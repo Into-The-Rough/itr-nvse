@@ -1,0 +1,257 @@
+#include "nvse/PluginAPI.h"
+#include "nvse/CommandTable.h"
+#include "nvse/GameAPI.h"
+#include "nvse/GameObjects.h"
+#include "nvse/ParamInfos.h"
+#include "FallDamageHandler.h"
+#include <unordered_map>
+
+//fall damage modification system
+//provides global multiplier + per-actor overrides
+//scripts can use SetFallDamageMult/GetFallDamageMult to control
+
+static float g_globalFallDamageMult = 1.0f;
+static std::unordered_map<UInt32, float> g_actorFallDamageMults;
+
+static UInt32 s_setMultOpcode = 0;
+static UInt32 s_getMultOpcode = 0;
+
+extern void Console_Print(const char* fmt, ...);
+extern bool IsConsoleMode();
+
+//get multiplier for actor (checks per-actor map, falls back to global)
+//returns in st(0) for asm hook
+static float __cdecl GetFallDamageMultForActor(UInt32 refID)
+{
+	if (refID && !g_actorFallDamageMults.empty())
+	{
+		auto it = g_actorFallDamageMults.find(refID);
+		if (it != g_actorFallDamageMults.end())
+			return it->second;
+	}
+	return g_globalFallDamageMult;
+}
+
+//hook at 0x8A63EC - after damage calculation, before comparison to 0
+//[ebp-0x28] = calculated damage
+//[ebp-0x54] = actor
+namespace FallDamageHook
+{
+	static const UInt32 kHookAddr = 0x8A63EC;
+	static const UInt32 kRetnAddr = 0x8A63F5;
+
+	void __fastcall ApplyFallDamageMult(Actor* actor, float* damage)
+	{
+		float mult = GetFallDamageMultForActor(actor ? actor->refID : 0);
+		*damage *= mult;
+	}
+
+	__declspec(naked) void Hook()
+	{
+		__asm
+		{
+			push ecx
+			push edx
+
+			//get actor refID safely
+			mov eax, [ebp-0x54]
+			test eax, eax
+			jz use_global
+			mov eax, [eax+0x0C]  //refID at offset 0x0C
+			jmp do_call
+
+		use_global:
+			xor eax, eax
+
+		do_call:
+			push eax  //refID arg
+			call GetFallDamageMultForActor
+			add esp, 4
+
+			pop edx
+			pop ecx
+
+			//st(0) = multiplier, multiply by damage
+			fmul dword ptr [ebp-0x28]
+			fstp dword ptr [ebp-0x28]
+
+			//replicate original instructions
+			fld dword ptr [ebp-0x28]
+			fcomp qword ptr ds:[0x01012060]
+			jmp kRetnAddr
+		}
+	}
+
+	void WriteRelJump(UInt32 src, UInt32 dst)
+	{
+		DWORD oldProtect;
+		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
+		*(UInt8*)src = 0xE9;
+		*(UInt32*)(src + 1) = dst - src - 5;
+		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
+	}
+
+	void Init()
+	{
+		WriteRelJump(kHookAddr, (UInt32)Hook);
+	}
+}
+
+//helper to check if a ref is an actor (ACHR = character ref, ACRE = creature ref)
+static Actor* RefToActor(TESObjectREFR* ref)
+{
+	if (ref)
+	{
+		UInt8 typeID = ref->typeID;
+		if (typeID == kFormType_ACHR || typeID == kFormType_ACRE)
+			return (Actor*)ref;
+	}
+	return nullptr;
+}
+
+//SetFallDamageMult multiplier [actorRef]
+//if no actor and no thisObj, sets global. otherwise sets per-actor override
+static ParamInfo kParams_SetFallDamageMult[2] = {
+	{ "multiplier", kParamType_Float, 0 },
+	{ "actorRef", kParamType_Actor, 1 },
+};
+
+DEFINE_COMMAND_PLUGIN(SetFallDamageMult, "Sets fall damage multiplier (global or per-actor)", 0, 2, kParams_SetFallDamageMult);
+
+bool Cmd_SetFallDamageMult_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	float mult = 1.0f;
+	Actor* actor = nullptr;
+
+	if (!ExtractArgs(EXTRACT_ARGS, &mult, &actor))
+		return true;
+
+	//use thisObj if no explicit actor
+	if (!actor)
+		actor = RefToActor(thisObj);
+
+	if (mult < 0.0f) mult = 0.0f;
+
+	if (actor)
+	{
+		if (mult == 1.0f)
+		{
+			//remove override, use global
+			g_actorFallDamageMults.erase(actor->refID);
+			if (IsConsoleMode())
+				Console_Print("SetFallDamageMult >> Cleared override for %08X (using global %.2f)", actor->refID, g_globalFallDamageMult);
+		}
+		else
+		{
+			g_actorFallDamageMults[actor->refID] = mult;
+			if (IsConsoleMode())
+				Console_Print("SetFallDamageMult >> Set %08X to %.2f", actor->refID, mult);
+		}
+	}
+	else
+	{
+		g_globalFallDamageMult = mult;
+		if (IsConsoleMode())
+			Console_Print("SetFallDamageMult >> Set global to %.2f", mult);
+	}
+
+	*result = 1;
+	return true;
+}
+
+//GetFallDamageMult [actorRef]
+//if no actor and no thisObj, returns global. otherwise returns effective mult for that actor
+static ParamInfo kParams_GetFallDamageMult[1] = {
+	{ "actorRef", kParamType_Actor, 1 },
+};
+
+DEFINE_COMMAND_PLUGIN(GetFallDamageMult, "Gets fall damage multiplier (global or per-actor)", 0, 1, kParams_GetFallDamageMult);
+
+bool Cmd_GetFallDamageMult_Execute(COMMAND_ARGS)
+{
+	*result = g_globalFallDamageMult;
+	Actor* actor = nullptr;
+
+	ExtractArgs(EXTRACT_ARGS, &actor);
+
+	//use thisObj if no explicit actor
+	if (!actor)
+		actor = RefToActor(thisObj);
+
+	if (actor)
+	{
+		*result = GetFallDamageMultForActor(actor->refID);
+		if (IsConsoleMode())
+			Console_Print("GetFallDamageMult >> %08X = %.2f", actor->refID, *result);
+	}
+	else
+	{
+		if (IsConsoleMode())
+			Console_Print("GetFallDamageMult >> global = %.2f", *result);
+	}
+
+	return true;
+}
+
+//ClearFallDamageMult [actorRef]
+//clears per-actor override. if no actor/thisObj, clears all overrides + global
+static ParamInfo kParams_ClearFallDamageMult[1] = {
+	{ "actorRef", kParamType_Actor, 1 },
+};
+
+DEFINE_COMMAND_PLUGIN(ClearFallDamageMult, "Clears fall damage multiplier override", 0, 1, kParams_ClearFallDamageMult);
+
+bool Cmd_ClearFallDamageMult_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	Actor* actor = nullptr;
+
+	ExtractArgs(EXTRACT_ARGS, &actor);
+
+	//use thisObj if no explicit actor
+	if (!actor)
+		actor = RefToActor(thisObj);
+
+	if (actor)
+	{
+		g_actorFallDamageMults.erase(actor->refID);
+		if (IsConsoleMode())
+			Console_Print("ClearFallDamageMult >> Cleared %08X", actor->refID);
+	}
+	else
+	{
+		size_t count = g_actorFallDamageMults.size();
+		g_actorFallDamageMults.clear();
+		g_globalFallDamageMult = 1.0f;
+		if (IsConsoleMode())
+			Console_Print("ClearFallDamageMult >> Cleared all (%d actors + global)", count);
+	}
+
+	*result = 1;
+	return true;
+}
+
+bool FDH_Init(void* nvse)
+{
+	NVSEInterface* g_nvse = (NVSEInterface*)nvse;
+
+	//register commands at 0x3B1B-0x3B1D
+	g_nvse->SetOpcodeBase(0x3B1B);
+
+	s_setMultOpcode = 0x3B1B;
+	g_nvse->RegisterCommand(&kCommandInfo_SetFallDamageMult);
+
+	s_getMultOpcode = 0x3B1C;
+	g_nvse->RegisterCommand(&kCommandInfo_GetFallDamageMult);
+
+	g_nvse->RegisterCommand(&kCommandInfo_ClearFallDamageMult);
+
+	//install hook
+	FallDamageHook::Init();
+
+	return true;
+}
+
+UInt32 FDH_GetSetMultOpcode() { return s_setMultOpcode; }
+UInt32 FDH_GetGetMultOpcode() { return s_getMultOpcode; }
