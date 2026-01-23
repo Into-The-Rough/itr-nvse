@@ -1231,6 +1231,12 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			}
 			break;
 
+		case NVSEMessagingInterface::kMessage_PostPostLoad:
+			// Install camera hooks after ALL plugins loaded (chains to JohnnyGuitar if present)
+			if (Settings::bDialogueCamera)
+				DCH_InstallCameraHooks();
+			break;
+
 		case NVSEMessagingInterface::kMessage_NewGame:
 		case NVSEMessagingInterface::kMessage_PostLoadGame:
 			// Build perk entry map for OnEntryPointHandler

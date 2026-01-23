@@ -6,11 +6,145 @@
 #include <cstdio>
 #include <Windows.h>
 
-//CameraOverride API from main.cpp
-namespace CameraOverride {
-	void SetRotation(bool enable, int axis, float degrees);
-	void SetTranslation(bool enable, float x, float y, float z);
-	void ResetRotation();
+//camera hooks - intercept game's own camera update calls
+namespace CameraHooks {
+	struct NiVector3 { float x, y, z; };
+	struct NiMatrix3 {
+		float m[3][3];
+
+		void MakeIdentity() {
+			m[0][0] = 1; m[0][1] = 0; m[0][2] = 0;
+			m[1][0] = 0; m[1][1] = 1; m[1][2] = 0;
+			m[2][0] = 0; m[2][1] = 0; m[2][2] = 1;
+		}
+
+		void MakeXRotation(float rad) {
+			float c = cosf(rad), s = sinf(rad);
+			m[0][0] = 1; m[0][1] = 0;  m[0][2] = 0;
+			m[1][0] = 0; m[1][1] = c;  m[1][2] = s;
+			m[2][0] = 0; m[2][1] = -s; m[2][2] = c;
+		}
+
+		void MakeZRotation(float rad) {
+			float c = cosf(rad), s = sinf(rad);
+			m[0][0] = c;  m[0][1] = s; m[0][2] = 0;
+			m[1][0] = -s; m[1][1] = c; m[1][2] = 0;
+			m[2][0] = 0;  m[2][1] = 0; m[2][2] = 1;
+		}
+
+		NiMatrix3 operator*(const NiMatrix3& b) const {
+			NiMatrix3 r;
+			for (int i = 0; i < 3; i++) {
+				for (int j = 0; j < 3; j++) {
+					r.m[i][j] = m[i][0]*b.m[0][j] + m[i][1]*b.m[1][j] + m[i][2]*b.m[2][j];
+				}
+			}
+			return r;
+		}
+	};
+
+	static NiVector3 g_cameraPos = {0, 0, 0};
+	static NiMatrix3 g_cameraRot;
+	static bool g_overrideActive = false;
+
+	typedef void (__fastcall *SetLocalTranslate_t)(void*, void*, NiVector3*);
+	typedef void (__fastcall *SetLocalRotate_t)(void*, void*, NiMatrix3*);
+
+	static SetLocalTranslate_t g_origTranslate1 = nullptr;
+	static SetLocalTranslate_t g_origTranslate2 = nullptr;
+	static SetLocalRotate_t g_origRotate1 = nullptr;
+	static SetLocalRotate_t g_origRotate2 = nullptr;
+
+	static int g_hookLogThrottle = 0;
+	static FILE* g_hookLog = nullptr;
+
+	static void HookLog(const char* fmt, ...) {
+		if (!g_hookLog) {
+			g_hookLog = fopen("CameraHooks.log", "w");
+			if (!g_hookLog) return;
+		}
+		va_list args;
+		va_start(args, fmt);
+		vfprintf(g_hookLog, fmt, args);
+		va_end(args);
+		fprintf(g_hookLog, "\n");
+		fflush(g_hookLog);
+	}
+
+	void __fastcall TranslateHook1(void* node, void* edx, NiVector3* pos) {
+		if (g_hookLogThrottle++ % 60 == 0) {
+			HookLog("TranslateHook1: node=%p override=%d pos=(%.1f,%.1f,%.1f)",
+				node, g_overrideActive, pos->x, pos->y, pos->z);
+		}
+		if (g_overrideActive) pos = &g_cameraPos;
+		g_origTranslate1(node, edx, pos);
+	}
+
+	void __fastcall TranslateHook2(void* node, void* edx, NiVector3* pos) {
+		if (g_hookLogThrottle % 60 == 0) {
+			HookLog("TranslateHook2: node=%p override=%d pos=(%.1f,%.1f,%.1f)",
+				node, g_overrideActive, pos->x, pos->y, pos->z);
+		}
+		if (g_overrideActive) pos = &g_cameraPos;
+		g_origTranslate2(node, edx, pos);
+	}
+
+	void __fastcall RotateHook1(void* node, void* edx, NiMatrix3* rot) {
+		if (g_overrideActive) rot = &g_cameraRot;
+		g_origRotate1(node, edx, rot);
+	}
+
+	void __fastcall RotateHook2(void* node, void* edx, NiMatrix3* rot) {
+		if (g_overrideActive) rot = &g_cameraRot;
+		g_origRotate2(node, edx, rot);
+	}
+
+	void SetPosition(float x, float y, float z, float pitchDeg, float yawDeg) {
+		g_cameraPos.x = x;
+		g_cameraPos.y = y;
+		g_cameraPos.z = z;
+
+		//pitch = rotation around X axis, yaw = rotation around Z axis
+		float pitchRad = pitchDeg * (3.14159265f / 180.0f);
+		float yawRad = yawDeg * (3.14159265f / 180.0f);
+
+		NiMatrix3 rotX, rotZ;
+		rotX.MakeXRotation(pitchRad);
+		rotZ.MakeZRotation(yawRad);
+		g_cameraRot = rotZ * rotX; //yaw then pitch
+
+		g_overrideActive = true;
+	}
+
+	void Disable() {
+		g_overrideActive = false;
+	}
+
+	//helper to write call and get original
+	template<typename T>
+	static T WriteRelCallEx(UInt32 src, UInt32 dst) {
+		T orig = (T)(*(UInt32*)(src + 1) + src + 5);
+		DWORD oldProtect;
+		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
+		*(UInt8*)src = 0xE8;
+		*(UInt32*)(src + 1) = dst - src - 5;
+		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
+		return orig;
+	}
+
+	void InstallHooks() {
+		//hook addresses (verified in IDA):
+		//0x94AD8A - SetLocalTranslate in PlayerCharacter::HandleFlycamMovement
+		//0x94AD9D - SetLocalRotate in PlayerCharacter::HandleFlycamMovement
+		//0x94BDC2 - SetLocalTranslate in PlayerCharacter::UpdateCamera
+		//0x94BDD5 - SetLocalRotate in PlayerCharacter::UpdateCamera
+		g_origTranslate1 = WriteRelCallEx<SetLocalTranslate_t>(0x94AD8A, (UInt32)TranslateHook1);
+		g_origRotate1 = WriteRelCallEx<SetLocalRotate_t>(0x94AD9D, (UInt32)RotateHook1);
+		g_origTranslate2 = WriteRelCallEx<SetLocalTranslate_t>(0x94BDC2, (UInt32)TranslateHook2);
+		g_origRotate2 = WriteRelCallEx<SetLocalRotate_t>(0x94BDD5, (UInt32)RotateHook2);
+
+		g_cameraRot.MakeIdentity();
+	}
 }
 
 static FILE* g_log = nullptr;
@@ -304,40 +438,19 @@ static const siv::PerlinNoise g_perlinZ{ 3 };
 static const siv::PerlinNoise g_perlinPitch{ 4 };
 static const siv::PerlinNoise g_perlinYaw{ 5 };
 
-static void RunCommand(const char* fmt, ...) {
-	if (!g_console) return;
-	char buf[256];
-	va_list args;
-	va_start(args, fmt);
-	vsnprintf(buf, sizeof(buf), fmt, args);
-	va_end(args);
-	g_console->RunScriptLine(buf, nullptr);
-}
-
 static void SetCameraPosition(float x, float y, float z, float pitch, float yaw) {
 	Log("SetCameraPosition: x=%.2f y=%.2f z=%.2f pitch=%.2f yaw=%.2f", x, y, z, pitch, yaw);
-	char buf[256];
-	snprintf(buf, sizeof(buf), "SetCameraTranslate 1 %.2f %.2f %.2f", x, y, z);
-	Log("Running: %s", buf);
-	if (g_console) g_console->RunScriptLine(buf, nullptr);
-
-	if (g_console) g_console->RunScriptLine("SetCameraRotate 1 0 0", nullptr);
-	snprintf(buf, sizeof(buf), "SetCameraRotate 1 1 %.2f", pitch);
-	Log("Running: %s", buf);
-	if (g_console) g_console->RunScriptLine(buf, nullptr);
-	snprintf(buf, sizeof(buf), "SetCameraRotate 1 3 %.2f", yaw);
-	Log("Running: %s", buf);
-	if (g_console) g_console->RunScriptLine(buf, nullptr);
+	CameraHooks::SetPosition(x, y, z, pitch, yaw);
 }
 
 static void DisableCamera() {
-	RunCommand("SetCameraTranslate 0 0 0 0");
-	RunCommand("SetCameraRotate 0 0 0");
+	Log("DisableCamera called");
+	CameraHooks::Disable();
 }
 
 static void ApplyCameraAngle(CameraAngle angle) {
 	PlayerCharacter* player = *g_thePlayer;
-	if (!player || !g_console || !g_dialogueTarget) return;
+	if (!player || !g_dialogueTarget) return;
 
 	//get positions (head height ~60 units above feet)
 	float px = player->posX;
@@ -503,25 +616,10 @@ static void ApplyCameraAngle(CameraAngle angle) {
 	Log("Angle %d (%s): cam=(%.1f,%.1f,%.1f) look=(%.1f,%.1f,%.1f) yaw=%.1f pitch=%.1f",
 		angle, angleNames[angle], camX, camY, camZ, lookX, lookY, lookZ, yaw, pitch);
 
-	char cmd[128];
-	snprintf(cmd, sizeof(cmd), "print \"[Camera: %s]\"", angleNames[angle]);
-	g_console->RunScriptLine(cmd, nullptr);
-	snprintf(cmd, sizeof(cmd), "SetCameraTranslate 1 %.2f %.2f %.2f", camX, camY, camZ);
-	g_console->RunScriptLine(cmd, nullptr);
-
-	//apply rotation: reset all axes then set pitch and yaw
-	Log("Setting rotation: axis0=0 axis1=%.2f axis2=0 axis3=%.2f", pitch, yaw);
-	g_console->RunScriptLine("SetCameraRotate 1 0 0", nullptr);
-	snprintf(cmd, sizeof(cmd), "SetCameraRotate 1 1 %.2f", pitch);
-	g_console->RunScriptLine(cmd, nullptr);
-	g_console->RunScriptLine("SetCameraRotate 1 2 0", nullptr);
-	snprintf(cmd, sizeof(cmd), "SetCameraRotate 1 3 %.2f", yaw);
-	g_console->RunScriptLine(cmd, nullptr);
+	CameraHooks::SetPosition(camX, camY, camZ, pitch, yaw);
 }
 
 static void ApplyCameraNoise() {
-	if (!g_console) return;
-
 	//rotation noise
 	constexpr float kRotAmp = 3.0f;
 
@@ -538,14 +636,7 @@ static void ApplyCameraNoise() {
 	yaw += (float)g_perlinYaw.octave1D(g_noiseTime, 3, 0.5) * kRotAmp;
 	pitch += (float)g_perlinPitch.octave1D(g_noiseTime, 3, 0.5) * kRotAmp * 0.5f;
 
-	char cmd[128];
-	//must set all 4 axes like ApplyCameraAngle does
-	g_console->RunScriptLine("SetCameraRotate 1 0 0", nullptr);
-	snprintf(cmd, sizeof(cmd), "SetCameraRotate 1 1 %.4f", pitch);
-	g_console->RunScriptLine(cmd, nullptr);
-	g_console->RunScriptLine("SetCameraRotate 1 2 0", nullptr);
-	snprintf(cmd, sizeof(cmd), "SetCameraRotate 1 3 %.4f", yaw);
-	g_console->RunScriptLine(cmd, nullptr);
+	CameraHooks::SetPosition(g_baseCamX, g_baseCamY, g_baseCamZ, pitch, yaw);
 }
 
 static void OnDialogueStart() {
@@ -566,11 +657,6 @@ static void OnDialogueStart() {
 		g_dialogueTarget = nullptr;
 		return;
 	}
-
-	//check JohnnyGuitar is loaded
-	HMODULE jg = GetModuleHandleA("JohnnyGuitar.dll");
-	Log("JohnnyGuitar=%p", jg);
-	if (!jg) return;
 
 	PlayerCharacter* player = *g_thePlayer;
 	Log("player=%p", player);
@@ -675,9 +761,14 @@ bool Init(NVSEConsoleInterface* console) {
 	SafeWrite8(0x953BBA, 0xEB);
 	Log("Patched dialogue to disable zoom");
 
-	//keep FocusOnActor for head tracking
+	//camera hooks installed later via InstallCameraHooks() on PostPostLoad
 
-	return g_console != nullptr;
+	return true;
+}
+
+void InstallCameraHooks() {
+	CameraHooks::InstallHooks();
+	Log("Camera hooks installed (PostPostLoad)");
 }
 
 }
@@ -690,4 +781,8 @@ bool DCH_Init(void* nvse) {
 
 void DCH_Update() {
 	DialogueCameraHandler::Update();
+}
+
+void DCH_InstallCameraHooks() {
+	DialogueCameraHandler::InstallCameraHooks();
 }
