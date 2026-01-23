@@ -257,17 +257,12 @@ void ONI_Update()
 		return;
 	}
 
-	//skip if owner is player
-	void* player = *(void**)kAddr_Player;
-	if (player)
+	//skip if owner is player (player NPC base form = 0x7)
+	UInt32 ownerRefID = *(UInt32*)((UInt8*)owner + kOffset_TESForm_RefID);
+	if (ownerRefID == 0x7)
 	{
-		UInt32 playerRefID = *(UInt32*)((UInt8*)player + kOffset_TESForm_RefID);
-		UInt32 ownerRefID = *(UInt32*)((UInt8*)owner + kOffset_TESForm_RefID);
-		if (playerRefID == ownerRefID)
-		{
-			g_lastRef = ref;
-			return;
-		}
+		g_lastRef = ref;
+		return;
 	}
 
 	g_lastRef = ref;

@@ -369,6 +369,14 @@ static void OnDialogueStart() {
 	Log("crosshairRef=%p", g_dialogueTarget);
 	if (!g_dialogueTarget) return;
 
+	//must be an actor (Character=0x3F or Creature=0x40), not a container/door/etc
+	UInt8 typeID = g_dialogueTarget->typeID;
+	if (typeID != 0x3F && typeID != 0x40) {
+		Log("crosshairRef is not an actor (typeID=%d), aborting camera", typeID);
+		g_dialogueTarget = nullptr;
+		return;
+	}
+
 	//check JohnnyGuitar is loaded
 	HMODULE jg = GetModuleHandleA("JohnnyGuitar.dll");
 	Log("JohnnyGuitar=%p", jg);
