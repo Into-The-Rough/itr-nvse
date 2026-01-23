@@ -46,9 +46,9 @@ constexpr UInt32 kTileValue_string = 0xFC4;
 typedef void (__thiscall* _TileSetString)(void* tile, UInt32 traitID, const char* str, bool propagate);
 static const _TileSetString TileSetString = (_TileSetString)0xA01350;
 
-//Actor::IsInFaction at 0x8A4C30
-typedef bool (__thiscall* _IsInFaction)(void* actor, void* faction);
-static const _IsInFaction IsInFaction = (_IsInFaction)0x8A4C30;
+//TESObjectREFR::IsInFaction at 0x575DB0 (returns rank or -1 if not in faction)
+typedef SInt32 (__thiscall* _GetFactionRank)(void* refr, void* faction);
+static const _GetFactionRank GetFactionRank = (_GetFactionRank)0x575DB0;
 
 //settings
 static bool g_bOwnerNameInfo = true;
@@ -274,7 +274,7 @@ void ONI_Update()
 	if (g_bShowNameOnlyCrime && isFaction)
 	{
 		void* player = *(void**)kAddr_Player;
-		if (player && IsInFaction(player, owner))
+		if (player && GetFactionRank(player, owner) >= 0)
 		{
 			g_lastRef = ref;
 			return;
