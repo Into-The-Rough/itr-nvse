@@ -41,6 +41,9 @@ namespace Settings
 	// OwnerNameInfo settings
 	int bOwnerNameInfo = 1;  // Enabled by default - show owner name on crosshair prompt
 
+	// DialogueCamera settings
+	int bDialogueCamera = 0;  // Disabled by default - cinematic camera angles during dialogue
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -78,5 +81,6 @@ namespace Settings
 		bReversePickpocketNoKarma = GetINIInt("Tweaks", "bReversePickpocketNoKarma", 1);
 		bSaveFileSize = GetINIInt("Tweaks", "bSaveFileSize", 1);
 		bOwnerNameInfo = GetINIInt("Tweaks", "bOwnerNameInfo", 1);
+		bDialogueCamera = GetINIInt("Tweaks", "bDialogueCamera", 0);
 	}
 }

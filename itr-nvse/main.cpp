@@ -1263,7 +1263,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OSPH_Update();
 
 			// DialogueCameraHandler update (every frame)
-			DCH_Update();
+			if (Settings::bDialogueCamera)
+				DCH_Update();
 
 			// AutoQuickLoad
 			if (Settings::bAutoQuickLoad && !g_quickLoadExecuted)
@@ -1369,6 +1370,7 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 	Log("  bKillActorXPFix: %d", Settings::bKillActorXPFix);
 	Log("  bReversePickpocketNoKarma: %d", Settings::bReversePickpocketNoKarma);
 	Log("  bOwnerNameInfo: %d", Settings::bOwnerNameInfo);
+	Log("  bDialogueCamera: %d", Settings::bDialogueCamera);
 	Log("  iAutoQuickLoadFrameDelay: %d", Settings::iAutoQuickLoadFrameDelay);
 
 	// QuickDrop/Quick180 hooks are installed in PostLoad message handler
@@ -1526,11 +1528,14 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 		Log("FallDamageHandler module failed to initialize");
 	}
 
-	// Initialize DialogueCameraHandler module
-	if (DCH_Init((void*)nvse)) {
-		Log("DialogueCameraHandler module initialized");
-	} else {
-		Log("DialogueCameraHandler module failed to initialize");
+	// Initialize DialogueCameraHandler module (requires JohnnyGuitar.dll)
+	if (Settings::bDialogueCamera)
+	{
+		if (DCH_Init((void*)nvse)) {
+			Log("DialogueCameraHandler module initialized");
+		} else {
+			Log("DialogueCameraHandler module failed to initialize");
+		}
 	}
 
 	// Initialize FakeHitHandler module (registers at 0x3F00-0x3F01)
