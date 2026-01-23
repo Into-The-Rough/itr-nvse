@@ -46,10 +46,15 @@ constexpr UInt32 kTileValue_string = 0xFC4;
 typedef void (__thiscall* _TileSetString)(void* tile, UInt32 traitID, const char* str, bool propagate);
 static const _TileSetString TileSetString = (_TileSetString)0xA01350;
 
+//Actor::IsInFaction at 0x8A4C30
+typedef bool (__thiscall* _IsInFaction)(void* actor, void* faction);
+static const _IsInFaction IsInFaction = (_IsInFaction)0x8A4C30;
+
 //settings
 static bool g_bOwnerNameInfo = true;
 static bool g_bCompatMode = true;
 static bool g_bShowFactionName = true;
+static bool g_bShowNameOnlyCrime = true;
 
 static void* g_lastRef = nullptr;
 
@@ -265,6 +270,17 @@ void ONI_Update()
 		return;
 	}
 
+	//skip if only showing for crimes and this isn't a crime
+	if (g_bShowNameOnlyCrime && isFaction)
+	{
+		void* player = *(void**)kAddr_Player;
+		if (player && IsInFaction(player, owner))
+		{
+			g_lastRef = ref;
+			return;
+		}
+	}
+
 	g_lastRef = ref;
 
 	//get original item name from global buffer
@@ -324,6 +340,7 @@ bool ONI_Init()
 	g_bOwnerNameInfo = GetPrivateProfileIntA("Tweaks", "bOwnerNameInfo", 1, iniPath) != 0;
 	g_bCompatMode = GetPrivateProfileIntA("OwnerNameInfo", "bCompatibilityMode", 1, iniPath) != 0;
 	g_bShowFactionName = GetPrivateProfileIntA("OwnerNameInfo", "bShowFactionName", 1, iniPath) != 0;
+	g_bShowNameOnlyCrime = GetPrivateProfileIntA("OwnerNameInfo", "bShowNameOnlyCrime", 1, iniPath) != 0;
 
 	return true;
 }
