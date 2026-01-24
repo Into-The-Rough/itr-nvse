@@ -202,6 +202,7 @@
     <ClCompile Include="LocationVisitPopup.cpp" />
     <ClCompile Include="VATSExtender.cpp" />
     <ClCompile Include="CameraOverride.cpp" />
+    <ClCompile Include="VATSLimbFix.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="internal\settings.h" />
@@ -230,6 +231,7 @@
     <ClInclude Include="LocationVisitPopup.h" />
     <ClInclude Include="VATSExtender.h" />
     <ClInclude Include="CameraOverride.h" />
+    <ClInclude Include="VATSLimbFix.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />
