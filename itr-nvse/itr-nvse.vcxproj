@@ -207,6 +207,11 @@
     <ClCompile Include="SlowMotionPhysicsFix.cpp" />
     <ClCompile Include="VATSProjectileFix.cpp" />
     <ClCompile Include="KillActorXPFix.cpp" />
+    <ClCompile Include="ExplodingPantsFix.cpp" />
+    <ClCompile Include="OwnedBeds.cpp" />
+    <ClCompile Include="AshPileNames.cpp" />
+    <ClCompile Include="ReversePickpocketNoKarmaFix.cpp" />
+    <ClCompile Include="ImperativeCommands.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="internal\settings.h" />
@@ -240,6 +245,11 @@
     <ClInclude Include="SlowMotionPhysicsFix.h" />
     <ClInclude Include="VATSProjectileFix.h" />
     <ClInclude Include="KillActorXPFix.h" />
+    <ClInclude Include="ExplodingPantsFix.h" />
+    <ClInclude Include="OwnedBeds.h" />
+    <ClInclude Include="AshPileNames.h" />
+    <ClInclude Include="ReversePickpocketNoKarmaFix.h" />
+    <ClInclude Include="ImperativeCommands.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />

@@ -48,13 +48,14 @@ __forceinline T_Ret CdeclCall(uint32_t _addr, Args ...args) {
 #include "SlowMotionPhysicsFix.h"
 #include "VATSProjectileFix.h"
 #include "KillActorXPFix.h"
+#include "ExplodingPantsFix.h"
+#include "OwnedBeds.h"
+#include "AshPileNames.h"
+#include "ReversePickpocketNoKarmaFix.h"
+#include "ImperativeCommands.h"
 
 #include <cstdio>
 #include <cstring>
-#include <vector>
-#include <algorithm>
-#include <cmath>
-#include <unordered_set>
 
 #define ITR_VERSION 100
 #define ITR_VERSION_STR "1.0.0"
@@ -184,256 +185,6 @@ void Log(const char* fmt, ...)
 	fprintf(g_logFile, "\n");
 	fflush(g_logFile);
 	va_end(args);
-}
-
-namespace ExplodingPantsFix
-{
-	static const uint32_t kAddr_IsAltTriggerCall = 0x9C3204;
-	static const uint32_t kAddr_IsAltTrigger = 0x975300;
-	static uint32_t g_retAddr = 0x9C3209;
-
-	static void* g_currentProjectile = nullptr;
-
-	void PatchWrite8(uint32_t addr, uint8_t data) {
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, 1, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint8_t*)addr = data;
-		VirtualProtect((void*)addr, 1, oldProtect, &oldProtect);
-	}
-
-	void PatchWrite32(uint32_t addr, uint32_t data) {
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, 4, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint32_t*)addr = data;
-		VirtualProtect((void*)addr, 4, oldProtect, &oldProtect);
-	}
-
-	void WriteRelCall(uint32_t src, uint32_t dst) {
-		PatchWrite8(src, 0xE8);
-		PatchWrite32(src + 1, dst - src - 5);
-	}
-
-	bool __cdecl Hook_IsAltTrigger(void* projBase) {
-		if (((bool(__thiscall*)(void*))kAddr_IsAltTrigger)(projBase))
-			return true;
-		//flag 0x400 at offset 0xC8
-		if (g_currentProjectile && (*(uint32_t*)((uint8_t*)g_currentProjectile + 0xC8) & 0x400))
-			return true;
-		return false;
-	}
-
-	__declspec(naked) void Hook_IsAltTrigger_Wrapper() {
-		__asm {
-			mov eax, [ebp-0A0h]
-			mov g_currentProjectile, eax
-			push ecx
-			call Hook_IsAltTrigger
-			add esp, 4
-			jmp g_retAddr
-		}
-	}
-
-	void Init() {
-		WriteRelCall(kAddr_IsAltTriggerCall, (uint32_t)Hook_IsAltTrigger_Wrapper);
-		Log("ExplodingPantsFix installed");
-	}
-}
-
-namespace OwnedBeds
-{
-	constexpr UInt32 kAddr_IsAnOwner = 0x5785E0;
-	constexpr UInt32 kAddr_IsAnOwnerCall = 0x509679;
-	constexpr UInt32 kAddr_ResolveOwnership = 0x567790;
-	constexpr UInt32 kAddr_PlayerSingleton = 0x011DEA3C;
-	constexpr UInt32 kAddr_ProcessListsSingleton = 0x11E0E80;
-	constexpr UInt32 kAddr_AttackAlarm = 0x8C0460;
-	constexpr UInt32 kAddr_GetActorRefInHigh = 0x970B30;
-	constexpr UInt32 kAddr_GetActorRefInHigh_0 = 0x970A20;
-	constexpr UInt32 kAddr_GetDetectionLevelAgainstActor = 0x8A0D10;
-	constexpr UInt32 kAddr_GetCurrentProcess = 0x8D8520;
-	constexpr UInt32 kAddr_GetTopic = 0x61A2D0;
-	constexpr UInt32 kAddr_ProcessGreet = 0x8DBE30;
-	constexpr UInt8 kFormType_TESFaction = 8;
-	constexpr UInt32 DT_COMBAT = 4;
-
-	static bool g_playerWarnedAboutBed = false;
-
-	template <typename T_Ret = void, typename... Args>
-	__forceinline T_Ret OBThisCall(UInt32 addr, void* thisObj, Args... args) {
-		return reinterpret_cast<T_Ret(__thiscall*)(void*, Args...)>(addr)(thisObj, args...);
-	}
-
-	inline UInt8 GetFormType(void* form) {
-		return *((UInt8*)form + 4);
-	}
-
-	typedef bool (__thiscall *_IsAnOwner)(void* thisObj, void* actor, bool checkFaction);
-	static _IsAnOwner IsAnOwner = (_IsAnOwner)kAddr_IsAnOwner;
-
-	typedef void* (__cdecl *_GetTopic)(UInt32 type, int index);
-	static _GetTopic GetTopic = (_GetTopic)kAddr_GetTopic;
-
-	typedef void* (__thiscall *_MobileGetProcess)(void* actor);
-	static _MobileGetProcess MobileGetProcess = (_MobileGetProcess)kAddr_GetCurrentProcess;
-
-	typedef void (__thiscall *_ProcessGreet)(void* process, void* actor, void* topic, bool forceSub, bool stop, bool queue, bool sayCallback);
-	static _ProcessGreet ProcessGreet = (_ProcessGreet)kAddr_ProcessGreet;
-
-	static void SendAssaultAlarmToBedOwner(void* bedRef, void* owner) {
-		void* player = *(void**)kAddr_PlayerSingleton;
-		void* processList = (void*)kAddr_ProcessListsSingleton;
-		void* nearbyActor = nullptr;
-
-		UInt8 formType = GetFormType(owner);
-
-		if (formType == kFormType_TESFaction) {
-			nearbyActor = OBThisCall<void*>(kAddr_GetActorRefInHigh, processList, owner, true, true);
-		} else {
-			nearbyActor = OBThisCall<void*>(kAddr_GetActorRefInHigh_0, processList, owner, 0);
-		}
-
-		if (!nearbyActor || nearbyActor == player)
-			return;
-
-		bool hasLOS = false;
-		bool a8 = false;
-		SInt32 detectionLevel = OBThisCall<SInt32>(kAddr_GetDetectionLevelAgainstActor,
-			nearbyActor, true, player, &hasLOS, false, false, 0, &a8);
-
-		if (detectionLevel <= 0)
-			return;
-
-		if (!g_playerWarnedAboutBed) {
-			void* topic = GetTopic(DT_COMBAT, 9);
-			if (topic) {
-				void* process = MobileGetProcess(nearbyActor);
-				if (process) {
-					ProcessGreet(process, nearbyActor, topic, false, false, true, false);
-				}
-			}
-			g_playerWarnedAboutBed = true;
-		} else {
-			OBThisCall(kAddr_AttackAlarm, nearbyActor, player, false, 1);
-		}
-	}
-
-	bool __fastcall IsAnOwnerHook(void* bedRef, void* edx, void* actor, bool checkFaction) {
-		bool isOwner = IsAnOwner(bedRef, actor, checkFaction);
-
-		if (!isOwner) {
-			void* owner = OBThisCall<void*>(kAddr_ResolveOwnership, bedRef);
-			if (owner) {
-				SendAssaultAlarmToBedOwner(bedRef, owner);
-			}
-			return true;
-		}
-		return true;
-	}
-
-	void PatchWrite8(uint32_t addr, uint8_t data) {
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, 1, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint8_t*)addr = data;
-		VirtualProtect((void*)addr, 1, oldProtect, &oldProtect);
-	}
-
-	void PatchWrite32(uint32_t addr, uint32_t data) {
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, 4, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint32_t*)addr = data;
-		VirtualProtect((void*)addr, 4, oldProtect, &oldProtect);
-	}
-
-	void WriteRelCall(UInt32 addr, UInt32 target) {
-		PatchWrite8(addr, 0xE8);
-		PatchWrite32(addr + 1, target - addr - 5);
-	}
-
-	void Init()
-	{
-		WriteRelCall(kAddr_IsAnOwnerCall, (UInt32)IsAnOwnerHook);
-		Log("OwnedBeds installed");
-	}
-}
-
-namespace AshPileNames
-{
-	constexpr UInt32 kGetBaseFullNameAddr = 0x55D520;
-	constexpr UInt32 kReturnAddr = 0x55D527;
-	constexpr UInt32 kExtraData_AshPileRef = 0x89;
-
-	static UInt8 g_trampoline[32];
-
-	typedef const char* (__thiscall* _TrampolineFunc)(TESObjectREFR* thisRef);
-	static _TrampolineFunc CallTrampoline = nullptr;
-
-	static BSExtraData* GetExtraDataByType(BaseExtraList* list, UInt32 type)
-	{
-		if (!list) return nullptr;
-		UInt32 index = (type >> 3);
-		UInt8 bitMask = 1 << (type % 8);
-		if (!(list->m_presenceBitfield[index] & bitMask))
-			return nullptr;
-		for (BSExtraData* traverse = list->m_data; traverse; traverse = traverse->next)
-			if (traverse->type == type)
-				return traverse;
-		return nullptr;
-	}
-
-	static const char* GetActorNameFromAshPile(TESObjectREFR* ashPileRef)
-	{
-		if (!ashPileRef) return nullptr;
-
-		BSExtraData* extraData = GetExtraDataByType(&ashPileRef->extraDataList, kExtraData_AshPileRef);
-		if (!extraData) return nullptr;
-
-		TESObjectREFR* sourceRef = *(TESObjectREFR**)((UInt8*)extraData + 0x0C);
-		if (!sourceRef || !sourceRef->baseForm) return nullptr;
-
-		TESForm* baseForm = sourceRef->baseForm;
-		UInt8 formType = baseForm->typeID;
-
-		if (formType != kFormType_NPC && formType != kFormType_Creature)
-			return nullptr;
-
-		TESActorBase* actorBase = (TESActorBase*)baseForm;
-		const char* name = actorBase->fullName.name.m_data;
-
-		if (name && name[0])
-			return name;
-
-		return nullptr;
-	}
-
-	static const char* __fastcall Hook_GetBaseFullName(TESObjectREFR* thisRef, void* edx)
-	{
-		const char* actorName = GetActorNameFromAshPile(thisRef);
-		if (actorName)
-			return actorName;
-		return CallTrampoline(thisRef);
-	}
-
-	void Init()
-	{
-		DWORD oldProtect;
-		VirtualProtect(g_trampoline, sizeof(g_trampoline), PAGE_EXECUTE_READWRITE, &oldProtect);
-
-		memcpy(g_trampoline, (void*)kGetBaseFullNameAddr, 7);
-		g_trampoline[7] = 0xE9;
-		*(UInt32*)&g_trampoline[8] = kReturnAddr - ((UInt32)&g_trampoline[7] + 5);
-
-		CallTrampoline = (_TrampolineFunc)(void*)g_trampoline;
-
-		DWORD oldProtect2;
-		VirtualProtect((void*)kGetBaseFullNameAddr, 7, PAGE_EXECUTE_READWRITE, &oldProtect2);
-		*(UInt8*)kGetBaseFullNameAddr = 0xE9;
-		*(UInt32*)(kGetBaseFullNameAddr + 1) = (UInt32)Hook_GetBaseFullName - kGetBaseFullNameAddr - 5;
-		*(UInt8*)(kGetBaseFullNameAddr + 5) = 0x90;
-		*(UInt8*)(kGetBaseFullNameAddr + 6) = 0x90;
-		VirtualProtect((void*)kGetBaseFullNameAddr, 7, oldProtect2, &oldProtect2);
-
-		Log("AshPileNames installed");
-	}
 }
 
 namespace NoWeaponSearch
@@ -567,81 +318,6 @@ static CommandInfo kCommandInfo_GetNoWeaponSearch = {
 	1, 0, nullptr, Cmd_GetNoWeaponSearch_Execute, nullptr, nullptr, 0
 };
 
-namespace ReversePickpocketNoKarmaFix
-{
-	constexpr uint32_t kAddr_TryPickpocket = 0x75E0B0;
-	constexpr uint32_t kAddr_IsLiveGrenade = 0x75D510;
-	constexpr uint32_t kAddr_CallSite1 = 0x75DBDA;
-	constexpr uint32_t kAddr_CallSite2 = 0x75DFA7;
-	constexpr uint32_t kAddr_CurrentEntry = 0x11D93FC;
-	constexpr uint32_t kAddr_Player = 0x11DEA3C;
-
-	typedef bool (__thiscall *_IsLiveGrenade)(void*, void*, void*, void*);
-
-	void PatchWrite8(uint32_t addr, uint8_t data) {
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, 1, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint8_t*)addr = data;
-		VirtualProtect((void*)addr, 1, oldProtect, &oldProtect);
-	}
-
-	void PatchWrite32(uint32_t addr, uint32_t data) {
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, 4, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint32_t*)addr = data;
-		VirtualProtect((void*)addr, 4, oldProtect, &oldProtect);
-	}
-
-	void WriteRelCall(uint32_t src, uint32_t dst) {
-		PatchWrite8(src, 0xE8);
-		PatchWrite32(src + 1, dst - src - 5);
-	}
-
-	bool __fastcall ShouldSkipKarma(void* menu, void* actor)
-	{
-		void* entry = *(void**)kAddr_CurrentEntry;
-		void* player = *(void**)kAddr_Player;
-
-		uint32_t currentItems = *(uint32_t*)((uint32_t)menu + 0xF8);
-		bool isReverse = (currentItems == (uint32_t)menu + 0x98);
-
-		if (isReverse && entry)
-		{
-			bool isLiveGrenade = ((_IsLiveGrenade)kAddr_IsLiveGrenade)(menu, entry, player, actor);
-			if (!isLiveGrenade)
-				return true;
-		}
-		return false;
-	}
-
-	__declspec(naked) void Hook_TryPickpocket()
-	{
-		__asm
-		{
-			push ecx
-			mov edx, [esp+8]
-			call ShouldSkipKarma
-			pop ecx
-
-			test al, al
-			jnz skip
-
-			jmp kAddr_TryPickpocket
-
-		skip:
-			mov al, 1
-			ret 12
-		}
-	}
-
-	void Init()
-	{
-		WriteRelCall(kAddr_CallSite1, (uint32_t)Hook_TryPickpocket);
-		WriteRelCall(kAddr_CallSite2, (uint32_t)Hook_TryPickpocket);
-		Log("ReversePickpocketNoKarmaFix installed");
-	}
-}
-
 
 static void DeleteConsoleLog()
 {
@@ -664,359 +340,6 @@ static void DeleteConsoleLog()
 }
 
 
-static ParamInfo kParams_GetRefsSortedByDistance[5] = {
-	{ "maxDistance",      kParamType_Float,   0 },
-	{ "formType",         kParamType_Integer, 1 },
-	{ "cellDepth",        kParamType_Integer, 1 },
-	{ "includeTakenRefs", kParamType_Integer, 1 },
-	{ "baseForm",         kParamType_AnyForm, 1 },
-};
-
-DEFINE_COMMAND_PLUGIN(GetRefsSortedByDistance, "Returns array of refs sorted by distance from player", 0, 5, kParams_GetRefsSortedByDistance);
-
-enum {
-	kFormTypeFilter_AnyType = 0,
-	kFormTypeFilter_Actor = 200,
-	kFormTypeFilter_InventoryItem = 201,
-};
-
-static bool IsInventoryItemType(UInt8 formType)
-{
-	return formType == kFormType_Armor || formType == kFormType_Book ||
-	       formType == kFormType_Clothing || formType == kFormType_Ingredient ||
-	       formType == kFormType_Misc || formType == kFormType_Weapon ||
-	       formType == kFormType_Ammo || formType == kFormType_Key ||
-	       formType == kFormType_AlchemyItem || formType == kFormType_Note;
-}
-
-static bool IsTakenRef(TESObjectREFR* refr)
-{
-	if (!refr->IsDeleted()) return false;
-	UInt8 formType = refr->baseForm->typeID;
-	return IsInventoryItemType(formType);
-}
-
-static bool MatchesBaseForm(TESObjectREFR* refr, TESForm* baseForm)
-{
-	if (!baseForm) return true;
-	return refr->baseForm == baseForm;
-}
-
-static bool MatchesFormType(TESObjectREFR* refr, UInt32 formType, bool includeTakenRefs)
-{
-	if (!refr || !refr->baseForm) return false;
-	if (!includeTakenRefs && IsTakenRef(refr)) return false;
-
-	UInt8 baseType = refr->baseForm->typeID;
-
-	switch (formType)
-	{
-		case kFormTypeFilter_AnyType:
-			return true;
-		case kFormTypeFilter_Actor:
-			if (refr->baseForm->refID == 7) return false;
-			return baseType == kFormType_Creature || baseType == kFormType_NPC;
-		case kFormTypeFilter_InventoryItem:
-			return IsInventoryItemType(baseType);
-		default:
-			if (baseType == kFormType_NPC && refr->baseForm->refID == 7) return false;
-			return baseType == formType;
-	}
-}
-
-static float CalcDistanceSquared(TESObjectREFR* a, TESObjectREFR* b)
-{
-	float dx = a->posX - b->posX;
-	float dy = a->posY - b->posY;
-	float dz = a->posZ - b->posZ;
-	return dx * dx + dy * dy + dz * dz;
-}
-
-bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-
-	float maxDistance = 0;
-	UInt32 formType = kFormTypeFilter_AnyType;
-	SInt32 cellDepth = 0;
-	UInt32 includeTakenRefs = 0;
-	TESForm* baseForm = nullptr;
-
-	if (!ExtractArgs(EXTRACT_ARGS, &maxDistance, &formType, &cellDepth, &includeTakenRefs, &baseForm))
-		return true;
-
-	if (maxDistance <= 0)
-	{
-		if (IsConsoleMode()) Console_Print("GetRefsSortedByDistance >> maxDistance must be > 0");
-		return true;
-	}
-
-	PlayerCharacter* player = PlayerCharacter::GetSingleton();
-	if (!player || !player->parentCell) return true;
-
-	float maxDistSq = maxDistance * maxDistance;
-
-	struct RefWithDist {
-		TESObjectREFR* ref;
-		float distance;
-	};
-	std::vector<RefWithDist> refs;
-
-	TESObjectCELL* playerCell = player->parentCell;
-
-	if (cellDepth == -1) cellDepth = 5;
-
-	auto ProcessCell = [&](TESObjectCELL* cell)
-	{
-		if (!cell) return;
-		for (auto iter = cell->objectList.Begin(); !iter.End(); ++iter)
-		{
-			TESObjectREFR* refr = iter.Get();
-			if (!refr || refr == player) continue;
-			if (!MatchesFormType(refr, formType, includeTakenRefs != 0)) continue;
-			if (!MatchesBaseForm(refr, baseForm)) continue;
-
-			float distSq = CalcDistanceSquared(refr, player);
-			if (distSq > maxDistSq) continue;
-
-			refs.push_back({ refr, sqrtf(distSq) });
-		}
-	};
-
-	ProcessCell(playerCell);
-
-	TESWorldSpace* world = playerCell->worldSpace;
-	if (world && cellDepth > 0 && !playerCell->IsInterior() && playerCell->coords)
-	{
-		SInt32 baseX = (SInt32)playerCell->coords->x;
-		SInt32 baseY = (SInt32)playerCell->coords->y;
-
-		for (SInt32 dx = -cellDepth; dx <= cellDepth; dx++)
-		{
-			for (SInt32 dy = -cellDepth; dy <= cellDepth; dy++)
-			{
-				if (dx == 0 && dy == 0) continue;
-				UInt32 key = ((baseX + dx) << 16) | ((baseY + dy) & 0xFFFF);
-				TESObjectCELL* cell = world->cellMap->Lookup(key);
-				ProcessCell(cell);
-			}
-		}
-	}
-
-	std::sort(refs.begin(), refs.end(), [](const RefWithDist& a, const RefWithDist& b) {
-		return a.distance < b.distance;
-	});
-
-	NVSEArrayVarInterface::Array* arr = g_arrInterface->CreateArray(nullptr, 0, scriptObj);
-	for (const auto& item : refs)
-	{
-		NVSEArrayVarInterface::Element elem(item.ref);
-		g_arrInterface->AppendElement(arr, elem);
-	}
-
-	g_arrInterface->AssignCommandResult(arr, result);
-
-	if (IsConsoleMode())
-	{
-		Console_Print("GetRefsSortedByDistance >> Found %d refs within %.1f units", refs.size(), maxDistance);
-	}
-
-	return true;
-}
-
-typedef TESObjectREFR* (*_PlaceAtMe)(TESObjectREFR*, TESForm*, UInt32, UInt32, UInt32, float);
-static const _PlaceAtMe PlaceAtMe = (_PlaceAtMe)0x5C4B30;
-
-static ParamInfo kParams_Duplicate[1] = {
-	{ "count", kParamType_Integer, 1 },  // optional, defaults to 1
-};
-
-DEFINE_COMMAND_PLUGIN(Duplicate, "Duplicates the reference and returns the new ref", 1, 1, kParams_Duplicate);
-
-bool Cmd_Duplicate_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-
-	UInt32 count = 1;
-
-	ExtractArgs(EXTRACT_ARGS, &count);
-
-	if (count < 1) count = 1;
-
-	if (!thisObj || !thisObj->baseForm)
-	{
-		if (IsConsoleMode())
-			Console_Print("Duplicate >> No reference selected");
-		return true;
-	}
-
-	TESObjectREFR* lastRef = nullptr;
-	UInt32 created = 0;
-
-	for (UInt32 i = 0; i < count; i++)
-	{
-		TESObjectREFR* newRef = PlaceAtMe(
-			thisObj,           // spawn location
-			thisObj->baseForm, // form to spawn
-			1,                 // count
-			0,                 // distance
-			0,                 // direction
-			1.0f);             // health (1.0 = full)
-
-		if (newRef)
-		{
-			lastRef = newRef;
-			created++;
-		}
-	}
-
-	if (lastRef)
-	{
-		*((UInt32*)result) = lastRef->refID;
-		if (IsConsoleMode())
-			Console_Print("Duplicate >> Created %d ref(s), last: %08X", created, lastRef->refID);
-	}
-	else
-	{
-		if (IsConsoleMode())
-			Console_Print("Duplicate >> Failed to create reference");
-	}
-
-	return true;
-}
-
-typedef bool (__thiscall *_ConditionList_Evaluate)(void* conditionList, TESObjectREFR* runOnRef, TESForm* arg2, bool* result, bool arg4);
-static const _ConditionList_Evaluate ConditionList_Evaluate = (_ConditionList_Evaluate)0x680C60;
-
-typedef SInt32 (__thiscall *_GetActorValue)(void* actorValueOwner, UInt32 avCode);
-static const _GetActorValue GetActorValue = (_GetActorValue)0x66EF50;
-
-typedef SInt32 (__thiscall *_GetItemCount)(TESObjectREFR* container, TESForm* item);
-static const _GetItemCount GetItemCount = (_GetItemCount)0x575610;
-
-static ParamInfo kParams_GetAvailableRecipes[1] = {
-	{ "category", kParamType_AnyForm, 1 },  // optional category filter
-};
-
-DEFINE_COMMAND_PLUGIN(GetAvailableRecipes, "Returns array of recipes player can craft", 0, 1, kParams_GetAvailableRecipes);
-
-bool Cmd_GetAvailableRecipes_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-
-	TESForm* categoryFilter = nullptr;
-	ExtractArgs(EXTRACT_ARGS, &categoryFilter);
-
-	if (categoryFilter && categoryFilter->typeID != kFormType_RecipeCategory)
-		categoryFilter = nullptr;
-
-	PlayerCharacter* player = PlayerCharacter::GetSingleton();
-	if (!player) return true;
-
-	DataHandler* dataHandler = *(DataHandler**)0x011C3F2C;
-	if (!dataHandler) return true;
-
-	std::vector<TESForm*> availableRecipes;
-	tList<TESRecipe>* recipeList = &dataHandler->recipeList;
-
-	for (auto iter = recipeList->Begin(); !iter.End(); ++iter)
-	{
-		TESRecipe* recipe = iter.Get();
-		if (!recipe) continue;
-
-		if (categoryFilter)
-		{
-			TESRecipeCategory* cat = recipe->category;
-			TESRecipeCategory* subCat = recipe->subCategory;
-			if (cat != categoryFilter && subCat != categoryFilter)
-				continue;
-		}
-
-		void* conditionList = &recipe->conditions;
-		bool evalResult = false;
-		bool conditionsPassed = ConditionList_Evaluate(conditionList, player, nullptr, &evalResult, false);
-		if (!conditionsPassed)
-			continue;
-
-		if (recipe->reqSkill != (UInt32)-1 && recipe->reqSkillLevel > 0)
-		{
-			void* actorValueOwner = (void*)((UInt8*)player + 0xA4); //ActorValueOwner at 0xA4
-			SInt32 playerSkill = GetActorValue(actorValueOwner, recipe->reqSkill);
-			if (playerSkill < (SInt32)recipe->reqSkillLevel)
-				continue;
-		}
-
-		bool hasAllInputs = true;
-		for (auto inputIter = recipe->inputs.Begin(); !inputIter.End(); ++inputIter)
-		{
-			ComponentEntry* component = inputIter.Get();
-			if (!component || !component->item)
-				continue;
-
-			UInt32 playerCount = GetItemCount(player, component->item);
-			if (playerCount < component->quantity)
-			{
-				hasAllInputs = false;
-				break;
-			}
-		}
-		if (!hasAllInputs)
-			continue;
-
-		availableRecipes.push_back(recipe);
-	}
-
-	if (!availableRecipes.empty() && g_arrInterface)
-	{
-		NVSEArrayVarInterface::Array* arr = g_arrInterface->CreateArray(nullptr, 0, scriptObj);
-		for (TESForm* recipe : availableRecipes)
-		{
-			NVSEArrayVarInterface::Element elem(recipe);
-			g_arrInterface->AppendElement(arr, elem);
-		}
-		g_arrInterface->AssignCommandResult(arr, result);
-	}
-
-	if (IsConsoleMode())
-	{
-		Console_Print("GetAvailableRecipes >> Found %d craftable recipes", availableRecipes.size());
-	}
-
-	return true;
-}
-
-
-//TESObjectREFR::ClampToGround at 0x576470
-typedef bool (__thiscall *_ClampToGround)(TESObjectREFR*);
-static const _ClampToGround RefClampToGround = (_ClampToGround)0x576470;
-
-//TESObjectREFR::SetLocationOnReference at 0x575830
-typedef void (__thiscall *_SetLocationOnReference)(TESObjectREFR*, float*);
-static const _SetLocationOnReference SetLocationOnReference = (_SetLocationOnReference)0x575830;
-
-DEFINE_COMMAND_PLUGIN(ClampToGround, "Clamps the reference to the ground", 1, 0, nullptr);
-
-bool Cmd_ClampToGround_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-
-	if (!thisObj)
-	{
-		if (IsConsoleMode())
-			Console_Print("ClampToGround >> No reference selected");
-		return true;
-	}
-
-	if (RefClampToGround(thisObj))
-	{
-		SetLocationOnReference(thisObj, &thisObj->posX);
-		*result = 1;
-	}
-
-	return true;
-}
-
-
 static bool g_hooksInstalled = false;
 
 static void MessageHandler(NVSEMessagingInterface::Message* msg)
@@ -1032,11 +355,11 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bSlowMotionPhysicsFix)
 					SlowMotionPhysicsFix_Init();
 				if (Settings::bExplodingPantsFix)
-					ExplodingPantsFix::Init();
+					ExplodingPantsFix_Init();
 				if (Settings::bKillActorXPFix)
 					KillActorXPFix_Init();
 				if (Settings::bReversePickpocketNoKarma)
-					ReversePickpocketNoKarmaFix::Init();
+					ReversePickpocketNoKarmaFix_Init();
 				if (Settings::bSaveFileSize)
 					SFSH_Init();
 				if (Settings::bVATSProjectileFix)
@@ -1044,7 +367,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bVATSLimbFix)
 					VATSLimbFix_Init();
 				if (Settings::bOwnedBeds)
-					OwnedBeds::Init();
+					OwnedBeds_Init();
 				if (Settings::bLocationVisitPopup)
 					LocationVisitPopup_Init(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
 				g_hooksInstalled = true;
@@ -1055,7 +378,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			if (Settings::bDialogueCamera)
 				DCH_InstallCameraHooks();
 			if (Settings::bAshPileNames)
-				AshPileNames::Init();
+				AshPileNames_Init();
 			if (Settings::bVATSExtender)
 				VATSExtender_Init();
 			if (Settings::bSuppressObjectives || Settings::bSuppressReputation)
@@ -1209,9 +532,7 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 
 	g_msgInterface->RegisterListener(g_pluginHandle, "NVSE", MessageHandler);
 
-	nvse->SetOpcodeBase(0x4040);
-	nvse->RegisterTypedCommand(&kCommandInfo_GetRefsSortedByDistance, kRetnType_Array);
-	Log("Registered GetRefsSortedByDistance at opcode 0x4040");
+	ImperativeCommands_Init((void*)nvse);
 
 	if (DTF_Init((void*)nvse)) {
 		Log("DialogueTextFilter module initialized (opcode 0x%04X)", DTF_GetOpcode());
@@ -1230,10 +551,6 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 	} else {
 		Log("OnWeaponDropHandler module failed to initialize");
 	}
-
-	nvse->SetOpcodeBase(0x3B03);
-	nvse->RegisterTypedCommand(&kCommandInfo_Duplicate, kRetnType_Form);
-	Log("Registered Duplicate at opcode 0x3B03");
 
 	if (OCH_Init((void*)nvse)) {
 		Log("OnConsoleHandler module initialized (open=0x%04X, close=0x%04X)",
@@ -1282,14 +599,6 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 	nvse->SetOpcodeBase(0x3B15);
 	CameraOverride_RegisterCommands(nvse);
 	Log("Registered SetCameraAngle at opcode 0x3B15");
-
-	nvse->SetOpcodeBase(0x3B16);
-	nvse->RegisterTypedCommand(&kCommandInfo_GetAvailableRecipes, kRetnType_Array);
-	Log("Registered GetAvailableRecipes at opcode 0x3B16");
-
-	nvse->SetOpcodeBase(0x3B1F);
-	nvse->RegisterCommand(&kCommandInfo_ClampToGround);
-	Log("Registered ClampToGround at opcode 0x3B1F");
 
 	if (OEPH_Init((void*)nvse)) {
 		Log("OnEntryPointHandler module initialized (opcode 0x%04X)", OEPH_GetOpcode());
