@@ -61,6 +61,9 @@ namespace Settings
 	int iLocationVisitCooldownSeconds = 300;  // Cooldown between popups for same location
 	int bLocationVisitDisableSound = 0;  // Play sound with popup
 
+	// VATSExtender settings
+	int bVATSExtender = 1;  // Enabled by default - extend VATS target highlighting limit
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -106,5 +109,6 @@ namespace Settings
 		bLocationVisitPopup = GetINIInt("Tweaks", "bLocationVisitPopup", 1);
 		iLocationVisitCooldownSeconds = GetINIInt("LocationVisitPopup", "iCooldownSeconds", 300);
 		bLocationVisitDisableSound = GetINIInt("LocationVisitPopup", "bDisableSound", 0);
+		bVATSExtender = GetINIInt("Tweaks", "bVATSExtender", 1);
 	}
 }
