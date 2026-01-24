@@ -50,6 +50,12 @@ namespace Settings
 	// VATSLimbFix settings
 	int bVATSLimbFix = 0;  // Disabled by default - hide dismembered limbs in VATS
 
+	// OwnedBeds settings
+	int bOwnedBeds = 0;  // Disabled by default - allow sleeping in owned beds with consequences
+
+	// AshPileNames settings
+	int bAshPileNames = 0;  // Disabled by default - show original NPC name for ash piles
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -90,5 +96,7 @@ namespace Settings
 		bDialogueCamera = GetINIInt("Tweaks", "bDialogueCamera", 0);
 		bVATSProjectileFix = GetINIInt("Tweaks", "bVATSProjectileFix", 1);
 		bVATSLimbFix = GetINIInt("Tweaks", "bVATSLimbFix", 0);
+		bOwnedBeds = GetINIInt("Tweaks", "bOwnedBeds", 0);
+		bAshPileNames = GetINIInt("Tweaks", "bAshPileNames", 0);
 	}
 }

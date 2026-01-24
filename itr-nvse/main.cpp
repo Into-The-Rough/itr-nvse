@@ -646,6 +646,211 @@ namespace VATSLimbFix
 }
 
 //=============================================================================
+// Owned Beds - allow sleeping in owned beds with consequences
+//=============================================================================
+
+namespace OwnedBeds
+{
+	constexpr UInt32 kAddr_IsAnOwner = 0x5785E0;
+	constexpr UInt32 kAddr_IsAnOwnerCall = 0x509679;
+	constexpr UInt32 kAddr_ResolveOwnership = 0x567790;
+	constexpr UInt32 kAddr_PlayerSingleton = 0x011DEA3C;
+	constexpr UInt32 kAddr_ProcessListsSingleton = 0x11E0E80;
+	constexpr UInt32 kAddr_AttackAlarm = 0x8C0460;
+	constexpr UInt32 kAddr_GetActorRefInHigh = 0x970B30;
+	constexpr UInt32 kAddr_GetActorRefInHigh_0 = 0x970A20;
+	constexpr UInt32 kAddr_GetDetectionLevelAgainstActor = 0x8A0D10;
+	constexpr UInt32 kAddr_GetCurrentProcess = 0x8D8520;
+	constexpr UInt32 kAddr_GetTopic = 0x61A2D0;
+	constexpr UInt32 kAddr_ProcessGreet = 0x8DBE30;
+	constexpr UInt8 kFormType_TESFaction = 8;
+	constexpr UInt32 DT_COMBAT = 4;
+
+	static bool g_playerWarnedAboutBed = false;
+
+	template <typename T_Ret = void, typename... Args>
+	__forceinline T_Ret OBThisCall(UInt32 addr, void* thisObj, Args... args) {
+		return reinterpret_cast<T_Ret(__thiscall*)(void*, Args...)>(addr)(thisObj, args...);
+	}
+
+	inline UInt8 GetFormType(void* form) {
+		return *((UInt8*)form + 4);
+	}
+
+	typedef bool (__thiscall *_IsAnOwner)(void* thisObj, void* actor, bool checkFaction);
+	static _IsAnOwner IsAnOwner = (_IsAnOwner)kAddr_IsAnOwner;
+
+	typedef void* (__cdecl *_GetTopic)(UInt32 type, int index);
+	static _GetTopic GetTopic = (_GetTopic)kAddr_GetTopic;
+
+	typedef void* (__thiscall *_MobileGetProcess)(void* actor);
+	static _MobileGetProcess MobileGetProcess = (_MobileGetProcess)kAddr_GetCurrentProcess;
+
+	typedef void (__thiscall *_ProcessGreet)(void* process, void* actor, void* topic, bool forceSub, bool stop, bool queue, bool sayCallback);
+	static _ProcessGreet ProcessGreet = (_ProcessGreet)kAddr_ProcessGreet;
+
+	static void SendAssaultAlarmToBedOwner(void* bedRef, void* owner) {
+		void* player = *(void**)kAddr_PlayerSingleton;
+		void* processList = (void*)kAddr_ProcessListsSingleton;
+		void* nearbyActor = nullptr;
+
+		UInt8 formType = GetFormType(owner);
+
+		if (formType == kFormType_TESFaction) {
+			nearbyActor = OBThisCall<void*>(kAddr_GetActorRefInHigh, processList, owner, true, true);
+		} else {
+			nearbyActor = OBThisCall<void*>(kAddr_GetActorRefInHigh_0, processList, owner, 0);
+		}
+
+		if (!nearbyActor || nearbyActor == player)
+			return;
+
+		bool hasLOS = false;
+		bool a8 = false;
+		SInt32 detectionLevel = OBThisCall<SInt32>(kAddr_GetDetectionLevelAgainstActor,
+			nearbyActor, true, player, &hasLOS, false, false, 0, &a8);
+
+		if (detectionLevel <= 0)
+			return;
+
+		if (!g_playerWarnedAboutBed) {
+			void* topic = GetTopic(DT_COMBAT, 9);
+			if (topic) {
+				void* process = MobileGetProcess(nearbyActor);
+				if (process) {
+					ProcessGreet(process, nearbyActor, topic, false, false, true, false);
+				}
+			}
+			g_playerWarnedAboutBed = true;
+		} else {
+			OBThisCall(kAddr_AttackAlarm, nearbyActor, player, false, 1);
+		}
+	}
+
+	bool __fastcall IsAnOwnerHook(void* bedRef, void* edx, void* actor, bool checkFaction) {
+		bool isOwner = IsAnOwner(bedRef, actor, checkFaction);
+
+		if (!isOwner) {
+			void* owner = OBThisCall<void*>(kAddr_ResolveOwnership, bedRef);
+			if (owner) {
+				SendAssaultAlarmToBedOwner(bedRef, owner);
+			}
+			return true;
+		}
+		return true;
+	}
+
+	void PatchWrite8(uint32_t addr, uint8_t data) {
+		DWORD oldProtect;
+		VirtualProtect((void*)addr, 1, PAGE_EXECUTE_READWRITE, &oldProtect);
+		*(uint8_t*)addr = data;
+		VirtualProtect((void*)addr, 1, oldProtect, &oldProtect);
+	}
+
+	void PatchWrite32(uint32_t addr, uint32_t data) {
+		DWORD oldProtect;
+		VirtualProtect((void*)addr, 4, PAGE_EXECUTE_READWRITE, &oldProtect);
+		*(uint32_t*)addr = data;
+		VirtualProtect((void*)addr, 4, oldProtect, &oldProtect);
+	}
+
+	void WriteRelCall(UInt32 addr, UInt32 target) {
+		PatchWrite8(addr, 0xE8);
+		PatchWrite32(addr + 1, target - addr - 5);
+	}
+
+	void Init()
+	{
+		WriteRelCall(kAddr_IsAnOwnerCall, (UInt32)IsAnOwnerHook);
+		Log("OwnedBeds installed");
+	}
+}
+
+//=============================================================================
+// Ash Pile Names - show original NPC name for ash piles
+//=============================================================================
+
+namespace AshPileNames
+{
+	constexpr UInt32 kGetBaseFullNameAddr = 0x55D520;
+	constexpr UInt32 kReturnAddr = 0x55D527;
+	constexpr UInt32 kExtraData_AshPileRef = 0x89;
+
+	static UInt8 g_trampoline[32];
+
+	typedef const char* (__thiscall* _TrampolineFunc)(TESObjectREFR* thisRef);
+	static _TrampolineFunc CallTrampoline = nullptr;
+
+	static BSExtraData* GetExtraDataByType(BaseExtraList* list, UInt32 type)
+	{
+		if (!list) return nullptr;
+		UInt32 index = (type >> 3);
+		UInt8 bitMask = 1 << (type % 8);
+		if (!(list->m_presenceBitfield[index] & bitMask))
+			return nullptr;
+		for (BSExtraData* traverse = list->m_data; traverse; traverse = traverse->next)
+			if (traverse->type == type)
+				return traverse;
+		return nullptr;
+	}
+
+	static const char* GetActorNameFromAshPile(TESObjectREFR* ashPileRef)
+	{
+		if (!ashPileRef) return nullptr;
+
+		BSExtraData* extraData = GetExtraDataByType(&ashPileRef->extraDataList, kExtraData_AshPileRef);
+		if (!extraData) return nullptr;
+
+		TESObjectREFR* sourceRef = *(TESObjectREFR**)((UInt8*)extraData + 0x0C);
+		if (!sourceRef || !sourceRef->baseForm) return nullptr;
+
+		TESForm* baseForm = sourceRef->baseForm;
+		UInt8 formType = baseForm->typeID;
+
+		if (formType != kFormType_NPC && formType != kFormType_Creature)
+			return nullptr;
+
+		TESActorBase* actorBase = (TESActorBase*)baseForm;
+		const char* name = actorBase->fullName.name.m_data;
+
+		if (name && name[0])
+			return name;
+
+		return nullptr;
+	}
+
+	static const char* __fastcall Hook_GetBaseFullName(TESObjectREFR* thisRef, void* edx)
+	{
+		const char* actorName = GetActorNameFromAshPile(thisRef);
+		if (actorName)
+			return actorName;
+		return CallTrampoline(thisRef);
+	}
+
+	void Init()
+	{
+		DWORD oldProtect;
+		VirtualProtect(g_trampoline, sizeof(g_trampoline), PAGE_EXECUTE_READWRITE, &oldProtect);
+
+		memcpy(g_trampoline, (void*)kGetBaseFullNameAddr, 7);
+		g_trampoline[7] = 0xE9;
+		*(UInt32*)&g_trampoline[8] = kReturnAddr - ((UInt32)&g_trampoline[7] + 5);
+
+		CallTrampoline = (_TrampolineFunc)(void*)g_trampoline;
+
+		DWORD oldProtect2;
+		VirtualProtect((void*)kGetBaseFullNameAddr, 7, PAGE_EXECUTE_READWRITE, &oldProtect2);
+		*(UInt8*)kGetBaseFullNameAddr = 0xE9;
+		*(UInt32*)(kGetBaseFullNameAddr + 1) = (UInt32)Hook_GetBaseFullName - kGetBaseFullNameAddr - 5;
+		*(UInt8*)(kGetBaseFullNameAddr + 5) = 0x90;
+		*(UInt8*)(kGetBaseFullNameAddr + 6) = 0x90;
+		VirtualProtect((void*)kGetBaseFullNameAddr, 7, oldProtect2, &oldProtect2);
+
+		Log("AshPileNames installed");
+	}
+}
+
+//=============================================================================
 // Kill Actor XP Fix - prevents XP reward when using "kill" command on already-dead actors
 //=============================================================================
 
@@ -1473,6 +1678,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					VATSProjectileFix::Init();
 				if (Settings::bVATSLimbFix)
 					VATSLimbFix::Init();
+				if (Settings::bOwnedBeds)
+					OwnedBeds::Init();
 				g_hooksInstalled = true;
 			}
 			break;
@@ -1481,6 +1688,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			// Install camera hooks after ALL plugins loaded (chains to JohnnyGuitar if present)
 			if (Settings::bDialogueCamera)
 				DCH_InstallCameraHooks();
+			if (Settings::bAshPileNames)
+				AshPileNames::Init();
 			break;
 
 		case NVSEMessagingInterface::kMessage_NewGame:
@@ -1629,6 +1838,8 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 	Log("  bDialogueCamera: %d", Settings::bDialogueCamera);
 	Log("  bVATSProjectileFix: %d", Settings::bVATSProjectileFix);
 	Log("  bVATSLimbFix: %d", Settings::bVATSLimbFix);
+	Log("  bOwnedBeds: %d", Settings::bOwnedBeds);
+	Log("  bAshPileNames: %d", Settings::bAshPileNames);
 	Log("  iAutoQuickLoadFrameDelay: %d", Settings::iAutoQuickLoadFrameDelay);
 
 	// QuickDrop/Quick180 hooks are installed in PostLoad message handler
