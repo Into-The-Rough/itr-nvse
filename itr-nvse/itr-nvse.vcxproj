@@ -198,6 +198,8 @@
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
     </ClCompile>
+    <ClCompile Include="ELMO.cpp" />
+    <ClCompile Include="LocationVisitPopup.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="internal\settings.h" />
@@ -222,6 +224,8 @@
     <ClInclude Include="SaveFileSizeHandler.h" />
     <ClInclude Include="OwnerNameInfoHandler.h" />
     <ClInclude Include="PreventWeaponSwitch.h" />
+    <ClInclude Include="ELMO.h" />
+    <ClInclude Include="LocationVisitPopup.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />
