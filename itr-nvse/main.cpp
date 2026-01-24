@@ -39,6 +39,7 @@ __forceinline T_Ret CdeclCall(uint32_t _addr, Args ...args) {
 #include "FakeHitHandler.h"
 #include "SaveFileSizeHandler.h"
 #include "OwnerNameInfoHandler.h"
+#include "PreventWeaponSwitch.h"
 
 #include <cstdio>
 #include <cstring>
@@ -2788,6 +2789,12 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 	nvse->RegisterCommand(&kCommandInfo_SetNoWeaponSearch);
 	nvse->RegisterCommand(&kCommandInfo_GetNoWeaponSearch);
 	Log("Registered SetNoWeaponSearch/GetNoWeaponSearch at 0x3B20-0x3B21");
+
+	// Initialize PreventWeaponSwitch module
+	PreventWeaponSwitch_Init();
+	nvse->SetOpcodeBase(0x3B22);
+	PreventWeaponSwitch_RegisterCommands(nvse);
+	Log("Registered SetPreventWeaponSwitch/GetPreventWeaponSwitch at 0x3B22-0x3B23");
 
 	Log("itr-nvse loaded successfully");
 

@@ -194,6 +194,10 @@
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
     </ClCompile>
+    <ClCompile Include="PreventWeaponSwitch.cpp">
+      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
+      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="internal\settings.h" />
@@ -217,6 +221,7 @@
     <ClInclude Include="FakeHitHandler.h" />
     <ClInclude Include="SaveFileSizeHandler.h" />
     <ClInclude Include="OwnerNameInfoHandler.h" />
+    <ClInclude Include="PreventWeaponSwitch.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />
