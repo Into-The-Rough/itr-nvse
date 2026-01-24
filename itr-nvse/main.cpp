@@ -110,7 +110,6 @@ PlayerCharacter* PlayerCharacter::GetSingleton()
 {
 	return *(PlayerCharacter**)0x011DEA3C;
 }
-=============================================================================
 
 PluginHandle g_pluginHandle = kPluginHandle_Invalid;
 NVSEMessagingInterface* g_msgInterface = nullptr;
@@ -122,17 +121,13 @@ static PlayerCharacter** g_thePlayer = (PlayerCharacter**)0x011DEA3C;
 static UInt8* g_MenuVisibilityArray = (UInt8*)0x011F308F;
 static SaveGameManager** g_saveGameManager = (SaveGameManager**)0x011DE134;
 
-// AutoGodMode state
 static bool g_godModeExecuted = false;
-
-// AutoQuickLoad state
 static bool g_quickLoadExecuted = false;
 static int g_framesOnMenu = 0;
 
 typedef bool (__thiscall *_LoadQuicksave)(SaveGameManager* mgr);
 static const _LoadQuicksave LoadQuicksave = (_LoadQuicksave)0x8509F0;
 
-// AltTabMute state
 constexpr UInt32 kNumVolumeChannels = 12;
 #define INI_MUSIC_VOLUME_ADDR 0x11F6E44
 
@@ -177,7 +172,6 @@ static void OnFocusGained()
 	*iniMusicVolume = g_savedIniMusicVolume;
 }
 
-// Simple log file (declared early so hooks can use it)
 static FILE* g_logFile = nullptr;
 
 void Log(const char* fmt, ...)
@@ -190,10 +184,6 @@ void Log(const char* fmt, ...)
 	fflush(g_logFile);
 	va_end(args);
 }
-
-//=============================================================================
-// Exploding Pants Fix
-//=============================================================================
 
 namespace ExplodingPantsFix
 {
@@ -223,10 +213,9 @@ namespace ExplodingPantsFix
 	}
 
 	bool __cdecl Hook_IsAltTrigger(void* projBase) {
-		// Call original IsAltTrigger
 		if (((bool(__thiscall*)(void*))kAddr_IsAltTrigger)(projBase))
 			return true;
-		// Check projectile flag 0x400 at offset 0xC8
+		//flag 0x400 at offset 0xC8
 		if (g_currentProjectile && (*(uint32_t*)((uint8_t*)g_currentProjectile + 0xC8) & 0x400))
 			return true;
 		return false;
@@ -248,10 +237,6 @@ namespace ExplodingPantsFix
 		Log("ExplodingPantsFix installed");
 	}
 }
-
-//=============================================================================
-// Owned Beds - allow sleeping in owned beds with consequences
-//=============================================================================
 
 namespace OwnedBeds
 {
@@ -370,10 +355,6 @@ namespace OwnedBeds
 	}
 }
 
-//=============================================================================
-// Ash Pile Names - show original NPC name for ash piles
-//=============================================================================
-
 namespace AshPileNames
 {
 	constexpr UInt32 kGetBaseFullNameAddr = 0x55D520;
@@ -453,10 +434,6 @@ namespace AshPileNames
 		Log("AshPileNames installed");
 	}
 }
-
-//=============================================================================
-// NoWeaponSearch - disable weapon searching for specific actors
-//=============================================================================
 
 namespace NoWeaponSearch
 {
@@ -589,23 +566,13 @@ static CommandInfo kCommandInfo_GetNoWeaponSearch = {
 	1, 0, nullptr, Cmd_GetNoWeaponSearch_Execute, nullptr, nullptr, 0
 };
 
-//=============================================================================
-// Kill Actor XP Fix - prevents XP reward when using "kill" command on already-dead actors
-//=============================================================================
-
 namespace KillActorXPFix
 {
-	// Cmd_KillActor_Execute XP block:
-	// 0x5BE379: mov ecx, [ebp-10h]   ; load actor (3 bytes)
-	// 0x5BE37C: call Actor::GetLevel ; start XP calc (5 bytes)
-	// ...
-	// 0x5BE3FA: (after XP block)     ; skip target
-
-	constexpr uint32_t kAddr_XPBlockStart = 0x5BE379;      // Start of XP reward code
-	constexpr uint32_t kAddr_XPBlockEnd = 0x5BE3FA;        // Jump here to skip XP
-	constexpr uint32_t kAddr_ActorGetLevel = 0x87F9F0;     // Actor::GetLevel
-	constexpr uint32_t kAddr_ReturnAfterHook = 0x5BE381;   // Return address after our hook (after the call)
-	constexpr uint32_t kOffset_Actor_LifeState = 0x108;    // Actor::lifeState offset
+	constexpr uint32_t kAddr_XPBlockStart = 0x5BE379;
+	constexpr uint32_t kAddr_XPBlockEnd = 0x5BE3FA;
+	constexpr uint32_t kAddr_ActorGetLevel = 0x87F9F0;
+	constexpr uint32_t kAddr_ReturnAfterHook = 0x5BE381;
+	constexpr uint32_t kOffset_Actor_LifeState = 0x108;
 
 	void PatchWrite8(uint32_t addr, uint8_t data) {
 		DWORD oldProtect;
@@ -630,27 +597,19 @@ namespace KillActorXPFix
 	{
 		__asm
 		{
-			// Load actor pointer from [ebp-10h]
 			mov ecx, [ebp-0x10]
-
-			// Check if actor is dead (lifeState at offset 0x108)
-			// lifeState: 0=alive, 1=dying, 2=dead, 6=essential
-			mov eax, [ecx + 0x108]  // actor->lifeState
-			cmp eax, 1              // dying?
+			mov eax, [ecx + 0x108] //lifeState: 0=alive,1=dying,2=dead
+			cmp eax, 1
 			je skip_xp
-			cmp eax, 2              // dead?
+			cmp eax, 2
 			je skip_xp
 
-			// Actor is alive - continue with XP reward
-			// ecx already has actor, call Actor::GetLevel
 			mov eax, kAddr_ActorGetLevel
 			call eax
-			// Return to after the call instruction
 			mov eax, kAddr_ReturnAfterHook
 			jmp eax
 
 		skip_xp:
-			// Actor already dead - skip XP block entirely
 			mov eax, kAddr_XPBlockEnd
 			jmp eax
 		}
@@ -658,20 +617,13 @@ namespace KillActorXPFix
 
 	void Init()
 	{
-		// Overwrite 8 bytes at 0x5BE379:
-		// Original: mov ecx, [ebp-10h] (3 bytes) + call Actor::GetLevel (5 bytes)
-		// New: jmp Hook_XPBlockStart (5 bytes) + 3 NOPs
 		WriteRelJump(kAddr_XPBlockStart, (uint32_t)Hook_XPBlockStart);
-		PatchWrite8(kAddr_XPBlockStart + 5, 0x90);  // NOP
-		PatchWrite8(kAddr_XPBlockStart + 6, 0x90);  // NOP
-		PatchWrite8(kAddr_XPBlockStart + 7, 0x90);  // NOP
+		PatchWrite8(kAddr_XPBlockStart + 5, 0x90);
+		PatchWrite8(kAddr_XPBlockStart + 6, 0x90);
+		PatchWrite8(kAddr_XPBlockStart + 7, 0x90);
 		Log("KillActorXPFix installed");
 	}
 }
-
-//=============================================================================
-// Reverse Pickpocket No Karma
-//=============================================================================
 
 namespace ReversePickpocketNoKarmaFix
 {
@@ -748,9 +700,6 @@ namespace ReversePickpocketNoKarmaFix
 	}
 }
 
-//=============================================================================
-// Console Log Cleaner
-//=============================================================================
 
 static void DeleteConsoleLog()
 {
@@ -759,7 +708,7 @@ static void DeleteConsoleLog()
 	char* lastSlash = strrchr(gameDir, '\\');
 	if (lastSlash) *lastSlash = '\0';
 
-	// Check Stewie's Tweaks INI for custom console log name
+	//stewie's tweaks custom console log name
 	char iniPath[MAX_PATH];
 	sprintf_s(iniPath, "%s\\Data\\NVSE\\Plugins\\nvse_stewie_tweaks.ini", gameDir);
 
@@ -772,9 +721,6 @@ static void DeleteConsoleLog()
 	DeleteFileA(logPath);
 }
 
-//=============================================================================
-// GetRefsSortedByDistance Command
-//=============================================================================
 
 static ParamInfo kParams_GetRefsSortedByDistance[5] = {
 	{ "maxDistance",      kParamType_Float,   0 },
@@ -936,12 +882,6 @@ bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 	return true;
 }
 
-//=============================================================================
-// Duplicate Command
-//=============================================================================
-
-// PlaceAtMe game function - spawns a ref from a base form at a location
-// TESObjectREFR* PlaceAtMe(TESObjectREFR* refr, TESForm* form, UInt32 count, UInt32 distance, UInt32 direction, float health)
 typedef TESObjectREFR* (*_PlaceAtMe)(TESObjectREFR*, TESForm*, UInt32, UInt32, UInt32, float);
 static const _PlaceAtMe PlaceAtMe = (_PlaceAtMe)0x5C4B30;
 
@@ -1003,19 +943,12 @@ bool Cmd_Duplicate_Execute(COMMAND_ARGS)
 	return true;
 }
 
-//=============================================================================
-// GetAvailableRecipes Command - Returns array of recipes player can craft
-//=============================================================================
-
-// Condition evaluation function: bool __thiscall tList<Condition>::Evaluate(TESObjectREFR* runOnRef, TESForm* arg2, bool* result, bool arg4)
 typedef bool (__thiscall *_ConditionList_Evaluate)(void* conditionList, TESObjectREFR* runOnRef, TESForm* arg2, bool* result, bool arg4);
 static const _ConditionList_Evaluate ConditionList_Evaluate = (_ConditionList_Evaluate)0x680C60;
 
-// Get actor value (for skill checks)
 typedef SInt32 (__thiscall *_GetActorValue)(void* actorValueOwner, UInt32 avCode);
 static const _GetActorValue GetActorValue = (_GetActorValue)0x66EF50;
 
-// Get item count from inventory: TESObjectREFR::GetItemCountinContainer at 0x575610
 typedef SInt32 (__thiscall *_GetItemCount)(TESObjectREFR* container, TESForm* item);
 static const _GetItemCount GetItemCount = (_GetItemCount)0x575610;
 
@@ -1032,20 +965,16 @@ bool Cmd_GetAvailableRecipes_Execute(COMMAND_ARGS)
 	TESForm* categoryFilter = nullptr;
 	ExtractArgs(EXTRACT_ARGS, &categoryFilter);
 
-	// Validate category filter if provided
 	if (categoryFilter && categoryFilter->typeID != kFormType_RecipeCategory)
 		categoryFilter = nullptr;
 
 	PlayerCharacter* player = PlayerCharacter::GetSingleton();
 	if (!player) return true;
 
-	// Get recipe list from data handler (direct pointer access since DataHandler::Get() isn't linked)
 	DataHandler* dataHandler = *(DataHandler**)0x011C3F2C;
 	if (!dataHandler) return true;
 
 	std::vector<TESForm*> availableRecipes;
-
-	// Iterate through all recipes
 	tList<TESRecipe>* recipeList = &dataHandler->recipeList;
 
 	for (auto iter = recipeList->Begin(); !iter.End(); ++iter)
@@ -1053,7 +982,6 @@ bool Cmd_GetAvailableRecipes_Execute(COMMAND_ARGS)
 		TESRecipe* recipe = iter.Get();
 		if (!recipe) continue;
 
-		// Filter by category if specified
 		if (categoryFilter)
 		{
 			TESRecipeCategory* cat = recipe->category;
@@ -1062,24 +990,20 @@ bool Cmd_GetAvailableRecipes_Execute(COMMAND_ARGS)
 				continue;
 		}
 
-		// 1. Evaluate conditions
 		void* conditionList = &recipe->conditions;
 		bool evalResult = false;
 		bool conditionsPassed = ConditionList_Evaluate(conditionList, player, nullptr, &evalResult, false);
 		if (!conditionsPassed)
 			continue;
 
-		// 2. Check skill requirement
 		if (recipe->reqSkill != (UInt32)-1 && recipe->reqSkillLevel > 0)
 		{
-			// ActorValueOwner is at offset 0xA4 in Actor (Actor inherits from MobileObject -> TESObjectREFR)
-			void* actorValueOwner = (void*)((UInt8*)player + 0xA4);
+			void* actorValueOwner = (void*)((UInt8*)player + 0xA4); //ActorValueOwner at 0xA4
 			SInt32 playerSkill = GetActorValue(actorValueOwner, recipe->reqSkill);
 			if (playerSkill < (SInt32)recipe->reqSkillLevel)
 				continue;
 		}
 
-		// 3. Check if player has all required input items
 		bool hasAllInputs = true;
 		for (auto inputIter = recipe->inputs.Begin(); !inputIter.End(); ++inputIter)
 		{
@@ -1097,11 +1021,9 @@ bool Cmd_GetAvailableRecipes_Execute(COMMAND_ARGS)
 		if (!hasAllInputs)
 			continue;
 
-		// All checks passed - recipe is available
 		availableRecipes.push_back(recipe);
 	}
 
-	// Create and return array
 	if (!availableRecipes.empty() && g_arrInterface)
 	{
 		NVSEArrayVarInterface::Array* arr = g_arrInterface->CreateArray(nullptr, 0, scriptObj);
@@ -1121,9 +1043,6 @@ bool Cmd_GetAvailableRecipes_Execute(COMMAND_ARGS)
 	return true;
 }
 
-//=============================================================================
-// ClampToGround Command
-//=============================================================================
 
 //TESObjectREFR::ClampToGround at 0x576470
 typedef bool (__thiscall *_ClampToGround)(TESObjectREFR*);
@@ -1155,9 +1074,6 @@ bool Cmd_ClampToGround_Execute(COMMAND_ARGS)
 	return true;
 }
 
-//=============================================================================
-// Message Handler
-//=============================================================================
 
 static bool g_hooksInstalled = false;
 
@@ -1166,7 +1082,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 	switch (msg->type)
 	{
 		case NVSEMessagingInterface::kMessage_PostLoad:
-			// Install hooks AFTER all plugins loaded - ensures proper chaining
 			if (!g_hooksInstalled)
 			{
 				if (Settings::bQuickDrop || Settings::bQuick180)
@@ -1195,7 +1110,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 
 		case NVSEMessagingInterface::kMessage_PostPostLoad:
-			// Install camera hooks after ALL plugins loaded (chains to JohnnyGuitar if present)
 			if (Settings::bDialogueCamera)
 				DCH_InstallCameraHooks();
 			if (Settings::bAshPileNames)
@@ -1208,10 +1122,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 		case NVSEMessagingInterface::kMessage_NewGame:
 		case NVSEMessagingInterface::kMessage_PostLoadGame:
-			// Build perk entry map for OnEntryPointHandler
 			OEPH_BuildEntryMap();
-
-			// AutoGodMode
 			if (Settings::bAutoGodMode && !g_godModeExecuted)
 			{
 				//g_bIsGodMode at 0x11E07BA
@@ -1226,26 +1137,13 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 
 		case kMessage_MainGameLoop:
-			//init camera override on first frame (after JG has hooked)
 			CameraOverride_Init();
-
-			// OwnerNameInfo update (every frame)
 			ONI_Update();
-
-			// KeyHeldHandler update (every frame)
 			KHH_Update();
-
-			// DoubleTapHandler update (every frame)
 			DTH_Update();
-
-			// OnSoundPlayedHandler update (every frame - process queued sound events)
 			OSPH_Update();
-
-			// DialogueCameraHandler update (every frame)
 			if (Settings::bDialogueCamera)
 				DCH_Update();
-
-			// AutoQuickLoad
 			if (Settings::bAutoQuickLoad && !g_quickLoadExecuted)
 			{
 				if (g_MenuVisibilityArray[kMenuType_Start])
@@ -1262,8 +1160,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					}
 				}
 			}
-
-			// AltTabMute
 			if (Settings::bAltTabMute)
 			{
 				if (!g_gameWindow)
@@ -1287,9 +1183,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 	}
 }
 
-//=============================================================================
-// Plugin Entry Points
-//=============================================================================
 
 extern "C" {
 
@@ -1313,7 +1206,6 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 
 	if (nvse->isEditor) return true;
 
-	// Open log file next to our DLL
 	char logPath[MAX_PATH];
 	GetModuleFileNameA(GetModuleHandleA("itr-nvse.dll"), logPath, MAX_PATH);
 	char* lastSlash = strrchr(logPath, '\\');
@@ -1322,7 +1214,6 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 
 	Log("itr-nvse v%s loading...", ITR_VERSION_STR);
 
-	// Get interfaces
 	g_msgInterface = (NVSEMessagingInterface*)nvse->QueryInterface(kInterface_Messaging);
 	g_consoleInterface = (NVSEConsoleInterface*)nvse->QueryInterface(kInterface_Console);
 	g_arrInterface = (NVSEArrayVarInterface*)nvse->QueryInterface(kInterface_ArrayVar);
@@ -1333,7 +1224,6 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 		return false;
 	}
 
-	// Load INI settings
 	Settings::Load();
 
 	Log("Settings loaded:");
@@ -1360,60 +1250,49 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 	Log("  bSuppressReputation: %d", Settings::bSuppressReputation);
 	Log("  iAutoQuickLoadFrameDelay: %d", Settings::iAutoQuickLoadFrameDelay);
 
-	// QuickDrop/Quick180 hooks are installed in PostLoad message handler
-	// This ensures we chain properly with other plugins (e.g., Stewie Tweaks)
 	if (Settings::bQuickDrop) Log("QuickDrop enabled (modifier=%d, control=%d)", Settings::iQuickDropModifierKey, Settings::iQuickDropControlID);
 	if (Settings::bQuick180) Log("Quick180 enabled (modifier=%d, control=%d)", Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
 
-	// Delete console log if enabled
 	if (Settings::bConsoleLogCleaner)
 	{
 		DeleteConsoleLog();
 		Log("ConsoleLogCleaner: Deleted console log");
 	}
 
-	// Initialize MessageBoxQuickClose if enabled
 	if (Settings::bMessageBoxQuickClose)
 	{
 		MBQC_Init();
 		Log("MessageBoxQuickClose enabled");
 	}
 
-	// Register message listener
 	g_msgInterface->RegisterListener(g_pluginHandle, "NVSE", MessageHandler);
 
-	// Register itr-nvse commands
 	nvse->SetOpcodeBase(0x4040);
 	nvse->RegisterTypedCommand(&kCommandInfo_GetRefsSortedByDistance, kRetnType_Array);
 	Log("Registered GetRefsSortedByDistance at opcode 0x4040");
 
-	// Initialize DialogueTextFilter module (registers SetOnDialogueTextEventHandler at 0x3B00)
 	if (DTF_Init((void*)nvse)) {
 		Log("DialogueTextFilter module initialized (opcode 0x%04X)", DTF_GetOpcode());
 	} else {
 		Log("DialogueTextFilter module failed to initialize");
 	}
 
-	// Initialize OnStealHandler module (registers SetOnStealEventHandler at 0x3B01)
 	if (OSH_Init((void*)nvse)) {
 		Log("OnStealHandler module initialized (opcode 0x%04X)", OSH_GetOpcode());
 	} else {
 		Log("OnStealHandler module failed to initialize");
 	}
 
-	// Initialize OnWeaponDropHandler module (registers SetOnWeaponDropEventHandler at 0x3B02)
 	if (OWDH_Init((void*)nvse)) {
 		Log("OnWeaponDropHandler module initialized (opcode 0x%04X)", OWDH_GetOpcode());
 	} else {
 		Log("OnWeaponDropHandler module failed to initialize");
 	}
 
-	// Register Duplicate command at 0x3B03
 	nvse->SetOpcodeBase(0x3B03);
 	nvse->RegisterTypedCommand(&kCommandInfo_Duplicate, kRetnType_Form);
 	Log("Registered Duplicate at opcode 0x3B03");
 
-	// Initialize OnConsoleHandler module (registers at 0x3B04 and 0x3B05)
 	if (OCH_Init((void*)nvse)) {
 		Log("OnConsoleHandler module initialized (open=0x%04X, close=0x%04X)",
 		    OCH_GetOpenOpcode(), OCH_GetCloseOpcode());
@@ -1421,14 +1300,12 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 		Log("OnConsoleHandler module failed to initialize");
 	}
 
-	// Initialize OnWeaponJamHandler module (registers at 0x3B06)
 	if (OWJH_Init((void*)nvse)) {
 		Log("OnWeaponJamHandler module initialized (opcode 0x%04X)", OWJH_GetOpcode());
 	} else {
 		Log("OnWeaponJamHandler module failed to initialize");
 	}
 
-	// Initialize OnKeyStateHandler module (registers at 0x3B07-0x3B0A)
 	if (OKSH_Init((void*)nvse)) {
 		Log("OnKeyStateHandler module initialized (disabled=0x%04X, enabled=0x%04X)",
 		    OKSH_GetDisabledOpcode(), OKSH_GetEnabledOpcode());
@@ -1436,78 +1313,66 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 		Log("OnKeyStateHandler module failed to initialize");
 	}
 
-	// Initialize KeyHeldHandler module (registers at 0x3B0B-0x3B0E)
 	if (KHH_Init((void*)nvse)) {
 		Log("KeyHeldHandler module initialized");
 	} else {
 		Log("KeyHeldHandler module failed to initialize");
 	}
 
-	// Initialize DoubleTapHandler module (registers at 0x3B0F-0x3B12)
 	if (DTH_Init((void*)nvse)) {
 		Log("DoubleTapHandler module initialized");
 	} else {
 		Log("DoubleTapHandler module failed to initialize");
 	}
 
-	// Initialize OnFrenzyHandler module (registers at 0x3B13)
 	if (OFH_Init((void*)nvse)) {
 		Log("OnFrenzyHandler module initialized (opcode 0x%04X)", OFH_GetOpcode());
 	} else {
 		Log("OnFrenzyHandler module failed to initialize");
 	}
 
-	// Initialize CornerMessageHandler module (registers at 0x3B14)
 	if (CMH_Init((void*)nvse)) {
 		Log("CornerMessageHandler module initialized (opcode 0x%04X)", CMH_GetOpcode());
 	} else {
 		Log("CornerMessageHandler module failed to initialize");
 	}
 
-	// Register SetCameraAngle command at 0x3B15
 	nvse->SetOpcodeBase(0x3B15);
 	CameraOverride_RegisterCommands(nvse);
 	Log("Registered SetCameraAngle at opcode 0x3B15");
 
-	// Register GetAvailableRecipes command at 0x3B16
 	nvse->SetOpcodeBase(0x3B16);
 	nvse->RegisterTypedCommand(&kCommandInfo_GetAvailableRecipes, kRetnType_Array);
 	Log("Registered GetAvailableRecipes at opcode 0x3B16");
 
-	// Register ClampToGround command at 0x3B1F
 	nvse->SetOpcodeBase(0x3B1F);
 	nvse->RegisterCommand(&kCommandInfo_ClampToGround);
 	Log("Registered ClampToGround at opcode 0x3B1F");
 
-	// Initialize OnEntryPointHandler module (registers at 0x3B17)
 	if (OEPH_Init((void*)nvse)) {
 		Log("OnEntryPointHandler module initialized (opcode 0x%04X)", OEPH_GetOpcode());
 	} else {
 		Log("OnEntryPointHandler module failed to initialize");
 	}
 
-	// Initialize OnCombatProcedureHandler module (registers at 0x3B18)
 	if (OCPH_Init((void*)nvse)) {
 		Log("OnCombatProcedureHandler module initialized (opcode 0x%04X)", OCPH_GetOpcode());
 	} else {
 		Log("OnCombatProcedureHandler module failed to initialize");
 	}
 
-	// Initialize OnSoundPlayedHandler module (registers at 0x3B19)
 	if (OSPH_Init((void*)nvse)) {
 		Log("OnSoundPlayedHandler module initialized (opcode 0x%04X)", OSPH_GetOpcode());
 	} else {
 		Log("OnSoundPlayedHandler module failed to initialize");
 	}
 
-	// Initialize OnFastTravelHandler module (registers at 0x3B1E)
 	if (OFTH_Init((void*)nvse)) {
 		Log("OnFastTravelHandler module initialized (opcode 0x%04X)", OFTH_GetOpcode());
 	} else {
 		Log("OnFastTravelHandler module failed to initialize");
 	}
 
-	// Initialize FallDamageHandler module (registers at 0x3B1B-0x3B1D)
 	if (FDH_Init((void*)nvse)) {
 		Log("FallDamageHandler module initialized (SetMult=0x%04X, GetMult=0x%04X)",
 		    FDH_GetSetMultOpcode(), FDH_GetGetMultOpcode());
@@ -1515,7 +1380,6 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 		Log("FallDamageHandler module failed to initialize");
 	}
 
-	// Initialize DialogueCameraHandler module (requires JohnnyGuitar.dll)
 	if (Settings::bDialogueCamera)
 	{
 		if (DCH_Init((void*)nvse)) {
@@ -1525,14 +1389,12 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 		}
 	}
 
-	// Initialize FakeHitHandler module (registers at 0x3F00-0x3F01)
 	if (FakeHit_Init((void*)nvse)) {
 		Log("FakeHitHandler module initialized");
 	} else {
 		Log("FakeHitHandler module failed to initialize");
 	}
 
-	// Initialize OwnerNameInfoHandler module
 	if (Settings::bOwnerNameInfo)
 	{
 		if (ONI_Init()) {
@@ -1542,20 +1404,17 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 		}
 	}
 
-	// SaveFileSizeHandler is deferred to PostLoad to chain after Stewie Tweaks
 	if (Settings::bSaveFileSize)
 	{
 		Log("SaveFileSizeHandler will initialize in PostLoad");
 	}
 
-	// Initialize NoWeaponSearch module
 	NoWeaponSearch::Init();
 	nvse->SetOpcodeBase(0x3B20);
 	nvse->RegisterCommand(&kCommandInfo_SetNoWeaponSearch);
 	nvse->RegisterCommand(&kCommandInfo_GetNoWeaponSearch);
 	Log("Registered SetNoWeaponSearch/GetNoWeaponSearch at 0x3B20-0x3B21");
 
-	// Initialize PreventWeaponSwitch module
 	PreventWeaponSwitch_Init();
 	nvse->SetOpcodeBase(0x3B22);
 	PreventWeaponSwitch_RegisterCommands(nvse);
