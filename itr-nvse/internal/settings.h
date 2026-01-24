@@ -64,6 +64,10 @@ namespace Settings
 	// VATSExtender settings
 	int bVATSExtender = 1;  // Enabled by default - extend VATS target highlighting limit
 
+	// ELMO settings - convert popups to corner messages
+	int bSuppressObjectives = 1;  // Enabled by default - quest objectives as corner messages
+	int bSuppressReputation = 1;  // Enabled by default - reputation changes as corner messages
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -110,5 +114,7 @@ namespace Settings
 		iLocationVisitCooldownSeconds = GetINIInt("LocationVisitPopup", "iCooldownSeconds", 300);
 		bLocationVisitDisableSound = GetINIInt("LocationVisitPopup", "bDisableSound", 0);
 		bVATSExtender = GetINIInt("Tweaks", "bVATSExtender", 1);
+		bSuppressObjectives = GetINIInt("Tweaks", "bSuppressObjectives", 1);
+		bSuppressReputation = GetINIInt("Tweaks", "bSuppressReputation", 1);
 	}
 }
