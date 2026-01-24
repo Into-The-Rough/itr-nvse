@@ -205,6 +205,7 @@
     <ClCompile Include="VATSLimbFix.cpp" />
     <ClCompile Include="PlayerUpdateHook.cpp" />
     <ClCompile Include="SlowMotionPhysicsFix.cpp" />
+    <ClCompile Include="VATSProjectileFix.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="internal\settings.h" />
@@ -236,6 +237,7 @@
     <ClInclude Include="VATSLimbFix.h" />
     <ClInclude Include="PlayerUpdateHook.h" />
     <ClInclude Include="SlowMotionPhysicsFix.h" />
+    <ClInclude Include="VATSProjectileFix.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />
