@@ -204,6 +204,7 @@
     <ClCompile Include="CameraOverride.cpp" />
     <ClCompile Include="VATSLimbFix.cpp" />
     <ClCompile Include="PlayerUpdateHook.cpp" />
+    <ClCompile Include="SlowMotionPhysicsFix.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="internal\settings.h" />
@@ -234,6 +235,7 @@
     <ClInclude Include="CameraOverride.h" />
     <ClInclude Include="VATSLimbFix.h" />
     <ClInclude Include="PlayerUpdateHook.h" />
+    <ClInclude Include="SlowMotionPhysicsFix.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />
