@@ -47,6 +47,9 @@ namespace Settings
 	// VATSProjectileFix settings
 	int bVATSProjectileFix = 1;  // Enabled by default - fix projectile hit chance in VATS
 
+	// VATSLimbFix settings
+	int bVATSLimbFix = 0;  // Disabled by default - hide dismembered limbs in VATS
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -86,5 +89,6 @@ namespace Settings
 		bOwnerNameInfo = GetINIInt("Tweaks", "bOwnerNameInfo", 1);
 		bDialogueCamera = GetINIInt("Tweaks", "bDialogueCamera", 0);
 		bVATSProjectileFix = GetINIInt("Tweaks", "bVATSProjectileFix", 1);
+		bVATSLimbFix = GetINIInt("Tweaks", "bVATSLimbFix", 0);
 	}
 }
