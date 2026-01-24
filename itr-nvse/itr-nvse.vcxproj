@@ -200,6 +200,8 @@
     </ClCompile>
     <ClCompile Include="ELMO.cpp" />
     <ClCompile Include="LocationVisitPopup.cpp" />
+    <ClCompile Include="VATSExtender.cpp" />
+    <ClCompile Include="CameraOverride.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="internal\settings.h" />
@@ -226,6 +228,8 @@
     <ClInclude Include="PreventWeaponSwitch.h" />
     <ClInclude Include="ELMO.h" />
     <ClInclude Include="LocationVisitPopup.h" />
+    <ClInclude Include="VATSExtender.h" />
+    <ClInclude Include="CameraOverride.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />

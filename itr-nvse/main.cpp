@@ -42,6 +42,8 @@ __forceinline T_Ret CdeclCall(uint32_t _addr, Args ...args) {
 #include "PreventWeaponSwitch.h"
 #include "ELMO.h"
 #include "LocationVisitPopup.h"
+#include "VATSExtender.h"
+#include "CameraOverride.h"
 
 #include <cstdio>
 #include <cstring>
@@ -867,169 +869,6 @@ namespace AshPileNames
 }
 
 //=============================================================================
-// VATS Extender - extend VATS target highlighting limit
-//=============================================================================
-
-namespace VATSExtender
-{
-	static constexpr UInt32 kMaxOverflow = 256;
-	UInt32 g_overflowRefIDs[kMaxOverflow];
-	UInt32 g_overflowCount = 0;
-	UInt32 g_lastVanillaCount = 0;
-
-	UInt32 g_lastLocationID = 0;
-	bool g_lastWasInterior = false;
-
-	void** g_interfaceManager = (void**)0x11D8A80;
-
-	typedef TESForm* (*_LookupFormByID)(UInt32 id);
-	static const _LookupFormByID VE_LookupFormByID = (_LookupFormByID)0x004839C0;
-
-	void WriteRelJump(UInt32 src, UInt32 dst) {
-		DWORD oldProtect;
-		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(UInt8*)src = 0xE9;
-		*(UInt32*)(src + 1) = dst - src - 5;
-		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
-	}
-
-	void WriteRelCall(UInt32 src, UInt32 dst) {
-		DWORD oldProtect;
-		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(UInt8*)src = 0xE8;
-		*(UInt32*)(src + 1) = dst - src - 5;
-		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
-	}
-
-	void* GetVATSHighlightData()
-	{
-		void* im = *g_interfaceManager;
-		if (!im) return nullptr;
-		return (void*)((UInt8*)im + 0x1DC);
-	}
-
-	void ClearOverflow()
-	{
-		g_overflowCount = 0;
-	}
-
-	void CheckForReset(void* vatsData)
-	{
-		UInt32 vanillaCount = *(UInt32*)((UInt8*)vatsData + 0x0C);
-		if (vanillaCount == 0 && g_lastVanillaCount > 0)
-		{
-			ClearOverflow();
-		}
-		g_lastVanillaCount = vanillaCount;
-	}
-
-	bool IsTracked(UInt32 refID)
-	{
-		for (UInt32 i = 0; i < g_overflowCount; i++)
-		{
-			if (g_overflowRefIDs[i] == refID) return true;
-		}
-		return false;
-	}
-
-	void AddOverflowRef(TESObjectREFR* refr)
-	{
-		if (!refr) return;
-		if (g_overflowCount >= kMaxOverflow) return;
-		if (IsTracked(refr->refID)) return;
-		if (!refr->GetNiNode()) return;
-
-		g_overflowRefIDs[g_overflowCount++] = refr->refID;
-	}
-
-	void __cdecl CaptureOverflowRef(TESObjectREFR* refr)
-	{
-		if (!refr) return;
-
-		TESObjectCELL* currentCell = refr->parentCell;
-		if (currentCell)
-		{
-			bool isInterior = currentCell->IsInterior();
-			UInt32 locationID = isInterior ? currentCell->refID :
-				(currentCell->worldSpace ? currentCell->worldSpace->refID : 0);
-
-			if ((isInterior != g_lastWasInterior || locationID != g_lastLocationID) && g_overflowCount > 0)
-			{
-				ClearOverflow();
-			}
-
-			g_lastWasInterior = isInterior;
-			g_lastLocationID = locationID;
-		}
-
-		AddOverflowRef(refr);
-	}
-
-	__declspec(naked) void Hook_OnLimitReached()
-	{
-		__asm
-		{
-			pushad
-			pushfd
-			mov eax, [ebp+8]
-			push eax
-			call CaptureOverflowRef
-			add esp, 4
-			popfd
-			popad
-			push 0x800E45
-			ret
-		}
-	}
-
-	void __cdecl Hook_RenderScene(void* camera, void* accumulator)
-	{
-		void* vatsData = GetVATSHighlightData();
-		if (vatsData) CheckForReset(vatsData);
-
-		if (g_overflowCount > 0)
-		{
-			void* worldRoot = CdeclCall<void*>(0x45C670);
-			if (worldRoot)
-			{
-				void* cullingProcess = ThisCall<void*>(0x8D80E0, worldRoot);
-				if (cullingProcess)
-				{
-					int rendered = 0;
-					for (UInt32 i = 0; i < g_overflowCount; i++)
-					{
-						TESForm* form = VE_LookupFormByID(g_overflowRefIDs[i]);
-						if (!form || form->typeID != kFormType_Reference) continue;
-
-						TESObjectREFR* refr = (TESObjectREFR*)form;
-						NiNode* node = refr->GetNiNode();
-						if (!node) continue;
-
-						CdeclCall(0xB6BEE0, camera, node, cullingProcess);
-						rendered++;
-					}
-
-					if (rendered == 0) ClearOverflow();
-				}
-			}
-		}
-
-		CdeclCall(0xB6C0D0, camera, accumulator);
-	}
-
-	void Init()
-	{
-		if (*(UInt8*)0x800DA4 == 0x68)
-			WriteRelJump(0x800DA4, (UInt32)Hook_OnLimitReached);
-
-		if (*(UInt8*)0x801993 == 0xE8)
-			WriteRelCall(0x801993, (UInt32)Hook_RenderScene);
-
-		Log("VATSExtender installed");
-	}
-}
-
-//=============================================================================
 // NoWeaponSearch - disable weapon searching for specific actors
 //=============================================================================
 
@@ -1324,185 +1163,6 @@ namespace ReversePickpocketNoKarmaFix
 }
 
 //=============================================================================
-// Camera Override
-//=============================================================================
-
-namespace CameraOverride
-{
-	static FILE* g_camLog = nullptr;
-	static int g_logThrottle = 0;
-
-	static void CamLog(const char* fmt, ...) {
-		if (!g_camLog) {
-			g_camLog = fopen("CameraOverride.log", "w");
-			if (!g_camLog) return;
-		}
-		va_list args;
-		va_start(args, fmt);
-		vfprintf(g_camLog, fmt, args);
-		va_end(args);
-		fprintf(g_camLog, "\n");
-		fflush(g_camLog);
-	}
-
-	struct Mat3 {
-		float m[3][3];
-
-		void Identity() {
-			m[0][0] = 1; m[0][1] = 0; m[0][2] = 0;
-			m[1][0] = 0; m[1][1] = 1; m[1][2] = 0;
-			m[2][0] = 0; m[2][1] = 0; m[2][2] = 1;
-		}
-
-		void RotateX(float rad) {
-			float s = sinf(rad), c = cosf(rad);
-			m[0][0] = 1; m[0][1] = 0; m[0][2] = 0;
-			m[1][0] = 0; m[1][1] = c; m[1][2] = s;
-			m[2][0] = 0; m[2][1] = -s; m[2][2] = c;
-		}
-
-		void RotateY(float rad) {
-			float s = sinf(rad), c = cosf(rad);
-			m[0][0] = c; m[0][1] = 0; m[0][2] = -s;
-			m[1][0] = 0; m[1][1] = 1; m[1][2] = 0;
-			m[2][0] = s; m[2][1] = 0; m[2][2] = c;
-		}
-
-		void RotateZ(float rad) {
-			float s = sinf(rad), c = cosf(rad);
-			m[0][0] = c; m[0][1] = s; m[0][2] = 0;
-			m[1][0] = -s; m[1][1] = c; m[1][2] = 0;
-			m[2][0] = 0; m[2][1] = 0; m[2][2] = 1;
-		}
-
-		Mat3 operator*(const Mat3& b) const {
-			Mat3 r;
-			for (int i = 0; i < 3; i++) {
-				for (int j = 0; j < 3; j++) {
-					r.m[i][j] = m[i][0]*b.m[0][j] + m[i][1]*b.m[1][j] + m[i][2]*b.m[2][j];
-				}
-			}
-			return r;
-		}
-	};
-
-	struct Vec3 { float x, y, z; };
-
-	static Mat3 g_rotation;
-	static Vec3 g_translation;
-	static bool g_overrideRot = false;
-	static bool g_overridePos = false;
-
-	//scene graph and camera access
-	static void** g_sceneGraph = (void**)0x11DEB7C;
-	static void** g_thePlayer = (void**)0x11DEA3C;
-
-	//NiAVObject offsets
-	//m_local at +0x34 (NiTransform: rotate=0x0, translate=0x24, scale=0x30)
-	//so m_local.rotate at +0x34, m_local.translate at +0x58
-	static constexpr UInt32 kOffset_LocalRotate = 0x34;
-	static constexpr UInt32 kOffset_LocalTranslate = 0x58;
-
-	//NiNode::GetAt virtual at vtable[0x30/4 = 12]
-	typedef void* (__thiscall *GetAt_t)(void* node, UInt32 index);
-
-	//NiAVObject::Update virtual at vtable[0x68/4 = 26]
-	typedef void (__thiscall *NiAVObjectUpdate_t)(void* node, void* updateData);
-
-	static void* GetCameraRootNode() {
-		void* sceneGraph = *g_sceneGraph;
-		if (!sceneGraph) return nullptr;
-		//call virtual GetAt(0) to get camera root node
-		void** vtable = *(void***)sceneGraph;
-		GetAt_t getAt = (GetAt_t)vtable[12];
-		return getAt(sceneGraph, 0);
-	}
-
-	static bool IsThirdPerson() {
-		void* player = *g_thePlayer;
-		if (!player) return false;
-		return *(bool*)((UInt8*)player + 0x650);
-	}
-
-	void Init() {
-		g_rotation.Identity();
-		g_translation = {0, 0, 0};
-		Log("CameraOverride installed (direct manipulation mode)");
-	}
-
-	//called every frame to apply camera override
-	void Update() {
-		if (!g_overrideRot && !g_overridePos) return;
-		if (!IsThirdPerson()) return;
-
-		void* cameraRoot = GetCameraRootNode();
-		if (!cameraRoot) return;
-
-		if (g_logThrottle++ % 60 == 0) {
-			CamLog("Update: cameraRoot=%p overrideRot=%d overridePos=%d", cameraRoot, g_overrideRot, g_overridePos);
-		}
-
-		//directly set m_local.rotate and m_local.translate
-		if (g_overridePos) {
-			Vec3* localTranslate = (Vec3*)((UInt8*)cameraRoot + kOffset_LocalTranslate);
-			*localTranslate = g_translation;
-			if (g_logThrottle % 60 == 1) {
-				CamLog("  set translate to (%.1f, %.1f, %.1f)", g_translation.x, g_translation.y, g_translation.z);
-			}
-		}
-
-		if (g_overrideRot) {
-			Mat3* localRotate = (Mat3*)((UInt8*)cameraRoot + kOffset_LocalRotate);
-			*localRotate = g_rotation;
-			if (g_logThrottle % 60 == 1) {
-				CamLog("  set rotation matrix");
-			}
-		}
-
-		//call NiAVObject::Update to recalculate world transform
-		void** vtable = *(void***)cameraRoot;
-		NiAVObjectUpdate_t updateFunc = (NiAVObjectUpdate_t)vtable[26];
-		//pass null for update data (0.0 time, no flags)
-		UInt8 updateData[12] = {0};
-		updateFunc(cameraRoot, updateData);
-	}
-
-	//public API for other modules
-	void SetRotation(bool enable, int axis, float degrees) {
-		CamLog("SetRotation: enable=%d axis=%d degrees=%.1f", enable, axis, degrees);
-		g_overrideRot = enable;
-		if (!enable) {
-			g_rotation.Identity();
-			return;
-		}
-
-		float rad = degrees * 0.01745329252f; //deg to rad
-		Mat3 rot;
-		switch (axis) {
-			case 0: g_rotation.Identity(); return;
-			case 1: rot.RotateX(rad); break;
-			case 2: rot.RotateY(rad); break;
-			case 3: rot.RotateZ(rad); break;
-			default: return;
-		}
-		g_rotation = g_rotation * rot;
-		CamLog("  g_overrideRot is now %d", g_overrideRot);
-	}
-
-	void SetTranslation(bool enable, float x, float y, float z) {
-		CamLog("SetTranslation: enable=%d pos=(%.1f, %.1f, %.1f)", enable, x, y, z);
-		g_overridePos = enable;
-		g_translation = {x, y, z};
-		CamLog("  g_overridePos is now %d", g_overridePos);
-	}
-
-	void ResetRotation() {
-		CamLog("ResetRotation called");
-		g_rotation.Identity();
-	}
-}
-
-//=============================================================================
 // Console Log Cleaner
 //=============================================================================
 
@@ -1758,59 +1418,6 @@ bool Cmd_Duplicate_Execute(COMMAND_ARGS)
 }
 
 //=============================================================================
-// SetCameraAngle Command - Sets absolute camera rotation (requires JohnnyGuitar)
-//=============================================================================
-
-static ParamInfo kParams_SetCameraAngle[4] = {
-	{ "enable",  kParamType_Integer, 0 },
-	{ "angleX",  kParamType_Float,   0 },
-	{ "angleY",  kParamType_Float,   0 },
-	{ "angleZ",  kParamType_Float,   0 },
-};
-
-DEFINE_COMMAND_PLUGIN(SetCameraAngle, "Sets absolute camera rotation angles (requires JohnnyGuitar)", 0, 4, kParams_SetCameraAngle);
-
-bool Cmd_SetCameraAngle_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-
-	UInt32 enable = 0;
-	float angleX = 0.0f;
-	float angleY = 0.0f;
-	float angleZ = 0.0f;
-
-	if (!ExtractArgs(EXTRACT_ARGS, &enable, &angleX, &angleY, &angleZ))
-		return true;
-
-	//reset rotation matrix
-	CameraOverride::ResetRotation();
-
-	if (enable)
-	{
-		if (angleX != 0.0f)
-			CameraOverride::SetRotation(true, 1, angleX);
-		if (angleY != 0.0f)
-			CameraOverride::SetRotation(true, 2, angleY);
-		if (angleZ != 0.0f)
-			CameraOverride::SetRotation(true, 3, angleZ);
-	}
-	else
-	{
-		CameraOverride::SetRotation(false, 0, 0);
-	}
-
-	if (IsConsoleMode())
-	{
-		if (enable)
-			Console_Print("SetCameraAngle >> Set to X:%.1f Y:%.1f Z:%.1f", angleX, angleY, angleZ);
-		else
-			Console_Print("SetCameraAngle >> Disabled");
-	}
-
-	return true;
-}
-
-//=============================================================================
 // GetAvailableRecipes Command - Returns array of recipes player can craft
 //=============================================================================
 
@@ -2007,7 +1614,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			if (Settings::bAshPileNames)
 				AshPileNames::Init();
 			if (Settings::bVATSExtender)
-				VATSExtender::Init();
+				VATSExtender_Init();
 			if (Settings::bSuppressObjectives || Settings::bSuppressReputation)
 				ELMO_Init(Settings::bSuppressObjectives != 0, Settings::bSuppressReputation != 0);
 			break;
@@ -2033,7 +1640,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 		case kMessage_MainGameLoop:
 			//init camera override on first frame (after JG has hooked)
-			CameraOverride::Init();
+			CameraOverride_Init();
 
 			// OwnerNameInfo update (every frame)
 			ONI_Update();
@@ -2272,7 +1879,7 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 
 	// Register SetCameraAngle command at 0x3B15
 	nvse->SetOpcodeBase(0x3B15);
-	nvse->RegisterCommand(&kCommandInfo_SetCameraAngle);
+	CameraOverride_RegisterCommands(nvse);
 	Log("Registered SetCameraAngle at opcode 0x3B15");
 
 	// Register GetAvailableRecipes command at 0x3B16
