@@ -206,6 +206,7 @@
     <ClCompile Include="PlayerUpdateHook.cpp" />
     <ClCompile Include="SlowMotionPhysicsFix.cpp" />
     <ClCompile Include="VATSProjectileFix.cpp" />
+    <ClCompile Include="KillActorXPFix.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="internal\settings.h" />
@@ -238,6 +239,7 @@
     <ClInclude Include="PlayerUpdateHook.h" />
     <ClInclude Include="SlowMotionPhysicsFix.h" />
     <ClInclude Include="VATSProjectileFix.h" />
+    <ClInclude Include="KillActorXPFix.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />
