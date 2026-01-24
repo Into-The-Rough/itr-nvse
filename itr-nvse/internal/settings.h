@@ -44,6 +44,9 @@ namespace Settings
 	// DialogueCamera settings
 	int bDialogueCamera = 0;  // Disabled by default - cinematic camera angles during dialogue
 
+	// VATSProjectileFix settings
+	int bVATSProjectileFix = 1;  // Enabled by default - fix projectile hit chance in VATS
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -82,5 +85,6 @@ namespace Settings
 		bSaveFileSize = GetINIInt("Tweaks", "bSaveFileSize", 1);
 		bOwnerNameInfo = GetINIInt("Tweaks", "bOwnerNameInfo", 1);
 		bDialogueCamera = GetINIInt("Tweaks", "bDialogueCamera", 0);
+		bVATSProjectileFix = GetINIInt("Tweaks", "bVATSProjectileFix", 1);
 	}
 }
