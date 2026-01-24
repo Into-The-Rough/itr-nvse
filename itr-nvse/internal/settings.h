@@ -56,6 +56,11 @@ namespace Settings
 	// AshPileNames settings
 	int bAshPileNames = 0;  // Disabled by default - show original NPC name for ash piles
 
+	// LocationVisitPopup settings
+	int bLocationVisitPopup = 1;  // Enabled by default - show popup when revisiting discovered locations
+	int iLocationVisitCooldownSeconds = 300;  // Cooldown between popups for same location
+	int bLocationVisitDisableSound = 0;  // Play sound with popup
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -98,5 +103,8 @@ namespace Settings
 		bVATSLimbFix = GetINIInt("Tweaks", "bVATSLimbFix", 0);
 		bOwnedBeds = GetINIInt("Tweaks", "bOwnedBeds", 0);
 		bAshPileNames = GetINIInt("Tweaks", "bAshPileNames", 0);
+		bLocationVisitPopup = GetINIInt("Tweaks", "bLocationVisitPopup", 1);
+		iLocationVisitCooldownSeconds = GetINIInt("LocationVisitPopup", "iCooldownSeconds", 300);
+		bLocationVisitDisableSound = GetINIInt("LocationVisitPopup", "bDisableSound", 0);
 	}
 }
