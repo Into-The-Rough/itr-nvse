@@ -1,6 +1,8 @@
 //standalone commands that do stuff (not event handlers)
 
 #include "ImperativeCommands.h"
+#define FORMUTILS_USE_NVSE_TYPES
+#include "internal/FormUtils.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/GameObjects.h"
@@ -18,6 +20,8 @@ extern void Console_Print(const char* fmt, ...);
 extern NVSEArrayVarInterface* g_arrInterface;
 extern void Log(const char* fmt, ...);
 
+using namespace FormUtils;
+
 static ParamInfo kParams_GetRefsSortedByDistance[5] = {
 	{ "maxDistance",      kParamType_Float,   0 },
 	{ "formType",         kParamType_Integer, 1 },
@@ -29,25 +33,16 @@ static ParamInfo kParams_GetRefsSortedByDistance[5] = {
 DEFINE_COMMAND_PLUGIN(GetRefsSortedByDistance, "Returns array of refs sorted by distance from player", 0, 5, kParams_GetRefsSortedByDistance);
 
 enum {
-	kFormTypeFilter_AnyType = 0,
-	kFormTypeFilter_Actor = 200,
-	kFormTypeFilter_InventoryItem = 201,
+	kFormTypeFilter_AnyType = kFilter_AnyType,
+	kFormTypeFilter_Actor = kFilter_Actor,
+	kFormTypeFilter_InventoryItem = kFilter_InventoryItem,
 };
-
-static bool IsInventoryItemType(UInt8 formType)
-{
-	return formType == kFormType_Armor || formType == kFormType_Book ||
-	       formType == kFormType_Clothing || formType == kFormType_Ingredient ||
-	       formType == kFormType_Misc || formType == kFormType_Weapon ||
-	       formType == kFormType_Ammo || formType == kFormType_Key ||
-	       formType == kFormType_AlchemyItem || formType == kFormType_Note;
-}
 
 static bool IsTakenRef(TESObjectREFR* refr)
 {
 	if (!refr->IsDeleted()) return false;
 	UInt8 formType = refr->baseForm->typeID;
-	return IsInventoryItemType(formType);
+	return FormUtils::IsInventoryItemType(formType);
 }
 
 static bool MatchesBaseForm(TESObjectREFR* refr, TESForm* baseForm)
@@ -71,19 +66,11 @@ static bool MatchesFormType(TESObjectREFR* refr, UInt32 formType, bool includeTa
 			if (refr->baseForm->refID == 7) return false;
 			return baseType == kFormType_Creature || baseType == kFormType_NPC;
 		case kFormTypeFilter_InventoryItem:
-			return IsInventoryItemType(baseType);
+			return FormUtils::IsInventoryItemType(baseType);
 		default:
 			if (baseType == kFormType_NPC && refr->baseForm->refID == 7) return false;
 			return baseType == formType;
 	}
-}
-
-static float CalcDistanceSquared(TESObjectREFR* a, TESObjectREFR* b)
-{
-	float dx = a->posX - b->posX;
-	float dy = a->posY - b->posY;
-	float dz = a->posZ - b->posZ;
-	return dx * dx + dy * dy + dz * dz;
 }
 
 bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
@@ -130,7 +117,7 @@ bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 			if (!MatchesFormType(refr, formType, includeTakenRefs != 0)) continue;
 			if (!MatchesBaseForm(refr, baseForm)) continue;
 
-			float distSq = CalcDistanceSquared(refr, player);
+			float distSq = FormUtils::CalcDistanceSquared(refr, (TESObjectREFR*)player);
 			if (distSq > maxDistSq) continue;
 
 			refs.push_back({ refr, sqrtf(distSq) });
