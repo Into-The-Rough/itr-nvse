@@ -1,6 +1,7 @@
 //shows popup when revisiting discovered locations with cooldown
 
 #include "LocationVisitPopup.h"
+#include "internal/CooldownTracker.h"
 #include <Windows.h>
 
 extern void Log(const char* fmt, ...);
@@ -8,15 +9,11 @@ extern void Log(const char* fmt, ...);
 namespace LocationVisitPopup
 {
 	static DWORD g_cooldownMs = 5 * 60 * 1000;
+	static DWORD g_leaveThresholdMs = 3000;
 	static bool g_disableSound = false;
 	static int g_muxDetected = -1;
 
-	static const UInt32 kMaxMarkers = 256;
-	static UInt32 s_markers[kMaxMarkers];
-	static DWORD s_popupTime[kMaxMarkers];
-	static bool s_hasLeft[kMaxMarkers];
-	static DWORD s_lastSeen[kMaxMarkers];
-	static UInt32 s_count = 0;
+	static CooldownTracker<256> s_tracker;
 
 	template <typename T_Ret = void, typename ...Args>
 	__forceinline T_Ret LVPThisCall(UInt32 _addr, void* _this, Args ...args) {
@@ -43,42 +40,15 @@ namespace LocationVisitPopup
 	}
 
 	static void UpdateCooldowns() {
-		DWORD now = GetTickCount();
-		for (UInt32 i = 0; i < s_count; i++)
-			if (!s_hasLeft[i] && now - s_lastSeen[i] > 3000)
-				s_hasLeft[i] = true;
+		s_tracker.UpdateCooldowns(GetTickCount(), g_leaveThresholdMs);
 	}
 
 	static int CheckMarker(UInt32 refID) {
-		DWORD now = GetTickCount();
-		for (UInt32 i = 0; i < s_count; i++) {
-			if (s_markers[i] == refID) {
-				s_lastSeen[i] = now;
-				if (!s_hasLeft[i])
-					return 1;
-				if (s_popupTime[i] && now - s_popupTime[i] < g_cooldownMs)
-					return 1;
-				return 0;
-			}
-		}
-		if (s_count < kMaxMarkers) {
-			s_markers[s_count] = refID;
-			s_popupTime[s_count] = 0;
-			s_hasLeft[s_count] = false;
-			s_lastSeen[s_count] = now;
-			s_count++;
-		}
-		return 1;
+		return s_tracker.Check(refID, GetTickCount(), g_cooldownMs);
 	}
 
 	static void MarkShown(UInt32 refID) {
-		DWORD now = GetTickCount();
-		for (UInt32 i = 0; i < s_count; i++) {
-			if (s_markers[i] == refID) {
-				s_popupTime[i] = now;
-				return;
-			}
-		}
+		s_tracker.MarkShown(refID, GetTickCount());
 	}
 
 	typedef void(__cdecl* SetCustomQuestText_t)(const char*, const char*, int, int, int, int, const char*);

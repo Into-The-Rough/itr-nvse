@@ -42,11 +42,15 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="test_formutils.cpp" />
     <ClCompile Include="test_refidset.cpp" />
+    <ClCompile Include="test_stringmatch.cpp" />
+    <ClCompile Include="test_cooldowntracker.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="test.h" />
     <ClInclude Include="..\internal\FormUtils.h" />
     <ClInclude Include="..\internal\RefIdSet.h" />
+    <ClInclude Include="..\internal\StringMatch.h" />
+    <ClInclude Include="..\internal\CooldownTracker.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

@@ -7,6 +7,7 @@
 #include <Windows.h>
 
 #include "DialogueTextFilter.h"
+#include "internal/StringMatch.h"
 
 
 class TESForm;
@@ -263,17 +264,7 @@ struct TextFilterEntry {
     TextFilterEntry& operator=(const TextFilterEntry&) = delete;
 
     bool Matches(const char* responseText) const {
-        if (!responseText) return false;
-        if (!filterText || !*filterText || (filterText[0] == '*' && filterText[1] == '\0'))
-            return true;
-        size_t needleLen = strlen(filterText);
-        const char* haystack = responseText;
-        while (*haystack) {
-            if (_strnicmp(haystack, filterText, needleLen) == 0)
-                return true;
-            ++haystack;
-        }
-        return false;
+        return StringMatch::ContainsSubstringCI(responseText, filterText);
     }
 };
 
