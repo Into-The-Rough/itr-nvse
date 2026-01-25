@@ -38,6 +38,7 @@
 #include "fixes/OwnedBeds.h"
 #include "fixes/AshPileNames.h"
 #include "fixes/ReversePickpocketNoKarmaFix.h"
+#include "fixes/FriendlyFire.h"
 
 #include "features/MessageBoxQuickClose.h"
 #include "features/PreventWeaponSwitch.h"
@@ -354,6 +355,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					OwnedBeds_Init();
 				if (Settings::bLocationVisitPopup)
 					LocationVisitPopup_Init(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
+				if (Settings::bFriendlyFire)
+					FriendlyFire_Init();
 				g_hooksInstalled = true;
 			}
 			break;
