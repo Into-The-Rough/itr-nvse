@@ -68,6 +68,9 @@ namespace Settings
 	int bSuppressObjectives = 1;  // Enabled by default - quest objectives as corner messages
 	int bSuppressReputation = 1;  // Enabled by default - reputation changes as corner messages
 
+	// FriendlyFire settings
+	int bFriendlyFire = 0;  // Disabled by default - allow player to damage allies
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -116,5 +119,6 @@ namespace Settings
 		bVATSExtender = GetINIInt("Tweaks", "bVATSExtender", 1);
 		bSuppressObjectives = GetINIInt("Tweaks", "bSuppressObjectives", 1);
 		bSuppressReputation = GetINIInt("Tweaks", "bSuppressReputation", 1);
+		bFriendlyFire = GetINIInt("Tweaks", "bFriendlyFire", 0);
 	}
 }
