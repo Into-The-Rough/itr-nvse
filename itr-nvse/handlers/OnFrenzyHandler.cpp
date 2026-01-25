@@ -7,9 +7,6 @@
 
 #include "OnFrenzyHandler.h"
 
-using UInt8 = uint8_t;
-using UInt16 = uint16_t;
-using UInt32 = uint32_t;
 
 class TESForm;
 class TESObjectREFR;

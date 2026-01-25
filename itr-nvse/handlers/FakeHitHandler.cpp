@@ -7,10 +7,6 @@
 #include <cstring>
 #include <cmath>
 
-typedef uint8_t UInt8;
-typedef uint16_t UInt16;
-typedef uint32_t UInt32;
-typedef int32_t SInt32;
 typedef float Float32;
 
 struct PluginInfo {

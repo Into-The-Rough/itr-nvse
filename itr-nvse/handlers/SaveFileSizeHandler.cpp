@@ -2,9 +2,6 @@
 #include <Windows.h>
 #include <cstdio>
 
-typedef unsigned int UInt32;
-typedef unsigned char UInt8;
-typedef signed int SInt32;
 
 typedef void (__thiscall *_Tile_SetStringValue)(void*, UInt32, const char*, bool);
 static const _Tile_SetStringValue Tile_SetStringValue = (_Tile_SetStringValue)0xA01350;
