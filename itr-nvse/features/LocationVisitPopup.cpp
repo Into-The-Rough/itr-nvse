@@ -147,3 +147,9 @@ void LocationVisitPopup_Init(int cooldownSeconds, bool disableSound)
 {
 	LocationVisitPopup::Init(cooldownSeconds, disableSound);
 }
+
+void LocationVisitPopup_UpdateSettings(int cooldownSeconds, bool disableSound)
+{
+	LocationVisitPopup::g_cooldownMs = cooldownSeconds * 1000;
+	LocationVisitPopup::g_disableSound = disableSound;
+}

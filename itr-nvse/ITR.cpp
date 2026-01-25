@@ -387,9 +387,32 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				const char* pluginName = (const char*)msg->data;
 				if (_stricmp(pluginName, "itr-nvse") == 0)
 				{
+					bool oldGodMode = Settings::bAutoGodMode;
 					Settings::Load();
+
+					//update runtime settings
+					LocationVisitPopup_UpdateSettings(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
+
+					if (Settings::bQuickDrop || Settings::bQuick180)
+						PlayerUpdateHook_UpdateSettings(Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
+						                                Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
+
+					//apply god mode immediately if setting changed
+					if (Settings::bAutoGodMode && !oldGodMode)
+					{
+						*(UInt8*)0x11E07BA = 1;
+						Console_Print("itr-nvse: God mode enabled");
+					}
+					else if (!Settings::bAutoGodMode && oldGodMode)
+					{
+						*(UInt8*)0x11E07BA = 0;
+						Console_Print("itr-nvse: God mode disabled");
+					}
+
 					Log("Config reloaded via ReloadPluginConfig");
 					Console_Print("itr-nvse: Config reloaded");
+					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180 keys, AltTabMute, DialogueCamera");
+					Console_Print("  Requires restart: Fixes, hooks (bSlowMotionPhysicsFix, bOwnedBeds, etc)");
 				}
 			}
 			break;
