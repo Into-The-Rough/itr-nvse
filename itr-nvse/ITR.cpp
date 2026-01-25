@@ -39,6 +39,7 @@
 #include "fixes/AshPileNames.h"
 #include "fixes/ReversePickpocketNoKarmaFix.h"
 #include "fixes/FriendlyFire.h"
+#include "fixes/NoDoorFade.h"
 
 #include "features/MessageBoxQuickClose.h"
 #include "features/PreventWeaponSwitch.h"
@@ -357,6 +358,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					LocationVisitPopup_Init(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
 				if (Settings::bFriendlyFire)
 					FriendlyFire_Init();
+				if (Settings::bNoDoorFade)
+					NoDoorFade_Init();
 				g_hooksInstalled = true;
 			}
 			break;
@@ -503,6 +506,7 @@ static void LogSettings()
 	Log("  bVATSExtender: %d", Settings::bVATSExtender);
 	Log("  bSuppressObjectives: %d", Settings::bSuppressObjectives);
 	Log("  bSuppressReputation: %d", Settings::bSuppressReputation);
+	Log("  bNoDoorFade: %d", Settings::bNoDoorFade);
 	Log("  iAutoQuickLoadFrameDelay: %d", Settings::iAutoQuickLoadFrameDelay);
 
 	if (Settings::bQuickDrop) Log("QuickDrop enabled (modifier=%d, control=%d)", Settings::iQuickDropModifierKey, Settings::iQuickDropControlID);
