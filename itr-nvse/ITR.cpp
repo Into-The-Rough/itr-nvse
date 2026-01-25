@@ -58,7 +58,7 @@ __forceinline T_Ret ThisCall(uint32_t _addr, const void* _this, Args ...args) {
 }
 
 #define kMessage_MainGameLoop 20
-#define kMessage_ReloadConfig 25
+#define kMessage_ReloadConfig 25  //sent via ReloadPluginConfig console command
 
 #ifndef kMenuType_Start
 #define kMenuType_Start 0x3F5
@@ -381,7 +381,17 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 
 		case kMessage_ReloadConfig:
-			Console_Print("itr-nvse: Got config!");
+			//dataLen = length of plugin name, data = const char* pluginName
+			if (msg->data && msg->dataLen > 0)
+			{
+				const char* pluginName = (const char*)msg->data;
+				if (_stricmp(pluginName, "itr-nvse") == 0)
+				{
+					Settings::Load();
+					Log("Config reloaded via ReloadPluginConfig");
+					Console_Print("itr-nvse: Config reloaded");
+				}
+			}
 			break;
 
 		case kMessage_MainGameLoop:
