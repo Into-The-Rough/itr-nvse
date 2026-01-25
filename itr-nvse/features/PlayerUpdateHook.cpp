@@ -125,3 +125,12 @@ void PlayerUpdateHook_Init(bool quickDrop, int quickDropModKey, int quickDropCon
 	PlayerUpdateHook::g_quick180ControlID = quick180ControlID;
 	PlayerUpdateHook::Init();
 }
+
+void PlayerUpdateHook_UpdateSettings(int quickDropModKey, int quickDropControlID,
+                                     int quick180ModKey, int quick180ControlID)
+{
+	PlayerUpdateHook::g_quickDropModifierKey = quickDropModKey;
+	PlayerUpdateHook::g_quickDropControlID = quickDropControlID;
+	PlayerUpdateHook::g_quick180ModifierKey = quick180ModKey;
+	PlayerUpdateHook::g_quick180ControlID = quick180ControlID;
+}
