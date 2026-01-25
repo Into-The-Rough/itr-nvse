@@ -77,9 +77,11 @@ namespace Settings
 
 	inline void Load()
 	{
-		GetModuleFileNameA(GetModuleHandleA("itr-nvse.dll"), iniPath, MAX_PATH);
+		//ini in Data\config\ per project conventions
+		GetModuleFileNameA(nullptr, iniPath, MAX_PATH);
 		char* lastSlash = strrchr(iniPath, '\\');
-		if (lastSlash) strcpy_s(lastSlash + 1, MAX_PATH - (lastSlash + 1 - iniPath), "itr-nvse.ini");
+		if (lastSlash) *lastSlash = '\0';
+		strcat_s(iniPath, "\\Data\\config\\itr-nvse.ini");
 
 		bAutoGodMode = GetINIInt("Tweaks", "bAutoGodMode", 0);
 		bAutoQuickLoad = GetINIInt("Tweaks", "bAutoQuickLoad", 0);
