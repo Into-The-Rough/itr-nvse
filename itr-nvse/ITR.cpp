@@ -397,6 +397,9 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 						PlayerUpdateHook_UpdateSettings(Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
 						                                Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
 
+					if (Settings::bOwnerNameInfo)
+						ONI_UpdateSettings();
+
 					//apply god mode immediately if setting changed
 					if (Settings::bAutoGodMode && !oldGodMode)
 					{
@@ -411,7 +414,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 					Log("Config reloaded via ReloadPluginConfig");
 					Console_Print("itr-nvse: Config reloaded");
-					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180 keys, AltTabMute, DialogueCamera");
+					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180 keys, OwnerNameInfo, AltTabMute, DialogueCamera");
 					Console_Print("  Requires restart: Fixes, hooks (bSlowMotionPhysicsFix, bOwnedBeds, etc)");
 				}
 			}

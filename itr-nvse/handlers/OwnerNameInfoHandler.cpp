@@ -322,17 +322,31 @@ void ONI_Update()
 	TileSetString(tile, kTileValue_string, modifiedName, true);
 }
 
+static char g_iniPath[MAX_PATH] = {0};
+
+static void LoadINIPath()
+{
+	if (g_iniPath[0]) return;
+	GetModuleFileNameA(nullptr, g_iniPath, MAX_PATH);
+	char* lastSlash = strrchr(g_iniPath, '\\');
+	if (lastSlash) *lastSlash = '\0';
+	strcat_s(g_iniPath, "\\Data\\config\\itr-nvse.ini");
+}
+
 bool ONI_Init()
 {
-	char iniPath[MAX_PATH];
-	GetModuleFileNameA(GetModuleHandleA("itr-nvse.dll"), iniPath, MAX_PATH);
-	char* lastSlash = strrchr(iniPath, '\\');
-	if (lastSlash) strcpy_s(lastSlash + 1, MAX_PATH - (lastSlash + 1 - iniPath), "itr-nvse.ini");
-
-	g_bOwnerNameInfo = GetPrivateProfileIntA("Tweaks", "bOwnerNameInfo", 1, iniPath) != 0;
-	g_bCompatMode = GetPrivateProfileIntA("OwnerNameInfo", "bCompatibilityMode", 1, iniPath) != 0;
-	g_bShowFactionName = GetPrivateProfileIntA("OwnerNameInfo", "bShowFactionName", 1, iniPath) != 0;
-	g_bShowNameOnlyCrime = GetPrivateProfileIntA("OwnerNameInfo", "bShowNameOnlyCrime", 1, iniPath) != 0;
-
+	LoadINIPath();
+	g_bOwnerNameInfo = GetPrivateProfileIntA("Tweaks", "bOwnerNameInfo", 1, g_iniPath) != 0;
+	g_bCompatMode = GetPrivateProfileIntA("OwnerNameInfo", "bCompatibilityMode", 1, g_iniPath) != 0;
+	g_bShowFactionName = GetPrivateProfileIntA("OwnerNameInfo", "bShowFactionName", 1, g_iniPath) != 0;
+	g_bShowNameOnlyCrime = GetPrivateProfileIntA("OwnerNameInfo", "bShowNameOnlyCrime", 1, g_iniPath) != 0;
 	return true;
+}
+
+void ONI_UpdateSettings()
+{
+	LoadINIPath();
+	g_bCompatMode = GetPrivateProfileIntA("OwnerNameInfo", "bCompatibilityMode", 1, g_iniPath) != 0;
+	g_bShowFactionName = GetPrivateProfileIntA("OwnerNameInfo", "bShowFactionName", 1, g_iniPath) != 0;
+	g_bShowNameOnlyCrime = GetPrivateProfileIntA("OwnerNameInfo", "bShowNameOnlyCrime", 1, g_iniPath) != 0;
 }
