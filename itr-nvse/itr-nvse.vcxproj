@@ -165,6 +165,8 @@
     <ClInclude Include="internal\settings.h" />
     <ClInclude Include="internal\FormUtils.h" />
     <ClInclude Include="internal\RefIdSet.h" />
+    <ClInclude Include="internal\StringMatch.h" />
+    <ClInclude Include="internal\CooldownTracker.h" />
     <ClInclude Include="handlers\DialogueTextFilter.h" />
     <ClInclude Include="handlers\OnStealHandler.h" />
     <ClInclude Include="handlers\OnWeaponDropHandler.h" />
