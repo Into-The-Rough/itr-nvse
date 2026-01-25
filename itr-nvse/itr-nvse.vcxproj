@@ -115,63 +115,36 @@
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
     </ClCompile>
-    <ClCompile Include="DialogueTextFilter.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="OnStealHandler.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="OnWeaponDropHandler.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="OnConsoleHandler.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="OnWeaponJamHandler.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="OnKeyStateHandler.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="KeyHeldHandler.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="DoubleTapHandler.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="OnFrenzyHandler.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="CornerMessageHandler.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="OnEntryPointHandler.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="OnCombatProcedureHandler.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="OnSoundPlayedHandler.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="OnFastTravelHandler.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="MessageBoxQuickClose.cpp">
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="ITR.cpp" />
+    <ClCompile Include="handlers\DialogueTextFilter.cpp" />
+    <ClCompile Include="handlers\OnStealHandler.cpp" />
+    <ClCompile Include="handlers\OnWeaponDropHandler.cpp" />
+    <ClCompile Include="handlers\OnConsoleHandler.cpp" />
+    <ClCompile Include="handlers\OnWeaponJamHandler.cpp" />
+    <ClCompile Include="handlers\OnKeyStateHandler.cpp" />
+    <ClCompile Include="handlers\KeyHeldHandler.cpp" />
+    <ClCompile Include="handlers\DoubleTapHandler.cpp" />
+    <ClCompile Include="handlers\OnFrenzyHandler.cpp" />
+    <ClCompile Include="handlers\CornerMessageHandler.cpp" />
+    <ClCompile Include="handlers\OnEntryPointHandler.cpp" />
+    <ClCompile Include="handlers\OnCombatProcedureHandler.cpp" />
+    <ClCompile Include="handlers\OnSoundPlayedHandler.cpp" />
+    <ClCompile Include="handlers\OnFastTravelHandler.cpp" />
+    <ClCompile Include="handlers\FallDamageHandler.cpp" />
+    <ClCompile Include="handlers\DialogueCameraHandler.cpp" />
+    <ClCompile Include="handlers\FakeHitHandler.cpp" />
+    <ClCompile Include="handlers\SaveFileSizeHandler.cpp" />
+    <ClCompile Include="handlers\OwnerNameInfoHandler.cpp" />
+    <ClCompile Include="fixes\SlowMotionPhysicsFix.cpp" />
+    <ClCompile Include="fixes\VATSProjectileFix.cpp" />
+    <ClCompile Include="fixes\VATSLimbFix.cpp" />
+    <ClCompile Include="fixes\KillActorXPFix.cpp" />
+    <ClCompile Include="fixes\ExplodingPantsFix.cpp" />
+    <ClCompile Include="fixes\OwnedBeds.cpp" />
+    <ClCompile Include="fixes\AshPileNames.cpp" />
+    <ClCompile Include="fixes\ReversePickpocketNoKarmaFix.cpp" />
+    <ClCompile Include="features\MessageBoxQuickClose.cpp">
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">internal/prefix.h</ForcedIncludeFiles>
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">internal/prefix.h</ForcedIncludeFiles>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(ProjectDir)..\..\JIP-LN-NVSE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -179,77 +152,52 @@
       <LanguageStandard Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">stdcpp23</LanguageStandard>
       <LanguageStandard Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">stdcpp23</LanguageStandard>
     </ClCompile>
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="FallDamageHandler.cpp" />
-    <ClCompile Include="DialogueCameraHandler.cpp" />
-    <ClCompile Include="FakeHitHandler.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="SaveFileSizeHandler.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="OwnerNameInfoHandler.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="PreventWeaponSwitch.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'"></ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></ForcedIncludeFiles>
-    </ClCompile>
-    <ClCompile Include="ELMO.cpp" />
-    <ClCompile Include="LocationVisitPopup.cpp" />
-    <ClCompile Include="VATSExtender.cpp" />
-    <ClCompile Include="CameraOverride.cpp" />
-    <ClCompile Include="VATSLimbFix.cpp" />
-    <ClCompile Include="PlayerUpdateHook.cpp" />
-    <ClCompile Include="SlowMotionPhysicsFix.cpp" />
-    <ClCompile Include="VATSProjectileFix.cpp" />
-    <ClCompile Include="KillActorXPFix.cpp" />
-    <ClCompile Include="ExplodingPantsFix.cpp" />
-    <ClCompile Include="OwnedBeds.cpp" />
-    <ClCompile Include="AshPileNames.cpp" />
-    <ClCompile Include="ReversePickpocketNoKarmaFix.cpp" />
-    <ClCompile Include="ImperativeCommands.cpp" />
+    <ClCompile Include="features\PreventWeaponSwitch.cpp" />
+    <ClCompile Include="features\ELMO.cpp" />
+    <ClCompile Include="features\LocationVisitPopup.cpp" />
+    <ClCompile Include="features\VATSExtender.cpp" />
+    <ClCompile Include="features\CameraOverride.cpp" />
+    <ClCompile Include="features\PlayerUpdateHook.cpp" />
+    <ClCompile Include="commands\ImperativeCommands.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ITR.h" />
     <ClInclude Include="internal\settings.h" />
-    <ClInclude Include="DialogueTextFilter.h" />
-    <ClInclude Include="OnStealHandler.h" />
-    <ClInclude Include="OnWeaponDropHandler.h" />
-    <ClInclude Include="OnConsoleHandler.h" />
-    <ClInclude Include="OnWeaponJamHandler.h" />
-    <ClInclude Include="OnKeyStateHandler.h" />
-    <ClInclude Include="KeyHeldHandler.h" />
-    <ClInclude Include="DoubleTapHandler.h" />
-    <ClInclude Include="OnFrenzyHandler.h" />
-    <ClInclude Include="CornerMessageHandler.h" />
-    <ClInclude Include="OnEntryPointHandler.h" />
-    <ClInclude Include="OnCombatProcedureHandler.h" />
-    <ClInclude Include="OnSoundPlayedHandler.h" />
-    <ClInclude Include="OnFastTravelHandler.h" />
-    <ClInclude Include="MessageBoxQuickClose.h" />
-    <ClInclude Include="FallDamageHandler.h" />
-    <ClInclude Include="DialogueCameraHandler.h" />
-    <ClInclude Include="FakeHitHandler.h" />
-    <ClInclude Include="SaveFileSizeHandler.h" />
-    <ClInclude Include="OwnerNameInfoHandler.h" />
-    <ClInclude Include="PreventWeaponSwitch.h" />
-    <ClInclude Include="ELMO.h" />
-    <ClInclude Include="LocationVisitPopup.h" />
-    <ClInclude Include="VATSExtender.h" />
-    <ClInclude Include="CameraOverride.h" />
-    <ClInclude Include="VATSLimbFix.h" />
-    <ClInclude Include="PlayerUpdateHook.h" />
-    <ClInclude Include="SlowMotionPhysicsFix.h" />
-    <ClInclude Include="VATSProjectileFix.h" />
-    <ClInclude Include="KillActorXPFix.h" />
-    <ClInclude Include="ExplodingPantsFix.h" />
-    <ClInclude Include="OwnedBeds.h" />
-    <ClInclude Include="AshPileNames.h" />
-    <ClInclude Include="ReversePickpocketNoKarmaFix.h" />
-    <ClInclude Include="ImperativeCommands.h" />
+    <ClInclude Include="handlers\DialogueTextFilter.h" />
+    <ClInclude Include="handlers\OnStealHandler.h" />
+    <ClInclude Include="handlers\OnWeaponDropHandler.h" />
+    <ClInclude Include="handlers\OnConsoleHandler.h" />
+    <ClInclude Include="handlers\OnWeaponJamHandler.h" />
+    <ClInclude Include="handlers\OnKeyStateHandler.h" />
+    <ClInclude Include="handlers\KeyHeldHandler.h" />
+    <ClInclude Include="handlers\DoubleTapHandler.h" />
+    <ClInclude Include="handlers\OnFrenzyHandler.h" />
+    <ClInclude Include="handlers\CornerMessageHandler.h" />
+    <ClInclude Include="handlers\OnEntryPointHandler.h" />
+    <ClInclude Include="handlers\OnCombatProcedureHandler.h" />
+    <ClInclude Include="handlers\OnSoundPlayedHandler.h" />
+    <ClInclude Include="handlers\OnFastTravelHandler.h" />
+    <ClInclude Include="handlers\FallDamageHandler.h" />
+    <ClInclude Include="handlers\DialogueCameraHandler.h" />
+    <ClInclude Include="handlers\FakeHitHandler.h" />
+    <ClInclude Include="handlers\SaveFileSizeHandler.h" />
+    <ClInclude Include="handlers\OwnerNameInfoHandler.h" />
+    <ClInclude Include="fixes\SlowMotionPhysicsFix.h" />
+    <ClInclude Include="fixes\VATSProjectileFix.h" />
+    <ClInclude Include="fixes\VATSLimbFix.h" />
+    <ClInclude Include="fixes\KillActorXPFix.h" />
+    <ClInclude Include="fixes\ExplodingPantsFix.h" />
+    <ClInclude Include="fixes\OwnedBeds.h" />
+    <ClInclude Include="fixes\AshPileNames.h" />
+    <ClInclude Include="fixes\ReversePickpocketNoKarmaFix.h" />
+    <ClInclude Include="features\MessageBoxQuickClose.h" />
+    <ClInclude Include="features\PreventWeaponSwitch.h" />
+    <ClInclude Include="features\ELMO.h" />
+    <ClInclude Include="features\LocationVisitPopup.h" />
+    <ClInclude Include="features\VATSExtender.h" />
+    <ClInclude Include="features\CameraOverride.h" />
+    <ClInclude Include="features\PlayerUpdateHook.h" />
+    <ClInclude Include="commands\ImperativeCommands.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />

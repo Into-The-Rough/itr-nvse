@@ -8,8 +8,6 @@ extern void Log(const char* fmt, ...);
 
 namespace VATSProjectileFix
 {
-	typedef uint32_t UInt32;
-	typedef int32_t SInt32;
 
 	struct SimpleListNode {
 		void* item;

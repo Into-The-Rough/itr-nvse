@@ -8,9 +8,6 @@ extern void Log(const char* fmt, ...);
 
 namespace OwnedBeds
 {
-	typedef uint32_t UInt32;
-	typedef uint8_t UInt8;
-	typedef int32_t SInt32;
 
 	constexpr UInt32 kAddr_IsAnOwner = 0x5785E0;
 	constexpr UInt32 kAddr_IsAnOwnerCall = 0x509679;

@@ -5,9 +5,6 @@
 #include <cstdint>
 #include <cstring>
 
-typedef uint8_t UInt8;
-typedef uint16_t UInt16;
-typedef uint32_t UInt32;
 
 struct ParamInfo;
 struct TESObjectREFR;

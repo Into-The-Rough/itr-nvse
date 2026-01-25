@@ -9,10 +9,6 @@
 
 #include "OwnerNameInfoHandler.h"
 
-using UInt8 = uint8_t;
-using UInt16 = uint16_t;
-using UInt32 = uint32_t;
-using SInt32 = int32_t;
 
 //game addresses
 constexpr UInt32 kAddr_HUDMainMenu = 0x11D96C0;

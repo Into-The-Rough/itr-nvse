@@ -8,10 +8,6 @@
 
 #include "OnStealHandler.h"
 
-using UInt8 = uint8_t;
-using UInt16 = uint16_t;
-using UInt32 = uint32_t;
-using SInt32 = int32_t;
 
 // Forward declarations
 class TESForm;

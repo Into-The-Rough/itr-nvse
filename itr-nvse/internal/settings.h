@@ -77,12 +77,10 @@ namespace Settings
 
 	inline void Load()
 	{
-		// Find INI next to our DLL (works with mod managers)
 		GetModuleFileNameA(GetModuleHandleA("itr-nvse.dll"), iniPath, MAX_PATH);
 		char* lastSlash = strrchr(iniPath, '\\');
 		if (lastSlash) strcpy_s(lastSlash + 1, MAX_PATH - (lastSlash + 1 - iniPath), "itr-nvse.ini");
 
-		// Load settings
 		bAutoGodMode = GetINIInt("Tweaks", "bAutoGodMode", 0);
 		bAutoQuickLoad = GetINIInt("Tweaks", "bAutoQuickLoad", 0);
 		bMessageBoxQuickClose = GetINIInt("Tweaks", "bMessageBoxQuickClose", 1);
