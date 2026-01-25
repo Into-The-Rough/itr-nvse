@@ -71,6 +71,9 @@ namespace Settings
 	// FriendlyFire settings
 	int bFriendlyFire = 0;  // Disabled by default - allow player to damage allies
 
+	// NoDoorFade settings
+	int bNoDoorFade = 0;  // Disabled by default - skip actor fade-out when entering doors
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -120,5 +123,6 @@ namespace Settings
 		bSuppressObjectives = GetINIInt("Tweaks", "bSuppressObjectives", 1);
 		bSuppressReputation = GetINIInt("Tweaks", "bSuppressReputation", 1);
 		bFriendlyFire = GetINIInt("Tweaks", "bFriendlyFire", 0);
+		bNoDoorFade = GetINIInt("Tweaks", "bNoDoorFade", 0);
 	}
 }

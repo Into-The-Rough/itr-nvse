@@ -145,6 +145,7 @@
     <ClCompile Include="fixes\AshPileNames.cpp" />
     <ClCompile Include="fixes\ReversePickpocketNoKarmaFix.cpp" />
     <ClCompile Include="fixes\FriendlyFire.cpp" />
+    <ClCompile Include="fixes\NoDoorFade.cpp" />
     <ClCompile Include="features\MessageBoxQuickClose.cpp">
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">internal/prefix.h</ForcedIncludeFiles>
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">internal/prefix.h</ForcedIncludeFiles>
@@ -196,6 +197,7 @@
     <ClInclude Include="fixes\AshPileNames.h" />
     <ClInclude Include="fixes\ReversePickpocketNoKarmaFix.h" />
     <ClInclude Include="fixes\FriendlyFire.h" />
+    <ClInclude Include="fixes\NoDoorFade.h" />
     <ClInclude Include="features\MessageBoxQuickClose.h" />
     <ClInclude Include="features\PreventWeaponSwitch.h" />
     <ClInclude Include="features\ELMO.h" />
