@@ -158,6 +158,14 @@
     <ClCompile Include="features\PreventWeaponSwitch.cpp" />
     <ClCompile Include="features\ELMO.cpp" />
     <ClCompile Include="features\LocationVisitPopup.cpp" />
+    <ClCompile Include="features\QuickReadNote.cpp">
+      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">internal/prefix.h</ForcedIncludeFiles>
+      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">internal/prefix.h</ForcedIncludeFiles>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(ProjectDir)..\..\JIP-LN-NVSE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(ProjectDir)..\..\JIP-LN-NVSE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">stdcpp23</LanguageStandard>
+      <LanguageStandard Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">stdcpp23</LanguageStandard>
+    </ClCompile>
     <ClCompile Include="features\VATSExtender.cpp" />
     <ClCompile Include="features\CameraOverride.cpp" />
     <ClCompile Include="features\PlayerUpdateHook.cpp" />
@@ -204,6 +212,7 @@
     <ClInclude Include="features\PreventWeaponSwitch.h" />
     <ClInclude Include="features\ELMO.h" />
     <ClInclude Include="features\LocationVisitPopup.h" />
+    <ClInclude Include="features\QuickReadNote.h" />
     <ClInclude Include="features\VATSExtender.h" />
     <ClInclude Include="features\CameraOverride.h" />
     <ClInclude Include="features\PlayerUpdateHook.h" />
