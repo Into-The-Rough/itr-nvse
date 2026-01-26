@@ -46,6 +46,7 @@
 #include "features/PreventWeaponSwitch.h"
 #include "features/ELMO.h"
 #include "features/LocationVisitPopup.h"
+#include "features/QuickReadNote.h"
 #include "features/VATSExtender.h"
 #include "features/CameraOverride.h"
 #include "features/PlayerUpdateHook.h"
@@ -363,6 +364,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					NoDoorFade_Init();
 				if (Settings::bArmorDTDRFix)
 					ArmorDTDRFix_Init();
+				if (Settings::bQuickReadNote)
+					QuickReadNote_Init(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
 				g_hooksInstalled = true;
 			}
 			break;
@@ -409,6 +412,9 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					if (Settings::bOwnerNameInfo)
 						ONI_UpdateSettings();
 
+					if (Settings::bQuickReadNote)
+						QuickReadNote_UpdateSettings(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
+
 					//apply god mode immediately if setting changed
 					if (Settings::bAutoGodMode && !oldGodMode)
 					{
@@ -423,7 +429,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 					Log("Config reloaded via ReloadPluginConfig");
 					Console_Print("itr-nvse: Config reloaded");
-					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180 keys, OwnerNameInfo, AltTabMute, DialogueCamera");
+					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180 keys, OwnerNameInfo, QuickReadNote, AltTabMute, DialogueCamera");
 					Console_Print("  Requires restart: Fixes, hooks (bSlowMotionPhysicsFix, bOwnedBeds, etc)");
 				}
 			}
@@ -435,6 +441,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			KHH_Update();
 			DTH_Update();
 			OSPH_Update();
+			if (Settings::bQuickReadNote)
+				QuickReadNote_Update();
 			if (Settings::bDialogueCamera)
 				DCH_Update();
 			if (Settings::bAutoQuickLoad && !g_quickLoadExecuted)
@@ -510,6 +518,7 @@ static void LogSettings()
 	Log("  bSuppressObjectives: %d", Settings::bSuppressObjectives);
 	Log("  bSuppressReputation: %d", Settings::bSuppressReputation);
 	Log("  bNoDoorFade: %d", Settings::bNoDoorFade);
+	Log("  bQuickReadNote: %d", Settings::bQuickReadNote);
 	Log("  iAutoQuickLoadFrameDelay: %d", Settings::iAutoQuickLoadFrameDelay);
 
 	if (Settings::bQuickDrop) Log("QuickDrop enabled (modifier=%d, control=%d)", Settings::iQuickDropModifierKey, Settings::iQuickDropControlID);

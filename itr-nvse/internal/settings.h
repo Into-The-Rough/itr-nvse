@@ -77,6 +77,12 @@ namespace Settings
 	// ArmorDTDRFix settings
 	int bArmorDTDRFix = 1;  // Enabled by default - fix NPC armor DT/DR not updating on equip
 
+	// QuickReadNote settings
+	int bQuickReadNote = 1;  // Enabled by default - quick view notes on pickup
+	int iQuickReadNoteTimeoutMs = 5000;
+	int iQuickReadNoteControlID = 6;  // Aim/Block
+	int iQuickReadNoteMaxLines = 0;  // 0 = auto-calculate from screen height
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -128,5 +134,9 @@ namespace Settings
 		bFriendlyFire = GetINIInt("Tweaks", "bFriendlyFire", 0);
 		bNoDoorFade = GetINIInt("Tweaks", "bNoDoorFade", 0);
 		bArmorDTDRFix = GetINIInt("Tweaks", "bArmorDTDRFix", 1);
+		bQuickReadNote = GetINIInt("Tweaks", "bQuickReadNote", 1);
+		iQuickReadNoteTimeoutMs = GetINIInt("QuickReadNote", "iTimeoutMs", 5000);
+		iQuickReadNoteControlID = GetINIInt("QuickReadNote", "iControlID", 6);
+		iQuickReadNoteMaxLines = GetINIInt("QuickReadNote", "iMaxLines", 0);
 	}
 }
