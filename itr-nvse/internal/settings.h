@@ -74,6 +74,9 @@ namespace Settings
 	// NoDoorFade settings
 	int bNoDoorFade = 0;  // Disabled by default - skip actor fade-out when entering doors
 
+	// ArmorDTDRFix settings
+	int bArmorDTDRFix = 1;  // Enabled by default - fix NPC armor DT/DR not updating on equip
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -124,5 +127,6 @@ namespace Settings
 		bSuppressReputation = GetINIInt("Tweaks", "bSuppressReputation", 1);
 		bFriendlyFire = GetINIInt("Tweaks", "bFriendlyFire", 0);
 		bNoDoorFade = GetINIInt("Tweaks", "bNoDoorFade", 0);
+		bArmorDTDRFix = GetINIInt("Tweaks", "bArmorDTDRFix", 1);
 	}
 }
