@@ -5,8 +5,10 @@
 #include "StringCommands.h"
 #include <cctype>
 #include <cstring>
+#include <string>
 
 extern void Log(const char* fmt, ...);
+extern NVSEArrayVarInterface* g_arrInterface;
 
 static NVSEStringVarInterface* g_strInterface = nullptr;
 static bool (*ExtractArgsEx)(ParamInfo* paramInfo, void* scriptData, UInt32* opcodeOffsetPtr, Script* scriptObj, ScriptEventList* eventList, ...) = nullptr;
@@ -14,6 +16,55 @@ static bool (*ExtractArgsEx)(ParamInfo* paramInfo, void* scriptData, UInt32* opc
 #define EXTRACT_ARGS_EX paramInfo, scriptData, opcodeOffsetPtr, scriptObj, eventList
 
 DEFINE_COMMAND_PLUGIN(Sv_TrimStr, "trims whitespace from string", 0, 1, kParams_OneString)
+
+static ParamInfo kParams_OneArray_OneOptionalString[2] = {
+	{"array", kParamType_Integer, 0},
+	{"delimiter", kParamType_String, 1}
+};
+DEFINE_COMMAND_PLUGIN(Sv_Join, "joins array elements into string", 0, 2, kParams_OneArray_OneOptionalString)
+
+bool Cmd_Sv_Join_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	UInt32 arrID = 0;
+	char delimiter[0x100] = "";
+
+	if (!ExtractArgsEx(EXTRACT_ARGS_EX, &arrID, &delimiter))
+		return true;
+
+	NVSEArrayVarInterface::Array* arr = g_arrInterface->LookupArrayByID(arrID);
+	if (!arr)
+	{
+		g_strInterface->Assign(PASS_COMMAND_ARGS, "");
+		return true;
+	}
+
+	UInt32 size = g_arrInterface->GetArraySize(arr);
+	if (size == 0)
+	{
+		g_strInterface->Assign(PASS_COMMAND_ARGS, "");
+		return true;
+	}
+
+	NVSEArrayVarInterface::Element* elements = new NVSEArrayVarInterface::Element[size];
+	g_arrInterface->GetElements(arr, elements, nullptr);
+
+	std::string joined;
+	for (UInt32 i = 0; i < size; i++)
+	{
+		if (i > 0 && delimiter[0])
+			joined += delimiter;
+
+		if (elements[i].GetType() == NVSEArrayVarInterface::Element::kType_String)
+			joined += elements[i].String();
+		else if (elements[i].GetType() == NVSEArrayVarInterface::Element::kType_Numeric)
+			joined += std::to_string(elements[i].Number());
+	}
+
+	delete[] elements;
+	g_strInterface->Assign(PASS_COMMAND_ARGS, joined.c_str());
+	return true;
+}
 
 bool Cmd_Sv_TrimStr_Execute(COMMAND_ARGS)
 {
@@ -61,6 +112,7 @@ bool StringCommands_Init(void* nvsePtr)
 
 	nvse->SetOpcodeBase(0x4042);
 	nvse->RegisterTypedCommand(&kCommandInfo_Sv_TrimStr, kRetnType_String);
+	nvse->RegisterTypedCommand(&kCommandInfo_Sv_Join, kRetnType_String);
 
 	return true;
 }
