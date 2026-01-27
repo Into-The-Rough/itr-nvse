@@ -179,8 +179,11 @@ static bool __fastcall Hook_HUDMainMenu_ShowNotify(
         }
     }
 
+    //suppress sound when handlers registered, but still call original to maintain queue for other mods
+    const char* finalSoundPath = g_hasHandlers ? nullptr : soundPath;
+
     return ((bool(__thiscall*)(void*, const char*, UInt32, const char*, const char*, float, bool))g_originalShowNotify)(
-        thisPtr, text, emotion, iconPath, soundPath, displayTime, instant
+        thisPtr, text, emotion, iconPath, finalSoundPath, displayTime, instant
     );
 }
 
