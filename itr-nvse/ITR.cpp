@@ -52,6 +52,7 @@
 #include "features/PlayerUpdateHook.h"
 
 #include "commands/ImperativeCommands.h"
+#include "commands/StringCommands.h"
 
 #include <cstdio>
 #include <cstring>
@@ -681,6 +682,7 @@ namespace ITR
 		g_msgInterface->RegisterListener(g_pluginHandle, "NVSE", MessageHandler);
 
 		ImperativeCommands_Init((void*)nvse);
+		StringCommands_Init((void*)nvse);
 		RegisterHandlers(nvse);
 
 		Log("itr-nvse loaded successfully");
