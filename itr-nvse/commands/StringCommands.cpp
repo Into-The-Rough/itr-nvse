@@ -6,6 +6,7 @@
 #include <cctype>
 #include <cstring>
 #include <string>
+#include <algorithm>
 
 extern void Log(const char* fmt, ...);
 extern NVSEArrayVarInterface* g_arrInterface;
@@ -22,6 +23,22 @@ static ParamInfo kParams_OneArray_OneOptionalString[2] = {
 	{"delimiter", kParamType_String, 1}
 };
 DEFINE_COMMAND_PLUGIN(Sv_Join, "joins array elements into string", 0, 2, kParams_OneArray_OneOptionalString)
+DEFINE_COMMAND_PLUGIN(Sv_Reverse, "reverses a string", 0, 1, kParams_OneString)
+
+bool Cmd_Sv_Reverse_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	char srcString[0x200];
+	srcString[0] = 0;
+
+	if (!ExtractArgsEx(EXTRACT_ARGS_EX, &srcString))
+		return true;
+
+	std::string str(srcString);
+	std::reverse(str.begin(), str.end());
+	g_strInterface->Assign(PASS_COMMAND_ARGS, str.c_str());
+	return true;
+}
 
 bool Cmd_Sv_Join_Execute(COMMAND_ARGS)
 {
@@ -113,6 +130,7 @@ bool StringCommands_Init(void* nvsePtr)
 	nvse->SetOpcodeBase(0x4042);
 	nvse->RegisterTypedCommand(&kCommandInfo_Sv_TrimStr, kRetnType_String);
 	nvse->RegisterTypedCommand(&kCommandInfo_Sv_Join, kRetnType_String);
+	nvse->RegisterTypedCommand(&kCommandInfo_Sv_Reverse, kRetnType_String);
 
 	return true;
 }
