@@ -105,7 +105,7 @@ namespace CameraOverride
 	void Init() {
 		g_rotation.Identity();
 		g_translation = {0, 0, 0};
-		Log("CameraOverride installed (direct manipulation mode)");
+		//Log("CameraOverride installed (direct manipulation mode)");
 	}
 
 	void Update() {

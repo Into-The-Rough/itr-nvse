@@ -455,9 +455,9 @@ bool OSH_Init(void* nvseInterface)
     }
 
     // Register command at opcode 0x3B01 (after DialogueTextFilter at 0x3B00)
-    nvse->SetOpcodeBase(0x3B01);
+    nvse->SetOpcodeBase(0x4001);
     nvse->RegisterCommand(&kCommandInfo_SetOnStealEventHandler);
-    g_oshOpcode = 0x3B01;
+    g_oshOpcode = 0x4001;
 
     OSH_Log("Registered SetOnStealEventHandler at opcode 0x%04X", g_oshOpcode);
     OSH_Log("OnStealHandler module initialized successfully");

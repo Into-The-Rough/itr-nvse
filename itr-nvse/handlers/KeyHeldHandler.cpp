@@ -365,13 +365,13 @@ bool KHH_Init(void* nvseInterface) {
     }
     g_ExtractArgsEx = g_khhScript->ExtractArgsEx;
 
-    nvse->SetOpcodeBase(0x3B0B);
+    nvse->SetOpcodeBase(0x400A);
     nvse->RegisterCommand(&kCommandInfo_RegisterKeyHeld);
-    nvse->SetOpcodeBase(0x3B0C);
+    nvse->SetOpcodeBase(0x400B);
     nvse->RegisterCommand(&kCommandInfo_RegisterControlHeld);
-    nvse->SetOpcodeBase(0x3B0D);
+    nvse->SetOpcodeBase(0x400C);
     nvse->RegisterCommand(&kCommandInfo_UnregisterKeyHeld);
-    nvse->SetOpcodeBase(0x3B0E);
+    nvse->SetOpcodeBase(0x400D);
     nvse->RegisterCommand(&kCommandInfo_UnregisterControlHeld);
 
     KHH_Log("Registered commands at opcodes 0x3B0B-0x3B0E");

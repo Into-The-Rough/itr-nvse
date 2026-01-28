@@ -452,13 +452,13 @@ bool OCH_Init(void* nvseInterface)
     OCH_Log("Script interface at 0x%08X", g_ochScript);
 
     // Register commands at opcodes 0x3B04 and 0x3B05
-    nvse->SetOpcodeBase(0x3B04);
+    nvse->SetOpcodeBase(0x4003);
     nvse->RegisterCommand(&kCommandInfo_SetOnConsoleOpenEventHandler);
-    g_ochOpenOpcode = 0x3B04;
+    g_ochOpenOpcode = 0x4003;
 
-    nvse->SetOpcodeBase(0x3B05);
+    nvse->SetOpcodeBase(0x4004);
     nvse->RegisterCommand(&kCommandInfo_SetOnConsoleCloseEventHandler);
-    g_ochCloseOpcode = 0x3B05;
+    g_ochCloseOpcode = 0x4004;
 
     OCH_Log("Registered SetOnConsoleOpenEventHandler at opcode 0x%04X", g_ochOpenOpcode);
     OCH_Log("Registered SetOnConsoleCloseEventHandler at opcode 0x%04X", g_ochCloseOpcode);

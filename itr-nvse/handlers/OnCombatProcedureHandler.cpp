@@ -537,9 +537,9 @@ bool OCPH_Init(void* nvseInterface)
     g_ExtractArgsEx = g_ocphScript->ExtractArgsEx;
     OCPH_Log("Script interface at 0x%08X", g_ocphScript);
 
-    nvse->SetOpcodeBase(0x3B18);
+    nvse->SetOpcodeBase(0x4015);
     nvse->RegisterCommand(&kCommandInfo_SetOnCombatProcedureStartEventHandler);
-    g_ocphOpcode = 0x3B18;
+    g_ocphOpcode = 0x4015;
 
     OCPH_Log("Registered SetOnCombatProcedureStartEventHandler at opcode 0x%04X", g_ocphOpcode);
     OCPH_Log("OnCombatProcedureHandler module initialized successfully");

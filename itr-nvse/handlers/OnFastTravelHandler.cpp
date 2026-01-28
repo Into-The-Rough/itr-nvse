@@ -415,9 +415,9 @@ bool OFTH_Init(void* nvseInterface)
                 g_CaptureLambdaVars, g_UncaptureLambdaVars);
     }
 
-    nvse->SetOpcodeBase(0x3B1E);
+    nvse->SetOpcodeBase(0x401C);
     nvse->RegisterCommand(&kCommandInfo_SetOnFastTravelHandler);
-    g_ofthOpcode = 0x3B1E;
+    g_ofthOpcode = 0x401C;
 
     OFTH_Log("Registered SetOnFastTravelHandler at opcode 0x%04X", g_ofthOpcode);
     OFTH_Log("OnFastTravelHandler module initialized successfully");

@@ -237,12 +237,12 @@ bool FDH_Init(void* nvse)
 	NVSEInterface* g_nvse = (NVSEInterface*)nvse;
 
 	//register commands at 0x3B1B-0x3B1D
-	g_nvse->SetOpcodeBase(0x3B1B);
+	g_nvse->SetOpcodeBase(0x4017);
 
-	s_setMultOpcode = 0x3B1B;
+	s_setMultOpcode = 0x4017;
 	g_nvse->RegisterCommand(&kCommandInfo_SetFallDamageMult);
 
-	s_getMultOpcode = 0x3B1C;
+	s_getMultOpcode = 0x4018;
 	g_nvse->RegisterCommand(&kCommandInfo_GetFallDamageMult);
 
 	g_nvse->RegisterCommand(&kCommandInfo_ClearFallDamageMult);

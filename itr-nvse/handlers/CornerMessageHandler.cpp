@@ -325,11 +325,11 @@ bool CMH_Init(void* nvseInterface) {
 
     InstallHook();
 
-    nvse->SetOpcodeBase(0x3B14);
+    nvse->SetOpcodeBase(0x4013);
     nvse->RegisterCommand(&kCommandInfo_SetCornerMessageHandler);
-    g_registeredOpcode = 0x3B14;
+    g_registeredOpcode = 0x4013;
 
-    CMH_Log("Registered SetCornerMessageHandler at opcode 0x3B14");
+    CMH_Log("Registered SetCornerMessageHandler at opcode 0x4013");
     CMH_Log("CornerMessageHandler initialized successfully");
     return true;
 }

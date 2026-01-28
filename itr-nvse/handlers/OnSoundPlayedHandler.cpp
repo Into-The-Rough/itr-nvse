@@ -645,9 +645,9 @@ bool OSPH_Init(void* nvseInterface)
     OSPH_Log("Script interface at 0x%08X", g_osphScript);
 
     // Register commands at opcode 0x3B19
-    nvse->SetOpcodeBase(0x3B19);
+    nvse->SetOpcodeBase(0x4016);
     nvse->RegisterCommand(&kCommandInfo_SetOnSoundPlayedEventHandler);
-    g_osphOpcode = 0x3B19;
+    g_osphOpcode = 0x4016;
 
     OSPH_Log("SoundPlayed: name=%s execute=0x%08X", kCommandInfo_SetOnSoundPlayedEventHandler.longName, (UInt32)kCommandInfo_SetOnSoundPlayedEventHandler.execute);
 
