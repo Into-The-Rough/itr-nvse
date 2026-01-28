@@ -332,11 +332,11 @@ bool OFH_Init(void* nvseInterface) {
     InstallHook();
 
     // Register command
-    nvse->SetOpcodeBase(0x3B13);
+    nvse->SetOpcodeBase(0x4012);
     nvse->RegisterCommand(&kCommandInfo_SetOnFrenzyEventHandler);
-    g_registeredOpcode = 0x3B13;
+    g_registeredOpcode = 0x4012;
 
-    OFH_Log("Registered SetOnFrenzyEventHandler at opcode 0x3B13");
+    OFH_Log("Registered SetOnFrenzyEventHandler at opcode 0x4012");
     OFH_Log("OnFrenzyHandler initialized successfully");
     return true;
 }

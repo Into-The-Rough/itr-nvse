@@ -628,9 +628,9 @@ bool DTF_Init(void* nvseInterface) {
                 g_CaptureLambdaVars, g_UncaptureLambdaVars);
     }
 
-    nvse->SetOpcodeBase(0x3B00);
+    nvse->SetOpcodeBase(0x4000);
     nvse->RegisterCommand(&kCommandInfo_SetOnDialogueTextEventHandler);
-    g_dtfOpcode = 0x3B00;
+    g_dtfOpcode = 0x4000;
 
     DTF_Log("Registered SetOnDialogueTextEventHandler at opcode 0x%04X", g_dtfOpcode);
     DTF_Log("DialogueTextFilter module initialized successfully");

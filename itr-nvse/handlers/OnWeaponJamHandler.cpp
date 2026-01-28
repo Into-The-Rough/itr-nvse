@@ -451,9 +451,9 @@ bool OWJH_Init(void* nvseInterface)
     OWJH_Log("Script interface at 0x%08X", g_owjhScript);
 
     // Register command at opcode 0x3B06
-    nvse->SetOpcodeBase(0x3B06);
+    nvse->SetOpcodeBase(0x4005);
     nvse->RegisterCommand(&kCommandInfo_SetOnWeaponJamEventHandler);
-    g_owjhOpcode = 0x3B06;
+    g_owjhOpcode = 0x4005;
 
     OWJH_Log("Registered SetOnWeaponJamEventHandler at opcode 0x%04X", g_owjhOpcode);
     OWJH_Log("OnWeaponJamHandler module initialized successfully");

@@ -83,6 +83,12 @@ namespace Settings
 	int iQuickReadNoteControlID = 6;  // Aim/Block
 	int iQuickReadNoteMaxLines = 0;  // 0 = auto-calculate from screen height
 
+	// SwitchWeaponOnEmpty settings
+	int bSwitchWeaponOnEmpty = 0;  // Disabled by default - NPCs switch to loaded weapon instead of reloading
+
+	// AttackExplosiveObject settings
+	int bAttackExplosiveObject = 0;  // Disabled by default - NPCs shoot explosives near enemies
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -138,5 +144,8 @@ namespace Settings
 		iQuickReadNoteTimeoutMs = GetINIInt("QuickReadNote", "iTimeoutMs", 5000);
 		iQuickReadNoteControlID = GetINIInt("QuickReadNote", "iControlID", 6);
 		iQuickReadNoteMaxLines = GetINIInt("QuickReadNote", "iMaxLines", 0);
+
+		bSwitchWeaponOnEmpty = GetINIInt("Tweaks", "bSwitchWeaponOnEmpty", 0);
+		bAttackExplosiveObject = GetINIInt("Tweaks", "bAttackExplosiveObject", 0);
 	}
 }

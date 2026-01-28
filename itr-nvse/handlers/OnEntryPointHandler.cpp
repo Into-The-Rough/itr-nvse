@@ -508,9 +508,9 @@ bool OEPH_Init(void* nvseInterface)
     g_ExtractArgsEx = g_oephScript->ExtractArgsEx;
 
     // Register command at opcode 0x3B17
-    nvse->SetOpcodeBase(0x3B17);
+    nvse->SetOpcodeBase(0x4014);
     nvse->RegisterCommand(&kCommandInfo_SetOnEntryPointEventHandler);
-    g_oephOpcode = 0x3B17;
+    g_oephOpcode = 0x4014;
 
     return true;
 }

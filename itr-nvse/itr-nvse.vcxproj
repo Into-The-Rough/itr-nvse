@@ -147,6 +147,8 @@
     <ClCompile Include="fixes\FriendlyFire.cpp" />
     <ClCompile Include="fixes\NoDoorFade.cpp" />
     <ClCompile Include="fixes\ArmorDTDRFix.cpp" />
+    <ClCompile Include="fixes\SwitchWeaponOnEmpty.cpp" />
+    <ClCompile Include="features\AttackExplosiveObject.cpp" />
     <ClCompile Include="features\MessageBoxQuickClose.cpp">
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">internal/prefix.h</ForcedIncludeFiles>
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">internal/prefix.h</ForcedIncludeFiles>
@@ -209,6 +211,8 @@
     <ClInclude Include="fixes\FriendlyFire.h" />
     <ClInclude Include="fixes\NoDoorFade.h" />
     <ClInclude Include="fixes\ArmorDTDRFix.h" />
+    <ClInclude Include="fixes\SwitchWeaponOnEmpty.h" />
+    <ClInclude Include="features\AttackExplosiveObject.h" />
     <ClInclude Include="features\MessageBoxQuickClose.h" />
     <ClInclude Include="features\PreventWeaponSwitch.h" />
     <ClInclude Include="features\ELMO.h" />

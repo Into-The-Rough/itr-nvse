@@ -540,7 +540,7 @@ bool FakeHit_Init(void* nvse)
 	if (g_scriptInterface) extractArgs = (ExtractArgsEx_t)g_scriptInterface->ExtractArgsEx;
 	if (!extractArgs) return false;
 
-	nvseIntf->SetOpcodeBase(0x3F00);
+	nvseIntf->SetOpcodeBase(0x401A);
 	nvseIntf->RegisterCommand(&kCommandInfo_FakeHit);
 	nvseIntf->RegisterCommand(&kCommandInfo_FakeHitEx);
 	return true;

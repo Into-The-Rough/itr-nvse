@@ -431,9 +431,9 @@ bool OWDH_Init(void* nvseInterface)
     OWDH_Log("Script interface at 0x%08X", g_owdhScript);
 
     // Register command at opcode 0x3B02
-    nvse->SetOpcodeBase(0x3B02);
+    nvse->SetOpcodeBase(0x4002);
     nvse->RegisterCommand(&kCommandInfo_SetOnWeaponDropEventHandler);
-    g_owdhOpcode = 0x3B02;
+    g_owdhOpcode = 0x4002;
 
     OWDH_Log("Registered SetOnWeaponDropEventHandler at opcode 0x%04X", g_owdhOpcode);
     OWDH_Log("OnWeaponDropHandler module initialized successfully");

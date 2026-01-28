@@ -8,6 +8,7 @@
 #include "nvse/GameObjects.h"
 #include "nvse/GameForms.h"
 #include "nvse/GameData.h"
+#include "nvse/GameProcess.h"
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
 #include <vector>
@@ -354,25 +355,226 @@ bool Cmd_ClampToGround_Execute(COMMAND_ARGS)
 	return true;
 }
 
+//debug command to dump CombatTarget memory for offset verification
+static ParamInfo kParams_DumpCombatTarget[1] = {
+	{ "target", kParamType_Actor, 0 },
+};
+
+DEFINE_COMMAND_PLUGIN(DumpCombatTarget, "Dumps CombatTarget structure for offset verification", 1, 1, kParams_DumpCombatTarget);
+
+typedef void* (__thiscall *_GetCombatController)(Actor*);
+typedef void* (__thiscall *_GetCombatTargetForActor)(void* combatGroup, Actor* target);
+static const _GetCombatController GetCombatController = (_GetCombatController)0x8A02D0;
+static const _GetCombatTargetForActor GetCombatTargetForActor = (_GetCombatTargetForActor)0x9865D0;
+
+bool Cmd_DumpCombatTarget_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+
+	Actor* target = nullptr;
+
+	Log("DumpCombatTarget: ExtractArgs...");
+	if (!ExtractArgs(EXTRACT_ARGS, &target))
+	{
+		Log("DumpCombatTarget: ExtractArgs failed");
+		Console_Print("DumpCombatTarget >> ExtractArgs failed");
+		return true;
+	}
+
+	Log("DumpCombatTarget: thisObj=%08X target=%08X", thisObj, target);
+	if (!thisObj || !target)
+	{
+		Console_Print("DumpCombatTarget >> Call on observer ref with target as param");
+		return true;
+	}
+
+	Actor* observer = (Actor*)thisObj;
+	Log("DumpCombatTarget: observer refID=%08X", observer->refID);
+
+	//get combat controller via direct function call
+	void* combatController = GetCombatController(observer);
+	Log("DumpCombatTarget: combatController=%08X", combatController);
+
+	if (!combatController)
+	{
+		Console_Print("DumpCombatTarget >> Observer has no combat controller");
+		return true;
+	}
+
+	//combatGroup is at offset 0x80 in CombatController
+	void* combatGroup = *(void**)((UInt8*)combatController + 0x80);
+	Log("DumpCombatTarget: combatGroup=%08X", combatGroup);
+	if (!combatGroup)
+	{
+		Console_Print("DumpCombatTarget >> No combat group");
+		return true;
+	}
+
+	void* combatTarget = GetCombatTargetForActor(combatGroup, target);
+	Log("DumpCombatTarget: combatTarget=%08X", combatTarget);
+	if (!combatTarget)
+	{
+		Console_Print("DumpCombatTarget >> No CombatTarget for target actor");
+		return true;
+	}
+
+	Console_Print("DumpCombatTarget >> CombatTarget at %08X", combatTarget);
+
+	//dump raw bytes
+	UInt8* bytes = (UInt8*)combatTarget;
+	Log("CombatTarget dump at %08X:", combatTarget);
+	for (int i = 0; i < 0x68; i += 16)
+	{
+		Log("  +%02X: %02X %02X %02X %02X %02X %02X %02X %02X  %02X %02X %02X %02X %02X %02X %02X %02X",
+			i,
+			bytes[i+0], bytes[i+1], bytes[i+2], bytes[i+3],
+			bytes[i+4], bytes[i+5], bytes[i+6], bytes[i+7],
+			bytes[i+8], bytes[i+9], bytes[i+10], bytes[i+11],
+			bytes[i+12], bytes[i+13], bytes[i+14], bytes[i+15]);
+	}
+
+	//try to interpret known fields
+	Actor** pTarget = (Actor**)bytes;
+	Console_Print("  +00 pTarget: %08X (expected %08X)", *pTarget, target);
+
+	SInt32 detectionLevel = *(SInt32*)(bytes + 0x04);
+	Console_Print("  +04 detectionLevel: %d", detectionLevel);
+
+	//BGSWorldLocation at +08 (kLastSeenLocation) - 0x10 bytes
+	float* lastSeenPos = (float*)(bytes + 0x08);
+	Console_Print("  +08 kLastSeenLocation: %.1f, %.1f, %.1f", lastSeenPos[0], lastSeenPos[1], lastSeenPos[2]);
+
+	//BGSWorldLocation at +18 (kDetectedLocation)
+	float* detectedPos = (float*)(bytes + 0x18);
+	Console_Print("  +18 kDetectedLocation: %.1f, %.1f, %.1f", detectedPos[0], detectedPos[1], detectedPos[2]);
+
+	//BGSWorldLocation at +28 (kLastFullyVisibleLocation)
+	float* fullyVisPos = (float*)(bytes + 0x28);
+	Console_Print("  +28 kLastFullyVisibleLocation: %.1f, %.1f, %.1f", fullyVisPos[0], fullyVisPos[1], fullyVisPos[2]);
+
+	//BGSWorldLocation at +38 (kInitialTargetLocation)
+	float* initialPos = (float*)(bytes + 0x38);
+	Console_Print("  +38 kInitialTargetLocation: %.1f, %.1f, %.1f", initialPos[0], initialPos[1], initialPos[2]);
+
+	//counts at +48
+	UInt16 searchCount = *(UInt16*)(bytes + 0x48);
+	UInt16 attackerCount = *(UInt16*)(bytes + 0x4A);
+	UInt8 inLOSCount = *(UInt8*)(bytes + 0x4C);
+	UInt8 inFullLOSCount = *(UInt8*)(bytes + 0x4D);
+	Console_Print("  +48 searchCount: %d, attackerCount: %d", searchCount, attackerCount);
+	Console_Print("  +4C inLOSCount: %d, inFullLOSCount: %d", inLOSCount, inFullLOSCount);
+
+	//timestamps at +50, +54, +58, +5C, +60, +64
+	float* timestamps = (float*)(bytes + 0x50);
+	Console_Print("  +50 timestamps: %.2f, %.2f, %.2f, %.2f, %.2f, %.2f",
+		timestamps[0], timestamps[1], timestamps[2], timestamps[3], timestamps[4], timestamps[5]);
+
+	//also print target's actual position for comparison
+	Console_Print("  Target actual pos: %.1f, %.1f, %.1f", target->posX, target->posY, target->posZ);
+
+	*result = 1;
+	return true;
+}
+
+//helper to get CombatTarget for observer/target pair
+static void* GetCombatTargetData(Actor* observer, Actor* target)
+{
+	if (!observer || !target) return nullptr;
+
+	void* combatController = GetCombatController(observer);
+	if (!combatController) return nullptr;
+
+	void* combatGroup = *(void**)((UInt8*)combatController + 0x80);
+	if (!combatGroup) return nullptr;
+
+	return GetCombatTargetForActor(combatGroup, target);
+}
+
+//helper to create position array from CombatTarget offset
+static bool CreatePositionArray(COMMAND_ARGS, void* combatTarget, UInt32 offset)
+{
+	if (!combatTarget) return false;
+
+	float* pos = (float*)((UInt8*)combatTarget + offset);
+
+	NVSEArrayVarInterface::Array* arr = g_arrInterface->CreateArray(nullptr, 0, scriptObj);
+	g_arrInterface->AppendElement(arr, NVSEArrayVarInterface::Element(pos[0]));
+	g_arrInterface->AppendElement(arr, NVSEArrayVarInterface::Element(pos[1]));
+	g_arrInterface->AppendElement(arr, NVSEArrayVarInterface::Element(pos[2]));
+	g_arrInterface->AssignCommandResult(arr, result);
+
+	return true;
+}
+
+//combat target location getters - all use same params
+static ParamInfo kParams_CombatTargetLocation[1] = {
+	{ "target", kParamType_Actor, 0 },
+};
+
+DEFINE_COMMAND_PLUGIN(GetTargetLastSeenLocation, "Returns array [x,y,z] of where observer last saw target", 1, 1, kParams_CombatTargetLocation);
+DEFINE_COMMAND_PLUGIN(GetTargetDetectedLocation, "Returns array [x,y,z] of where observer detected target (sound/event)", 1, 1, kParams_CombatTargetLocation);
+DEFINE_COMMAND_PLUGIN(GetTargetLastFullyVisibleLocation, "Returns array [x,y,z] of where observer last had full LOS to target", 1, 1, kParams_CombatTargetLocation);
+DEFINE_COMMAND_PLUGIN(GetTargetInitialLocation, "Returns array [x,y,z] of where observer first spotted target", 1, 1, kParams_CombatTargetLocation);
+
+bool Cmd_GetTargetLastSeenLocation_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	Actor* target = nullptr;
+	if (!ExtractArgs(EXTRACT_ARGS, &target)) return true;
+
+	void* ct = GetCombatTargetData((Actor*)thisObj, target);
+	CreatePositionArray(PASS_COMMAND_ARGS, ct, 0x08);
+	return true;
+}
+
+bool Cmd_GetTargetDetectedLocation_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	Actor* target = nullptr;
+	if (!ExtractArgs(EXTRACT_ARGS, &target)) return true;
+
+	void* ct = GetCombatTargetData((Actor*)thisObj, target);
+	CreatePositionArray(PASS_COMMAND_ARGS, ct, 0x18);
+	return true;
+}
+
+bool Cmd_GetTargetLastFullyVisibleLocation_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	Actor* target = nullptr;
+	if (!ExtractArgs(EXTRACT_ARGS, &target)) return true;
+
+	void* ct = GetCombatTargetData((Actor*)thisObj, target);
+	CreatePositionArray(PASS_COMMAND_ARGS, ct, 0x28);
+	return true;
+}
+
+bool Cmd_GetTargetInitialLocation_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	Actor* target = nullptr;
+	if (!ExtractArgs(EXTRACT_ARGS, &target)) return true;
+
+	void* ct = GetCombatTargetData((Actor*)thisObj, target);
+	CreatePositionArray(PASS_COMMAND_ARGS, ct, 0x38);
+	return true;
+}
+
 bool ImperativeCommands_Init(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 
-	nvse->SetOpcodeBase(0x4040);
-	nvse->RegisterTypedCommand(&kCommandInfo_GetRefsSortedByDistance, kRetnType_Array);
-	Log("Registered GetRefsSortedByDistance at opcode 0x4040");
-
-	nvse->SetOpcodeBase(0x3B03);
-	nvse->RegisterTypedCommand(&kCommandInfo_Duplicate, kRetnType_Form);
-	Log("Registered Duplicate at opcode 0x3B03");
-
-	nvse->SetOpcodeBase(0x3B16);
-	nvse->RegisterTypedCommand(&kCommandInfo_GetAvailableRecipes, kRetnType_Array);
-	Log("Registered GetAvailableRecipes at opcode 0x3B16");
-
-	nvse->SetOpcodeBase(0x3B1F);
-	nvse->RegisterCommand(&kCommandInfo_ClampToGround);
-	Log("Registered ClampToGround at opcode 0x3B1F");
+	nvse->SetOpcodeBase(0x4021);
+	/*4021*/ nvse->RegisterTypedCommand(&kCommandInfo_GetRefsSortedByDistance, kRetnType_Array);
+	/*4022*/ nvse->RegisterTypedCommand(&kCommandInfo_Duplicate, kRetnType_Form);
+	/*4023*/ nvse->RegisterTypedCommand(&kCommandInfo_GetAvailableRecipes, kRetnType_Array);
+	/*4024*/ nvse->RegisterCommand(&kCommandInfo_ClampToGround);
+	/*4025*/ nvse->RegisterCommand(&kCommandInfo_DumpCombatTarget);
+	/*4026*/ nvse->RegisterTypedCommand(&kCommandInfo_GetTargetLastSeenLocation, kRetnType_Array);
+	/*4027*/ nvse->RegisterTypedCommand(&kCommandInfo_GetTargetDetectedLocation, kRetnType_Array);
+	/*4028*/ nvse->RegisterTypedCommand(&kCommandInfo_GetTargetLastFullyVisibleLocation, kRetnType_Array);
+	/*4029*/ nvse->RegisterTypedCommand(&kCommandInfo_GetTargetInitialLocation, kRetnType_Array);
+	Log("Registered ImperativeCommands at 0x4021-0x4029");
 
 	return true;
 }

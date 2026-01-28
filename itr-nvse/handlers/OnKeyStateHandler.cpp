@@ -499,18 +499,18 @@ bool OKSH_Init(void* nvseInterface)
     OKSH_Log("Console interface at 0x%08X", g_okshConsole);
 
     // Register commands at opcodes 0x3B07-0x3B0A
-    nvse->SetOpcodeBase(0x3B07);
+    nvse->SetOpcodeBase(0x4006);
     nvse->RegisterCommand(&kCommandInfo_SetOnKeyDisabledEventHandler);
-    g_okshDisabledOpcode = 0x3B07;
+    g_okshDisabledOpcode = 0x4006;
 
-    nvse->SetOpcodeBase(0x3B08);
+    nvse->SetOpcodeBase(0x4007);
     nvse->RegisterCommand(&kCommandInfo_SetOnKeyEnabledEventHandler);
-    g_okshEnabledOpcode = 0x3B08;
+    g_okshEnabledOpcode = 0x4007;
 
-    nvse->SetOpcodeBase(0x3B09);
+    nvse->SetOpcodeBase(0x4008);
     nvse->RegisterCommand(&kCommandInfo_DisableKeyEx);
 
-    nvse->SetOpcodeBase(0x3B0A);
+    nvse->SetOpcodeBase(0x4009);
     nvse->RegisterCommand(&kCommandInfo_EnableKeyEx);
 
     OKSH_Log("Registered SetOnKeyDisabledEventHandler at opcode 0x%04X", g_okshDisabledOpcode);

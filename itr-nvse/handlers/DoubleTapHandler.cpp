@@ -346,13 +346,13 @@ bool DTH_Init(void* nvseInterface) {
     }
     g_ExtractArgsEx = g_dthScript->ExtractArgsEx;
 
-    nvse->SetOpcodeBase(0x3B0F);
+    nvse->SetOpcodeBase(0x400E);
     nvse->RegisterCommand(&kCommandInfo_RegisterKeyDoubleTap);
-    nvse->SetOpcodeBase(0x3B10);
+    nvse->SetOpcodeBase(0x400F);
     nvse->RegisterCommand(&kCommandInfo_RegisterControlDoubleTap);
-    nvse->SetOpcodeBase(0x3B11);
+    nvse->SetOpcodeBase(0x4010);
     nvse->RegisterCommand(&kCommandInfo_UnregisterKeyDoubleTap);
-    nvse->SetOpcodeBase(0x3B12);
+    nvse->SetOpcodeBase(0x4011);
     nvse->RegisterCommand(&kCommandInfo_UnregisterControlDoubleTap);
 
     DTH_Log("Registered commands at opcodes 0x3B0F-0x3B12");
