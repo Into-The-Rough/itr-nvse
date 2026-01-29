@@ -8,6 +8,8 @@ extern void Log(const char* fmt, ...);
 
 namespace ReversePickpocketNoKarmaFix
 {
+	static bool g_enabled = false;
+
 	constexpr uint32_t kAddr_TryPickpocket = 0x75E0B0;
 	constexpr uint32_t kAddr_IsLiveGrenade = 0x75D510;
 	constexpr uint32_t kAddr_CallSite1 = 0x75DBDA;
@@ -57,6 +59,9 @@ namespace ReversePickpocketNoKarmaFix
 	{
 		__asm
 		{
+			cmp g_enabled, 0
+			je call_original
+
 			push ecx
 			mov edx, [esp+8]
 			call ShouldSkipKarma
@@ -65,6 +70,7 @@ namespace ReversePickpocketNoKarmaFix
 			test al, al
 			jnz skip
 
+		call_original:
 			jmp kAddr_TryPickpocket
 
 		skip:
@@ -73,15 +79,27 @@ namespace ReversePickpocketNoKarmaFix
 		}
 	}
 
-	void Init()
+	void SetEnabled(bool enabled)
+	{
+		g_enabled = enabled;
+		Log("ReversePickpocketNoKarmaFix %s", enabled ? "enabled" : "disabled");
+	}
+
+	void Init(bool enabled)
 	{
 		WriteRelCall(kAddr_CallSite1, (uint32_t)Hook_TryPickpocket);
 		WriteRelCall(kAddr_CallSite2, (uint32_t)Hook_TryPickpocket);
-		Log("ReversePickpocketNoKarmaFix installed");
+		g_enabled = enabled;
+		Log("ReversePickpocketNoKarmaFix initialized (enabled=%d)", enabled);
 	}
 }
 
-void ReversePickpocketNoKarmaFix_Init()
+void ReversePickpocketNoKarmaFix_Init(bool enabled)
 {
-	ReversePickpocketNoKarmaFix::Init();
+	ReversePickpocketNoKarmaFix::Init(enabled);
+}
+
+void ReversePickpocketNoKarmaFix_SetEnabled(bool enabled)
+{
+	ReversePickpocketNoKarmaFix::SetEnabled(enabled);
 }
