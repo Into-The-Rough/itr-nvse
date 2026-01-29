@@ -31,6 +31,11 @@
 - SetPreventWeaponSwitch - prevent NPC weapon switching
 - GetPreventWeaponSwitch - get weapon switch prevention state
 
+**Radio**
+- GetPlayingRadioTrack - returns TESSound or TESTopicInfo for playing radio track
+- GetPlayingRadioTrackFileName - returns file path of playing radio track
+- GetPlayingRadioText - returns dialogue text of playing radio voice line
+
 **Input**
 - RegisterKeyHeld - register key held callback
 - RegisterControlHeld - register control held callback
