@@ -12,7 +12,6 @@
 #include <cstring>
 #include <cctype>
 
-
 static NVSEStringVarInterface* g_strInterface = nullptr;
 
 DEFINE_COMMAND_PLUGIN(GetPlayingRadioTrack, "Returns TESSound or TESTopicInfo for the playing radio track", 0, 0, NULL)
