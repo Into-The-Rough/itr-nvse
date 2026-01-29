@@ -42,6 +42,7 @@
 #include "fixes/NoDoorFade.h"
 #include "fixes/ArmorDTDRFix.h"
 #include "fixes/DoorPackageOwnershipFix.h"
+#include "fixes/VATSSpeechFix.h"
 
 #include "features/MessageBoxQuickClose.h"
 #include "features/PreventWeaponSwitch.h"
@@ -371,6 +372,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					QuickReadNote_Init(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
 				if (Settings::bDoorPackageOwnershipFix)
 					DoorPackageOwnershipFix_Init();
+				if (Settings::bVATSSpeechFix)
+					VATSSpeechFix_Init();
 				g_hooksInstalled = true;
 			}
 			break;
@@ -525,6 +528,7 @@ static void LogSettings()
 	Log("  bNoDoorFade: %d", Settings::bNoDoorFade);
 	Log("  bQuickReadNote: %d", Settings::bQuickReadNote);
 	Log("  bDoorPackageOwnershipFix: %d", Settings::bDoorPackageOwnershipFix);
+	Log("  bVATSSpeechFix: %d", Settings::bVATSSpeechFix);
 	Log("  iAutoQuickLoadFrameDelay: %d", Settings::iAutoQuickLoadFrameDelay);
 
 	if (Settings::bQuickDrop) Log("QuickDrop enabled (modifier=%d, control=%d)", Settings::iQuickDropModifierKey, Settings::iQuickDropControlID);
