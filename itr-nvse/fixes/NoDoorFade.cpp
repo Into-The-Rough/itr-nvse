@@ -10,6 +10,8 @@ extern void Log(const char* fmt, ...);
 
 namespace NoDoorFade
 {
+	static bool g_enabled = false;
+
 	constexpr uint32_t kAddr_FadeOutCall = 0x51895B;
 	constexpr uint32_t kAddr_FadeOut = 0x8FE960;
 
@@ -25,8 +27,8 @@ namespace NoDoorFade
 		//call original to set up fade state and teleport ref
 		Original_FadeOut(process, actor, doorRef, teleport);
 
-		//immediately zero alpha so fade completes next frame
-		if (teleport)
+		//if enabled, immediately zero alpha so fade completes next frame
+		if (g_enabled && teleport)
 		{
 			float* fadeAlpha = (float*)((uint8_t*)process + kOffset_fFadeAlpha);
 			*fadeAlpha = 0.0f;
@@ -41,14 +43,26 @@ namespace NoDoorFade
 		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
 	}
 
-	void Init()
+	void SetEnabled(bool enabled)
+	{
+		g_enabled = enabled;
+		Log("NoDoorFade %s", enabled ? "enabled" : "disabled");
+	}
+
+	void Init(bool enabled)
 	{
 		PatchCall(kAddr_FadeOutCall, (uint32_t)Hook_FadeOut);
-		Log("NoDoorFade: Hooked FadeOut for instant door transitions");
+		g_enabled = enabled;
+		Log("NoDoorFade initialized (enabled=%d)", enabled);
 	}
 }
 
-void NoDoorFade_Init()
+void NoDoorFade_Init(bool enabled)
 {
-	NoDoorFade::Init();
+	NoDoorFade::Init(enabled);
+}
+
+void NoDoorFade_SetEnabled(bool enabled)
+{
+	NoDoorFade::SetEnabled(enabled);
 }
