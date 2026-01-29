@@ -41,9 +41,7 @@
 #include "fixes/FriendlyFire.h"
 #include "fixes/NoDoorFade.h"
 #include "fixes/ArmorDTDRFix.h"
-#include "fixes/SwitchWeaponOnEmpty.h"
-
-#include "features/AttackExplosiveObject.h"
+#include "fixes/DoorPackageOwnershipFix.h"
 
 #include "features/MessageBoxQuickClose.h"
 #include "features/PreventWeaponSwitch.h"
@@ -370,10 +368,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					ArmorDTDRFix_Init();
 				if (Settings::bQuickReadNote)
 					QuickReadNote_Init(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
-				if (Settings::bSwitchWeaponOnEmpty)
-					SwitchWeaponOnEmpty_Init();
-				if (Settings::bAttackExplosiveObject)
-					AttackExplosiveObject_Init();
+				if (Settings::bDoorPackageOwnershipFix)
+					DoorPackageOwnershipFix_Init();
 				g_hooksInstalled = true;
 			}
 			break;
@@ -453,8 +449,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				QuickReadNote_Update();
 			if (Settings::bDialogueCamera)
 				DCH_Update();
-			if (Settings::bSwitchWeaponOnEmpty)
-				SwitchWeaponOnEmpty_Update();
 			if (Settings::bAutoQuickLoad && !g_quickLoadExecuted)
 			{
 				if (g_MenuVisibilityArray[kMenuType_Start])
@@ -529,8 +523,7 @@ static void LogSettings()
 	Log("  bSuppressReputation: %d", Settings::bSuppressReputation);
 	Log("  bNoDoorFade: %d", Settings::bNoDoorFade);
 	Log("  bQuickReadNote: %d", Settings::bQuickReadNote);
-	Log("  bSwitchWeaponOnEmpty: %d", Settings::bSwitchWeaponOnEmpty);
-	Log("  bAttackExplosiveObject: %d", Settings::bAttackExplosiveObject);
+	Log("  bDoorPackageOwnershipFix: %d", Settings::bDoorPackageOwnershipFix);
 	Log("  iAutoQuickLoadFrameDelay: %d", Settings::iAutoQuickLoadFrameDelay);
 
 	if (Settings::bQuickDrop) Log("QuickDrop enabled (modifier=%d, control=%d)", Settings::iQuickDropModifierKey, Settings::iQuickDropControlID);
