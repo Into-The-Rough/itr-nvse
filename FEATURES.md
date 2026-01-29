@@ -75,7 +75,6 @@
 - AutoQuickLoad - auto-load quicksave on main menu
 - OwnerNameInfo - show item owner on crosshair
 - SaveFileSize - show save file size in menu
-- AttackExplosiveObject - NPCs target nearby explosive objects in combat
 
 ## Fixes
 
@@ -88,7 +87,6 @@
 - OwnedBeds - sleep in owned beds with consequences
 - ReversePickpocketNoKarmaFix - no karma loss for reverse pickpocket
 - SlowMotionPhysicsFix - stable ragdoll physics in VATS
-- SwitchWeaponOnEmpty - NPCs switch weapon instead of reload
 - VATSLimbFix - hide dismembered limbs in VATS
 - VATSProjectileFix - fix projectile hit chance in VATS
 
