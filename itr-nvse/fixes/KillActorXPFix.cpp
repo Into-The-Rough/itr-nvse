@@ -8,6 +8,8 @@ extern void Log(const char* fmt, ...);
 
 namespace KillActorXPFix
 {
+	static bool g_enabled = false;
+
 	constexpr uint32_t kAddr_XPBlockStart = 0x5BE379;
 	constexpr uint32_t kAddr_XPBlockEnd = 0x5BE3FA;
 	constexpr uint32_t kAddr_ActorGetLevel = 0x87F9F0;
@@ -37,6 +39,10 @@ namespace KillActorXPFix
 	{
 		__asm
 		{
+			//check if fix is enabled
+			cmp g_enabled, 0
+			je normal_path
+
 			mov ecx, [ebp-0x10]
 			mov eax, [ecx + 0x108] //lifeState: 0=alive,1=dying,2=dead
 			cmp eax, 1
@@ -44,6 +50,8 @@ namespace KillActorXPFix
 			cmp eax, 2
 			je skip_xp
 
+		normal_path:
+			mov ecx, [ebp-0x10]
 			mov eax, kAddr_ActorGetLevel
 			call eax
 			mov eax, kAddr_ReturnAfterHook
@@ -55,17 +63,28 @@ namespace KillActorXPFix
 		}
 	}
 
-	void Init()
+	void SetEnabled(bool enabled) {
+		g_enabled = enabled;
+		Log("KillActorXPFix %s", enabled ? "enabled" : "disabled");
+	}
+
+	void Init(bool enabled)
 	{
 		WriteRelJump(kAddr_XPBlockStart, (uint32_t)Hook_XPBlockStart);
 		PatchWrite8(kAddr_XPBlockStart + 5, 0x90);
 		PatchWrite8(kAddr_XPBlockStart + 6, 0x90);
 		PatchWrite8(kAddr_XPBlockStart + 7, 0x90);
-		Log("KillActorXPFix installed");
+		g_enabled = enabled;
+		Log("KillActorXPFix initialized (enabled=%d)", enabled);
 	}
 }
 
-void KillActorXPFix_Init()
+void KillActorXPFix_Init(bool enabled)
 {
-	KillActorXPFix::Init();
+	KillActorXPFix::Init(enabled);
+}
+
+void KillActorXPFix_SetEnabled(bool enabled)
+{
+	KillActorXPFix::SetEnabled(enabled);
 }

@@ -8,6 +8,7 @@ extern void Log(const char* fmt, ...);
 
 namespace OwnedBeds
 {
+	static bool g_enabled = false;
 
 	constexpr UInt32 kAddr_IsAnOwner = 0x5785E0;
 	constexpr UInt32 kAddr_IsAnOwnerCall = 0x509679;
@@ -86,6 +87,10 @@ namespace OwnedBeds
 	}
 
 	bool __fastcall IsAnOwnerHook(void* bedRef, void* edx, void* actor, bool checkFaction) {
+		//if disabled, just call original
+		if (!g_enabled)
+			return IsAnOwner(bedRef, actor, checkFaction);
+
 		bool isOwner = IsAnOwner(bedRef, actor, checkFaction);
 
 		if (!isOwner) {
@@ -117,14 +122,25 @@ namespace OwnedBeds
 		PatchWrite32(addr + 1, target - addr - 5);
 	}
 
-	void Init()
+	void SetEnabled(bool enabled) {
+		g_enabled = enabled;
+		Log("OwnedBeds %s", enabled ? "enabled" : "disabled");
+	}
+
+	void Init(bool enabled)
 	{
 		WriteRelCall(kAddr_IsAnOwnerCall, (UInt32)IsAnOwnerHook);
-		Log("OwnedBeds installed");
+		g_enabled = enabled;
+		Log("OwnedBeds initialized (enabled=%d)", enabled);
 	}
 }
 
-void OwnedBeds_Init()
+void OwnedBeds_Init(bool enabled)
 {
-	OwnedBeds::Init();
+	OwnedBeds::Init(enabled);
+}
+
+void OwnedBeds_SetEnabled(bool enabled)
+{
+	OwnedBeds::SetEnabled(enabled);
 }
