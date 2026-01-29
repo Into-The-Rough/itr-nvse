@@ -54,6 +54,7 @@
 
 #include "commands/ImperativeCommands.h"
 #include "commands/StringCommands.h"
+#include "commands/RadioCommands.h"
 
 #include <cstdio>
 #include <cstring>
@@ -687,6 +688,7 @@ namespace ITR
 
 		ImperativeCommands_Init((void*)nvse);
 		StringCommands_Init((void*)nvse);
+		RadioCommands_Init((void*)nvse);
 		RegisterHandlers(nvse);
 
 		Log("itr-nvse loaded successfully");

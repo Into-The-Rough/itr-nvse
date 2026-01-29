@@ -172,6 +172,7 @@
     <ClCompile Include="features\PlayerUpdateHook.cpp" />
     <ClCompile Include="commands\ImperativeCommands.cpp" />
     <ClCompile Include="commands\StringCommands.cpp" />
+    <ClCompile Include="commands\RadioCommands.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ITR.h" />
@@ -221,6 +222,7 @@
     <ClInclude Include="features\PlayerUpdateHook.h" />
     <ClInclude Include="commands\ImperativeCommands.h" />
     <ClInclude Include="commands\StringCommands.h" />
+    <ClInclude Include="commands\RadioCommands.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />
