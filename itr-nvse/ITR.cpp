@@ -53,6 +53,7 @@
 #include "features/VATSExtender.h"
 #include "features/CameraOverride.h"
 #include "features/PlayerUpdateHook.h"
+#include "features/NPCAntidoteUse.h"
 
 #include "commands/ImperativeCommands.h"
 #include "commands/StringCommands.h"
@@ -369,10 +370,11 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					QuickReadNote_Init(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
 				if (Settings::bDoorPackageOwnershipFix)
 					DoorPackageOwnershipFix_Init();
-				if (Settings::bVATSSpeechFix)
-					VATSSpeechFix_Init();
+				VATSSpeechFix_Init(Settings::bVATSSpeechFix != 0);
 				if (Settings::bCombatItemTimerFix)
 					CombatItemTimerFix_Init();
+				if (Settings::bNPCAntidoteUse)
+					NPCAntidoteUse_Init(Settings::fCombatItemCureTimer, Settings::fCureHealthThreshold);
 				g_hooksInstalled = true;
 			}
 			break;
@@ -426,6 +428,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					OwnedBeds_SetEnabled(Settings::bOwnedBeds != 0);
 					KillActorXPFix_SetEnabled(Settings::bKillActorXPFix != 0);
 					NoDoorFade_SetEnabled(Settings::bNoDoorFade != 0);
+					VATSSpeechFix_SetEnabled(Settings::bVATSSpeechFix != 0);
 
 					//apply god mode immediately if setting changed
 					if (Settings::bAutoGodMode && !oldGodMode)
@@ -441,7 +444,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 					Log("Config reloaded via ReloadPluginConfig");
 					Console_Print("itr-nvse: Config reloaded");
-					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180, OwnerNameInfo, QuickReadNote, FriendlyFire, OwnedBeds, KillActorXPFix, NoDoorFade");
+					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180, OwnerNameInfo, QuickReadNote, FriendlyFire, OwnedBeds, KillActorXPFix, NoDoorFade, VATSSpeechFix");
 				}
 			}
 			break;
@@ -533,10 +536,12 @@ static void LogSettings()
 	Log("  bDoorPackageOwnershipFix: %d", Settings::bDoorPackageOwnershipFix);
 	Log("  bVATSSpeechFix: %d", Settings::bVATSSpeechFix);
 	Log("  bCombatItemTimerFix: %d", Settings::bCombatItemTimerFix);
+	Log("  bNPCAntidoteUse: %d", Settings::bNPCAntidoteUse);
 	Log("  iAutoQuickLoadFrameDelay: %d", Settings::iAutoQuickLoadFrameDelay);
 
 	if (Settings::bQuickDrop) Log("QuickDrop enabled (modifier=%d, control=%d)", Settings::iQuickDropModifierKey, Settings::iQuickDropControlID);
 	if (Settings::bQuick180) Log("Quick180 enabled (modifier=%d, control=%d)", Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
+	if (Settings::bNPCAntidoteUse) Log("NPCAntidoteUse enabled (timer=%.1f, healthThreshold=%.1f)", Settings::fCombatItemCureTimer, Settings::fCureHealthThreshold);
 }
 
 static void RegisterHandlers(NVSEInterface* nvse)
