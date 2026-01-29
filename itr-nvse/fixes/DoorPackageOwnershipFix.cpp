@@ -1,0 +1,149 @@
+//fixes NPCs with lock/unlock door packages locking doors they don't own
+//vanilla bug: doors skip cell ownership inheritance in GetOwnerRawForm
+//fix: hook IsAnOwner calls in lock/unlock functions to also check cell ownership for doors
+
+#include "DoorPackageOwnershipFix.h"
+#include <Windows.h>
+#include <cstdint>
+
+namespace DoorPackageOwnershipFix
+{
+	//addresses
+	constexpr UInt32 kAddr_IsAnOwner = 0x5785E0;
+	constexpr UInt32 kAddr_GetOwner = 0x567790;              //GetOwnerRawForm - returns explicit owner only for doors
+	constexpr UInt32 kAddr_IsInFaction = 0x89A9A0;           //Actor::IsInFaction
+
+	//call sites for IsAnOwner in lock/unlock functions
+	constexpr UInt32 kCall_LockIsAnOwner = 0x90D528;         //9491752 - call in LockDoorsAtLocation
+	constexpr UInt32 kCall_UnlockIsAnOwner = 0x90D5DE;       //9491934 - call in UnlockDoorsAtLocation
+
+	constexpr UInt8 kFormType_Faction = 0x06;
+	constexpr UInt8 kExtraData_Ownership = 0x21;
+
+	typedef bool (__thiscall* _IsAnOwner)(void* refr, void* actor, bool checkFaction);
+	typedef void* (__thiscall* _GetOwner)(void* refr);
+	typedef bool (__thiscall* _IsInFaction)(void* actor, void* faction);
+
+	static _IsAnOwner OriginalIsAnOwner = (_IsAnOwner)kAddr_IsAnOwner;
+	static _GetOwner GetOwner = (_GetOwner)kAddr_GetOwner;
+	static _IsInFaction IsInFaction = (_IsInFaction)kAddr_IsInFaction;
+
+	inline UInt8 GetFormTypeDirect(void* form) {
+		return form ? *(UInt8*)((char*)form + 0x04) : 0;
+	}
+
+	//TESObjectREFR::parentCell is at offset 0x40
+	inline void* GetParentCellDirect(void* refr)
+	{
+		return *(void**)((char*)refr + 0x40);
+	}
+
+	//TESObjectCELL flags2 at offset 0x26 - values 5 or 6 mean loaded
+	inline bool IsCellLoaded(void* cell)
+	{
+		if (!cell) return false;
+		UInt8 flags2 = *(UInt8*)((char*)cell + 0x26);
+		return (flags2 >= 5);
+	}
+
+	//read cell owner directly from ExtraDataList - thread safe, no function calls
+	//TESObjectCELL::extraDataList at offset 0x28 (embedded, not pointer)
+	//ExtraDataList::m_data at offset 0x04 (BSExtraData* head)
+	//BSExtraData::type at 0x04, next at 0x08
+	//ExtraOwnership::owner at 0x0C
+	void* GetCellOwnerDirect(void* cell)
+	{
+		if (!cell) return nullptr;
+
+		void* extraHead = *(void**)((char*)cell + 0x28 + 0x04);
+
+		//traverse linked list
+		void* current = extraHead;
+		while (current)
+		{
+			UInt8 type = *(UInt8*)((char*)current + 0x04);
+			if (type == kExtraData_Ownership)
+			{
+				return *(void**)((char*)current + 0x0C);
+			}
+			current = *(void**)((char*)current + 0x08);
+		}
+
+		return nullptr; //no owner
+	}
+
+	inline void* GetBaseForm(void* refr)
+	{
+		return refr ? *(void**)((char*)refr + 0x20) : nullptr;
+	}
+
+	//check if actor owns the cell (or is in the owning faction)
+	bool ActorOwnsCell(void* actor, void* cellOwner)
+	{
+		if (!actor || !cellOwner) return true; //safe default
+
+		//check if cell owner is a faction
+		UInt8 ownerType = GetFormTypeDirect(cellOwner);
+		if (ownerType == kFormType_Faction)
+		{
+			return IsInFaction(actor, cellOwner);
+		}
+
+		//cell owner is an NPC - check if actor's base form matches
+		//actor is a reference, owner is a base form
+		void* actorBase = GetBaseForm(actor);
+		if (!actorBase) return true;
+
+		UInt32 actorBaseID = *(UInt32*)((char*)actorBase + 0x0C);
+		UInt32 ownerID = *(UInt32*)((char*)cellOwner + 0x0C);
+		return actorBaseID == ownerID;
+	}
+
+	//replacement IsAnOwner that also checks cell ownership for doors
+	bool __fastcall IsAnOwner_Hook(void* refr, void* edx, void* actor, bool checkFaction)
+	{
+		bool originalResult = OriginalIsAnOwner(refr, actor, checkFaction);
+
+		if (!originalResult) return false;
+
+		void* explicitOwner = GetOwner(refr);
+		if (explicitOwner) return true;
+
+		void* cell = GetParentCellDirect(refr);
+		if (!cell) return true; //no cell = allow
+
+		if (!IsCellLoaded(cell)) return true; //cell not loaded = skip check, allow
+
+		void* cellOwner = GetCellOwnerDirect(cell);
+		if (!cellOwner) return true; //no cell owner = anyone can use
+
+		return ActorOwnsCell(actor, cellOwner);
+	}
+
+	void PatchMemory(UInt32 addr, const void* data, UInt32 size)
+	{
+		DWORD oldProtect;
+		VirtualProtect((void*)addr, size, PAGE_EXECUTE_READWRITE, &oldProtect);
+		memcpy((void*)addr, data, size);
+		VirtualProtect((void*)addr, size, oldProtect, &oldProtect);
+	}
+
+	void ReplaceCall(UInt32 callAddr, UInt32 newFunc)
+	{
+		UInt32 relOffset = newFunc - callAddr - 5;
+		UInt8 patch[5] = { 0xE8 }; //CALL opcode
+		*(UInt32*)(patch + 1) = relOffset;
+		PatchMemory(callAddr, patch, 5);
+	}
+
+	void Init()
+	{
+		ReplaceCall(kCall_LockIsAnOwner, (UInt32)IsAnOwner_Hook);
+		ReplaceCall(kCall_UnlockIsAnOwner, (UInt32)IsAnOwner_Hook);
+	}
+}
+
+void DoorPackageOwnershipFix_Init()
+{
+	DoorPackageOwnershipFix::Init();
+}
