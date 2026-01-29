@@ -362,8 +362,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bLocationVisitPopup)
 					LocationVisitPopup_Init(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
 				FriendlyFire_Init(Settings::bFriendlyFire != 0);
-				if (Settings::bNoDoorFade)
-					NoDoorFade_Init();
+				NoDoorFade_Init(Settings::bNoDoorFade != 0);
 				if (Settings::bArmorDTDRFix)
 					ArmorDTDRFix_Init();
 				if (Settings::bQuickReadNote)
@@ -426,6 +425,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					FriendlyFire_SetEnabled(Settings::bFriendlyFire != 0);
 					OwnedBeds_SetEnabled(Settings::bOwnedBeds != 0);
 					KillActorXPFix_SetEnabled(Settings::bKillActorXPFix != 0);
+					NoDoorFade_SetEnabled(Settings::bNoDoorFade != 0);
 
 					//apply god mode immediately if setting changed
 					if (Settings::bAutoGodMode && !oldGodMode)
@@ -441,7 +441,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 					Log("Config reloaded via ReloadPluginConfig");
 					Console_Print("itr-nvse: Config reloaded");
-					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180, OwnerNameInfo, QuickReadNote, FriendlyFire, OwnedBeds, KillActorXPFix");
+					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180, OwnerNameInfo, QuickReadNote, FriendlyFire, OwnedBeds, KillActorXPFix, NoDoorFade");
 				}
 			}
 			break;
