@@ -89,6 +89,9 @@ namespace Settings
 	// VATSSpeechFix settings
 	int bVATSSpeechFix = 1;
 
+	// CombatItemTimerFix settings
+	int bCombatItemTimerFix = 1;  // Enabled by default - fixes stimpak timer using wrong game setting
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -148,5 +151,7 @@ namespace Settings
 		bDoorPackageOwnershipFix = GetINIInt("Tweaks", "bDoorPackageOwnershipFix", 1);
 
 		bVATSSpeechFix = GetINIInt("Tweaks", "bVATSSpeechFix", 1);
+
+		bCombatItemTimerFix = GetINIInt("Tweaks", "bCombatItemTimerFix", 1);
 	}
 }

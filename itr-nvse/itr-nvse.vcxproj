@@ -148,6 +148,8 @@
     <ClCompile Include="fixes\NoDoorFade.cpp" />
     <ClCompile Include="fixes\ArmorDTDRFix.cpp" />
     <ClCompile Include="fixes\DoorPackageOwnershipFix.cpp" />
+    <ClCompile Include="fixes\VATSSpeechFix.cpp" />
+    <ClCompile Include="fixes\CombatItemTimerFix.cpp" />
     <ClCompile Include="features\MessageBoxQuickClose.cpp">
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">internal/prefix.h</ForcedIncludeFiles>
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">internal/prefix.h</ForcedIncludeFiles>
@@ -212,6 +214,8 @@
     <ClInclude Include="fixes\NoDoorFade.h" />
     <ClInclude Include="fixes\ArmorDTDRFix.h" />
     <ClInclude Include="fixes\DoorPackageOwnershipFix.h" />
+    <ClInclude Include="fixes\VATSSpeechFix.h" />
+    <ClInclude Include="fixes\CombatItemTimerFix.h" />
     <ClInclude Include="features\MessageBoxQuickClose.h" />
     <ClInclude Include="features\PreventWeaponSwitch.h" />
     <ClInclude Include="features\ELMO.h" />

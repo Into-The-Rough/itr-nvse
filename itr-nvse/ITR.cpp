@@ -43,6 +43,7 @@
 #include "fixes/ArmorDTDRFix.h"
 #include "fixes/DoorPackageOwnershipFix.h"
 #include "fixes/VATSSpeechFix.h"
+#include "fixes/CombatItemTimerFix.h"
 
 #include "features/MessageBoxQuickClose.h"
 #include "features/PreventWeaponSwitch.h"
@@ -362,8 +363,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					OwnedBeds_Init();
 				if (Settings::bLocationVisitPopup)
 					LocationVisitPopup_Init(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
-				if (Settings::bFriendlyFire)
-					FriendlyFire_Init();
+				FriendlyFire_Init(Settings::bFriendlyFire != 0);
 				if (Settings::bNoDoorFade)
 					NoDoorFade_Init();
 				if (Settings::bArmorDTDRFix)
@@ -374,6 +374,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					DoorPackageOwnershipFix_Init();
 				if (Settings::bVATSSpeechFix)
 					VATSSpeechFix_Init();
+				if (Settings::bCombatItemTimerFix)
+					CombatItemTimerFix_Init();
 				g_hooksInstalled = true;
 			}
 			break;
@@ -423,6 +425,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					if (Settings::bQuickReadNote)
 						QuickReadNote_UpdateSettings(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
 
+					FriendlyFire_SetEnabled(Settings::bFriendlyFire != 0);
+
 					//apply god mode immediately if setting changed
 					if (Settings::bAutoGodMode && !oldGodMode)
 					{
@@ -437,8 +441,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 					Log("Config reloaded via ReloadPluginConfig");
 					Console_Print("itr-nvse: Config reloaded");
-					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180 keys, OwnerNameInfo, QuickReadNote, AltTabMute, DialogueCamera");
-					Console_Print("  Requires restart: Fixes, hooks (bSlowMotionPhysicsFix, bOwnedBeds, etc)");
+					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180 keys, OwnerNameInfo, QuickReadNote, FriendlyFire");
 				}
 			}
 			break;
@@ -529,6 +532,7 @@ static void LogSettings()
 	Log("  bQuickReadNote: %d", Settings::bQuickReadNote);
 	Log("  bDoorPackageOwnershipFix: %d", Settings::bDoorPackageOwnershipFix);
 	Log("  bVATSSpeechFix: %d", Settings::bVATSSpeechFix);
+	Log("  bCombatItemTimerFix: %d", Settings::bCombatItemTimerFix);
 	Log("  iAutoQuickLoadFrameDelay: %d", Settings::iAutoQuickLoadFrameDelay);
 
 	if (Settings::bQuickDrop) Log("QuickDrop enabled (modifier=%d, control=%d)", Settings::iQuickDropModifierKey, Settings::iQuickDropControlID);
