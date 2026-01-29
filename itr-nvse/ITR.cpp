@@ -349,8 +349,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					SlowMotionPhysicsFix_Init();
 				if (Settings::bExplodingPantsFix)
 					ExplodingPantsFix_Init();
-				if (Settings::bKillActorXPFix)
-					KillActorXPFix_Init();
+				KillActorXPFix_Init(Settings::bKillActorXPFix != 0);
 				if (Settings::bReversePickpocketNoKarma)
 					ReversePickpocketNoKarmaFix_Init();
 				if (Settings::bSaveFileSize)
@@ -359,8 +358,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					VATSProjectileFix_Init();
 				if (Settings::bVATSLimbFix)
 					VATSLimbFix_Init();
-				if (Settings::bOwnedBeds)
-					OwnedBeds_Init();
+				OwnedBeds_Init(Settings::bOwnedBeds != 0);
 				if (Settings::bLocationVisitPopup)
 					LocationVisitPopup_Init(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
 				FriendlyFire_Init(Settings::bFriendlyFire != 0);
@@ -426,6 +424,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 						QuickReadNote_UpdateSettings(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
 
 					FriendlyFire_SetEnabled(Settings::bFriendlyFire != 0);
+					OwnedBeds_SetEnabled(Settings::bOwnedBeds != 0);
+					KillActorXPFix_SetEnabled(Settings::bKillActorXPFix != 0);
 
 					//apply god mode immediately if setting changed
 					if (Settings::bAutoGodMode && !oldGodMode)
@@ -441,7 +441,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 					Log("Config reloaded via ReloadPluginConfig");
 					Console_Print("itr-nvse: Config reloaded");
-					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180 keys, OwnerNameInfo, QuickReadNote, FriendlyFire");
+					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180, OwnerNameInfo, QuickReadNote, FriendlyFire, OwnedBeds, KillActorXPFix");
 				}
 			}
 			break;
