@@ -86,6 +86,9 @@ namespace Settings
 	// DoorPackageOwnershipFix settings
 	int bDoorPackageOwnershipFix = 1;  // Enabled by default - fix NPCs locking doors they don't own
 
+	// VATSSpeechFix settings
+	int bVATSSpeechFix = 1;
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -143,5 +146,7 @@ namespace Settings
 		iQuickReadNoteMaxLines = GetINIInt("QuickReadNote", "iMaxLines", 0);
 
 		bDoorPackageOwnershipFix = GetINIInt("Tweaks", "bDoorPackageOwnershipFix", 1);
+
+		bVATSSpeechFix = GetINIInt("Tweaks", "bVATSSpeechFix", 1);
 	}
 }
