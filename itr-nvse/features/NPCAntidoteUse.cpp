@@ -2,205 +2,219 @@
 
 #include "NPCAntidoteUse.h"
 #include <Windows.h>
-#include <unordered_map>
 #include <cstdint>
-
-extern void Log(const char* fmt, ...);
 
 namespace NPCAntidoteUse
 {
 	//config
 	float g_fCombatItemCureTimer = 10.0f;
-	float g_fCureHealthThreshold = 25.0f; //don't cure if health below this (prioritize stimpak)
+	float g_fCureHealthThreshold = 25.0f;
+	bool g_enabled = false;
 
 	//NVAntivenomEffect "Cure Animal Poison" [MGEF:000E2C6D]
 	constexpr uint32_t kFormID_CurePoisonEffect = 0xE2C6D;
 
 	//addresses
-	constexpr uint32_t kAddr_UpdateLowCall = 0x997CE5;
-	constexpr uint32_t kAddr_UpdateLow = 0x998CE0;
-	constexpr uint32_t kAddr_DrinkPotion = 0x8C2780;
+	constexpr uint32_t kAddr_DrinkPotion = 0x8C1F80; //Actor::DrinkPotion
 	constexpr uint32_t kAddr_GetPackageOwner = 0x97AE90;
-	constexpr uint32_t kAddr_g_gameTime = 0x11AC3A0;
+	constexpr uint32_t kAddr_GetExtraData = 0x410220; //BaseExtraList::GetByType
 
-	//spell types
-	enum { kSpellType_Poison = 5 };
-
-	//minimal structures
-	struct TESForm { void* vtbl; uint32_t typeID; uint32_t flags; uint32_t refID; };
-	struct EffectSetting : TESForm {};
-	struct EffectItem { uint32_t magnitude; uint32_t area; uint32_t duration; uint32_t range; uint32_t actorValue; EffectSetting* setting; };
-
-	struct EffectNode { EffectItem* data; EffectNode* next; };
-	struct EffectItemList { void* vtbl; EffectNode head; };
-
-	struct MagicItem { void* vtbl; char pad[0x08]; EffectItemList list; };
-	struct AlchemyItem : MagicItem { };
-
-	struct ActiveEffect { void* vtbl; uint8_t pad04[0x44]; uint32_t spellType; };
-	struct ActiveEffectNode { ActiveEffect* data; ActiveEffectNode* next; };
-	struct ActiveEffectList { ActiveEffectNode head; };
-
-	struct MagicTarget { void* vtbl; uint8_t pad[0x04]; ActiveEffectList* GetEffectList() { return *(ActiveEffectList**)((char*)this + 0x04); } };
-
-	struct Actor : TESForm
-	{
-		uint8_t pad10[0x100 - 0x10];
-		MagicTarget magicTarget; //0x100
-
-		float GetHealthPercent() {
-			typedef float(__thiscall* Fn)(Actor*);
-			return ((Fn)0x8A4B30)(this) * 100.0f;
-		}
-	};
-
-	struct ItemEntry { void* vtbl; TESForm* type; };
-	struct ItemEntryNode { ItemEntry* data; ItemEntryNode* next; };
-	struct ItemEntryList { ItemEntryNode head; };
-	struct InventoryChanges { ItemEntryList itemList; };
-
-	struct CombatController { uint8_t pad[0xBC]; Actor* packageOwner; };
-	struct CombatState { uint8_t pad[0x1C4]; CombatController* pCombatController; };
-
-	//timer tracking: refID -> last use game time
-	std::unordered_map<uint32_t, float> g_lastCureTime;
-
-	float GetGameTime()
-	{
-		return *(float*)kAddr_g_gameTime;
-	}
+	//simple timer using real-time milliseconds
+	constexpr int MAX_TIMERS = 64;
+	uint32_t g_timerRefIDs[MAX_TIMERS] = {0};
+	DWORD g_timerValues[MAX_TIMERS] = {0};
+	int g_timerCount = 0;
 
 	bool IsTimerReady(uint32_t refID)
 	{
-		auto it = g_lastCureTime.find(refID);
-		if (it == g_lastCureTime.end())
-			return true;
-		return (GetGameTime() - it->second) >= g_fCombatItemCureTimer;
+		DWORD now = GetTickCount();
+		DWORD cooldownMs = (DWORD)(g_fCombatItemCureTimer * 1000.0f);
+		for (int i = 0; i < g_timerCount; i++)
+		{
+			if (g_timerRefIDs[i] == refID)
+				return (now - g_timerValues[i]) >= cooldownMs;
+		}
+		return true;
 	}
 
 	void ResetTimer(uint32_t refID)
 	{
-		g_lastCureTime[refID] = GetGameTime();
-	}
-
-	bool IsPoisoned(Actor* actor)
-	{
-		ActiveEffectList* effList = actor->magicTarget.GetEffectList();
-		if (!effList) return false;
-
-		ActiveEffectNode* node = &effList->head;
-		while (node && node->data)
+		DWORD now = GetTickCount();
+		for (int i = 0; i < g_timerCount; i++)
 		{
-			if (node->data->spellType == kSpellType_Poison)
-				return true;
-			node = node->next;
-		}
-		return false;
-	}
-
-	bool HasCurePoisonEffect(AlchemyItem* item)
-	{
-		EffectNode* node = &item->list.head;
-		while (node && node->data)
-		{
-			if (node->data->setting && node->data->setting->refID == kFormID_CurePoisonEffect)
-				return true;
-			node = node->next;
-		}
-		return false;
-	}
-
-	AlchemyItem* FindAntidoteInInventory(Actor* actor)
-	{
-		//get inventory changes at actor+0x7C (TESObjectREFR offset)
-		InventoryChanges* inv = *(InventoryChanges**)((char*)actor + 0x114);
-		if (!inv) return nullptr;
-
-		ItemEntryNode* node = &inv->itemList.head;
-		while (node && node->data)
-		{
-			TESForm* form = node->data->type;
-			if (form && form->typeID == 0x2F) //kFormType_AlchemyItem
+			if (g_timerRefIDs[i] == refID)
 			{
-				AlchemyItem* alch = (AlchemyItem*)form;
-				if (HasCurePoisonEffect(alch))
-					return alch;
+				g_timerValues[i] = now;
+				return;
 			}
-			node = node->next;
+		}
+		if (g_timerCount < MAX_TIMERS)
+		{
+			g_timerRefIDs[g_timerCount] = refID;
+			g_timerValues[g_timerCount] = now;
+			g_timerCount++;
+		}
+	}
+
+	typedef void* (__thiscall *GetPackageOwner_t)(void* controller);
+	GetPackageOwner_t GetPackageOwner = (GetPackageOwner_t)kAddr_GetPackageOwner;
+
+	uint32_t GetRefID(void* actor) { return *(uint32_t*)((char*)actor + 0x0C); }
+	uint32_t GetTypeID(void* form) { return *(uint32_t*)((char*)form + 0x04); }
+
+	float GetHealthPercent(void* actor)
+	{
+		//ActorValueOwner at Actor+0xA4, vtable[3]=GetActorValue, vtable[1]=GetBaseActorValue
+		void* avOwner = (char*)actor + 0xA4;
+		void** vtbl = *(void***)avOwner;
+		if (!vtbl) return 100.0f;
+
+		typedef float(__thiscall* GetAV_t)(void*, uint32_t);
+		float current = ((GetAV_t)vtbl[3])(avOwner, 0x10); //Health
+		float base = ((GetAV_t)vtbl[1])(avOwner, 0x10);
+
+		if (base <= 0.0f) return 100.0f;
+		return (current / base) * 100.0f;
+	}
+
+	bool IsPoisoned(void* actor)
+	{
+		//MagicTarget at 0x94, vtable[2] = GetEffectList
+		void* magicTarget = (char*)actor + 0x94;
+		void** vtbl = *(void***)magicTarget;
+		if (!vtbl) return false;
+
+		typedef void* (__thiscall* GetEffectList_t)(void*);
+		void* effectList = ((GetEffectList_t)vtbl[2])(magicTarget);
+		if (!effectList) return false;
+
+		void* node = *(void**)effectList;
+		void* next = *(void**)((char*)effectList + 4);
+
+		while (true)
+		{
+			if (node)
+			{
+				uint32_t spellType = *(uint32_t*)((char*)node + 0x2C);
+				if (spellType == 5) //poison
+					return true;
+			}
+			if (!next) break;
+			node = *(void**)next;
+			next = *(void**)((char*)next + 4);
+		}
+		return false;
+	}
+
+	bool HasCurePoisonEffect(void* alchItem)
+	{
+		//tList head at AlchemyItem+0x40
+		void* listHead = (char*)alchItem + 0x40;
+		void* data = *(void**)listHead;
+		void* next = *(void**)((char*)listHead + 4);
+
+		while (true)
+		{
+			if (data)
+			{
+				void* setting = *(void**)((char*)data + 0x14); //EffectItem::setting
+				if (setting)
+				{
+					uint32_t settingRefID = *(uint32_t*)((char*)setting + 0x0C);
+					if (settingRefID == kFormID_CurePoisonEffect)
+						return true;
+				}
+			}
+			if (!next) break;
+			data = *(void**)next;
+			next = *(void**)((char*)next + 4);
+		}
+		return false;
+	}
+
+	void* FindAntidoteInInventory(void* actor)
+	{
+		void* extraDataList = (char*)actor + 0x44;
+
+		typedef void* (__thiscall* GetExtra_t)(void*, uint32_t);
+		void* extraCC = ((GetExtra_t)kAddr_GetExtraData)(extraDataList, 0x15);
+		if (!extraCC) return nullptr;
+
+		void* data = *(void**)((char*)extraCC + 0x0C);
+		if (!data) return nullptr;
+
+		void* objList = *(void**)data;
+		if (!objList) return nullptr;
+
+		void* nodeData = *(void**)objList;
+		void* nodeNext = *(void**)((char*)objList + 4);
+
+		int count = 0;
+		while (true)
+		{
+			if (nodeData)
+			{
+				void* form = *(void**)((char*)nodeData + 0x08);
+				if (form && GetTypeID(form) == 0x2F) //AlchemyItem
+				{
+					if (HasCurePoisonEffect(form))
+						return form;
+				}
+			}
+			if (!nodeNext) break;
+			nodeData = *(void**)nodeNext;
+			nodeNext = *(void**)((char*)nodeNext + 4);
+			if (++count > 500) break;
 		}
 		return nullptr;
 	}
 
-	void DrinkPotion(Actor* actor, AlchemyItem* potion)
+	void DrinkPotion(void* actor, void* potion)
 	{
-		typedef void(__thiscall* Fn)(Actor*, AlchemyItem*, bool, bool);
-		((Fn)kAddr_DrinkPotion)(actor, potion, false, true);
+		typedef bool(__thiscall* Fn)(void*, void*, void*, bool);
+		((Fn)kAddr_DrinkPotion)(actor, potion, nullptr, true);
 	}
 
-	void CheckAndUseCure(CombatState* combatState)
+	void Check(void* combatState)
 	{
-		if (!combatState || !combatState->pCombatController)
+		if (!g_enabled || !combatState)
 			return;
 
-		Actor* actor = combatState->pCombatController->packageOwner;
-		if (!actor)
+		void* controller = *(void**)((char*)combatState + 0x1C4);
+		if (!controller) return;
+
+		void* actor = GetPackageOwner(controller);
+		if (!actor) return;
+
+		uint32_t refID = GetRefID(actor);
+
+		float health = GetHealthPercent(actor);
+		if (health < g_fCureHealthThreshold)
 			return;
 
-		//skip if health is critical (let stimpak system handle it)
-		if (actor->GetHealthPercent() < g_fCureHealthThreshold)
-			return;
-
-		//check if poisoned
 		if (!IsPoisoned(actor))
 			return;
 
-		//check timer
-		if (!IsTimerReady(actor->refID))
+		if (!IsTimerReady(refID))
 			return;
 
-		//find antidote
-		AlchemyItem* antidote = FindAntidoteInInventory(actor);
+		void* antidote = FindAntidoteInInventory(actor);
 		if (!antidote)
 			return;
 
-		//use it
 		DrinkPotion(actor, antidote);
-		ResetTimer(actor->refID);
-	}
-
-	//hook
-	static uint32_t s_originalUpdateLow = 0;
-
-	void __fastcall Hook_UpdateLow(CombatState* combatState, void* edx)
-	{
-		//call original
-		typedef void(__thiscall* Fn)(CombatState*);
-		((Fn)s_originalUpdateLow)(combatState);
-
-		//our antidote check
-		CheckAndUseCure(combatState);
-	}
-
-	void WriteRelCall(uint32_t src, uint32_t dst)
-	{
-		DWORD oldProtect;
-		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-		s_originalUpdateLow = *(uint32_t*)(src + 1) + src + 5; //read original target
-		*(uint8_t*)src = 0xE8;
-		*(uint32_t*)(src + 1) = dst - src - 5;
-		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
-	}
-
-	void Init(float cureTimer, float healthThreshold)
-	{
-		g_fCombatItemCureTimer = cureTimer;
-		g_fCureHealthThreshold = healthThreshold;
-		WriteRelCall(kAddr_UpdateLowCall, (uint32_t)Hook_UpdateLow);
-		Log("NPCAntidoteUse installed (timer=%.1f, healthThreshold=%.1f)", cureTimer, healthThreshold);
+		ResetTimer(refID);
 	}
 }
 
-void NPCAntidoteUse_Init()
+void NPCAntidoteUse_Init(float cureTimer, float healthThreshold)
 {
-	NPCAntidoteUse::Init(10.0f, 25.0f);
+	NPCAntidoteUse::g_fCombatItemCureTimer = cureTimer;
+	NPCAntidoteUse::g_fCureHealthThreshold = healthThreshold;
+	NPCAntidoteUse::g_enabled = true;
+}
+
+void NPCAntidoteUse_Check(void* combatState)
+{
+	NPCAntidoteUse::Check(combatState);
 }

@@ -92,6 +92,11 @@ namespace Settings
 	// CombatItemTimerFix settings
 	int bCombatItemTimerFix = 1;  // Enabled by default - fixes stimpak timer using wrong game setting
 
+	// NPCAntidoteUse settings
+	int bNPCAntidoteUse = 1;  // Enabled by default - NPCs use antidotes when poisoned
+	float fCombatItemCureTimer = 10.0f;  // Cooldown between cure item uses
+	float fCureHealthThreshold = 25.0f;  // Don't cure if health below this (prioritize stimpak)
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -153,5 +158,9 @@ namespace Settings
 		bVATSSpeechFix = GetINIInt("Tweaks", "bVATSSpeechFix", 1);
 
 		bCombatItemTimerFix = GetINIInt("Tweaks", "bCombatItemTimerFix", 1);
+
+		bNPCAntidoteUse = GetINIInt("Tweaks", "bNPCAntidoteUse", 1);
+		fCombatItemCureTimer = (float)GetINIInt("NPCAntidoteUse", "iCureTimer", 10);
+		fCureHealthThreshold = (float)GetINIInt("NPCAntidoteUse", "iHealthThreshold", 25);
 	}
 }

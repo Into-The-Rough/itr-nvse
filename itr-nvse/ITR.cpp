@@ -213,6 +213,9 @@ namespace NoWeaponSearch
 
 	bool __fastcall Hook(void* combatState, void* edx)
 	{
+		//antidote check runs for all NPCs in combat
+		NPCAntidoteUse_Check(combatState);
+
 		if (g_count == 0)
 			return Original(combatState);
 
@@ -351,8 +354,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bExplodingPantsFix)
 					ExplodingPantsFix_Init();
 				KillActorXPFix_Init(Settings::bKillActorXPFix != 0);
-				if (Settings::bReversePickpocketNoKarma)
-					ReversePickpocketNoKarmaFix_Init();
+				ReversePickpocketNoKarmaFix_Init(Settings::bReversePickpocketNoKarma != 0);
 				if (Settings::bSaveFileSize)
 					SFSH_Init();
 				if (Settings::bVATSProjectileFix)
@@ -429,6 +431,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					KillActorXPFix_SetEnabled(Settings::bKillActorXPFix != 0);
 					NoDoorFade_SetEnabled(Settings::bNoDoorFade != 0);
 					VATSSpeechFix_SetEnabled(Settings::bVATSSpeechFix != 0);
+					ReversePickpocketNoKarmaFix_SetEnabled(Settings::bReversePickpocketNoKarma != 0);
 
 					//apply god mode immediately if setting changed
 					if (Settings::bAutoGodMode && !oldGodMode)
@@ -444,7 +447,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 					Log("Config reloaded via ReloadPluginConfig");
 					Console_Print("itr-nvse: Config reloaded");
-					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180, OwnerNameInfo, QuickReadNote, FriendlyFire, OwnedBeds, KillActorXPFix, NoDoorFade, VATSSpeechFix");
+					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180, OwnerNameInfo, QuickReadNote, FriendlyFire, OwnedBeds, KillActorXPFix, NoDoorFade, VATSSpeechFix, ReversePickpocket");
 				}
 			}
 			break;
