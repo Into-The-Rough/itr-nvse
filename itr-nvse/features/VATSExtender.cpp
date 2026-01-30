@@ -1,4 +1,5 @@
 //extends VATS target highlighting beyond vanilla limit
+//NOT hot-reloadable - requires game restart
 
 #include "VATSExtender.h"
 #include "nvse/GameForms.h"

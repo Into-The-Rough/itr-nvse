@@ -1,6 +1,7 @@
 // MessageBoxQuickClose.cpp - Isolated module using JIP-LN-NVSE headers
 // This file must NOT include nvse/prefix.h (NVSE-Plugins-main headers)
 // It uses JIP-LN-NVSE headers directly
+//NOT hot-reloadable - requires game restart
 
 #include "nvse/PluginAPI.h"
 #include "nvse/GameUI.h"
