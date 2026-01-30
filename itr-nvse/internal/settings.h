@@ -101,6 +101,10 @@ namespace Settings
 	float fCombatItemCureTimer = 10.0f;  // Cooldown between cure item uses
 	float fCureHealthThreshold = 25.0f;  // Don't cure if health below this (prioritize stimpak)
 
+	// NPCDoctorsBagUse settings
+	int bNPCDoctorsBagUse = 1;  // Enabled by default - NPCs use doctor's bags when crippled
+	float fDoctorsBagUseTimer = 15.0f;  // Cooldown between uses
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -168,5 +172,8 @@ namespace Settings
 		bNPCAntidoteUse = GetINIInt("Tweaks", "bNPCAntidoteUse", 1);
 		fCombatItemCureTimer = (float)GetINIInt("NPCAntidoteUse", "iCureTimer", 10);
 		fCureHealthThreshold = (float)GetINIInt("NPCAntidoteUse", "iHealthThreshold", 25);
+
+		bNPCDoctorsBagUse = GetINIInt("Tweaks", "bNPCDoctorsBagUse", 1);
+		fDoctorsBagUseTimer = (float)GetINIInt("NPCDoctorsBagUse", "iUseTimer", 15);
 	}
 }
