@@ -56,6 +56,7 @@
 #include "features/PlayerUpdateHook.h"
 #include "features/NPCAntidoteUse.h"
 #include "features/NPCDoctorsBagUse.h"
+#include "features/CompassTraps.h"
 
 #include "commands/ImperativeCommands.h"
 #include "commands/StringCommands.h"
@@ -215,9 +216,11 @@ namespace NoWeaponSearch
 
 	bool __fastcall Hook(void* combatState, void* edx)
 	{
-		//NPC item use checks run for all NPCs in combat
-		NPCAntidoteUse_Check(combatState);
-		NPCDoctorsBagUse_Check(combatState);
+		//NPC item use checks only run if features enabled
+		if (Settings::bNPCAntidoteUse)
+			NPCAntidoteUse_Check(combatState);
+		if (Settings::bNPCDoctorsBagUse)
+			NPCDoctorsBagUse_Check(combatState);
 
 		if (g_count == 0)
 			return Original(combatState);
@@ -396,6 +399,11 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				VATSExtender_Init();
 			if (Settings::bSuppressObjectives || Settings::bSuppressReputation)
 				ELMO_Init(Settings::bSuppressObjectives != 0, Settings::bSuppressReputation != 0);
+			if (Settings::bCompassTrapsShowMines || Settings::bCompassTrapsShowTraps)
+				CompassTraps_Init(Settings::bCompassTrapsShowMines != 0, Settings::bCompassTrapsShowTraps != 0,
+					(float)Settings::iCompassTrapsMaxDistance,
+					Settings::iCompassTrapsMineColorR, Settings::iCompassTrapsMineColorG, Settings::iCompassTrapsMineColorB,
+					Settings::iCompassTrapsTrapColorR, Settings::iCompassTrapsTrapColorG, Settings::iCompassTrapsTrapColorB);
 			break;
 
 		case NVSEMessagingInterface::kMessage_NewGame:

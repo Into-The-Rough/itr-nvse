@@ -105,6 +105,17 @@ namespace Settings
 	int bNPCDoctorsBagUse = 1;  // Enabled by default - NPCs use doctor's bags when crippled
 	float fDoctorsBagUseTimer = 15.0f;  // Cooldown between uses
 
+	// CompassTraps settings
+	int bCompassTrapsShowMines = 1;  // Enabled by default - show mines on compass
+	int bCompassTrapsShowTraps = 1;  // Enabled by default - show activator traps on compass
+	int iCompassTrapsMaxDistance = 1000;  // Max distance in game units
+	int iCompassTrapsMineColorR = 255;
+	int iCompassTrapsMineColorG = 50;
+	int iCompassTrapsMineColorB = 0;
+	int iCompassTrapsTrapColorR = 255;
+	int iCompassTrapsTrapColorG = 100;
+	int iCompassTrapsTrapColorB = 0;
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -114,7 +125,6 @@ namespace Settings
 
 	inline void Load()
 	{
-		//ini in Data\config\ per project conventions
 		GetModuleFileNameA(nullptr, iniPath, MAX_PATH);
 		char* lastSlash = strrchr(iniPath, '\\');
 		if (lastSlash) *lastSlash = '\0';
@@ -175,5 +185,15 @@ namespace Settings
 
 		bNPCDoctorsBagUse = GetINIInt("Tweaks", "bNPCDoctorsBagUse", 1);
 		fDoctorsBagUseTimer = (float)GetINIInt("NPCDoctorsBagUse", "iUseTimer", 15);
+
+		bCompassTrapsShowMines = GetINIInt("CompassTraps", "bShowMines", 1);
+		bCompassTrapsShowTraps = GetINIInt("CompassTraps", "bShowTraps", 1);
+		iCompassTrapsMaxDistance = GetINIInt("CompassTraps", "fMaxTrapDistance", 1000);
+		iCompassTrapsMineColorR = GetINIInt("CompassTraps", "iMineColorR", 255);
+		iCompassTrapsMineColorG = GetINIInt("CompassTraps", "iMineColorG", 50);
+		iCompassTrapsMineColorB = GetINIInt("CompassTraps", "iMineColorB", 0);
+		iCompassTrapsTrapColorR = GetINIInt("CompassTraps", "iTrapColorR", 255);
+		iCompassTrapsTrapColorG = GetINIInt("CompassTraps", "iTrapColorG", 100);
+		iCompassTrapsTrapColorB = GetINIInt("CompassTraps", "iTrapColorB", 0);
 	}
 }
