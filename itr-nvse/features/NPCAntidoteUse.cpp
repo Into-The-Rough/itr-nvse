@@ -3,6 +3,23 @@
 #include "NPCAntidoteUse.h"
 #include <Windows.h>
 #include <cstdint>
+#include <cstdio>
+
+static FILE* g_logFile = nullptr;
+
+static void Log(const char* fmt, ...)
+{
+	if (!g_logFile)
+	{
+		g_logFile = fopen("NPCAntidoteUse.log", "a");
+		if (!g_logFile) return;
+	}
+	va_list args;
+	va_start(args, fmt);
+	vfprintf(g_logFile, fmt, args);
+	va_end(args);
+	fflush(g_logFile);
+}
 
 namespace NPCAntidoteUse
 {
@@ -18,6 +35,10 @@ namespace NPCAntidoteUse
 	constexpr uint32_t kAddr_DrinkPotion = 0x8C1F80; //Actor::DrinkPotion
 	constexpr uint32_t kAddr_GetPackageOwner = 0x97AE90;
 	constexpr uint32_t kAddr_GetExtraData = 0x410220; //BaseExtraList::GetByType
+	constexpr uint32_t kAddr_GetCurrentProcess = 0x8D8520; //MobileObject::GetCurrentProcess
+	constexpr uint32_t kAddr_FindSpecialIdletoPlay = 0x8FF0B0; //LowProcess::FindSpecialIdletoPlay
+	constexpr uint32_t kAddr_SetUsedItem = 0x600900; //TESIdleManager::SetUsedItem
+	constexpr uint32_t kAddr_DefaultObjectManager = 0x11CA80C; //BGSDefaultObjectManager singleton ptr
 
 	//simple timer using real-time milliseconds
 	constexpr int MAX_TIMERS = 64;
@@ -169,8 +190,65 @@ namespace NPCAntidoteUse
 		return nullptr;
 	}
 
+	void* GetCurrentProcess(void* actor)
+	{
+		typedef void* (__thiscall* Fn)(void*);
+		return ((Fn)kAddr_GetCurrentProcess)(actor);
+	}
+
+	constexpr uint32_t kFormID_Stimpak = 0x00015169;
+	constexpr uint32_t kAddr_LookupFormByID = 0x483A00;
+
+	void* GetFoodForAnimation()
+	{
+		typedef void* (*LookupFormByID_t)(uint32_t);
+		return ((LookupFormByID_t)kAddr_LookupFormByID)(kFormID_Stimpak);
+	}
+
+	void SetUsedItem(void* item)
+	{
+		typedef void(__cdecl* Fn)(void*);
+		((Fn)kAddr_SetUsedItem)(item);
+	}
+
+	bool IsCharacter(void* actor)
+	{
+		//0x3B=TESNPC, 0x3C=TESCreature, 0x43=Character, 0x44=Creature
+		uint8_t typeID = *(uint8_t*)((char*)actor + 0x04);
+		return typeID == 0x3B || typeID == 0x43;
+	}
+
+	void PlayUseAnimation(void* actor, void* item)
+	{
+		Log("[Antidote] PlayUseAnimation: actor=%p item=%p\n", actor, item);
+
+		//only play animation for humanoid NPCs, not creatures
+		if (!IsCharacter(actor))
+		{
+			Log("[Antidote] PlayUseAnimation: not a character, skipping\n");
+			return;
+		}
+
+		void* process = GetCurrentProcess(actor);
+		Log("[Antidote] PlayUseAnimation: process=%p\n", process);
+		if (!process) return;
+
+		//spoof as food so we get the eating animation
+		void* food = GetFoodForAnimation();
+		Log("[Antidote] PlayUseAnimation: food=%p\n", food);
+		if (!food) return;
+		SetUsedItem(food);
+
+		Log("[Antidote] PlayUseAnimation: calling FindSpecialIdletoPlay\n");
+		typedef bool(__thiscall* Fn)(void*, void*, void*, void*);
+		((Fn)kAddr_FindSpecialIdletoPlay)(process, actor, food, nullptr);
+		Log("[Antidote] PlayUseAnimation: done\n");
+	}
+
 	void DrinkPotion(void* actor, void* potion)
 	{
+		PlayUseAnimation(actor, potion);
+
 		typedef bool(__thiscall* Fn)(void*, void*, void*, bool);
 		((Fn)kAddr_DrinkPotion)(actor, potion, nullptr, true);
 	}
@@ -186,24 +264,42 @@ namespace NPCAntidoteUse
 		void* actor = GetPackageOwner(controller);
 		if (!actor) return;
 
+		uint8_t typeID = *(uint8_t*)((char*)actor + 0x04);
+		Log("[Antidote] Check: actor=%p typeID=0x%02X\n", actor, typeID);
+
+		//skip creatures - only humanoid NPCs can use items
+		if (!IsCharacter(actor))
+		{
+			Log("[Antidote] Check: skipping non-character\n");
+			return;
+		}
+
 		uint32_t refID = GetRefID(actor);
+		Log("[Antidote] Check: refID=%08X\n", refID);
 
 		float health = GetHealthPercent(actor);
+		Log("[Antidote] Check: health=%.1f threshold=%.1f\n", health, g_fCureHealthThreshold);
 		if (health < g_fCureHealthThreshold)
 			return;
 
+		Log("[Antidote] Check: checking IsPoisoned\n");
 		if (!IsPoisoned(actor))
 			return;
+
+		Log("[Antidote] Check: actor is poisoned!\n");
 
 		if (!IsTimerReady(refID))
 			return;
 
+		Log("[Antidote] Check: looking for antidote\n");
 		void* antidote = FindAntidoteInInventory(actor);
 		if (!antidote)
 			return;
 
+		Log("[Antidote] Check: found antidote=%p, using it\n", antidote);
 		DrinkPotion(actor, antidote);
 		ResetTimer(refID);
+		Log("[Antidote] Check: done\n");
 	}
 }
 

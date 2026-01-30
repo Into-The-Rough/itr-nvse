@@ -175,6 +175,7 @@
     <ClCompile Include="features\PlayerUpdateHook.cpp" />
     <ClCompile Include="features\NPCAntidoteUse.cpp" />
     <ClCompile Include="features\NPCDoctorsBagUse.cpp" />
+    <ClCompile Include="features\CompassTraps.cpp" />
     <ClCompile Include="commands\ImperativeCommands.cpp" />
     <ClCompile Include="commands\StringCommands.cpp" />
     <ClCompile Include="commands\RadioCommands.cpp" />
@@ -230,6 +231,7 @@
     <ClInclude Include="features\PlayerUpdateHook.h" />
     <ClInclude Include="features\NPCAntidoteUse.h" />
     <ClInclude Include="features\NPCDoctorsBagUse.h" />
+    <ClInclude Include="features\CompassTraps.h" />
     <ClInclude Include="commands\ImperativeCommands.h" />
     <ClInclude Include="commands\StringCommands.h" />
     <ClInclude Include="commands\RadioCommands.h" />

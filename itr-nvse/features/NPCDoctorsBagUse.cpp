@@ -3,6 +3,23 @@
 #include "NPCDoctorsBagUse.h"
 #include <Windows.h>
 #include <cstdint>
+#include <cstdio>
+
+static FILE* g_logFile2 = nullptr;
+
+static void Log2(const char* fmt, ...)
+{
+	if (!g_logFile2)
+	{
+		g_logFile2 = fopen("NPCDoctorsBagUse.log", "a");
+		if (!g_logFile2) return;
+	}
+	va_list args;
+	va_start(args, fmt);
+	vfprintf(g_logFile2, fmt, args);
+	va_end(args);
+	fflush(g_logFile2);
+}
 
 namespace NPCDoctorsBagUse
 {
@@ -22,6 +39,10 @@ namespace NPCDoctorsBagUse
 	constexpr uint32_t kAddr_DrinkPotion = 0x8C1F80;
 	constexpr uint32_t kAddr_GetPackageOwner = 0x97AE90;
 	constexpr uint32_t kAddr_GetExtraData = 0x410220;
+	constexpr uint32_t kAddr_GetCurrentProcess = 0x8D8520;
+	constexpr uint32_t kAddr_FindSpecialIdletoPlay = 0x8FF0B0;
+	constexpr uint32_t kAddr_SetUsedItem = 0x600900;
+	constexpr uint32_t kAddr_DefaultObjectManager = 0x11CA80C;
 
 	//timer using real-time milliseconds
 	constexpr int MAX_TIMERS = 64;
@@ -155,8 +176,64 @@ namespace NPCDoctorsBagUse
 		return nullptr;
 	}
 
+	void* GetCurrentProcess(void* actor)
+	{
+		typedef void* (__thiscall* Fn)(void*);
+		return ((Fn)kAddr_GetCurrentProcess)(actor);
+	}
+
+	constexpr uint32_t kFormID_Stimpak = 0x00015169;
+	constexpr uint32_t kAddr_LookupFormByID = 0x483A00;
+
+	void* GetFoodForAnimation()
+	{
+		typedef void* (*LookupFormByID_t)(uint32_t);
+		return ((LookupFormByID_t)kAddr_LookupFormByID)(kFormID_Stimpak);
+	}
+
+	void SetUsedItem(void* item)
+	{
+		typedef void(__cdecl* Fn)(void*);
+		((Fn)kAddr_SetUsedItem)(item);
+	}
+
+	bool IsCharacter(void* actor)
+	{
+		//0x3B=TESNPC, 0x3C=TESCreature, 0x43=Character, 0x44=Creature
+		uint8_t typeID = *(uint8_t*)((char*)actor + 0x04);
+		return typeID == 0x3B || typeID == 0x43;
+	}
+
+	void PlayUseAnimation(void* actor, void* item)
+	{
+		Log2("[DocBag] PlayUseAnimation: actor=%p item=%p\n", actor, item);
+
+		if (!IsCharacter(actor))
+		{
+			Log2("[DocBag] PlayUseAnimation: not a character, skipping\n");
+			return;
+		}
+
+		void* process = GetCurrentProcess(actor);
+		Log2("[DocBag] PlayUseAnimation: process=%p\n", process);
+		if (!process) return;
+
+		//spoof as food for eating animation
+		void* food = GetFoodForAnimation();
+		Log2("[DocBag] PlayUseAnimation: food=%p\n", food);
+		if (!food) return;
+		SetUsedItem(food);
+
+		Log2("[DocBag] PlayUseAnimation: calling FindSpecialIdletoPlay\n");
+		typedef bool(__thiscall* Fn)(void*, void*, void*, void*);
+		((Fn)kAddr_FindSpecialIdletoPlay)(process, actor, food, nullptr);
+		Log2("[DocBag] PlayUseAnimation: done\n");
+	}
+
 	void UseDoctorsBag(void* actor, void* item)
 	{
+		PlayUseAnimation(actor, item);
+
 		typedef bool(__thiscall* Fn)(void*, void*, void*, bool);
 		((Fn)kAddr_DrinkPotion)(actor, item, nullptr, true);
 	}
@@ -172,20 +249,37 @@ namespace NPCDoctorsBagUse
 		void* actor = GetPackageOwner(controller);
 		if (!actor) return;
 
-		uint32_t refID = GetRefID(actor);
+		uint8_t typeID = *(uint8_t*)((char*)actor + 0x04);
+		Log2("[DocBag] Check: actor=%p typeID=0x%02X\n", actor, typeID);
 
+		//skip creatures - only humanoid NPCs can use items
+		if (!IsCharacter(actor))
+		{
+			Log2("[DocBag] Check: skipping non-character\n");
+			return;
+		}
+
+		uint32_t refID = GetRefID(actor);
+		Log2("[DocBag] Check: refID=%08X\n", refID);
+
+		Log2("[DocBag] Check: checking HasCrippledLimb\n");
 		if (!HasCrippledLimb(actor))
 			return;
+
+		Log2("[DocBag] Check: actor has crippled limb!\n");
 
 		if (!IsTimerReady(refID))
 			return;
 
+		Log2("[DocBag] Check: looking for doctor's bag\n");
 		void* doctorsBag = FindDoctorsBagInInventory(actor);
 		if (!doctorsBag)
 			return;
 
+		Log2("[DocBag] Check: found doctorsBag=%p, using it\n", doctorsBag);
 		UseDoctorsBag(actor, doctorsBag);
 		ResetTimer(refID);
+		Log2("[DocBag] Check: done\n");
 	}
 }
 
