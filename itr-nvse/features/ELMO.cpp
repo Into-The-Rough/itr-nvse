@@ -1,4 +1,5 @@
 //ELMO - convert objectives and reputation popups to corner messages
+//NOT hot-reloadable - mid-function patches break instruction boundaries
 
 #include "ELMO.h"
 #include <Windows.h>

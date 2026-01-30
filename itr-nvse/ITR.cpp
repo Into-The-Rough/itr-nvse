@@ -42,6 +42,7 @@
 #include "fixes/NoDoorFade.h"
 #include "fixes/ArmorDTDRFix.h"
 #include "fixes/DoorPackageOwnershipFix.h"
+#include "fixes/NPCDoorUnlockBlock.h"
 #include "fixes/VATSSpeechFix.h"
 #include "fixes/CombatItemTimerFix.h"
 
@@ -372,6 +373,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					QuickReadNote_Init(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
 				if (Settings::bDoorPackageOwnershipFix)
 					DoorPackageOwnershipFix_Init();
+				NPCDoorUnlockBlock_Init(Settings::iNPCDoorUnlockBlock);
 				VATSSpeechFix_Init(Settings::bVATSSpeechFix != 0);
 				if (Settings::bCombatItemTimerFix)
 					CombatItemTimerFix_Init();
@@ -432,6 +434,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					NoDoorFade_SetEnabled(Settings::bNoDoorFade != 0);
 					VATSSpeechFix_SetEnabled(Settings::bVATSSpeechFix != 0);
 					ReversePickpocketNoKarmaFix_SetEnabled(Settings::bReversePickpocketNoKarma != 0);
+					NPCDoorUnlockBlock_SetLevel(Settings::iNPCDoorUnlockBlock);
 
 					//apply god mode immediately if setting changed
 					if (Settings::bAutoGodMode && !oldGodMode)
@@ -447,7 +450,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 					Log("Config reloaded via ReloadPluginConfig");
 					Console_Print("itr-nvse: Config reloaded");
-					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180, OwnerNameInfo, QuickReadNote, FriendlyFire, OwnedBeds, KillActorXPFix, NoDoorFade, VATSSpeechFix, ReversePickpocket");
+					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180, OwnerNameInfo, QuickReadNote, FriendlyFire, OwnedBeds, KillActorXPFix, NoDoorFade, VATSSpeechFix, ReversePickpocket, NPCDoorUnlockBlock");
 				}
 			}
 			break;
@@ -537,6 +540,7 @@ static void LogSettings()
 	Log("  bNoDoorFade: %d", Settings::bNoDoorFade);
 	Log("  bQuickReadNote: %d", Settings::bQuickReadNote);
 	Log("  bDoorPackageOwnershipFix: %d", Settings::bDoorPackageOwnershipFix);
+	Log("  iNPCDoorUnlockBlock: %d", Settings::iNPCDoorUnlockBlock);
 	Log("  bVATSSpeechFix: %d", Settings::bVATSSpeechFix);
 	Log("  bCombatItemTimerFix: %d", Settings::bCombatItemTimerFix);
 	Log("  bNPCAntidoteUse: %d", Settings::bNPCAntidoteUse);

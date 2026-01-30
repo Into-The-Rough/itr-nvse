@@ -1,5 +1,6 @@
 //npc armor DT/DR cache invalidation fix
 //vanilla ResetArmorRating doesn't dirty the HighProcess CachedActorValues
+//NOT hot-reloadable - requires game restart
 
 #include "ArmorDTDRFix.h"
 #include <Windows.h>

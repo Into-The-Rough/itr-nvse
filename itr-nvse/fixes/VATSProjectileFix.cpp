@@ -1,4 +1,5 @@
 //fixes projectile hit chance in VATS
+//NOT hot-reloadable - requires game restart
 
 #include "VATSProjectileFix.h"
 #include <Windows.h>
