@@ -1,4 +1,5 @@
 //shows original NPC name for ash piles
+//NOT hot-reloadable - requires game restart
 
 #include "AshPileNames.h"
 #include "nvse/GameObjects.h"

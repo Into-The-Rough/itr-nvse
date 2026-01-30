@@ -1,4 +1,5 @@
 //hides dismembered limbs in VATS targeting
+//NOT hot-reloadable - requires game restart
 
 #include "VATSLimbFix.h"
 #include <Windows.h>

@@ -1,5 +1,6 @@
 //fixes NPCs using fCombatItemBuffTimer for stimpaks instead of fCombatItemRestoreTimer
 //bethesda forgot an else clause in CombatState::ResetCombatItemTimer
+//NOT hot-reloadable - requires game restart
 
 #include "CombatItemTimerFix.h"
 #include <Windows.h>
