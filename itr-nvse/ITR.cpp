@@ -55,6 +55,7 @@
 #include "features/CameraOverride.h"
 #include "features/PlayerUpdateHook.h"
 #include "features/NPCAntidoteUse.h"
+#include "features/NPCDoctorsBagUse.h"
 
 #include "commands/ImperativeCommands.h"
 #include "commands/StringCommands.h"
@@ -214,8 +215,9 @@ namespace NoWeaponSearch
 
 	bool __fastcall Hook(void* combatState, void* edx)
 	{
-		//antidote check runs for all NPCs in combat
+		//NPC item use checks run for all NPCs in combat
 		NPCAntidoteUse_Check(combatState);
+		NPCDoctorsBagUse_Check(combatState);
 
 		if (g_count == 0)
 			return Original(combatState);
@@ -379,6 +381,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					CombatItemTimerFix_Init();
 				if (Settings::bNPCAntidoteUse)
 					NPCAntidoteUse_Init(Settings::fCombatItemCureTimer, Settings::fCureHealthThreshold);
+				if (Settings::bNPCDoctorsBagUse)
+					NPCDoctorsBagUse_Init(Settings::fDoctorsBagUseTimer);
 				g_hooksInstalled = true;
 			}
 			break;
@@ -544,11 +548,13 @@ static void LogSettings()
 	Log("  bVATSSpeechFix: %d", Settings::bVATSSpeechFix);
 	Log("  bCombatItemTimerFix: %d", Settings::bCombatItemTimerFix);
 	Log("  bNPCAntidoteUse: %d", Settings::bNPCAntidoteUse);
+	Log("  bNPCDoctorsBagUse: %d", Settings::bNPCDoctorsBagUse);
 	Log("  iAutoQuickLoadFrameDelay: %d", Settings::iAutoQuickLoadFrameDelay);
 
 	if (Settings::bQuickDrop) Log("QuickDrop enabled (modifier=%d, control=%d)", Settings::iQuickDropModifierKey, Settings::iQuickDropControlID);
 	if (Settings::bQuick180) Log("Quick180 enabled (modifier=%d, control=%d)", Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
 	if (Settings::bNPCAntidoteUse) Log("NPCAntidoteUse enabled (timer=%.1f, healthThreshold=%.1f)", Settings::fCombatItemCureTimer, Settings::fCureHealthThreshold);
+	if (Settings::bNPCDoctorsBagUse) Log("NPCDoctorsBagUse enabled (timer=%.1f)", Settings::fDoctorsBagUseTimer);
 }
 
 static void RegisterHandlers(NVSEInterface* nvse)
