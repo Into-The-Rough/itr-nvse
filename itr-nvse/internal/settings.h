@@ -86,6 +86,10 @@ namespace Settings
 	// DoorPackageOwnershipFix settings
 	int bDoorPackageOwnershipFix = 1;  // Enabled by default - fix NPCs locking doors they don't own
 
+	// NPCDoorUnlockBlock settings
+	// 0 = vanilla, 1 = only direct door owners can bypass locks, 2 = must use key/lockpicks
+	int iNPCDoorUnlockBlock = 0;
+
 	// VATSSpeechFix settings
 	int bVATSSpeechFix = 1;
 
@@ -154,6 +158,8 @@ namespace Settings
 		iQuickReadNoteMaxLines = GetINIInt("QuickReadNote", "iMaxLines", 0);
 
 		bDoorPackageOwnershipFix = GetINIInt("Tweaks", "bDoorPackageOwnershipFix", 1);
+
+		iNPCDoorUnlockBlock = GetINIInt("Tweaks", "iNPCDoorUnlockBlock", 0);
 
 		bVATSSpeechFix = GetINIInt("Tweaks", "bVATSSpeechFix", 1);
 

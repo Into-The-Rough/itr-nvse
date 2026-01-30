@@ -1,4 +1,5 @@
 //fixes explosions from projectiles worn as pants
+//NOT hot-reloadable - requires game restart
 
 #include "ExplodingPantsFix.h"
 #include <Windows.h>

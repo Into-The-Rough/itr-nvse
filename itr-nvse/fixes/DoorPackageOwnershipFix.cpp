@@ -1,6 +1,7 @@
 //fixes NPCs with lock/unlock door packages locking doors they don't own
 //vanilla bug: doors skip cell ownership inheritance in GetOwnerRawForm
 //fix: hook IsAnOwner calls in lock/unlock functions to also check cell ownership for doors
+//NOT hot-reloadable - requires game restart
 
 #include "DoorPackageOwnershipFix.h"
 #include <Windows.h>

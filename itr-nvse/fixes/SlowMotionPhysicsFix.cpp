@@ -1,4 +1,5 @@
 //clamps physics timestep to prevent ragdoll energy gain during extreme slowmo
+//NOT hot-reloadable - requires game restart
 
 #include "SlowMotionPhysicsFix.h"
 #include <Windows.h>
