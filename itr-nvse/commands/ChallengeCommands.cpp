@@ -20,6 +20,7 @@ constexpr UInt32 kOffset_Challenge_Icon = 0x38;       //TESIcon
 constexpr UInt32 kOffset_Challenge_Type = 0x54;       //data.type
 constexpr UInt32 kOffset_Challenge_Threshold = 0x58;  //data.threshold
 constexpr UInt32 kOffset_Challenge_DataFlags = 0x5C;  //data.flags - bit 1 = recurring
+constexpr UInt32 kOffset_Challenge_Interval = 0x60;   //data.interval (default 100)
 constexpr UInt32 kOffset_Challenge_Value1 = 0x64;     //data.value1 (UInt16)
 constexpr UInt32 kOffset_Challenge_Amount = 0x6C;     //current progress
 constexpr UInt32 kOffset_Challenge_Flags = 0x70;      //bit 1 = completed, bit 2 = flag4, bit 3 = norecur
@@ -48,6 +49,21 @@ typedef const char* (__thiscall *_TESDescriptionGet)(void*, TESForm*, UInt32);
 
 constexpr UInt32 kMiscStat_ChallengesCompleted = 27;
 constexpr UInt32 kChallengeType_MiscStat = 11;
+
+//helper to show challenge notification
+static void ShowChallengeNotification(UInt8* challenge, TESForm* form, UInt32 currentAmount, UInt32 threshold)
+{
+	void* fullNameObj = challenge + kOffset_Challenge_FullName;
+	const char* name = (const char*)ThisStdCall(kAddr_TESFullName_GetName, fullNameObj);
+	const char* desc = "";
+	const char* iconPath = ((const char*(__cdecl*)(TESForm*, void*))kAddr_TESTexture_GetTextureName)(form, nullptr);
+
+	char msg[512];
+	snprintf(msg, 512, "%s   %d\\%d\n%s", name ? name : "", currentAmount, threshold, desc);
+
+	((void(__cdecl*)(const char*, eEmotion, const char*, const char*, float, bool))kAddr_Interface_ShowNotify)
+		(msg, neutral, iconPath, nullptr, 2.0f, false);
+}
 
 static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 {
@@ -90,6 +106,21 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 	//get new amount
 	UInt32 newAmount = *(UInt32*)(challenge + kOffset_Challenge_Amount);
 
+	//show progress notification at interval boundaries (vanilla behavior)
+	if (newAmount < threshold)
+	{
+		UInt32 interval = *(UInt32*)(challenge + kOffset_Challenge_Interval);
+		if (interval == 0) interval = 100; //default
+
+		//check if we crossed an interval boundary
+		UInt32 oldIntervals = oldAmount / interval;
+		UInt32 newIntervals = newAmount / interval;
+		if (newIntervals > oldIntervals)
+		{
+			ShowChallengeNotification(challenge, form, newAmount, threshold);
+		}
+	}
+
 	//check for completion (crossed threshold)
 	if (oldAmount < threshold && newAmount >= threshold)
 	{
@@ -107,27 +138,9 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 			((void(__cdecl*)(UInt32))kAddr_IncPCMiscStat)(kMiscStat_ChallengesCompleted);
 		}
 
-		//show notification (bShowChallengeUpdates:GamePlay defaults to true)
-		{
-			//get name via TESFullName::GetName(this)
-			void* fullNameObj = challenge + kOffset_Challenge_FullName;
-			const char* name = (const char*)ThisStdCall(kAddr_TESFullName_GetName, fullNameObj);
-
-			//skip description for now - vtable call needs investigation
-			const char* desc = "";
-
-			//get icon via TESTexture::GetTextureName(form, refr)
-			const char* iconPath = ((const char*(__cdecl*)(TESForm*, void*))kAddr_TESTexture_GetTextureName)(form, nullptr);
-
-			//format notification
-			char msg[512];
-			snprintf(msg, 512, "%s   %d\\%d\n%s", name ? name : "", threshold, threshold, desc ? desc : "");
-
-			//show notification and play sound
-			((void(__cdecl*)(const char*, eEmotion, const char*, const char*, float, bool))kAddr_Interface_ShowNotify)
-				(msg, neutral, iconPath, nullptr, 2.0f, false);
-			((void(__cdecl*)(int))kAddr_PlayMenuSound)(21);
-		}
+		//show completion notification and play sound
+		ShowChallengeNotification(challenge, form, threshold, threshold);
+		((void(__cdecl*)(int))kAddr_PlayMenuSound)(21);
 
 		//handle completion vs recurring
 		if (!isRecurring || isNoRecur)
