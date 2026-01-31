@@ -29,6 +29,7 @@
 #include "handlers/FakeHitHandler.h"
 #include "handlers/SaveFileSizeHandler.h"
 #include "handlers/OwnerNameInfoHandler.h"
+#include "handlers/OnMenuFilterChangeHandler.h"
 
 #include "fixes/SlowMotionPhysicsFix.h"
 #include "fixes/VATSProjectileFix.h"
@@ -660,6 +661,11 @@ static void RegisterHandlers(NVSEInterface* nvse)
 		else
 			Log("OwnerNameInfoHandler module failed to initialize");
 	}
+
+	if (OMFCH_Init((void*)nvse))
+		Log("OnMenuFilterChangeHandler module initialized (opcode 0x%04X)", OMFCH_GetOpcode());
+	else
+		Log("OnMenuFilterChangeHandler module failed to initialize");
 
 	if (Settings::bSaveFileSize)
 		Log("SaveFileSizeHandler will initialize in PostLoad");
