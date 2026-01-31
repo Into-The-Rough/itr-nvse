@@ -136,6 +136,7 @@
     <ClCompile Include="handlers\FakeHitHandler.cpp" />
     <ClCompile Include="handlers\SaveFileSizeHandler.cpp" />
     <ClCompile Include="handlers\OwnerNameInfoHandler.cpp" />
+    <ClCompile Include="handlers\OnMenuFilterChangeHandler.cpp" />
     <ClCompile Include="fixes\SlowMotionPhysicsFix.cpp" />
     <ClCompile Include="fixes\VATSProjectileFix.cpp" />
     <ClCompile Include="fixes\VATSLimbFix.cpp" />
@@ -205,6 +206,7 @@
     <ClInclude Include="handlers\FakeHitHandler.h" />
     <ClInclude Include="handlers\SaveFileSizeHandler.h" />
     <ClInclude Include="handlers\OwnerNameInfoHandler.h" />
+    <ClInclude Include="handlers\OnMenuFilterChangeHandler.h" />
     <ClInclude Include="fixes\SlowMotionPhysicsFix.h" />
     <ClInclude Include="fixes\VATSProjectileFix.h" />
     <ClInclude Include="fixes\VATSLimbFix.h" />

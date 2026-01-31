@@ -1,0 +1,4 @@
+#pragma once
+
+bool OMFCH_Init(void* nvseInterface);
+unsigned int OMFCH_GetOpcode();
