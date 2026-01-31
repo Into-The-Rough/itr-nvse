@@ -587,6 +587,68 @@ bool Cmd_SetCreatureCombatSkill_Execute(COMMAND_ARGS)
 	return true;
 }
 
+static ActorProcessManager* g_actorProcessManager = (ActorProcessManager*)0x11E0E80;
+
+typedef void (__thiscall *_ActorResurrect)(Actor*, bool, bool, bool);
+static const _ActorResurrect ActorResurrect = (_ActorResurrect)0x89F780;
+
+DEFINE_COMMAND_PLUGIN(ResurrectAll, "Resurrects all dead actors in high process", 0, 0, nullptr);
+
+bool Cmd_ResurrectAll_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	UInt32 count = 0;
+
+	PlayerCharacter* player = PlayerCharacter::GetSingleton();
+	if (!player || !player->parentCell) return true;
+
+	auto ProcessCell = [&](TESObjectCELL* cell)
+	{
+		if (!cell) return;
+		for (auto iter = cell->objectList.Begin(); !iter.End(); ++iter)
+		{
+			TESObjectREFR* refr = iter.Get();
+			if (!refr || refr == player) continue;
+
+			UInt8 baseType = refr->baseForm ? refr->baseForm->typeID : 0;
+			if (baseType != kFormType_Creature && baseType != kFormType_NPC) continue;
+
+			Actor* actor = (Actor*)refr;
+			if (actor->lifeState != 2) continue;
+
+			ActorResurrect(actor, false, true, false);
+			count++;
+		}
+	};
+
+	ProcessCell(player->parentCell);
+
+	TESWorldSpace* world = player->parentCell->worldSpace;
+	if (world && !player->parentCell->IsInterior() && player->parentCell->coords)
+	{
+		SInt32 baseX = (SInt32)player->parentCell->coords->x;
+		SInt32 baseY = (SInt32)player->parentCell->coords->y;
+
+		for (SInt32 dx = -1; dx <= 1; dx++)
+		{
+			for (SInt32 dy = -1; dy <= 1; dy++)
+			{
+				if (dx == 0 && dy == 0) continue;
+				UInt32 key = ((baseX + dx) << 16) | ((baseY + dy) & 0xFFFF);
+				TESObjectCELL* cell = world->cellMap->Lookup(key);
+				ProcessCell(cell);
+			}
+		}
+	}
+
+	*result = count;
+
+	if (IsConsoleMode())
+		Console_Print("ResurrectAll >> Resurrected %d actors", count);
+
+	return true;
+}
+
 bool ImperativeCommands_Init(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
@@ -604,8 +666,9 @@ bool ImperativeCommands_Init(void* nvsePtr)
 
 	nvse->SetOpcodeBase(0x4035);
 	/*4035*/ nvse->RegisterCommand(&kCommandInfo_SetCreatureCombatSkill);
+	/*4036*/ nvse->RegisterCommand(&kCommandInfo_ResurrectAll);
 
-	Log("Registered ImperativeCommands at 0x4021-0x4029, 0x4035");
+	Log("Registered ImperativeCommands at 0x4021-0x4029, 0x4035-0x4036");
 
 	return true;
 }
