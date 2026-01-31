@@ -47,6 +47,7 @@
 #include "fixes/NPCDoorUnlockBlock.h"
 #include "fixes/VATSSpeechFix.h"
 #include "fixes/CombatItemTimerFix.h"
+#include "fixes/DetectionCrashFix.h"
 
 #include "features/MessageBoxQuickClose.h"
 #include "features/PreventWeaponSwitch.h"
@@ -62,6 +63,7 @@
 #include "commands/ImperativeCommands.h"
 #include "commands/StringCommands.h"
 #include "commands/RadioCommands.h"
+#include "commands/ChallengeCommands.h"
 
 #include <cstdio>
 #include <cstring>
@@ -383,6 +385,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				VATSSpeechFix_Init(Settings::bVATSSpeechFix != 0);
 				if (Settings::bCombatItemTimerFix)
 					CombatItemTimerFix_Init();
+				if (Settings::bDetectionCrashFix)
+					DetectionCrashFix_Init();
 				if (Settings::bNPCAntidoteUse)
 					NPCAntidoteUse_Init(Settings::fCombatItemCureTimer, Settings::fCureHealthThreshold);
 				if (Settings::bNPCDoctorsBagUse)
@@ -729,6 +733,7 @@ namespace ITR
 		ImperativeCommands_Init((void*)nvse);
 		StringCommands_Init((void*)nvse);
 		RadioCommands_Init((void*)nvse);
+		ChallengeCommands_Init((void*)nvse);
 		RegisterHandlers(nvse);
 
 		Log("itr-nvse loaded successfully");

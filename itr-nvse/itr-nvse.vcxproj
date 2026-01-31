@@ -153,6 +153,7 @@
     <ClCompile Include="fixes\NPCDoorUnlockBlock.cpp" />
     <ClCompile Include="fixes\VATSSpeechFix.cpp" />
     <ClCompile Include="fixes\CombatItemTimerFix.cpp" />
+    <ClCompile Include="fixes\DetectionCrashFix.cpp" />
     <ClCompile Include="features\MessageBoxQuickClose.cpp">
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">internal/prefix.h</ForcedIncludeFiles>
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">internal/prefix.h</ForcedIncludeFiles>
@@ -180,6 +181,7 @@
     <ClCompile Include="commands\ImperativeCommands.cpp" />
     <ClCompile Include="commands\StringCommands.cpp" />
     <ClCompile Include="commands\RadioCommands.cpp" />
+    <ClCompile Include="commands\ChallengeCommands.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ITR.h" />
@@ -224,6 +226,7 @@
     <ClInclude Include="fixes\NPCDoorUnlockBlock.h" />
     <ClInclude Include="fixes\VATSSpeechFix.h" />
     <ClInclude Include="fixes\CombatItemTimerFix.h" />
+    <ClInclude Include="fixes\DetectionCrashFix.h" />
     <ClInclude Include="features\MessageBoxQuickClose.h" />
     <ClInclude Include="features\PreventWeaponSwitch.h" />
     <ClInclude Include="features\ELMO.h" />
@@ -237,6 +240,7 @@
     <ClInclude Include="commands\ImperativeCommands.h" />
     <ClInclude Include="commands\StringCommands.h" />
     <ClInclude Include="commands\RadioCommands.h" />
+    <ClInclude Include="commands\ChallengeCommands.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />
