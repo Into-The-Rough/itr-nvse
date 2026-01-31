@@ -105,6 +105,9 @@ namespace Settings
 	int bNPCDoctorsBagUse = 1;  // Enabled by default - NPCs use doctor's bags when crippled
 	float fDoctorsBagUseTimer = 15.0f;  // Cooldown between uses
 
+	// CompanionNoInfamy settings
+	int bCompanionNoInfamy = 1;  // Enabled by default - companions killing faction members doesn't give player infamy
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -174,6 +177,8 @@ namespace Settings
 
 		bNPCDoctorsBagUse = GetINIInt("Tweaks", "bNPCDoctorsBagUse", 1);
 		fDoctorsBagUseTimer = (float)GetINIInt("NPCDoctorsBagUse", "iUseTimer", 15);
+
+		bCompanionNoInfamy = GetINIInt("Tweaks", "bCompanionNoInfamy", 1);
 
 	}
 }
