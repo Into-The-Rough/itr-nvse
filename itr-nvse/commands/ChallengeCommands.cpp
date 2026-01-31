@@ -42,7 +42,7 @@ constexpr UInt32 kAddr_Script_RunScriptEffectStart = 0x5AC340;
 constexpr UInt32 kAddr_Interface_ShowNotify = 0x7052F0;
 constexpr UInt32 kAddr_PlayMenuSound = 0x706F30;
 constexpr UInt32 kAddr_InitChallengesList = 0x5F5880;
-//TESDescription vtable Get method is at index 3
+//TESDescription::Get is at vtable[4] (after 4 BaseFormComponent virtuals)
 //chunk ID for description is 'DESC' = 0x43534544
 constexpr UInt32 kChunkID_DESC = 0x43534544;
 typedef const char* (__thiscall *_TESDescriptionGet)(void*, TESForm*, UInt32);
@@ -55,11 +55,16 @@ static void ShowChallengeNotification(UInt8* challenge, TESForm* form, UInt32 cu
 {
 	void* fullNameObj = challenge + kOffset_Challenge_FullName;
 	const char* name = (const char*)ThisStdCall(kAddr_TESFullName_GetName, fullNameObj);
-	const char* desc = "";
+
+	//get description via vtable[4] - TESDescription::Get(overrideForm, chunkID)
+	void* descObj = challenge + kOffset_Challenge_Description;
+	void** descVtbl = *(void***)descObj;
+	const char* desc = ((_TESDescriptionGet)descVtbl[4])(descObj, nullptr, kChunkID_DESC);
+
 	const char* iconPath = ((const char*(__cdecl*)(TESForm*, void*))kAddr_TESTexture_GetTextureName)(form, nullptr);
 
 	char msg[512];
-	snprintf(msg, 512, "%s   %d\\%d\n%s", name ? name : "", currentAmount, threshold, desc);
+	snprintf(msg, 512, "%s   %d\\%d\n%s", name ? name : "", currentAmount, threshold, desc ? desc : "");
 
 	((void(__cdecl*)(const char*, eEmotion, const char*, const char*, float, bool))kAddr_Interface_ShowNotify)
 		(msg, neutral, iconPath, nullptr, 2.0f, false);
