@@ -47,8 +47,6 @@
 #include "fixes/NPCDoorUnlockBlock.h"
 #include "fixes/VATSSpeechFix.h"
 #include "fixes/CombatItemTimerFix.h"
-#include "fixes/DetectionCrashFix.h"
-
 #include "features/MessageBoxQuickClose.h"
 #include "features/PreventWeaponSwitch.h"
 #include "features/ELMO.h"
@@ -385,8 +383,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				VATSSpeechFix_Init(Settings::bVATSSpeechFix != 0);
 				if (Settings::bCombatItemTimerFix)
 					CombatItemTimerFix_Init();
-				if (Settings::bDetectionCrashFix)
-					DetectionCrashFix_Init();
 				if (Settings::bNPCAntidoteUse)
 					NPCAntidoteUse_Init(Settings::fCombatItemCureTimer, Settings::fCureHealthThreshold);
 				if (Settings::bNPCDoctorsBagUse)
