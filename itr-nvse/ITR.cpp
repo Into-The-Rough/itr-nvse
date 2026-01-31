@@ -30,6 +30,7 @@
 #include "handlers/SaveFileSizeHandler.h"
 #include "handlers/OwnerNameInfoHandler.h"
 #include "handlers/OnMenuFilterChangeHandler.h"
+#include "handlers/OnMenuSideChangeHandler.h"
 
 #include "fixes/SlowMotionPhysicsFix.h"
 #include "fixes/VATSProjectileFix.h"
@@ -666,6 +667,11 @@ static void RegisterHandlers(NVSEInterface* nvse)
 		Log("OnMenuFilterChangeHandler module initialized (opcode 0x%04X)", OMFCH_GetOpcode());
 	else
 		Log("OnMenuFilterChangeHandler module failed to initialize");
+
+	if (OMSCH_Init((void*)nvse))
+		Log("OnMenuSideChangeHandler module initialized (opcode 0x%04X)", OMSCH_GetOpcode());
+	else
+		Log("OnMenuSideChangeHandler module failed to initialize");
 
 	if (Settings::bSaveFileSize)
 		Log("SaveFileSizeHandler will initialize in PostLoad");
