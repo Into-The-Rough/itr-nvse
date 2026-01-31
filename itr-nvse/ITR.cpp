@@ -47,6 +47,7 @@
 #include "fixes/NPCDoorUnlockBlock.h"
 #include "fixes/VATSSpeechFix.h"
 #include "fixes/CombatItemTimerFix.h"
+#include "fixes/CompanionNoInfamy.h"
 #include "features/MessageBoxQuickClose.h"
 #include "features/PreventWeaponSwitch.h"
 #include "features/ELMO.h"
@@ -387,6 +388,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					NPCAntidoteUse_Init(Settings::fCombatItemCureTimer, Settings::fCureHealthThreshold);
 				if (Settings::bNPCDoctorsBagUse)
 					NPCDoctorsBagUse_Init(Settings::fDoctorsBagUseTimer);
+				CompanionNoInfamy_Init(Settings::bCompanionNoInfamy != 0);
 				g_hooksInstalled = true;
 			}
 			break;
@@ -442,6 +444,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					NoDoorFade_SetEnabled(Settings::bNoDoorFade != 0);
 					VATSSpeechFix_SetEnabled(Settings::bVATSSpeechFix != 0);
 					ReversePickpocketNoKarmaFix_SetEnabled(Settings::bReversePickpocketNoKarma != 0);
+					CompanionNoInfamy_SetEnabled(Settings::bCompanionNoInfamy != 0);
 					NPCDoorUnlockBlock_SetLevel(Settings::iNPCDoorUnlockBlock);
 
 					//apply god mode immediately if setting changed
@@ -458,7 +461,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 					Log("Config reloaded via ReloadPluginConfig");
 					Console_Print("itr-nvse: Config reloaded");
-					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180, OwnerNameInfo, QuickReadNote, FriendlyFire, OwnedBeds, KillActorXPFix, NoDoorFade, VATSSpeechFix, ReversePickpocket, NPCDoorUnlockBlock");
+					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180, OwnerNameInfo, QuickReadNote, FriendlyFire, OwnedBeds, KillActorXPFix, NoDoorFade, VATSSpeechFix, ReversePickpocket, CompanionNoInfamy, NPCDoorUnlockBlock");
 				}
 			}
 			break;
@@ -553,6 +556,7 @@ static void LogSettings()
 	Log("  bCombatItemTimerFix: %d", Settings::bCombatItemTimerFix);
 	Log("  bNPCAntidoteUse: %d", Settings::bNPCAntidoteUse);
 	Log("  bNPCDoctorsBagUse: %d", Settings::bNPCDoctorsBagUse);
+	Log("  bCompanionNoInfamy: %d", Settings::bCompanionNoInfamy);
 	Log("  iAutoQuickLoadFrameDelay: %d", Settings::iAutoQuickLoadFrameDelay);
 
 	if (Settings::bQuickDrop) Log("QuickDrop enabled (modifier=%d, control=%d)", Settings::iQuickDropModifierKey, Settings::iQuickDropControlID);
