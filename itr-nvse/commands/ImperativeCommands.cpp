@@ -560,6 +560,33 @@ bool Cmd_GetTargetInitialLocation_Execute(COMMAND_ARGS)
 	return true;
 }
 
+static ParamInfo kParams_SetCreatureCombatSkill[2] = {
+	{ "value",    kParamType_Integer,  0 },
+	{ "creature", kParamType_AnyForm,  1 },
+};
+
+DEFINE_COMMAND_PLUGIN(SetCreatureCombatSkill, "Sets creature combat skill (0-255)", 0, 2, kParams_SetCreatureCombatSkill);
+
+bool Cmd_SetCreatureCombatSkill_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	UInt32 value = 0;
+	TESForm* form = nullptr;
+
+	if (!ExtractArgs(EXTRACT_ARGS, &value, &form)) return true;
+
+	if (!form && thisObj && thisObj->baseForm)
+		form = thisObj->baseForm;
+
+	if (!form || form->typeID != kFormType_Creature) return true;
+
+	TESCreature* creature = (TESCreature*)form;
+	creature->combatSkill = (value > 255) ? 255 : (UInt8)value;
+	*result = 1;
+
+	return true;
+}
+
 bool ImperativeCommands_Init(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
@@ -574,7 +601,11 @@ bool ImperativeCommands_Init(void* nvsePtr)
 	/*4027*/ nvse->RegisterTypedCommand(&kCommandInfo_GetTargetDetectedLocation, kRetnType_Array);
 	/*4028*/ nvse->RegisterTypedCommand(&kCommandInfo_GetTargetLastFullyVisibleLocation, kRetnType_Array);
 	/*4029*/ nvse->RegisterTypedCommand(&kCommandInfo_GetTargetInitialLocation, kRetnType_Array);
-	Log("Registered ImperativeCommands at 0x4021-0x4029");
+
+	nvse->SetOpcodeBase(0x4035);
+	/*4035*/ nvse->RegisterCommand(&kCommandInfo_SetCreatureCombatSkill);
+
+	Log("Registered ImperativeCommands at 0x4021-0x4029, 0x4035");
 
 	return true;
 }
