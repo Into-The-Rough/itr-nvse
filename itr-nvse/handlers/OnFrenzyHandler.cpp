@@ -1,87 +1,11 @@
 //fires when an actor becomes frenzied (brain condition goes to 0)
 
-#include <cstdint>
 #include <vector>
 #include <cstdio>
 #include <Windows.h>
 
 #include "OnFrenzyHandler.h"
-
-
-class TESForm;
-class TESObjectREFR;
-class Script;
-class ScriptEventList;
-class Actor;
-
-struct CommandInfo;
-struct ParamInfo;
-
-using PluginHandle = UInt32;
-
-struct NVSEInterface {
-    UInt32  nvseVersion;
-    UInt32  runtimeVersion;
-    UInt32  editorVersion;
-    UInt32  isEditor;
-    bool    (*RegisterCommand)(CommandInfo* info);
-    void    (*SetOpcodeBase)(UInt32 opcode);
-    void*   (*QueryInterface)(UInt32 id);
-    PluginHandle (*GetPluginHandle)(void);
-    bool    (*RegisterTypedCommand)(CommandInfo* info, UInt32 retnType);
-    const char* (*GetRuntimeDirectory)(void);
-};
-
-enum { kInterface_Script = 6 };
-enum { kRetnType_Default = 0 };
-
-struct NVSEArrayVarInterface {
-    struct Element { UInt8 pad[16]; };
-};
-
-struct NVSEScriptInterface {
-    bool (*CallFunction)(Script*, TESObjectREFR*, TESObjectREFR*, NVSEArrayVarInterface::Element*, UInt8, ...);
-    int (*GetFunctionParams)(Script*, UInt8*);
-    bool (*ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, ...);
-    bool (*ExtractFormatStringArgs)(UInt32, char*, ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, UInt32, ...);
-    bool (*CallFunctionAlt)(Script*, TESObjectREFR*, UInt8, ...);
-};
-
-#define COMMAND_ARGS void* paramInfo, void* scriptData, TESObjectREFR* thisObj, \
-    UInt32 containingObj, Script* scriptObj, ScriptEventList* eventList, \
-    double* result, UInt32* opcodeOffsetPtr
-
-using CommandExecuteFunc = bool (*)(COMMAND_ARGS);
-
-struct ParamInfo {
-    const char* typeStr;
-    UInt32 typeID;
-    UInt32 isOptional;
-};
-
-struct CommandInfo {
-    const char* longName;
-    const char* shortName;
-    UInt32 opcode;
-    const char* helpText;
-    UInt16 needsParent;
-    UInt16 numParams;
-    ParamInfo* params;
-    CommandExecuteFunc execute;
-    void* parse;
-    void* eval;
-    UInt32 flags;
-};
-
-enum { kParamType_Integer = 0x01, kParamType_AnyForm = 0x3D };
-enum { kFormType_Script = 0x11 };
-
-#define DEFINE_COMMAND_PLUGIN(name, desc, needsParent, numParams, params) \
-    extern bool Cmd_##name##_Execute(COMMAND_ARGS); \
-    static CommandInfo kCommandInfo_##name = { \
-        #name, "", 0, desc, needsParent, numParams, params, \
-        Cmd_##name##_Execute, nullptr, nullptr, 0 \
-    }
+#include "internal/NVSEMinimal.h"
 
 static FILE* g_ofhLogFile = nullptr;
 
