@@ -594,6 +594,65 @@ static const _ActorResurrect ActorResurrect = (_ActorResurrect)0x89F780;
 
 DEFINE_COMMAND_PLUGIN(ResurrectAll, "Resurrects all dead actors in high process", 0, 0, nullptr);
 
+//ForceReload - forces actor to play reload animation and refill ammo
+typedef bool (__thiscall *_ActorIsDead)(Actor*, bool);
+static const _ActorIsDead ActorIsDead = (_ActorIsDead)0x8844F0;
+
+typedef char (__thiscall *_ActorReload)(Actor*, TESObjectWEAP*, UInt32, bool);
+static const _ActorReload ActorReload = (_ActorReload)0x8A8420;
+
+typedef bool (__thiscall *_ItemChangeHasWeaponMod)(void*, UInt32);
+static const _ItemChangeHasWeaponMod ItemChangeHasWeaponMod = (_ItemChangeHasWeaponMod)0x4BDA70;
+
+DEFINE_COMMAND_PLUGIN(ForceReload, "Forces actor to reload their weapon", 1, 0, nullptr);
+
+bool Cmd_ForceReload_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+
+	if (!thisObj) return true;
+
+	Actor* actor = (Actor*)thisObj;
+	if (ActorIsDead(actor, false)) return true;
+
+	UInt32 pProcess = *(UInt32*)((UInt8*)actor + 0x68);
+	if (!pProcess) return true;
+
+	//processLevel at +0x28, must be 0 for HighProcess
+	UInt32 processLevel = *(UInt32*)(pProcess + 0x28);
+	if (processLevel != 0) return true;
+
+	if (!thisObj->GetNiNode()) return true;
+
+	UInt32 vtable = *(UInt32*)pProcess;
+	if (!vtable) return true;
+
+	//vtable[82] = GetCurrentWeapon
+	typedef UInt32 (__thiscall *GetCurrentWeapon_t)(UInt32);
+	GetCurrentWeapon_t GetCurrentWeapon = (GetCurrentWeapon_t)(*(UInt32*)(vtable + 82 * 4));
+	UInt32 weaponInfo = GetCurrentWeapon(pProcess);
+	if (!weaponInfo) return true;
+
+	TESObjectWEAP* weapon = (TESObjectWEAP*)(*(UInt32*)(weaponInfo + 0x08));
+	if (!weapon) return true;
+
+	//vtable[83] = GetAmmoInfo, returns AmmoInfo* with count at +0x04
+	typedef UInt32 (__thiscall *GetAmmoInfo_t)(UInt32);
+	GetAmmoInfo_t GetAmmoInfo = (GetAmmoInfo_t)(*(UInt32*)(vtable + 83 * 4));
+	UInt32 ammoInfo = GetAmmoInfo(pProcess);
+
+	//set current ammo count to 0 to bypass "clip is full" check in Actor::Reload
+	if (ammoInfo) {
+		*(SInt32*)(ammoInfo + 0x04) = 0;
+	}
+
+	bool hasExtendedMag = ItemChangeHasWeaponMod((void*)weaponInfo, 11);
+	char reloadResult = ActorReload(actor, weapon, 2, hasExtendedMag);
+	*result = reloadResult ? 1 : 0;
+
+	return true;
+}
+
 bool Cmd_ResurrectAll_Execute(COMMAND_ARGS)
 {
 	*result = 0;
@@ -667,8 +726,9 @@ bool ImperativeCommands_Init(void* nvsePtr)
 	nvse->SetOpcodeBase(0x4035);
 	/*4035*/ nvse->RegisterCommand(&kCommandInfo_SetCreatureCombatSkill);
 	/*4036*/ nvse->RegisterCommand(&kCommandInfo_ResurrectAll);
+	/*4037*/ nvse->RegisterCommand(&kCommandInfo_ForceReload);
 
-	Log("Registered ImperativeCommands at 0x4021-0x4029, 0x4035-0x4036");
+	Log("Registered ImperativeCommands at 0x4021-0x4029, 0x4035-0x4037");
 
 	return true;
 }
