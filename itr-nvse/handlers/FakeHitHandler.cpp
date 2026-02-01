@@ -1,98 +1,15 @@
 //ported from FakeHitNVSE - kept self-contained to avoid header conflicts
 
 #include "FakeHitHandler.h"
+#include "internal/NVSEMinimal.h"
 #include <Windows.h>
-#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <cmath>
 
-typedef float Float32;
-
-struct PluginInfo {
-	enum { kInfoVersion = 1 };
-	UInt32 infoVersion;
-	const char* name;
-	UInt32 version;
-};
-
-struct ParamInfo;
-struct TESObjectREFR;
-struct Script;
-struct ScriptEventList;
-
-#define COMMAND_ARGS ParamInfo* paramInfo, void* scriptData, TESObjectREFR* thisObj, TESObjectREFR* containingObj, Script* scriptObj, ScriptEventList* eventList, double* result, UInt32* opcodeOffsetPtr
 #define EXTRACT_ARGS_EX paramInfo, scriptData, opcodeOffsetPtr, scriptObj, eventList
 
 typedef bool (*ExtractArgsEx_t)(ParamInfo* paramInfo, void* scriptData, UInt32* opcodeOffsetPtr, Script* scriptObj, ScriptEventList* eventList, ...);
-
-struct CommandInfo {
-	const char* longName;
-	const char* shortName;
-	UInt32 opcode;
-	const char* helpText;
-	UInt16 needsParent;
-	UInt16 numParams;
-	ParamInfo* params;
-	void* execute;
-	void* parse;
-	void* eval;
-	UInt32 flags;
-};
-
-struct NVSEInterface {
-	UInt32 nvseVersion;
-	UInt32 runtimeVersion;
-	UInt32 editorVersion;
-	UInt32 isEditor;
-	bool (*RegisterCommand)(CommandInfo* info);
-	void (*SetOpcodeBase)(UInt32 opcode);
-	void* (*QueryInterface)(UInt32 id);
-	UInt32 (*GetPluginHandle)(void);
-	bool (*RegisterTypedCommand)(CommandInfo* info, UInt32 retnType);
-	const char* (*GetRuntimeDirectory)(void);
-	UInt32 isNogore;
-};
-
-enum {
-	kInterface_Console = 1,
-	kInterface_Messaging = 2,
-	kInterface_CommandTable = 3,
-	kInterface_StringVar = 4,
-	kInterface_ArrayVar = 5,
-	kInterface_Script = 6,
-	kInterface_Data = 7
-};
-
-struct NVSEScriptInterface {
-	bool (*CallFunction)(void* funcScript, TESObjectREFR* callingObj, TESObjectREFR* container,
-		void* result, UInt8 numArgs, ...);
-	UInt32 (*GetFunctionParams)(void* funcScript, UInt8* paramTypesOut);
-	bool (*ExtractArgsEx)(ParamInfo* paramInfo, void* scriptDataIn, UInt32* scriptDataOffset, void* scriptObj,
-		void* eventList, ...);
-	bool (*ExtractFormatStringArgs)(UInt32 fmtStringPos, char* buffer, ParamInfo* paramInfo, void* scriptDataIn,
-		UInt32* scriptDataOffset, void* scriptObj, void* eventList, UInt32 maxParams, ...);
-	bool (*CallFunctionAlt)(void* funcScript, TESObjectREFR* callingObj, UInt8 numArgs, ...);
-	void* (*CompileScript)(const char* scriptText);
-	void* (*CompileExpression)(const char* expression);
-};
-
-enum ParamType {
-	kParamType_String = 0,
-	kParamType_Integer = 1,
-	kParamType_Float = 2,
-	kParamType_ObjectID = 3,
-	kParamType_ObjectRef = 4,
-	kParamType_ActorValue = 5,
-	kParamType_Actor = 6,
-	kParamType_AnyForm = 22,
-};
-
-struct ParamInfo {
-	const char* name;
-	UInt32 type;
-	UInt32 isOptional;
-};
 
 struct NiPoint3 {
 	float x, y, z;
@@ -525,12 +442,12 @@ static ParamInfo kParams_FakeHitEx[7] = {
 
 static CommandInfo kCommandInfo_FakeHit = {
 	"FakeHit", "", 0, "Simulates a hit on an actor", 1, 5, kParams_FakeHit,
-	(void*)Cmd_FakeHit_Execute, nullptr, nullptr, 0
+	Cmd_FakeHit_Execute, nullptr, nullptr, 0
 };
 
 static CommandInfo kCommandInfo_FakeHitEx = {
 	"FakeHitEx", "", 0, "Extended FakeHit with fatigue and limb damage", 1, 7, kParams_FakeHitEx,
-	(void*)Cmd_FakeHitEx_Execute, nullptr, nullptr, 0
+	Cmd_FakeHitEx_Execute, nullptr, nullptr, 0
 };
 
 bool FakeHit_Init(void* nvse)

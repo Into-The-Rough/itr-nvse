@@ -1,6 +1,5 @@
 //dialogue text filter - self-contained module (no NVSE-Plugins-main headers)
 
-#include <cstdint>
 #include <vector>
 #include <cstring>
 #include <cstdio>
@@ -8,15 +7,11 @@
 
 #include "DialogueTextFilter.h"
 #include "internal/StringMatch.h"
+#include "internal/NVSEMinimal.h"
 
-
-class TESForm;
 class TESTopicInfo;
 class TESTopic;
 class TESQuest;
-class Actor;
-class Script;
-class TESObjectREFR;
 
 struct String {
     char*   m_data;
@@ -37,166 +32,6 @@ struct ModInfo {
     UInt8 pad00[0x20];
     char name[0x100];
 };
-
-struct PluginInfo {
-    enum { kInfoVersion = 1 };
-    UInt32      infoVersion;
-    const char* name;
-    UInt32      version;
-};
-
-struct CommandInfo;
-struct ParamInfo;
-struct ScriptEventList;
-
-using PluginHandle = UInt32;
-constexpr PluginHandle kPluginHandle_Invalid = 0xFFFFFFFF;
-
-struct NVSEInterface {
-    UInt32  nvseVersion;
-    UInt32  runtimeVersion;
-    UInt32  editorVersion;
-    UInt32  isEditor;
-
-    bool    (*RegisterCommand)(CommandInfo* info);
-    void    (*SetOpcodeBase)(UInt32 opcode);
-    void*   (*QueryInterface)(UInt32 id);
-    PluginHandle (*GetPluginHandle)(void);
-    bool    (*RegisterTypedCommand)(CommandInfo* info, UInt32 retnType);
-    const char* (*GetRuntimeDirectory)(void);
-};
-
-enum {
-    kInterface_Serialization = 0,
-    kInterface_Console,
-    kInterface_Messaging,
-    kInterface_CommandTable,
-    kInterface_StringVar,
-    kInterface_ArrayVar,
-    kInterface_Script,
-    kInterface_Data,
-};
-
-struct NVSEArrayVarInterface {
-    struct Element {
-        UInt8 pad[16];
-    };
-};
-
-struct NVSEScriptInterface {
-    enum { kVersion = 1 };
-
-    bool    (*CallFunction)(Script* funcScript, TESObjectREFR* callingObj,
-                TESObjectREFR* container, NVSEArrayVarInterface::Element* result,
-                UInt8 numArgs, ...);
-    int     (*GetFunctionParams)(Script* funcScript, UInt8* paramTypesOut);
-    bool    (*ExtractArgsEx)(ParamInfo* paramInfo, void* scriptDataIn,
-                UInt32* scriptDataOffset, Script* scriptObj, ScriptEventList* eventList, ...);
-    bool    (*ExtractFormatStringArgs)(UInt32 fmtStringPos, char* buffer,
-                ParamInfo* paramInfo, void* scriptDataIn, UInt32* scriptDataOffset,
-                Script* scriptObj, ScriptEventList* eventList, UInt32 maxParams, ...);
-    bool    (*CallFunctionAlt)(Script* funcScript, TESObjectREFR* callingObj,
-                UInt8 numArgs, ...);
-    Script* (*CompileScript)(const char* scriptText);
-    Script* (*CompileExpression)(const char* expression);
-    size_t  (__stdcall *pDecompileToBuffer)(Script* pScript, void* pStream, char* pBuffer);
-};
-
-struct NVSEDataInterface {
-    enum { kVersion = 1 };
-    UInt32  version;
-    void*   (*GetSingleton)(UInt32 singletonID);
-    enum {
-        kNVSEData_InventoryReferenceCreate = 1,
-        kNVSEData_InventoryReferenceGetForRefID,
-        kNVSEData_InventoryReferenceGetRefBySelf,
-        kNVSEData_ArrayVarMapDeleteBySelf,
-        kNVSEData_StringVarMapDeleteBySelf,
-        kNVSEData_LambdaDeleteAllForScript,
-        kNVSEData_InventoryReferenceCreateEntry,
-        kNVSEData_LambdaSaveVariableList,
-        kNVSEData_LambdaUnsaveVariableList,
-    };
-    void*   (*GetFunc)(UInt32 funcID);
-    void*   (*GetData)(UInt32 dataID);
-};
-
-using _CaptureLambdaVars = void (*)(Script* scriptLambda);
-using _UncaptureLambdaVars = void (*)(Script* scriptLambda);
-
-#define COMMAND_ARGS        void* paramInfo, void* scriptData, TESObjectREFR* thisObj, \
-                            UInt32 containingObj, Script* scriptObj, ScriptEventList* eventList, \
-                            double* result, UInt32* opcodeOffsetPtr
-
-#define EXTRACT_ARGS_EX     paramInfo, scriptData, opcodeOffsetPtr, scriptObj, eventList
-
-using CommandExecuteFunc = bool (*)(COMMAND_ARGS);
-using CommandParseFunc = bool (*)(UInt32, void*, void*, void*);
-using CommandEvalFunc = bool (*)(TESObjectREFR*, void*, void*, double*);
-
-struct ParamInfo {
-    const char* typeStr;
-    UInt32      typeID;
-    UInt32      isOptional;
-};
-
-struct CommandInfo {
-    const char*         longName;
-    const char*         shortName;
-    UInt32              opcode;
-    const char*         helpText;
-    UInt16              needsParent;
-    UInt16              numParams;
-    ParamInfo*          params;
-    CommandExecuteFunc  execute;
-    CommandParseFunc    parse;
-    CommandEvalFunc     eval;
-    UInt32              flags;
-};
-
-enum ParamType {
-    kParamType_String       = 0x00,
-    kParamType_Integer      = 0x01,
-    kParamType_Float        = 0x02,
-    kParamType_AnyForm      = 0x3D,
-};
-
-#define DEFINE_COMMAND_PLUGIN(name, desc, needsParent, params) \
-    extern bool Cmd_##name##_Execute(COMMAND_ARGS); \
-    static CommandInfo kCommandInfo_##name = { \
-        #name, "", 0, desc, needsParent, \
-        params ? (sizeof(params) / sizeof(ParamInfo)) : 0, \
-        params, Cmd_##name##_Execute, nullptr, nullptr, 0 \
-    }
-
-enum FormType {
-    kFormType_Script = 0x11,
-};
-
-namespace SafeWrite {
-    inline void Write8(UInt32 addr, UInt8 data) {
-        DWORD oldProtect;
-        VirtualProtect((void*)addr, 1, PAGE_EXECUTE_READWRITE, &oldProtect);
-        *(UInt8*)addr = data;
-        VirtualProtect((void*)addr, 1, oldProtect, &oldProtect);
-    }
-
-    inline void Write32(UInt32 addr, UInt32 data) {
-        DWORD oldProtect;
-        VirtualProtect((void*)addr, 4, PAGE_EXECUTE_READWRITE, &oldProtect);
-        *(UInt32*)addr = data;
-        VirtualProtect((void*)addr, 4, oldProtect, &oldProtect);
-    }
-
-    inline void WriteRelJump(UInt32 src, UInt32 dst) {
-        Write8(src, 0xE9);
-        Write32(src + 1, dst - src - 5);
-    }
-
-    inline UInt32 GetRelJumpTarget(UInt32 src) {
-        return *(UInt32*)(src + 1) + src + 5;
-    }
-}
 
 template <typename T, typename... Args>
 __forceinline T ThisStdCall(UInt32 addr, void* thisPtr, Args... args) {
@@ -529,7 +364,7 @@ static ParamInfo kParams_DialogueTextHandler[3] = {
 
 DEFINE_COMMAND_PLUGIN(SetOnDialogueTextEventHandler,
     "Registers/unregisters a callback for dialogue containing specific text",
-    0, kParams_DialogueTextHandler);
+    0, 3, kParams_DialogueTextHandler);
 
 bool Cmd_SetOnDialogueTextEventHandler_Execute(COMMAND_ARGS) {
     *result = 0;
