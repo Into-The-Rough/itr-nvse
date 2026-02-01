@@ -472,6 +472,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			KHH_Update();
 			DTH_Update();
 			OSPH_Update();
+			OMFCH_Update();
+			OMSCH_Update();
 			if (Settings::bQuickReadNote)
 				QuickReadNote_Update();
 			if (Settings::bDialogueCamera)

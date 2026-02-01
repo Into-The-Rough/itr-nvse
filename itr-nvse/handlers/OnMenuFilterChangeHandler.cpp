@@ -1,4 +1,5 @@
 //fires when menu filter/category changes (Inventory, Container, Barter menus)
+//uses polling to avoid hook conflicts with JIP NVSE
 
 #include <vector>
 #include <cstdio>
@@ -24,11 +25,6 @@ constexpr UInt32 kOffset_ContainerMenu_RightFilter = 0x90;
 constexpr UInt32 kOffset_BarterMenu_LeftFilter = 0x9C;
 constexpr UInt32 kOffset_BarterMenu_RightFilter = 0xA0;
 
-//function addresses
-constexpr UInt32 kAddr_InventoryMenu_SetCurrentTab = 0x706A40;
-constexpr UInt32 kAddr_ContainerMenu_HandleClick = 0x75BE80;
-constexpr UInt32 kAddr_BarterMenu_HandleClick = 0x72D770;
-
 static FILE* g_omfchLogFile = nullptr;
 
 static void OMFCH_Log(const char* fmt, ...) {
@@ -52,6 +48,16 @@ struct FilterChangeCallback {
 
 static std::vector<FilterChangeCallback> g_callbacks;
 
+//cached filter values for polling
+static UInt32 g_lastInventoryFilter = 0xFFFFFFFF;
+static UInt32 g_lastContainerLeftFilter = 0xFFFFFFFF;
+static UInt32 g_lastContainerRightFilter = 0xFFFFFFFF;
+static UInt32 g_lastBarterLeftFilter = 0xFFFFFFFF;
+static UInt32 g_lastBarterRightFilter = 0xFFFFFFFF;
+static void* g_lastInventoryMenu = nullptr;
+static void* g_lastContainerMenu = nullptr;
+static void* g_lastBarterMenu = nullptr;
+
 static void DispatchFilterChangeEvent(UInt32 menuID, UInt32 oldFilter, UInt32 newFilter, UInt32 side) {
     if (!g_omfchScript || g_callbacks.empty()) return;
     if (oldFilter == newFilter) return;
@@ -68,152 +74,76 @@ static void DispatchFilterChangeEvent(UInt32 menuID, UInt32 oldFilter, UInt32 ne
     }
 }
 
-//trampolines
-static UInt32 g_originalSetCurrentTab = 0;
-static UInt32 g_originalContainerHandleClick = 0;
-static UInt32 g_originalBarterHandleClick = 0;
-static UInt8* g_trampolineSetTab = nullptr;
-static UInt8* g_trampolineContainerClick = nullptr;
-static UInt8* g_trampolineBarterClick = nullptr;
+void OMFCH_Update() {
+    if (g_callbacks.empty()) return;
 
-static void PatchWrite32(UInt32 addr, UInt32 data) {
-    DWORD oldProtect;
-    VirtualProtect((void*)addr, 4, PAGE_EXECUTE_READWRITE, &oldProtect);
-    *(UInt32*)addr = data;
-    VirtualProtect((void*)addr, 4, oldProtect, &oldProtect);
-}
-
-static void PatchWrite8(UInt32 addr, UInt8 data) {
-    DWORD oldProtect;
-    VirtualProtect((void*)addr, 1, PAGE_EXECUTE_READWRITE, &oldProtect);
-    *(UInt8*)addr = data;
-    VirtualProtect((void*)addr, 1, oldProtect, &oldProtect);
-}
-
-static void WriteRelJump(UInt32 src, UInt32 dst) {
-    PatchWrite8(src, 0xE9);
-    PatchWrite32(src + 1, dst - src - 5);
-}
-
-//InventoryMenu::SetCurrentTab hook
-//original: void __cdecl InventoryMenu::SetCurrentTab(signed int filter)
-//prologue: 55 8B EC 83 3D A4 9E 1D 01 00 (10 bytes: push ebp; mov ebp,esp; cmp g_inventoryMenu,0)
-static void __cdecl Hook_InventoryMenu_SetCurrentTab(UInt32 newFilter) {
-    void* menu = *(void**)kAddr_InventoryMenuPtr;
-    UInt32 oldFilter = 0;
-
-    OMFCH_Log("InventoryMenu::SetCurrentTab called, newFilter=%d menu=%p", newFilter, menu);
-
-    if (menu) {
-        oldFilter = *(UInt32*)((UInt8*)menu + kOffset_InventoryMenu_Filter);
-        OMFCH_Log("  oldFilter=%d", oldFilter);
+    //check inventory menu
+    void* invMenu = *(void**)kAddr_InventoryMenuPtr;
+    if (invMenu) {
+        if (invMenu != g_lastInventoryMenu) {
+            //menu just opened, initialize cache
+            g_lastInventoryFilter = *(UInt32*)((UInt8*)invMenu + kOffset_InventoryMenu_Filter);
+            g_lastInventoryMenu = invMenu;
+        } else {
+            UInt32 currentFilter = *(UInt32*)((UInt8*)invMenu + kOffset_InventoryMenu_Filter);
+            if (currentFilter != g_lastInventoryFilter && g_lastInventoryFilter != 0xFFFFFFFF) {
+                DispatchFilterChangeEvent(kMenuType_Inventory, g_lastInventoryFilter, currentFilter, 0);
+            }
+            g_lastInventoryFilter = currentFilter;
+        }
+    } else {
+        g_lastInventoryMenu = nullptr;
+        g_lastInventoryFilter = 0xFFFFFFFF;
     }
 
-    //call original
-    ((void(__cdecl*)(UInt32))g_originalSetCurrentTab)(newFilter);
-
-    //dispatch event if changed
-    if (menu && oldFilter != newFilter) {
-        DispatchFilterChangeEvent(kMenuType_Inventory, oldFilter, newFilter, 0);
-    }
-}
-
-//ContainerMenu::HandleClick hook
-//original: void __thiscall ContainerMenu::HandleClick(unsigned __int64 clickID)
-//prologue: 55 8B EC 6A FF (5 bytes: push ebp; mov ebp,esp; push -1)
-static void __fastcall Hook_ContainerMenu_HandleClick(void* menu, void* edx, UInt32 clickIDLo, UInt32 clickIDHi) {
-    UInt32 oldLeft = *(UInt32*)((UInt8*)menu + kOffset_ContainerMenu_LeftFilter);
-    UInt32 oldRight = *(UInt32*)((UInt8*)menu + kOffset_ContainerMenu_RightFilter);
-
-    OMFCH_Log("ContainerMenu::HandleClick called, clickID=%u:%u oldLeft=%d oldRight=%d", clickIDHi, clickIDLo, oldLeft, oldRight);
-
-    //call original - pass both halves of the 64-bit clickID
-    ((void(__thiscall*)(void*, UInt32, UInt32))g_originalContainerHandleClick)(menu, clickIDLo, clickIDHi);
-
-    //check for changes
-    UInt32 newLeft = *(UInt32*)((UInt8*)menu + kOffset_ContainerMenu_LeftFilter);
-    UInt32 newRight = *(UInt32*)((UInt8*)menu + kOffset_ContainerMenu_RightFilter);
-
-    OMFCH_Log("  after: newLeft=%d newRight=%d", newLeft, newRight);
-
-    if (oldLeft != newLeft) {
-        DispatchFilterChangeEvent(kMenuType_Container, oldLeft, newLeft, 0);
-    }
-    if (oldRight != newRight) {
-        DispatchFilterChangeEvent(kMenuType_Container, oldRight, newRight, 1);
-    }
-}
-
-//BarterMenu::HandleClick hook
-//original: void __thiscall BarterMenu::HandleClick(unsigned __int64 clickID)
-static void __fastcall Hook_BarterMenu_HandleClick(void* menu, void* edx, UInt32 clickIDLo, UInt32 clickIDHi) {
-    UInt32 oldLeft = *(UInt32*)((UInt8*)menu + kOffset_BarterMenu_LeftFilter);
-    UInt32 oldRight = *(UInt32*)((UInt8*)menu + kOffset_BarterMenu_RightFilter);
-
-    OMFCH_Log("BarterMenu::HandleClick called, clickID=%u:%u oldLeft=%d oldRight=%d", clickIDHi, clickIDLo, oldLeft, oldRight);
-
-    //call original - pass both halves of the 64-bit clickID
-    ((void(__thiscall*)(void*, UInt32, UInt32))g_originalBarterHandleClick)(menu, clickIDLo, clickIDHi);
-
-    //check for changes
-    UInt32 newLeft = *(UInt32*)((UInt8*)menu + kOffset_BarterMenu_LeftFilter);
-    UInt32 newRight = *(UInt32*)((UInt8*)menu + kOffset_BarterMenu_RightFilter);
-
-    OMFCH_Log("  after: newLeft=%d newRight=%d", newLeft, newRight);
-
-    if (oldLeft != newLeft) {
-        DispatchFilterChangeEvent(kMenuType_Barter, oldLeft, newLeft, 0);
-    }
-    if (oldRight != newRight) {
-        DispatchFilterChangeEvent(kMenuType_Barter, oldRight, newRight, 1);
-    }
-}
-
-static UInt8* CreateTrampoline(UInt32 originalAddr, int prologueBytes) {
-    UInt8* trampoline = (UInt8*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-    if (!trampoline) return nullptr;
-
-    DWORD oldProtect;
-    VirtualProtect((void*)originalAddr, prologueBytes, PAGE_EXECUTE_READWRITE, &oldProtect);
-    memcpy(trampoline, (void*)originalAddr, prologueBytes);
-    VirtualProtect((void*)originalAddr, prologueBytes, oldProtect, &oldProtect);
-
-    //jmp back to original + prologueBytes
-    trampoline[prologueBytes] = 0xE9;
-    *(UInt32*)(trampoline + prologueBytes + 1) = (originalAddr + prologueBytes) - ((UInt32)trampoline + prologueBytes + 5);
-
-    return trampoline;
-}
-
-static void InstallHooks() {
-    //InventoryMenu::SetCurrentTab - prologue is 10 bytes
-    //55 8B EC 83 3D A4 9E 1D 01 00 = push ebp; mov ebp,esp; cmp g_inventoryMenu,0
-    g_trampolineSetTab = CreateTrampoline(kAddr_InventoryMenu_SetCurrentTab, 10);
-    if (g_trampolineSetTab) {
-        g_originalSetCurrentTab = (UInt32)g_trampolineSetTab;
-        WriteRelJump(kAddr_InventoryMenu_SetCurrentTab, (UInt32)Hook_InventoryMenu_SetCurrentTab);
-        for (int i = 5; i < 10; i++)
-            PatchWrite8(kAddr_InventoryMenu_SetCurrentTab + i, 0x90);
-        OMFCH_Log("Hooked InventoryMenu::SetCurrentTab at 0x%08X", kAddr_InventoryMenu_SetCurrentTab);
+    //check container menu
+    void* contMenu = *(void**)kAddr_ContainerMenuPtr;
+    if (contMenu) {
+        if (contMenu != g_lastContainerMenu) {
+            g_lastContainerLeftFilter = *(UInt32*)((UInt8*)contMenu + kOffset_ContainerMenu_LeftFilter);
+            g_lastContainerRightFilter = *(UInt32*)((UInt8*)contMenu + kOffset_ContainerMenu_RightFilter);
+            g_lastContainerMenu = contMenu;
+        } else {
+            UInt32 leftFilter = *(UInt32*)((UInt8*)contMenu + kOffset_ContainerMenu_LeftFilter);
+            UInt32 rightFilter = *(UInt32*)((UInt8*)contMenu + kOffset_ContainerMenu_RightFilter);
+            if (leftFilter != g_lastContainerLeftFilter && g_lastContainerLeftFilter != 0xFFFFFFFF) {
+                DispatchFilterChangeEvent(kMenuType_Container, g_lastContainerLeftFilter, leftFilter, 0);
+            }
+            if (rightFilter != g_lastContainerRightFilter && g_lastContainerRightFilter != 0xFFFFFFFF) {
+                DispatchFilterChangeEvent(kMenuType_Container, g_lastContainerRightFilter, rightFilter, 1);
+            }
+            g_lastContainerLeftFilter = leftFilter;
+            g_lastContainerRightFilter = rightFilter;
+        }
+    } else {
+        g_lastContainerMenu = nullptr;
+        g_lastContainerLeftFilter = 0xFFFFFFFF;
+        g_lastContainerRightFilter = 0xFFFFFFFF;
     }
 
-    //ContainerMenu::HandleClick - prologue is 5 bytes
-    //55 8B EC 6A FF = push ebp; mov ebp,esp; push -1
-    g_trampolineContainerClick = CreateTrampoline(kAddr_ContainerMenu_HandleClick, 5);
-    if (g_trampolineContainerClick) {
-        g_originalContainerHandleClick = (UInt32)g_trampolineContainerClick;
-        WriteRelJump(kAddr_ContainerMenu_HandleClick, (UInt32)Hook_ContainerMenu_HandleClick);
-        OMFCH_Log("Hooked ContainerMenu::HandleClick at 0x%08X", kAddr_ContainerMenu_HandleClick);
-    }
-
-    //BarterMenu::HandleClick - prologue is 6 bytes
-    //55 8B EC 83 EC 14 = push ebp; mov ebp,esp; sub esp,14h
-    g_trampolineBarterClick = CreateTrampoline(kAddr_BarterMenu_HandleClick, 6);
-    if (g_trampolineBarterClick) {
-        g_originalBarterHandleClick = (UInt32)g_trampolineBarterClick;
-        WriteRelJump(kAddr_BarterMenu_HandleClick, (UInt32)Hook_BarterMenu_HandleClick);
-        PatchWrite8(kAddr_BarterMenu_HandleClick + 5, 0x90);
-        OMFCH_Log("Hooked BarterMenu::HandleClick at 0x%08X", kAddr_BarterMenu_HandleClick);
+    //check barter menu
+    void* bartMenu = *(void**)kAddr_BarterMenuPtr;
+    if (bartMenu) {
+        if (bartMenu != g_lastBarterMenu) {
+            g_lastBarterLeftFilter = *(UInt32*)((UInt8*)bartMenu + kOffset_BarterMenu_LeftFilter);
+            g_lastBarterRightFilter = *(UInt32*)((UInt8*)bartMenu + kOffset_BarterMenu_RightFilter);
+            g_lastBarterMenu = bartMenu;
+        } else {
+            UInt32 leftFilter = *(UInt32*)((UInt8*)bartMenu + kOffset_BarterMenu_LeftFilter);
+            UInt32 rightFilter = *(UInt32*)((UInt8*)bartMenu + kOffset_BarterMenu_RightFilter);
+            if (leftFilter != g_lastBarterLeftFilter && g_lastBarterLeftFilter != 0xFFFFFFFF) {
+                DispatchFilterChangeEvent(kMenuType_Barter, g_lastBarterLeftFilter, leftFilter, 0);
+            }
+            if (rightFilter != g_lastBarterRightFilter && g_lastBarterRightFilter != 0xFFFFFFFF) {
+                DispatchFilterChangeEvent(kMenuType_Barter, g_lastBarterRightFilter, rightFilter, 1);
+            }
+            g_lastBarterLeftFilter = leftFilter;
+            g_lastBarterRightFilter = rightFilter;
+        }
+    } else {
+        g_lastBarterMenu = nullptr;
+        g_lastBarterLeftFilter = 0xFFFFFFFF;
+        g_lastBarterRightFilter = 0xFFFFFFFF;
     }
 }
 
@@ -289,7 +219,7 @@ bool OMFCH_Init(void* nvseInterface) {
     strcat_s(logPath, "\\Data\\NVSE\\Plugins\\OnMenuFilterChangeHandler.log");
     g_omfchLogFile = fopen(logPath, "w");
 
-    OMFCH_Log("OnMenuFilterChangeHandler initializing...");
+    OMFCH_Log("OnMenuFilterChangeHandler initializing (polling mode)...");
 
     g_omfchScript = (NVSEScriptInterface*)nvse->QueryInterface(kInterface_Script);
     if (!g_omfchScript) {
@@ -298,7 +228,7 @@ bool OMFCH_Init(void* nvseInterface) {
     }
     g_ExtractArgsEx = g_omfchScript->ExtractArgsEx;
 
-    InstallHooks();
+    //no hooks needed - uses polling via OMFCH_Update()
 
     nvse->SetOpcodeBase(0x4032);
     nvse->RegisterCommand(&kCommandInfo_SetOnMenuFilterChangeEventHandler);
