@@ -42,11 +42,32 @@ static ExtractArgs_t ExtractArgs = (ExtractArgs_t)0x5ACCB0;
 
 //storage for blocked actors
 static const int MAX_BLOCKED = 64;
-static volatile UInt32 g_blocked[MAX_BLOCKED] = {0};
-static volatile int g_count = 0;
+static UInt32 g_blocked[MAX_BLOCKED] = {0};
+static int g_count = 0;
+static CRITICAL_SECTION g_lock;
+static bool g_lockInit = false;
+
+class ScopedLock {
+	CRITICAL_SECTION* cs;
+public:
+	ScopedLock(CRITICAL_SECTION* c) : cs(c) { EnterCriticalSection(cs); }
+	~ScopedLock() { LeaveCriticalSection(cs); }
+	ScopedLock(const ScopedLock&) = delete;
+	ScopedLock& operator=(const ScopedLock&) = delete;
+};
+
+static void EnsureLockInit()
+{
+	if (!g_lockInit)
+	{
+		InitializeCriticalSection(&g_lock);
+		g_lockInit = true;
+	}
+}
 
 static bool IsBlocked(UInt32 refID)
 {
+	ScopedLock lock(&g_lock);
 	for (int i = 0; i < g_count; i++)
 		if (g_blocked[i] == refID)
 			return true;
@@ -55,9 +76,11 @@ static bool IsBlocked(UInt32 refID)
 
 static void SetBlocked(UInt32 refID, bool block)
 {
+	ScopedLock lock(&g_lock);
 	if (block)
 	{
-		if (IsBlocked(refID)) return;
+		for (int i = 0; i < g_count; i++)
+			if (g_blocked[i] == refID) return;
 		if (g_count < MAX_BLOCKED)
 			g_blocked[g_count++] = refID;
 	}
@@ -124,6 +147,7 @@ static void WriteJmp(UInt32 src, UInt32 dst)
 
 void PreventWeaponSwitch_Init()
 {
+	EnsureLockInit();
 	const UInt32 kAddr = 0x9DA7C0;
 
 	//save original 6 bytes
