@@ -1,4 +1,5 @@
 //fires when active side changes in Container/Barter menus (LT/RT, left/right arrows, or clicking)
+//uses polling to avoid hook conflicts with JIP NVSE
 
 #include <vector>
 #include <cstdio>
@@ -11,9 +12,9 @@
 constexpr UInt32 kMenuType_Container = 1008;
 constexpr UInt32 kMenuType_Barter = 1053;
 
-//function addresses
-constexpr UInt32 kAddr_ContainerMenu_HandleMouseover = 0x75CD70;
-constexpr UInt32 kAddr_BarterMenu_HandleMouseover = 0x72F770;
+//menu pointer addresses
+constexpr UInt32 kAddr_ContainerMenuPtr = 0x11D93F8;
+constexpr UInt32 kAddr_BarterMenuPtr = 0x11D8FA4;
 
 //offsets for active side pointer
 constexpr UInt32 kOffset_ContainerMenu_ActiveList = 0xF8;  //this[62]
@@ -44,6 +45,12 @@ struct SideChangeCallback {
 
 static std::vector<SideChangeCallback> g_callbacks;
 
+//cached side values for polling
+static UInt32 g_lastContainerSide = 0xFFFFFFFF;
+static UInt32 g_lastBarterSide = 0xFFFFFFFF;
+static void* g_lastContainerMenu = nullptr;
+static void* g_lastBarterMenu = nullptr;
+
 static UInt32 GetCurrentSide(void* menu, UInt32 menuType) {
     UInt32 activeListOffset = (menuType == kMenuType_Container) ? kOffset_ContainerMenu_ActiveList : kOffset_BarterMenu_ActiveList;
     UInt32 leftListOffset = (menuType == kMenuType_Container) ? kOffset_ContainerMenu_LeftList : kOffset_BarterMenu_LeftList;
@@ -70,104 +77,44 @@ static void DispatchSideChangeEvent(UInt32 menuID, UInt32 oldSide, UInt32 newSid
     }
 }
 
-//trampolines
-static UInt32 g_originalContainerHandleMouseover = 0;
-static UInt32 g_originalBarterHandleMouseover = 0;
-static UInt8* g_trampolineContainerMouseover = nullptr;
-static UInt8* g_trampolineBarterMouseover = nullptr;
+void OMSCH_Update() {
+    if (g_callbacks.empty()) return;
 
-static void PatchWrite32(UInt32 addr, UInt32 data) {
-    DWORD oldProtect;
-    VirtualProtect((void*)addr, 4, PAGE_EXECUTE_READWRITE, &oldProtect);
-    *(UInt32*)addr = data;
-    VirtualProtect((void*)addr, 4, oldProtect, &oldProtect);
-}
-
-static void PatchWrite8(UInt32 addr, UInt8 data) {
-    DWORD oldProtect;
-    VirtualProtect((void*)addr, 1, PAGE_EXECUTE_READWRITE, &oldProtect);
-    *(UInt8*)addr = data;
-    VirtualProtect((void*)addr, 1, oldProtect, &oldProtect);
-}
-
-static void WriteRelJump(UInt32 src, UInt32 dst) {
-    PatchWrite8(src, 0xE9);
-    PatchWrite32(src + 1, dst - src - 5);
-}
-
-//ContainerMenu::HandleMouseover hook
-//original: void __thiscall ContainerMenu::HandleMouseover(unsigned __int64 clickID)
-//prologue: 55 8B EC 83 EC 08 (6 bytes: push ebp; mov ebp,esp; sub esp,8)
-static void __fastcall Hook_ContainerMenu_HandleMouseover(void* menu, void* edx, UInt32 clickIDLo, UInt32 clickIDHi) {
-    UInt32 oldSide = GetCurrentSide(menu, kMenuType_Container);
-
-    OMSCH_Log("ContainerMenu::HandleMouseover called, clickID=%u:%u oldSide=%d", clickIDHi, clickIDLo, oldSide);
-
-    //call original
-    ((void(__thiscall*)(void*, UInt32, UInt32))g_originalContainerHandleMouseover)(menu, clickIDLo, clickIDHi);
-
-    UInt32 newSide = GetCurrentSide(menu, kMenuType_Container);
-
-    OMSCH_Log("  after: newSide=%d", newSide);
-
-    if (oldSide != newSide) {
-        DispatchSideChangeEvent(kMenuType_Container, oldSide, newSide);
-    }
-}
-
-//BarterMenu::HandleMouseover hook
-//original: void __thiscall BarterMenu::HandleMouseover(unsigned __int64 clickID)
-//prologue: 55 8B EC 83 EC 08 (6 bytes: push ebp; mov ebp,esp; sub esp,8)
-static void __fastcall Hook_BarterMenu_HandleMouseover(void* menu, void* edx, UInt32 clickIDLo, UInt32 clickIDHi) {
-    UInt32 oldSide = GetCurrentSide(menu, kMenuType_Barter);
-
-    OMSCH_Log("BarterMenu::HandleMouseover called, clickID=%u:%u oldSide=%d", clickIDHi, clickIDLo, oldSide);
-
-    //call original
-    ((void(__thiscall*)(void*, UInt32, UInt32))g_originalBarterHandleMouseover)(menu, clickIDLo, clickIDHi);
-
-    UInt32 newSide = GetCurrentSide(menu, kMenuType_Barter);
-
-    OMSCH_Log("  after: newSide=%d", newSide);
-
-    if (oldSide != newSide) {
-        DispatchSideChangeEvent(kMenuType_Barter, oldSide, newSide);
-    }
-}
-
-static UInt8* CreateTrampoline(UInt32 originalAddr, int prologueBytes) {
-    UInt8* trampoline = (UInt8*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-    if (!trampoline) return nullptr;
-
-    DWORD oldProtect;
-    VirtualProtect((void*)originalAddr, prologueBytes, PAGE_EXECUTE_READWRITE, &oldProtect);
-    memcpy(trampoline, (void*)originalAddr, prologueBytes);
-    VirtualProtect((void*)originalAddr, prologueBytes, oldProtect, &oldProtect);
-
-    //jmp back to original + prologueBytes
-    trampoline[prologueBytes] = 0xE9;
-    *(UInt32*)(trampoline + prologueBytes + 1) = (originalAddr + prologueBytes) - ((UInt32)trampoline + prologueBytes + 5);
-
-    return trampoline;
-}
-
-static void InstallHooks() {
-    //ContainerMenu::HandleMouseover - 6 byte prologue
-    g_trampolineContainerMouseover = CreateTrampoline(kAddr_ContainerMenu_HandleMouseover, 6);
-    if (g_trampolineContainerMouseover) {
-        g_originalContainerHandleMouseover = (UInt32)g_trampolineContainerMouseover;
-        WriteRelJump(kAddr_ContainerMenu_HandleMouseover, (UInt32)Hook_ContainerMenu_HandleMouseover);
-        PatchWrite8(kAddr_ContainerMenu_HandleMouseover + 5, 0x90);
-        OMSCH_Log("Hooked ContainerMenu::HandleMouseover at 0x%08X", kAddr_ContainerMenu_HandleMouseover);
+    //check container menu
+    void* contMenu = *(void**)kAddr_ContainerMenuPtr;
+    if (contMenu) {
+        if (contMenu != g_lastContainerMenu) {
+            //menu just opened, initialize cache
+            g_lastContainerSide = GetCurrentSide(contMenu, kMenuType_Container);
+            g_lastContainerMenu = contMenu;
+        } else {
+            UInt32 currentSide = GetCurrentSide(contMenu, kMenuType_Container);
+            if (currentSide != g_lastContainerSide && g_lastContainerSide != 0xFFFFFFFF) {
+                DispatchSideChangeEvent(kMenuType_Container, g_lastContainerSide, currentSide);
+            }
+            g_lastContainerSide = currentSide;
+        }
+    } else {
+        g_lastContainerMenu = nullptr;
+        g_lastContainerSide = 0xFFFFFFFF;
     }
 
-    //BarterMenu::HandleMouseover - 6 byte prologue
-    g_trampolineBarterMouseover = CreateTrampoline(kAddr_BarterMenu_HandleMouseover, 6);
-    if (g_trampolineBarterMouseover) {
-        g_originalBarterHandleMouseover = (UInt32)g_trampolineBarterMouseover;
-        WriteRelJump(kAddr_BarterMenu_HandleMouseover, (UInt32)Hook_BarterMenu_HandleMouseover);
-        PatchWrite8(kAddr_BarterMenu_HandleMouseover + 5, 0x90);
-        OMSCH_Log("Hooked BarterMenu::HandleMouseover at 0x%08X", kAddr_BarterMenu_HandleMouseover);
+    //check barter menu
+    void* bartMenu = *(void**)kAddr_BarterMenuPtr;
+    if (bartMenu) {
+        if (bartMenu != g_lastBarterMenu) {
+            g_lastBarterSide = GetCurrentSide(bartMenu, kMenuType_Barter);
+            g_lastBarterMenu = bartMenu;
+        } else {
+            UInt32 currentSide = GetCurrentSide(bartMenu, kMenuType_Barter);
+            if (currentSide != g_lastBarterSide && g_lastBarterSide != 0xFFFFFFFF) {
+                DispatchSideChangeEvent(kMenuType_Barter, g_lastBarterSide, currentSide);
+            }
+            g_lastBarterSide = currentSide;
+        }
+    } else {
+        g_lastBarterMenu = nullptr;
+        g_lastBarterSide = 0xFFFFFFFF;
     }
 }
 
@@ -243,7 +190,7 @@ bool OMSCH_Init(void* nvseInterface) {
     strcat_s(logPath, "\\Data\\NVSE\\Plugins\\OnMenuSideChangeHandler.log");
     g_omschLogFile = fopen(logPath, "w");
 
-    OMSCH_Log("OnMenuSideChangeHandler initializing...");
+    OMSCH_Log("OnMenuSideChangeHandler initializing (polling mode)...");
 
     g_omschScript = (NVSEScriptInterface*)nvse->QueryInterface(kInterface_Script);
     if (!g_omschScript) {
@@ -252,7 +199,7 @@ bool OMSCH_Init(void* nvseInterface) {
     }
     g_ExtractArgsEx = g_omschScript->ExtractArgsEx;
 
-    InstallHooks();
+    //no hooks needed - uses polling via OMSCH_Update()
 
     nvse->SetOpcodeBase(0x4033);
     nvse->RegisterCommand(&kCommandInfo_SetOnMenuSideChangeEventHandler);
