@@ -199,18 +199,44 @@ void Log(const char* fmt, ...)
 namespace NoWeaponSearch
 {
 	static const int MAX_DISABLED = 64;
-	volatile UInt32 g_disabled[MAX_DISABLED] = {0};
-	volatile int g_count = 0;
+	static UInt32 g_disabled[MAX_DISABLED] = {0};
+	static int g_count = 0;
+	static CRITICAL_SECTION g_lock;
+	static bool g_lockInit = false;
+
+	class ScopedLock {
+		CRITICAL_SECTION* cs;
+	public:
+		ScopedLock(CRITICAL_SECTION* c) : cs(c) { EnterCriticalSection(cs); }
+		~ScopedLock() { LeaveCriticalSection(cs); }
+		ScopedLock(const ScopedLock&) = delete;
+		ScopedLock& operator=(const ScopedLock&) = delete;
+	};
+
+	static void EnsureLockInit()
+	{
+		if (!g_lockInit)
+		{
+			InitializeCriticalSection(&g_lock);
+			g_lockInit = true;
+		}
+	}
 
 	typedef bool (__thiscall *CombatItemSearch_t)(void* combatState);
 	CombatItemSearch_t Original = (CombatItemSearch_t)0x99F6D0;
 
-	bool IsDisabled(UInt32 refID)
+	static bool IsDisabled_Unlocked(UInt32 refID)
 	{
 		for (int i = 0; i < g_count; i++)
 			if (g_disabled[i] == refID)
 				return true;
 		return false;
+	}
+
+	bool IsDisabled(UInt32 refID)
+	{
+		ScopedLock lock(&g_lock);
+		return IsDisabled_Unlocked(refID);
 	}
 
 	typedef Actor* (__thiscall *GetPackageOwner_t)(void* controller);
@@ -224,15 +250,18 @@ namespace NoWeaponSearch
 		if (Settings::bNPCDoctorsBagUse)
 			NPCDoctorsBagUse_Check(combatState);
 
-		if (g_count == 0)
-			return Original(combatState);
-
-		void* controller = *(void**)((char*)combatState + 0x1C4);
-		if (controller)
 		{
-			Actor* actor = GetPackageOwner(controller);
-			if (actor && IsDisabled(actor->refID))
-				return false;
+			ScopedLock lock(&g_lock);
+			if (g_count == 0)
+				return Original(combatState);
+
+			void* controller = *(void**)((char*)combatState + 0x1C4);
+			if (controller)
+			{
+				Actor* actor = GetPackageOwner(controller);
+				if (actor && IsDisabled_Unlocked(actor->refID))
+					return false;
+			}
 		}
 
 		return Original(combatState);
@@ -243,9 +272,10 @@ namespace NoWeaponSearch
 		if (!actor) return;
 		UInt32 refID = actor->refID;
 
+		ScopedLock lock(&g_lock);
 		if (disable)
 		{
-			if (IsDisabled(refID)) return;
+			if (IsDisabled_Unlocked(refID)) return;
 			if (g_count < MAX_DISABLED)
 				g_disabled[g_count++] = refID;
 		}
@@ -265,7 +295,9 @@ namespace NoWeaponSearch
 
 	bool Get(Actor* actor)
 	{
-		return actor && IsDisabled(actor->refID);
+		if (!actor) return false;
+		ScopedLock lock(&g_lock);
+		return IsDisabled_Unlocked(actor->refID);
 	}
 
 	void WriteRelCall(UInt32 src, UInt32 dst)
@@ -279,6 +311,7 @@ namespace NoWeaponSearch
 
 	void Init()
 	{
+		EnsureLockInit();
 		WriteRelCall(0x998D50, (UInt32)Hook);
 		Log("NoWeaponSearch: Hook installed at 0x998D50");
 	}
