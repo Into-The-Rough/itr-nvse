@@ -76,6 +76,15 @@ static NVSEScriptInterface* g_osphScript = nullptr;
 static bool (*g_ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, ...) = nullptr;
 static UInt32 g_osphOpcode = 0;
 
+class ScopedLock {
+    CRITICAL_SECTION* cs;
+public:
+    ScopedLock(CRITICAL_SECTION* c) : cs(c) { EnterCriticalSection(cs); }
+    ~ScopedLock() { LeaveCriticalSection(cs); }
+    ScopedLock(const ScopedLock&) = delete;
+    ScopedLock& operator=(const ScopedLock&) = delete;
+};
+
 namespace OnSoundPlayedHandler {
     std::vector<Script*> g_callbacks;
     std::vector<Script*> g_completionCallbacks;
@@ -140,9 +149,10 @@ static void QueueSoundEvent(const char* filePath, UInt32 flags, TESSound* source
     evt.soundFlags = flags;
     evt.sourceSound = sourceSound;
 
-    EnterCriticalSection(&OnSoundPlayedHandler::g_queueLock);
-    OnSoundPlayedHandler::g_pendingEvents.push_back(evt);
-    LeaveCriticalSection(&OnSoundPlayedHandler::g_queueLock);
+    {
+        ScopedLock lock(&OnSoundPlayedHandler::g_queueLock);
+        OnSoundPlayedHandler::g_pendingEvents.push_back(evt);
+    }
 }
 
 // Queue a voice sound for completion tracking
@@ -166,9 +176,10 @@ static void QueueVoiceTracking(UInt32 soundID, const char* filePath, UInt32 flag
         tracked.filePath[0] = '\0';
     }
 
-    EnterCriticalSection(&OnSoundPlayedHandler::g_queueLock);
-    OnSoundPlayedHandler::g_trackedSounds.push_back(tracked);
-    LeaveCriticalSection(&OnSoundPlayedHandler::g_queueLock);
+    {
+        ScopedLock lock(&OnSoundPlayedHandler::g_queueLock);
+        OnSoundPlayedHandler::g_trackedSounds.push_back(tracked);
+    }
 
     OSPH_Log("Tracking voice sound ID=%08X path=%s", soundID, tracked.filePath);
 }
@@ -211,10 +222,11 @@ void OSPH_Update()
     std::vector<QueuedSoundEvent> eventsToProcess;
     std::vector<TrackedVoiceSound> soundsToCheck;
 
-    EnterCriticalSection(&OnSoundPlayedHandler::g_queueLock);
-    eventsToProcess.swap(OnSoundPlayedHandler::g_pendingEvents);
-    soundsToCheck = OnSoundPlayedHandler::g_trackedSounds; //copy for checking
-    LeaveCriticalSection(&OnSoundPlayedHandler::g_queueLock);
+    {
+        ScopedLock lock(&OnSoundPlayedHandler::g_queueLock);
+        eventsToProcess.swap(OnSoundPlayedHandler::g_pendingEvents);
+        soundsToCheck = OnSoundPlayedHandler::g_trackedSounds; //copy for checking
+    }
 
     // Process sound started events
     if (!eventsToProcess.empty() && !OnSoundPlayedHandler::g_callbacks.empty())
@@ -285,14 +297,13 @@ void OSPH_Update()
         //remove completed sounds from tracking
         if (!completedIDs.empty())
         {
-            EnterCriticalSection(&OnSoundPlayedHandler::g_queueLock);
+            ScopedLock lock(&OnSoundPlayedHandler::g_queueLock);
             for (UInt32 id : completedIDs)
             {
                 auto& vec = OnSoundPlayedHandler::g_trackedSounds;
                 vec.erase(std::remove_if(vec.begin(), vec.end(),
                     [id](const TrackedVoiceSound& s) { return s.soundID == id; }), vec.end());
             }
-            LeaveCriticalSection(&OnSoundPlayedHandler::g_queueLock);
         }
     }
 }
