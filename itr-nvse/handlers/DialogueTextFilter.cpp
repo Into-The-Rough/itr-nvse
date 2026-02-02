@@ -1,4 +1,4 @@
-//dialogue text filter - self-contained module (no NVSE-Plugins-main headers)
+//dialogue text filter
 
 #include <vector>
 #include <cstring>
@@ -105,6 +105,7 @@ struct TextFilterEntry {
 
 namespace DialogueTextFilter {
     std::vector<TextFilterEntry> g_filters;
+    std::vector<DTF_NativeCallback> g_nativeCallbacks;
     bool g_hookInstalled = false;
 }
 
@@ -194,10 +195,27 @@ static bool BuildVoicePath(char* outPath, size_t outSize,
     return true;
 }
 
+static bool IsValidFormPointer(void* form) {
+    if (!form) return false;
+    __try {
+        UInt32 refID = *(UInt32*)((UInt8*)form + 0x0C);
+        UInt32 flags = *(UInt32*)((UInt8*)form + 0x08);
+        if (refID == 0) return false;
+        if (flags & 0x20) return false;  //deleted
+        if (flags & 0x800) return false; //temporary/invalid
+        return true;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
 static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
     DTF_Log("=== HOOK FIRED === topicInfo=0x%08X speaker=0x%08X", topicInfo, speaker);
 
-    if (DialogueTextFilter::g_filters.empty()) return;
+    if (!IsValidFormPointer(topicInfo) || !IsValidFormPointer(speaker)) {
+        DTF_Log("  Invalid form pointer, skipping");
+        return;
+    }
 
     TESTopicInfoResponse** ppResponse = ThisStdCall<TESTopicInfoResponse**>(
         kAddr_GetResponses, topicInfo, nullptr);
@@ -219,6 +237,23 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
         DTF_Log("  No text");
         return;
     }
+
+    //calculate duration using game's formula: strlen * fNoticeTextTimePerCharacter
+    //Setting at 0x11D2178, float value at offset 0x04
+    float timePerChar = *(float*)(0x11D2178 + 0x04);
+    if (timePerChar <= 0.0f) timePerChar = 0.08f; //fallback
+    float duration = (float)strlen(text) * timePerChar;
+    if (duration < 2.0f) duration = 2.0f; //minimum 2 seconds
+
+    //always call native callbacks (for other plugins like FloatingSubtitles)
+    for (auto callback : DialogueTextFilter::g_nativeCallbacks) {
+        if (callback) {
+            callback(speaker, text, duration, topicInfo, topic);
+        }
+    }
+
+    //script filters - check for matches
+    if (DialogueTextFilter::g_filters.empty()) return;
 
     bool anyMatch = false;
     for (const auto& filter : DialogueTextFilter::g_filters) {
@@ -483,4 +518,43 @@ bool DTF_RemoveFilter(const char* filterText, void* callback) {
 
 unsigned int DTF_GetOpcode() {
     return g_dtfOpcode;
+}
+
+//native callback registration for inter-plugin communication
+extern "C" {
+
+__declspec(dllexport) bool DTF_RegisterNativeCallback(DTF_NativeCallback callback) {
+    if (!callback) return false;
+
+    //check if already registered
+    for (auto cb : DialogueTextFilter::g_nativeCallbacks) {
+        if (cb == callback) return true;
+    }
+
+    DialogueTextFilter::g_nativeCallbacks.push_back(callback);
+
+    //ensure hook is installed
+    if (!DialogueTextFilter::g_hookInstalled) {
+        InitHook();
+    }
+
+    DTF_Log("Registered native callback: 0x%08X (total: %d)",
+            callback, DialogueTextFilter::g_nativeCallbacks.size());
+    return true;
+}
+
+__declspec(dllexport) bool DTF_UnregisterNativeCallback(DTF_NativeCallback callback) {
+    if (!callback) return false;
+
+    auto& callbacks = DialogueTextFilter::g_nativeCallbacks;
+    for (auto it = callbacks.begin(); it != callbacks.end(); ++it) {
+        if (*it == callback) {
+            callbacks.erase(it);
+            DTF_Log("Unregistered native callback: 0x%08X", callback);
+            return true;
+        }
+    }
+    return false;
+}
+
 }
