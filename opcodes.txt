@@ -57,3 +57,4 @@ itr-nvse opcode allocations
 0x4036  ResurrectAll
 0x4037  ForceReload
 0x4038  GetDialogueInfoFlags
+0x4039  SetDialogueInfoFlags

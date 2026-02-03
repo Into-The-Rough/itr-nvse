@@ -1,5 +1,6 @@
-//dialogue info query commands
+//dialogue info commands
 //GetDialogueInfoFlags - returns combined flags for a TESTopicInfo
+//SetDialogueInfoFlags - sets combined flags for a TESTopicInfo (runtime only)
 
 #include "DialogueCommands.h"
 #include "nvse/PluginAPI.h"
@@ -36,6 +37,7 @@ constexpr UInt8 kFormType_TopicInfo = 0x46;
 //0x2000 = High Intelligence
 
 DEFINE_COMMAND_PLUGIN(GetDialogueInfoFlags, "Returns combined flags for a dialogue info", 0, 1, kParams_OneForm)
+DEFINE_COMMAND_PLUGIN(SetDialogueInfoFlags, "Sets combined flags for a dialogue info (runtime only)", 0, 2, kParams_OneForm_OneInt)
 
 bool Cmd_GetDialogueInfoFlags_Execute(COMMAND_ARGS)
 {
@@ -56,9 +58,30 @@ bool Cmd_GetDialogueInfoFlags_Execute(COMMAND_ARGS)
 	return true;
 }
 
+bool Cmd_SetDialogueInfoFlags_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	TESForm* form = nullptr;
+	UInt32 flags = 0;
+
+	if (!ExtractArgs(EXTRACT_ARGS, &form, &flags))
+		return true;
+
+	if (!form || form->typeID != kFormType_TopicInfo)
+		return true;
+
+	UInt8* info = (UInt8*)form;
+	info[0x25] = flags & 0xFF;
+	info[0x26] = (flags >> 8) & 0xFF;
+
+	*result = 1;
+	return true;
+}
+
 void DialogueCommands_Init(void* nvse)
 {
 	NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
 	nvseIntf->SetOpcodeBase(0x4038);
 	nvseIntf->RegisterCommand(&kCommandInfo_GetDialogueInfoFlags);
+	nvseIntf->RegisterCommand(&kCommandInfo_SetDialogueInfoFlags);
 }
