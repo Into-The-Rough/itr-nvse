@@ -1,6 +1,7 @@
 //dialogue info commands
 //GetDialogueInfoFlags - returns combined flags for a TESTopicInfo
 //SetDialogueInfoFlags - sets combined flags for a TESTopicInfo (runtime only)
+//GetDisplayedDialogueInfos - returns array of TESTopicInfo currently shown in dialogue menu
 
 #include "DialogueCommands.h"
 #include "nvse/PluginAPI.h"
@@ -8,8 +9,23 @@
 #include "nvse/GameAPI.h"
 #include "nvse/GameForms.h"
 #include "nvse/ParamInfos.h"
+#include <utility>
 
 extern const _ExtractArgs ExtractArgs;
+extern NVSEArrayVarInterface* g_arrInterface;
+
+template <typename T_Ret = UInt32, typename ...Args>
+__forceinline T_Ret ThisCall(UInt32 _addr, const void* _this, Args ...args) {
+	return ((T_Ret(__thiscall*)(const void*, Args...))_addr)(_this, std::forward<Args>(args)...);
+}
+
+//DialogMenu singleton at 0x11D9510
+//DialogMenu::bIsOpen at 0x11D9514
+//MenuTopicManager* at DialogMenu+0x70
+//MenuTopicManager::FirstTopic = 0x83E370
+//MenuTopicManager::NextTopic = 0x83E3E0
+//MenuTopicManager::GetCurrentTopic = 0x83E4C0
+//MenuTopic::pTopicInfo at offset 0x18
 
 constexpr UInt8 kFormType_TopicInfo = 0x46;
 
@@ -38,6 +54,7 @@ constexpr UInt8 kFormType_TopicInfo = 0x46;
 
 DEFINE_COMMAND_PLUGIN(GetDialogueInfoFlags, "Returns combined flags for a dialogue info", 0, 1, kParams_OneForm)
 DEFINE_COMMAND_PLUGIN(SetDialogueInfoFlags, "Sets combined flags for a dialogue info (runtime only)", 0, 2, kParams_OneForm_OneInt)
+DEFINE_COMMAND_PLUGIN(GetDisplayedDialogueInfos, "Returns array of dialogue infos currently shown in dialogue menu", 0, 0, nullptr)
 
 bool Cmd_GetDialogueInfoFlags_Execute(COMMAND_ARGS)
 {
@@ -78,10 +95,58 @@ bool Cmd_SetDialogueInfoFlags_Execute(COMMAND_ARGS)
 	return true;
 }
 
+bool Cmd_GetDisplayedDialogueInfos_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+
+	if (!g_arrInterface)
+		return true;
+
+	//check if dialogue menu is open (bool at 0x11D9514)
+	if (!*(bool*)0x11D9514)
+		return true;
+
+	//get DialogMenu singleton
+	void* dialogMenu = *(void**)0x11D9510;
+	if (!dialogMenu)
+		return true;
+
+	//get MenuTopicManager from DialogMenu+0x70
+	void* menuTopicMgr = *(void**)((UInt8*)dialogMenu + 0x70);
+	if (!menuTopicMgr)
+		return true;
+
+	NVSEArrayVarInterface::Array* arr = g_arrInterface->CreateArray(nullptr, 0, scriptObj);
+	if (!arr)
+		return true;
+
+	//FirstTopic/NextTopic return bool, not pointer
+	bool hasTopic = ThisCall<bool>(0x83E370, menuTopicMgr, true);
+
+	while (hasTopic)
+	{
+		void* menuTopic = ThisCall<void*>(0x83E4C0, menuTopicMgr);
+		if (menuTopic)
+		{
+			TESForm* topicInfo = *(TESForm**)((UInt8*)menuTopic + 0x18);
+			if (topicInfo)
+			{
+				NVSEArrayVarInterface::Element elem(topicInfo);
+				g_arrInterface->AppendElement(arr, elem);
+			}
+		}
+		hasTopic = ThisCall<bool>(0x83E3E0, menuTopicMgr);
+	}
+
+	g_arrInterface->AssignCommandResult(arr, result);
+	return true;
+}
+
 void DialogueCommands_Init(void* nvse)
 {
 	NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
 	nvseIntf->SetOpcodeBase(0x4038);
 	nvseIntf->RegisterCommand(&kCommandInfo_GetDialogueInfoFlags);
 	nvseIntf->RegisterCommand(&kCommandInfo_SetDialogueInfoFlags);
+	nvseIntf->RegisterTypedCommand(&kCommandInfo_GetDisplayedDialogueInfos, kRetnType_Array);
 }
