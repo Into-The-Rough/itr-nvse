@@ -182,6 +182,7 @@
     <ClCompile Include="commands\StringCommands.cpp" />
     <ClCompile Include="commands\RadioCommands.cpp" />
     <ClCompile Include="commands\ChallengeCommands.cpp" />
+    <ClCompile Include="commands\DialogueCommands.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ITR.h" />
@@ -241,6 +242,7 @@
     <ClInclude Include="commands\StringCommands.h" />
     <ClInclude Include="commands\RadioCommands.h" />
     <ClInclude Include="commands\ChallengeCommands.h" />
+    <ClInclude Include="commands\DialogueCommands.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />

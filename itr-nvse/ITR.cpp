@@ -63,6 +63,7 @@
 #include "commands/StringCommands.h"
 #include "commands/RadioCommands.h"
 #include "commands/ChallengeCommands.h"
+#include "commands/DialogueCommands.h"
 
 #include <cstdio>
 #include <cstring>
@@ -769,6 +770,7 @@ namespace ITR
 		StringCommands_Init((void*)nvse);
 		RadioCommands_Init((void*)nvse);
 		ChallengeCommands_Init((void*)nvse);
+		DialogueCommands_Init((void*)nvse);
 		RegisterHandlers(nvse);
 
 		Log("itr-nvse loaded successfully");
