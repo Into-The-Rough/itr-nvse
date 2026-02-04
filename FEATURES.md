@@ -36,6 +36,11 @@
 - GetPlayingRadioTrackFileName - returns file path of playing radio track
 - GetPlayingRadioText - returns dialogue text of playing radio voice line
 
+**Dialogue**
+- GetDialogueInfoFlags - get combined flags for a TESTopicInfo
+- SetDialogueInfoFlags - set combined flags for a TESTopicInfo (runtime)
+- GetDisplayedDialogueInfos - get array of topic infos shown in dialogue menu
+
 **Input**
 - RegisterKeyHeld - register key held callback
 - RegisterControlHeld - register control held callback
