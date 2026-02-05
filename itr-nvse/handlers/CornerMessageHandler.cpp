@@ -258,3 +258,9 @@ bool CMH_Init(void* nvseInterface) {
     CMH_Log("CornerMessageHandler initialized successfully");
     return true;
 }
+
+void CMH_ClearCallbacks()
+{
+    g_callbacks.clear();
+    CMH_Log("Callbacks cleared on game load");
+}

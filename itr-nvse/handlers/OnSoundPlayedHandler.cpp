@@ -563,3 +563,9 @@ unsigned int OSPH_GetOpcode()
 {
     return g_osphOpcode;
 }
+
+void OSPH_ClearCallbacks()
+{
+    OnSoundPlayedHandler::g_callbacks.clear();
+    OSPH_Log("Callbacks cleared on game load");
+}

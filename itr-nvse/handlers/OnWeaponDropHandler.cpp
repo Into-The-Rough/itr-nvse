@@ -310,3 +310,9 @@ unsigned int OWDH_GetOpcode()
 {
     return g_owdhOpcode;
 }
+
+void OWDH_ClearCallbacks()
+{
+    OnWeaponDropHandler::g_callbacks.clear();
+    OWDH_Log("Callbacks cleared on game load");
+}

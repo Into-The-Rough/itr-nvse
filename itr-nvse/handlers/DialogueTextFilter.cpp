@@ -558,3 +558,10 @@ __declspec(dllexport) bool DTF_UnregisterNativeCallback(DTF_NativeCallback callb
 }
 
 }
+
+void DTF_ClearCallbacks()
+{
+    //clear script callbacks only - native callbacks are from other plugins and persist
+    DialogueTextFilter::g_filters.clear();
+    DTF_Log("Script callbacks cleared on game load");
+}

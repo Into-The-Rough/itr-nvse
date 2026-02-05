@@ -209,3 +209,9 @@ bool OMSCH_Init(void* nvseInterface) {
     OMSCH_Log("OnMenuSideChangeHandler initialized successfully");
     return true;
 }
+
+void OMSCH_ClearCallbacks()
+{
+    g_callbacks.clear();
+    OMSCH_Log("Callbacks cleared on game load");
+}

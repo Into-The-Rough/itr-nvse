@@ -319,3 +319,9 @@ unsigned int OSH_GetOpcode()
 {
     return g_oshOpcode;
 }
+
+void OSH_ClearCallbacks()
+{
+    OnStealHandler::g_callbacks.clear();
+    OSH_Log("Callbacks cleared on game load");
+}

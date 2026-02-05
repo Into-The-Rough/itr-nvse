@@ -238,3 +238,9 @@ bool OMFCH_Init(void* nvseInterface) {
     OMFCH_Log("OnMenuFilterChangeHandler initialized successfully");
     return true;
 }
+
+void OMFCH_ClearCallbacks()
+{
+    g_callbacks.clear();
+    OMFCH_Log("Callbacks cleared on game load");
+}

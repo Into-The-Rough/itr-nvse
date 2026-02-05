@@ -382,3 +382,8 @@ unsigned int OEPH_GetOpcode()
 {
     return g_oephOpcode;
 }
+
+void OEPH_ClearCallbacks()
+{
+    OnEntryPointHandler::g_callbacks.clear();
+}
