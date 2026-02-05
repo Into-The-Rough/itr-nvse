@@ -1,8 +1,7 @@
 //allows sleeping in owned beds with consequences
 
 #include "OwnedBeds.h"
-#include <Windows.h>
-#include <cstdint>
+#include "internal/NVSEMinimal.h"
 
 extern void Log(const char* fmt, ...);
 
@@ -103,25 +102,6 @@ namespace OwnedBeds
 		return true;
 	}
 
-	void PatchWrite8(uint32_t addr, uint8_t data) {
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, 1, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint8_t*)addr = data;
-		VirtualProtect((void*)addr, 1, oldProtect, &oldProtect);
-	}
-
-	void PatchWrite32(uint32_t addr, uint32_t data) {
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, 4, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint32_t*)addr = data;
-		VirtualProtect((void*)addr, 4, oldProtect, &oldProtect);
-	}
-
-	void WriteRelCall(UInt32 addr, UInt32 target) {
-		PatchWrite8(addr, 0xE8);
-		PatchWrite32(addr + 1, target - addr - 5);
-	}
-
 	void SetEnabled(bool enabled) {
 		g_enabled = enabled;
 		Log("OwnedBeds %s", enabled ? "enabled" : "disabled");
@@ -129,7 +109,7 @@ namespace OwnedBeds
 
 	void Init(bool enabled)
 	{
-		WriteRelCall(kAddr_IsAnOwnerCall, (UInt32)IsAnOwnerHook);
+		SafeWrite::WriteRelCall(kAddr_IsAnOwnerCall, (UInt32)IsAnOwnerHook);
 		g_enabled = enabled;
 		Log("OwnedBeds initialized (enabled=%d)", enabled);
 	}

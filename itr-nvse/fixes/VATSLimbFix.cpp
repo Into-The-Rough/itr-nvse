@@ -2,8 +2,7 @@
 //NOT hot-reloadable - requires game restart
 
 #include "VATSLimbFix.h"
-#include <Windows.h>
-#include <cstdint>
+#include "internal/NVSEMinimal.h"
 #include <cstring>
 
 extern void Log(const char* fmt, ...);
@@ -113,21 +112,6 @@ namespace VATSLimbFix
 		((SetPartitionVisible_t)(void*)g_trampolineSetPartitionVisible)(skinInstance, limbID, visible);
 	}
 
-	void PatchWrite8(uint32_t addr, uint8_t data) {
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, 1, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint8_t*)addr = data;
-		VirtualProtect((void*)addr, 1, oldProtect, &oldProtect);
-	}
-
-	void WriteRelJump(uintptr_t src, uintptr_t dst) {
-		DWORD oldProtect;
-		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint8_t*)src = 0xE9;
-		*(uint32_t*)(src + 1) = dst - src - 5;
-		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
-	}
-
 	void Init()
 	{
 		//prologue at 0x5E4810: push ebp (1) + mov ebp,esp (2) + sub esp,8 (3) = 6 bytes
@@ -140,8 +124,8 @@ namespace VATSLimbFix
 		DWORD oldProtect;
 		VirtualProtect(g_trampolineSetPartitionVisible, sizeof(g_trampolineSetPartitionVisible), PAGE_EXECUTE_READWRITE, &oldProtect);
 
-		WriteRelJump(kAddr_SetPartitionVisible, (uintptr_t)SetPartitionVisible_Hook);
-		PatchWrite8(kAddr_SetPartitionVisible + 5, 0x90); //nop leftover byte
+		SafeWrite::WriteRelJump(kAddr_SetPartitionVisible, (UInt32)SetPartitionVisible_Hook);
+		SafeWrite::Write8(kAddr_SetPartitionVisible + 5, 0x90); //nop leftover byte
 		Log("VATSLimbFix installed");
 	}
 }

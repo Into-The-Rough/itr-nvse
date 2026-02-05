@@ -116,25 +116,6 @@ static void __cdecl Hook_LimbCondition_HandleChange(
     }
 }
 
-static void PatchWrite32(UInt32 addr, UInt32 data) {
-    DWORD oldProtect;
-    VirtualProtect((void*)addr, 4, PAGE_EXECUTE_READWRITE, &oldProtect);
-    *(UInt32*)addr = data;
-    VirtualProtect((void*)addr, 4, oldProtect, &oldProtect);
-}
-
-static void PatchWrite8(UInt32 addr, UInt8 data) {
-    DWORD oldProtect;
-    VirtualProtect((void*)addr, 1, PAGE_EXECUTE_READWRITE, &oldProtect);
-    *(UInt8*)addr = data;
-    VirtualProtect((void*)addr, 1, oldProtect, &oldProtect);
-}
-
-static void WriteRelJump(UInt32 src, UInt32 dst) {
-    PatchWrite8(src, 0xE9);  // jmp rel32
-    PatchWrite32(src + 1, dst - src - 5);
-}
-
 // Trampoline for original function
 static UInt8* g_trampolineAddr = nullptr;
 
@@ -159,9 +140,9 @@ static void InstallHook() {
     g_originalHandleChange = (UInt32)g_trampolineAddr;
 
     // Write jump to our hook at the original location (overwrites 5 bytes, NOP remaining 4)
-    WriteRelJump(kAddr_LimbCondition_HandleChange, (UInt32)Hook_LimbCondition_HandleChange);
+    SafeWrite::WriteRelJump(kAddr_LimbCondition_HandleChange, (UInt32)Hook_LimbCondition_HandleChange);
     for (int i = 5; i < kPrologueBytes; i++) {
-        PatchWrite8(kAddr_LimbCondition_HandleChange + i, 0x90);  // NOP
+        SafeWrite::Write8(kAddr_LimbCondition_HandleChange + i, 0x90);
     }
 
     OFH_Log("Hook installed at 0x%08X, trampoline at 0x%08X", kAddr_LimbCondition_HandleChange, g_trampolineAddr);

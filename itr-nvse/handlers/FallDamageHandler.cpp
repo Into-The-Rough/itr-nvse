@@ -4,6 +4,7 @@
 #include "nvse/GameObjects.h"
 #include "nvse/ParamInfos.h"
 #include "FallDamageHandler.h"
+#include "internal/SafeWrite.h"
 #include <unordered_map>
 
 //fall damage modification system
@@ -82,18 +83,9 @@ namespace FallDamageHook
 		}
 	}
 
-	void WriteRelJump(UInt32 src, UInt32 dst)
-	{
-		DWORD oldProtect;
-		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(UInt8*)src = 0xE9;
-		*(UInt32*)(src + 1) = dst - src - 5;
-		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
-	}
-
 	void Init()
 	{
-		WriteRelJump(kHookAddr, (UInt32)Hook);
+		SafeWrite::WriteRelJump(kHookAddr, (UInt32)Hook);
 	}
 }
 

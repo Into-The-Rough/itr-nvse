@@ -1,8 +1,8 @@
 //prevents player from earning infamy when a companion kills a faction member
 
 #include "CompanionNoInfamy.h"
-#include <Windows.h>
-#include <cstdint>
+#include "internal/NVSEMinimal.h"
+#include <cstring>
 
 namespace CompanionNoInfamy
 {
@@ -10,37 +10,15 @@ namespace CompanionNoInfamy
 	static bool g_initialized = false;
 
 	//original bytes at hook sites (5 bytes each - call instruction)
-	static uint8_t g_origBytesMurder[5] = {0};
-	static uint8_t g_origBytesAttack[5] = {0};
-	static uint8_t g_origBytesKill[5] = {0};
+	static UInt8 g_origBytesMurder[5] = {0};
+	static UInt8 g_origBytesAttack[5] = {0};
+	static UInt8 g_origBytesKill[5] = {0};
 
-	static const uint32_t kAddr_HandleMajorCrimeFactionReputations = 0x8B7D20;
-	static const uint32_t kAddr_HandleMinorCrimeFactionReputations = 0x8B7C00;
-	static const uint32_t kAddr_MurderAlarmReputationCall = 0x8C0E6E;
-	static const uint32_t kAddr_AttackAlarmReputationCall = 0x8C0930;
-	static const uint32_t kAddr_ActorKillReputationCall = 0x89F3DF;
-
-	void SafeWrite8(uint32_t addr, uint8_t val)
-	{
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, 1, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint8_t*)addr = val;
-		VirtualProtect((void*)addr, 1, oldProtect, &oldProtect);
-	}
-
-	void SafeWrite32(uint32_t addr, uint32_t val)
-	{
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, 4, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint32_t*)addr = val;
-		VirtualProtect((void*)addr, 4, oldProtect, &oldProtect);
-	}
-
-	void WriteRelCall(uint32_t src, uint32_t dst)
-	{
-		SafeWrite8(src, 0xE8);
-		SafeWrite32(src + 1, dst - src - 5);
-	}
+	static const UInt32 kAddr_HandleMajorCrimeFactionReputations = 0x8B7D20;
+	static const UInt32 kAddr_HandleMinorCrimeFactionReputations = 0x8B7C00;
+	static const UInt32 kAddr_MurderAlarmReputationCall = 0x8C0E6E;
+	static const UInt32 kAddr_AttackAlarmReputationCall = 0x8C0930;
+	static const UInt32 kAddr_ActorKillReputationCall = 0x89F3DF;
 
 	//MurderAlarm: checks IsTeammate at [ebp-0x15]
 	__declspec(naked) void MurderAlarmReputationHook()
@@ -91,17 +69,17 @@ namespace CompanionNoInfamy
 
 	void ApplyPatch()
 	{
-		WriteRelCall(kAddr_MurderAlarmReputationCall, (uint32_t)MurderAlarmReputationHook);
-		WriteRelCall(kAddr_AttackAlarmReputationCall, (uint32_t)AttackAlarmReputationHook);
-		WriteRelCall(kAddr_ActorKillReputationCall, (uint32_t)ActorKillReputationHook);
+		SafeWrite::WriteRelCall(kAddr_MurderAlarmReputationCall, (UInt32)MurderAlarmReputationHook);
+		SafeWrite::WriteRelCall(kAddr_AttackAlarmReputationCall, (UInt32)AttackAlarmReputationHook);
+		SafeWrite::WriteRelCall(kAddr_ActorKillReputationCall, (UInt32)ActorKillReputationHook);
 	}
 
 	void RemovePatch()
 	{
 		for (int i = 0; i < 5; i++) {
-			SafeWrite8(kAddr_MurderAlarmReputationCall + i, g_origBytesMurder[i]);
-			SafeWrite8(kAddr_AttackAlarmReputationCall + i, g_origBytesAttack[i]);
-			SafeWrite8(kAddr_ActorKillReputationCall + i, g_origBytesKill[i]);
+			SafeWrite::Write8(kAddr_MurderAlarmReputationCall + i, g_origBytesMurder[i]);
+			SafeWrite::Write8(kAddr_AttackAlarmReputationCall + i, g_origBytesAttack[i]);
+			SafeWrite::Write8(kAddr_ActorKillReputationCall + i, g_origBytesKill[i]);
 		}
 	}
 

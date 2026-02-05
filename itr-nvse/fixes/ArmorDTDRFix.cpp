@@ -3,8 +3,7 @@
 //NOT hot-reloadable - requires game restart
 
 #include "ArmorDTDRFix.h"
-#include <Windows.h>
-#include <cstdint>
+#include "internal/NVSEMinimal.h"
 
 extern void Log(const char* fmt, ...);
 
@@ -55,18 +54,10 @@ namespace ArmorDTDRFix
 		return trampoline;
 	}
 
-	void WriteRelJump(uint32_t src, uint32_t dst) {
-		DWORD oldProtect;
-		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint8_t*)src = 0xE9;
-		*(uint32_t*)(src + 1) = dst - src - 5;
-		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
-	}
-
 	void Init() {
 		g_trampolineResetArmor = (uint32_t)CreateTrampoline(kAddr_ResetArmorRating, 7);
 		if (g_trampolineResetArmor)
-			WriteRelJump(kAddr_ResetArmorRating, (uint32_t)Hook_ResetArmorRating);
+			SafeWrite::WriteRelJump(kAddr_ResetArmorRating, (UInt32)Hook_ResetArmorRating);
 		Log("ArmorDTDRFix installed");
 	}
 }
