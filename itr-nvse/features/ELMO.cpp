@@ -2,7 +2,7 @@
 //NOT hot-reloadable - mid-function patches break instruction boundaries
 
 #include "ELMO.h"
-#include <Windows.h>
+#include "internal/SafeWrite.h"
 #include <cstdio>
 
 extern void Log(const char* fmt, ...);
@@ -249,27 +249,19 @@ namespace ELMO
 		}
 	}
 
-	void WriteRelJump(UInt32 src, UInt32 dst) {
-		DWORD oldProtect;
-		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(UInt8*)src = 0xE9;
-		*(UInt32*)(src + 1) = dst - src - 5;
-		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
-	}
-
 	void Init(bool suppressObjectives, bool suppressReputation)
 	{
 		if (suppressObjectives) {
-			WriteRelJump(0x77A5B0, (UInt32)Hook_SetQuestUpdateText);
+			SafeWrite::WriteRelJump(0x77A5B0, (UInt32)Hook_SetQuestUpdateText);
 			Log("ELMO: Objectives popup suppressed");
 		}
 
 		if (suppressReputation) {
-			WriteRelJump(0x6155F0, (UInt32)ReputationPopup_Hook);
-			WriteRelJump(0x615F4A, (UInt32)ReputationCornerMessage_Hook_AddRep);
-			WriteRelJump(0x61598B, (UInt32)ReputationCornerMessage_Hook_AddRepExact);
-			WriteRelJump(0x615C43, (UInt32)ReputationCornerMessage_Hook_RemRepExact);
-			WriteRelJump(0x616242, (UInt32)ReputationCornerMessage_Hook_RemRep);
+			SafeWrite::WriteRelJump(0x6155F0, (UInt32)ReputationPopup_Hook);
+			SafeWrite::WriteRelJump(0x615F4A, (UInt32)ReputationCornerMessage_Hook_AddRep);
+			SafeWrite::WriteRelJump(0x61598B, (UInt32)ReputationCornerMessage_Hook_AddRepExact);
+			SafeWrite::WriteRelJump(0x615C43, (UInt32)ReputationCornerMessage_Hook_RemRepExact);
+			SafeWrite::WriteRelJump(0x616242, (UInt32)ReputationCornerMessage_Hook_RemRep);
 			Log("ELMO: Reputation popup suppressed");
 		}
 	}

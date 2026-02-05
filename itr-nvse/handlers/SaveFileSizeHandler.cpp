@@ -1,5 +1,5 @@
 #include "SaveFileSizeHandler.h"
-#include <Windows.h>
+#include "internal/SafeWrite.h"
 #include <cstdio>
 
 
@@ -51,15 +51,6 @@ namespace SaveFileSizeHandler
 		UInt8* p = (UInt8*)addr;
 		if (p[0] != 0xE8) return 0;
 		return addr + 5 + *(SInt32*)(addr + 1);
-	}
-
-	static void WriteRelCall(UInt32 src, UInt32 dst)
-	{
-		DWORD oldProtect;
-		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(UInt8*)src = 0xE8;
-		*(UInt32*)(src + 1) = dst - src - 5;
-		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
 	}
 
 	static void SafeWriteBuf(UInt32 addr, const void* data, size_t len)
@@ -132,7 +123,7 @@ namespace SaveFileSizeHandler
 			return;
 
 		SafeWriteBuf(kAddr_JnzPatch, "\x90\x90\x90\x90\x90\x90", 6);
-		WriteRelCall(kAddr_HookSite, (UInt32)Hook);
+		SafeWrite::WriteRelCall(kAddr_HookSite, (UInt32)Hook);
 	}
 }
 

@@ -4,7 +4,7 @@
 #include "VATSExtender.h"
 #include "nvse/GameForms.h"
 #include "nvse/GameObjects.h"
-#include <Windows.h>
+#include "internal/SafeWrite.h"
 
 extern void Log(const char* fmt, ...);
 
@@ -32,22 +32,6 @@ namespace VATSExtender
 
 	typedef TESForm* (*_LookupFormByID)(UInt32 id);
 	static const _LookupFormByID VE_LookupFormByID = (_LookupFormByID)0x004839C0;
-
-	void WriteRelJump(UInt32 src, UInt32 dst) {
-		DWORD oldProtect;
-		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(UInt8*)src = 0xE9;
-		*(UInt32*)(src + 1) = dst - src - 5;
-		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
-	}
-
-	void WriteRelCall(UInt32 src, UInt32 dst) {
-		DWORD oldProtect;
-		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(UInt8*)src = 0xE8;
-		*(UInt32*)(src + 1) = dst - src - 5;
-		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
-	}
 
 	void* GetVATSHighlightData()
 	{
@@ -168,10 +152,10 @@ namespace VATSExtender
 	void Init()
 	{
 		if (*(UInt8*)0x800DA4 == 0x68)
-			WriteRelJump(0x800DA4, (UInt32)Hook_OnLimitReached);
+			SafeWrite::WriteRelJump(0x800DA4, (UInt32)Hook_OnLimitReached);
 
 		if (*(UInt8*)0x801993 == 0xE8)
-			WriteRelCall(0x801993, (UInt32)Hook_RenderScene);
+			SafeWrite::WriteRelCall(0x801993, (UInt32)Hook_RenderScene);
 
 		Log("VATSExtender installed");
 	}

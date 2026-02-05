@@ -1,8 +1,7 @@
 //QuickDrop & Quick180 (single combined hook)
 
 #include "PlayerUpdateHook.h"
-#include <Windows.h>
-#include <cstdint>
+#include "internal/SafeWrite.h"
 
 extern void Log(const char* fmt, ...);
 
@@ -30,21 +29,6 @@ namespace PlayerUpdateHook
 	bool g_quickDropLastPressed = false;
 	bool g_quick180LastPressed = false;
 	uint32_t g_originalCallTarget = 0;
-
-	void PatchWrite32(uint32_t addr, uint32_t data) {
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, 4, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint32_t*)addr = data;
-		VirtualProtect((void*)addr, 4, oldProtect, &oldProtect);
-	}
-
-	void PatchCall(uint32_t jumpSrc, uint32_t jumpTgt) {
-		PatchWrite32(jumpSrc + 1, jumpTgt - jumpSrc - 5);
-	}
-
-	uint32_t ReadCallTarget(uint32_t jumpSrc) {
-		return *(uint32_t*)(jumpSrc + 1) + jumpSrc + 5;
-	}
 
 	bool GetControlState(void* input, uint32_t controlCode, KeyState state) {
 		return ((bool(__thiscall*)(void*, uint32_t, KeyState))kAddr_GetControlState)(input, controlCode, state);
@@ -108,8 +92,8 @@ namespace PlayerUpdateHook
 	}
 
 	void Init() {
-		g_originalCallTarget = ReadCallTarget(kAddr_PlayerUpdateCall);
-		PatchCall(kAddr_PlayerUpdateCall, (uint32_t)PlayerUpdate_Hook);
+		g_originalCallTarget = SafeWrite::GetRelJumpTarget(kAddr_PlayerUpdateCall);
+		SafeWrite::Write32(kAddr_PlayerUpdateCall + 1, (UInt32)PlayerUpdate_Hook - kAddr_PlayerUpdateCall - 5);
 		Log("PlayerUpdateHook installed (chaining to 0x%08X)", g_originalCallTarget);
 	}
 }
