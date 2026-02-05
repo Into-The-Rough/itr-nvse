@@ -112,25 +112,6 @@ static bool __fastcall Hook_HUDMainMenu_ShowNotify(
     );
 }
 
-static void PatchWrite32(UInt32 addr, UInt32 data) {
-    DWORD oldProtect;
-    VirtualProtect((void*)addr, 4, PAGE_EXECUTE_READWRITE, &oldProtect);
-    *(UInt32*)addr = data;
-    VirtualProtect((void*)addr, 4, oldProtect, &oldProtect);
-}
-
-static void PatchWrite8(UInt32 addr, UInt8 data) {
-    DWORD oldProtect;
-    VirtualProtect((void*)addr, 1, PAGE_EXECUTE_READWRITE, &oldProtect);
-    *(UInt8*)addr = data;
-    VirtualProtect((void*)addr, 1, oldProtect, &oldProtect);
-}
-
-static void WriteRelJump(UInt32 src, UInt32 dst) {
-    PatchWrite8(src, 0xE9);
-    PatchWrite32(src + 1, dst - src - 5);
-}
-
 static UInt8* g_trampolineAddr = nullptr;
 
 static void InstallHook() {
@@ -150,7 +131,7 @@ static void InstallHook() {
 
     g_originalShowNotify = (UInt32)g_trampolineAddr;
 
-    WriteRelJump(kAddr_HUDMainMenu_ShowNotify, (UInt32)Hook_HUDMainMenu_ShowNotify);
+    SafeWrite::WriteRelJump(kAddr_HUDMainMenu_ShowNotify, (UInt32)Hook_HUDMainMenu_ShowNotify);
 
     CMH_Log("Hook installed at 0x%08X, trampoline at 0x%08X", kAddr_HUDMainMenu_ShowNotify, g_trampolineAddr);
 }

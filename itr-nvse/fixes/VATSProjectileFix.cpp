@@ -2,8 +2,7 @@
 //NOT hot-reloadable - requires game restart
 
 #include "VATSProjectileFix.h"
-#include <Windows.h>
-#include <cstdint>
+#include "internal/NVSEMinimal.h"
 
 extern void Log(const char* fmt, ...);
 
@@ -86,22 +85,11 @@ namespace VATSProjectileFix
 		return result;
 	}
 
-	void PatchWrite32(uint32_t addr, uint32_t data) {
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, 4, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint32_t*)addr = data;
-		VirtualProtect((void*)addr, 4, oldProtect, &oldProtect);
-	}
-
-	void PatchCall(uint32_t jumpSrc, uint32_t jumpTgt) {
-		PatchWrite32(jumpSrc + 1, jumpTgt - jumpSrc - 5);
-	}
-
 	void Init()
 	{
 		SInt32 currentDisp = *(SInt32*)(kAddr_HookSite + 1);
 		s_originalVATSMenuUpdate = kAddr_HookSite + 5 + currentDisp;
-		PatchCall(kAddr_HookSite, (UInt32)VATSMenuUpdate_Hook);
+		SafeWrite::Write32(kAddr_HookSite + 1, (UInt32)VATSMenuUpdate_Hook - kAddr_HookSite - 5);
 		Log("VATSProjectileFix installed");
 	}
 }

@@ -3,8 +3,7 @@
 //NOT hot-reloadable - requires game restart
 
 #include "CombatItemTimerFix.h"
-#include <Windows.h>
-#include <cstdint>
+#include "internal/NVSEMinimal.h"
 
 extern void Log(const char* fmt, ...);
 
@@ -57,17 +56,9 @@ namespace CombatItemTimerFix
 		}
 	}
 
-	void WriteRelCall(uint32_t src, uint32_t dst) {
-		DWORD oldProtect;
-		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint8_t*)src = 0xE8;
-		*(uint32_t*)(src + 1) = dst - src - 5;
-		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
-	}
-
 	void Init()
 	{
-		WriteRelCall(kAddr_CallSite, (uint32_t)Hook_ResetCombatItemTimer);
+		SafeWrite::WriteRelCall(kAddr_CallSite, (UInt32)Hook_ResetCombatItemTimer);
 		Log("CombatItemTimerFix installed");
 	}
 }
