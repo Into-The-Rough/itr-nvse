@@ -2,7 +2,7 @@
 
 #include "LocationVisitPopup.h"
 #include "internal/CooldownTracker.h"
-#include <Windows.h>
+#include "internal/SafeWrite.h"
 
 extern void Log(const char* fmt, ...);
 
@@ -18,25 +18,6 @@ namespace LocationVisitPopup
 	template <typename T_Ret = void, typename ...Args>
 	__forceinline T_Ret LVPThisCall(UInt32 _addr, void* _this, Args ...args) {
 		return ((T_Ret(__thiscall*)(void*, Args...))_addr)(_this, std::forward<Args>(args)...);
-	}
-
-	static void PatchWrite8(UInt32 addr, UInt8 data) {
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, 1, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(UInt8*)addr = data;
-		VirtualProtect((void*)addr, 1, oldProtect, &oldProtect);
-	}
-
-	static void PatchWrite32(UInt32 addr, UInt32 data) {
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, 4, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(UInt32*)addr = data;
-		VirtualProtect((void*)addr, 4, oldProtect, &oldProtect);
-	}
-
-	static void WriteRelJump(UInt32 jumpSrc, UInt32 jumpTgt) {
-		PatchWrite8(jumpSrc, 0xE9);
-		PatchWrite32(jumpSrc + 1, jumpTgt - jumpSrc - 5);
 	}
 
 	static void UpdateCooldowns() {
@@ -137,9 +118,9 @@ namespace LocationVisitPopup
 		s_cooldownSeconds = cooldownSeconds;
 		g_cooldownMs = cooldownSeconds * 1000;
 		g_disableSound = disableSound;
-		WriteRelJump(0x7795DD, (UInt32)CheckDiscoveredMarkerHook);
-		PatchWrite8(0x7795E2, 0x90);
-		PatchWrite8(0x7795E3, 0x90);
+		SafeWrite::WriteRelJump(0x7795DD, (UInt32)CheckDiscoveredMarkerHook);
+		SafeWrite::Write8(0x7795E2, 0x90);
+		SafeWrite::Write8(0x7795E3, 0x90);
 		Log("LocationVisitPopup installed (cooldown=%ds, sound=%s)",
 			cooldownSeconds, disableSound ? "off" : "on");
 	}

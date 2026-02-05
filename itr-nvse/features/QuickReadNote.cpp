@@ -3,7 +3,7 @@
 #include "nvse/PluginAPI.h"
 #include "nvse/GameUI.h"
 #include "QuickReadNote.h"
-#include <Windows.h>
+#include "internal/SafeWrite.h"
 
 extern void Log(const char* fmt, ...);
 
@@ -550,16 +550,6 @@ namespace QuickReadNote
 		return ((QueueUIMessageFn)s_originalQueueUIMessage)(msg, emotion, imagePath, soundName, time, instantEnd);
 	}
 
-	static UInt32 GetRelJumpAddr(UInt32 src) { return src + 5 + *(SInt32*)(src + 1); }
-
-	static void WriteRelCall(UInt32 src, UInt32 dst) {
-		DWORD oldProtect;
-		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(UInt8*)src = 0xE8;
-		*(UInt32*)(src + 1) = dst - src - 5;
-		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
-	}
-
 	class OSInputGlobals {
 	public:
 		bool GetControlState(UInt32 controlCode, UInt8 state) {
@@ -573,11 +563,11 @@ namespace QuickReadNote
 		g_controlID = controlID;
 		g_maxLines = maxLines;
 
-		s_originalNoteAddedCall = GetRelJumpAddr(0x966B0A);
-		WriteRelCall(0x966B0A, (UInt32)OnNoteAddedHook);
+		s_originalNoteAddedCall = SafeWrite::GetRelJumpTarget(0x966B0A);
+		SafeWrite::WriteRelCall(0x966B0A, (UInt32)OnNoteAddedHook);
 
-		s_originalQueueUIMessage = GetRelJumpAddr(0x966B53);
-		WriteRelCall(0x966B53, (UInt32)OnQueueUIMessageHook);
+		s_originalQueueUIMessage = SafeWrite::GetRelJumpTarget(0x966B53);
+		SafeWrite::WriteRelCall(0x966B53, (UInt32)OnQueueUIMessageHook);
 
 		UInt32* vtbl = reinterpret_cast<UInt32*>(kVtbl_MessageMenu);
 		ChainedHandleClick = reinterpret_cast<_MessageMenu_HandleClick>(vtbl[kOffset_HandleClick / 4]);

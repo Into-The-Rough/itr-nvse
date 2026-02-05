@@ -1,10 +1,10 @@
 #include "DialogueCameraHandler.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameObjects.h"
+#include "internal/SafeWrite.h"
 #include "PerlinNoise.hpp"
 #include <cmath>
 #include <cstdio>
-#include <Windows.h>
 
 //camera hooks - intercept game's own camera update calls
 namespace CameraHooks {
@@ -346,35 +346,6 @@ static float CheckCameraClip(float camX, float camY, float camZ,
 	return safeFrac;
 }
 
-static void SafeWrite8(UInt32 addr, UInt8 val) {
-	DWORD oldProtect;
-	VirtualProtect((void*)addr, 1, PAGE_EXECUTE_READWRITE, &oldProtect);
-	*(UInt8*)addr = val;
-	VirtualProtect((void*)addr, 1, oldProtect, &oldProtect);
-}
-
-static void PatchMemoryNop(UInt32 addr, UInt32 size) {
-	DWORD oldProtect;
-	VirtualProtect((void*)addr, size, PAGE_EXECUTE_READWRITE, &oldProtect);
-	memset((void*)addr, 0x90, size);
-	VirtualProtect((void*)addr, size, oldProtect, &oldProtect);
-}
-
-static void WriteRelJump(UInt32 src, UInt32 dst) {
-	DWORD oldProtect;
-	VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-	*(UInt8*)src = 0xE9;
-	*(UInt32*)(src + 1) = dst - src - 5;
-	VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
-}
-
-static void WriteRelCall(UInt32 src, UInt32 dst) {
-	DWORD oldProtect;
-	VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-	*(UInt8*)src = 0xE8;
-	*(UInt32*)(src + 1) = dst - src - 5;
-	VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
-}
 
 enum CameraAngle {
 	kAngle_Vanilla,        //player POV, looking at NPC
@@ -750,15 +721,15 @@ bool Init(NVSEConsoleInterface* console) {
 	Log("Init called, console=%p", console);
 
 	//force 3rd person in dialogue (from RealTimeMenus)
-	PatchMemoryNop(0x953124, 5);
-	PatchMemoryNop(0x761DEF, 5);
-	WriteRelJump(0x953ABF, 0x953AF5);
-	WriteRelJump(0x762E55, 0x762E72);
+	SafeWrite::WriteNop(0x953124, 5);
+	SafeWrite::WriteNop(0x761DEF, 5);
+	SafeWrite::WriteRelJump(0x953ABF, 0x953AF5);
+	SafeWrite::WriteRelJump(0x762E55, 0x762E72);
 	Log("Patched dialogue to force 3rd person");
 
 	//disable dialogue zoom
-	WriteRelJump(0x9533BE, 0x953562);
-	SafeWrite8(0x953BBA, 0xEB);
+	SafeWrite::WriteRelJump(0x9533BE, 0x953562);
+	SafeWrite::Write8(0x953BBA, 0xEB);
 	Log("Patched dialogue to disable zoom");
 
 	//camera hooks installed later via InstallCameraHooks() on PostPostLoad

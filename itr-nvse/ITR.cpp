@@ -7,6 +7,7 @@
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
 #include "nvse/SafeWrite.h"
+#include "internal/SafeWrite.h"
 
 #include "internal/settings.h"
 
@@ -301,19 +302,10 @@ namespace NoWeaponSearch
 		return IsDisabled_Unlocked(actor->refID);
 	}
 
-	void WriteRelCall(UInt32 src, UInt32 dst)
-	{
-		DWORD oldProtect;
-		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(UInt8*)src = 0xE8;
-		*(UInt32*)(src + 1) = dst - src - 5;
-		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
-	}
-
 	void Init()
 	{
 		EnsureLockInit();
-		WriteRelCall(0x998D50, (UInt32)Hook);
+		SafeWrite::WriteRelCall(0x998D50, (UInt32)Hook);
 		Log("NoWeaponSearch: Hook installed at 0x998D50");
 	}
 }
