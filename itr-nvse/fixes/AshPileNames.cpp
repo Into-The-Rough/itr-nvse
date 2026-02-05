@@ -72,19 +72,23 @@ namespace AshPileNames
 		DWORD oldProtect;
 		VirtualProtect(g_trampoline, sizeof(g_trampoline), PAGE_EXECUTE_READWRITE, &oldProtect);
 
-		memcpy(g_trampoline, (void*)kGetBaseFullNameAddr, 7);
-		g_trampoline[7] = 0xE9;
-		*(UInt32*)&g_trampoline[8] = kReturnAddr - ((UInt32)&g_trampoline[7] + 5);
+		//prologue: push ebp (1) + mov ebp,esp (2) + push ecx (1) + mov [ebp-4],ecx (3) = 7 bytes
+		constexpr size_t kPrologueSize = 7;
+
+		memcpy(g_trampoline, (void*)kGetBaseFullNameAddr, kPrologueSize);
+		g_trampoline[kPrologueSize] = 0xE9; //jmp rel32
+		*(UInt32*)&g_trampoline[kPrologueSize + 1] = kReturnAddr - ((UInt32)&g_trampoline[kPrologueSize] + 5);
 
 		CallTrampoline = (_TrampolineFunc)(void*)g_trampoline;
 
+		//patch original function: 5-byte jmp + 2 nops to fill prologue
 		DWORD oldProtect2;
-		VirtualProtect((void*)kGetBaseFullNameAddr, 7, PAGE_EXECUTE_READWRITE, &oldProtect2);
+		VirtualProtect((void*)kGetBaseFullNameAddr, kPrologueSize, PAGE_EXECUTE_READWRITE, &oldProtect2);
 		*(UInt8*)kGetBaseFullNameAddr = 0xE9;
 		*(UInt32*)(kGetBaseFullNameAddr + 1) = (UInt32)Hook_GetBaseFullName - kGetBaseFullNameAddr - 5;
 		*(UInt8*)(kGetBaseFullNameAddr + 5) = 0x90;
 		*(UInt8*)(kGetBaseFullNameAddr + 6) = 0x90;
-		VirtualProtect((void*)kGetBaseFullNameAddr, 7, oldProtect2, &oldProtect2);
+		VirtualProtect((void*)kGetBaseFullNameAddr, kPrologueSize, oldProtect2, &oldProtect2);
 
 		Log("AshPileNames installed");
 	}

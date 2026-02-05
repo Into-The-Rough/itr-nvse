@@ -47,7 +47,7 @@ namespace VATSProjectileFix
 	constexpr UInt32 kAddr_HookSite = 0x7ED349;
 	constexpr UInt32 kAddr_pTargetRef = 0x11F21CC;
 
-	static UInt32 s_previousTarget = 0;
+	static UInt32 s_originalVATSMenuUpdate = 0;
 
 	template <typename T_Ret = UInt32, typename ...Args>
 	__forceinline T_Ret VATSThisCall(UInt32 _addr, const void* _this, Args ...args) {
@@ -56,7 +56,7 @@ namespace VATSProjectileFix
 
 	static bool __fastcall VATSMenuUpdate_Hook(void* pThis)
 	{
-		bool result = VATSThisCall<bool>(s_previousTarget, pThis);
+		bool result = VATSThisCall<bool>(s_originalVATSMenuUpdate, pThis);
 		if (!result) return result;
 
 		void** ppTargetRef = (void**)kAddr_pTargetRef;
@@ -100,7 +100,7 @@ namespace VATSProjectileFix
 	void Init()
 	{
 		SInt32 currentDisp = *(SInt32*)(kAddr_HookSite + 1);
-		s_previousTarget = kAddr_HookSite + 5 + currentDisp;
+		s_originalVATSMenuUpdate = kAddr_HookSite + 5 + currentDisp;
 		PatchCall(kAddr_HookSite, (UInt32)VATSMenuUpdate_Hook);
 		Log("VATSProjectileFix installed");
 	}

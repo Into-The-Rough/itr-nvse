@@ -32,16 +32,13 @@ struct DoubleTapHandler {
     float maxInterval;
     bool useControlCode;
     Script* callback;
-};
-
-struct TapState {
+    //per-handler state (not shared by key)
     bool isDown;
     bool wasReleased;
     float lastPressTime;
 };
 
 static std::vector<DoubleTapHandler> g_handlers;
-static std::unordered_map<UInt32, TapState> g_tapStates;
 
 static int MapDIKToVK(UInt32 dik) {
     static const int dikToVk[256] = {
@@ -89,28 +86,26 @@ void DTH_Update() {
         GetControlState = (GetControlState_t)0xA24660;
     }
 
-    for (const auto& handler : g_handlers) {
+    for (auto& handler : g_handlers) {
         bool keyDown = handler.useControlCode
             ? IsControlPressed(handler.key)
             : IsRawKeyPressed(handler.key);
 
-        TapState& state = g_tapStates[handler.key];
+        if (keyDown && !handler.isDown) {
+            float timeSinceLastPress = g_currentTime - handler.lastPressTime;
 
-        if (keyDown && !state.isDown) {
-            float timeSinceLastPress = g_currentTime - state.lastPressTime;
-
-            if (state.wasReleased && timeSinceLastPress <= handler.maxInterval) {
+            if (handler.wasReleased && timeSinceLastPress <= handler.maxInterval) {
                 DTH_Log("Double tap detected: key=%d interval=%.3f", handler.key, timeSinceLastPress);
                 DispatchDoubleTapEvent(handler.callback, handler.key);
-                state.wasReleased = false;
+                handler.wasReleased = false;
             }
 
-            state.isDown = true;
-            state.lastPressTime = g_currentTime;
+            handler.isDown = true;
+            handler.lastPressTime = g_currentTime;
         }
-        else if (!keyDown && state.isDown) {
-            state.isDown = false;
-            state.wasReleased = true;
+        else if (!keyDown && handler.isDown) {
+            handler.isDown = false;
+            handler.wasReleased = true;
         }
     }
 }
@@ -149,6 +144,9 @@ bool Cmd_RegisterKeyDoubleTap_Execute(COMMAND_ARGS) {
     handler.maxInterval = maxInterval;
     handler.useControlCode = false;
     handler.callback = (Script*)callbackForm;
+    handler.isDown = false;
+    handler.wasReleased = false;
+    handler.lastPressTime = 0.0f;
 
     g_handlers.push_back(handler);
     *result = handler.id;
@@ -186,6 +184,9 @@ bool Cmd_RegisterControlDoubleTap_Execute(COMMAND_ARGS) {
     handler.maxInterval = maxInterval;
     handler.useControlCode = true;
     handler.callback = (Script*)callbackForm;
+    handler.isDown = false;
+    handler.wasReleased = false;
+    handler.lastPressTime = 0.0f;
 
     g_handlers.push_back(handler);
     *result = handler.id;
