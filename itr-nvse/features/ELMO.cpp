@@ -16,7 +16,7 @@ namespace ELMO
 
 	const char* __cdecl FormatReputationMessage(const char* factionName, const char* repTitle, const char* repDesc)
 	{
-		sprintf(g_msgBuffer, "%s - %s. %s", factionName, repTitle, repDesc);
+		sprintf_s(g_msgBuffer, "%s - %s. %s", factionName, repTitle, repDesc);
 		return g_msgBuffer;
 	}
 
