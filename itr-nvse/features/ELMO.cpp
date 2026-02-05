@@ -68,6 +68,7 @@ namespace ELMO
 			push ebp
 			mov ebp, esp
 			pushad
+			pushfd
 			mov edi, ecx
 			mov ecx, edi
 			call getRepDesc
@@ -89,6 +90,7 @@ namespace ELMO
 			push eax
 			call queueUIMsg
 			add esp, 0x18
+			popfd
 			popad
 			pop ebp
 			retn
@@ -105,6 +107,7 @@ namespace ELMO
 
 		__asm {
 			pushad
+			pushfd
 			mov edi, [ebp - 0x128]
 			mov ecx, edi
 			call getRepDesc
@@ -126,6 +129,7 @@ namespace ELMO
 			push eax
 			call queueUIMsg
 			add esp, 0x18
+			popfd
 			popad
 			jmp returnAddr
 		}
@@ -141,6 +145,7 @@ namespace ELMO
 
 		__asm {
 			pushad
+			pushfd
 			mov edi, [ebp - 0x110]
 			mov ecx, edi
 			call getRepDesc
@@ -162,6 +167,7 @@ namespace ELMO
 			push eax
 			call queueUIMsg
 			add esp, 0x18
+			popfd
 			popad
 			jmp returnAddr
 		}
@@ -177,6 +183,7 @@ namespace ELMO
 
 		__asm {
 			pushad
+			pushfd
 			mov edi, [ebp - 0x110]
 			mov ecx, edi
 			call getRepDesc
@@ -198,6 +205,7 @@ namespace ELMO
 			push eax
 			call queueUIMsg
 			add esp, 0x18
+			popfd
 			popad
 			jmp returnAddr
 		}
@@ -213,6 +221,7 @@ namespace ELMO
 
 		__asm {
 			pushad
+			pushfd
 			mov edi, [ebp - 0x128]
 			mov ecx, edi
 			call getRepDesc
@@ -234,6 +243,7 @@ namespace ELMO
 			push eax
 			call queueUIMsg
 			add esp, 0x18
+			popfd
 			popad
 			jmp returnAddr
 		}

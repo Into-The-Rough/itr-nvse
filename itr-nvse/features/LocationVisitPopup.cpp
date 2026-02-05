@@ -118,10 +118,12 @@ namespace LocationVisitPopup
 			test eax, eax
 			jz skipCheck
 			pushad
+			pushfd
 			push ecx
 			push dword ptr[eax + 0x0C]
 			call OnInDiscoveredMarkerRadius
 			add esp, 8
+			popfd
 			popad
 			movzx edx, byte ptr[ebp - 0x90]
 		skipCheck:

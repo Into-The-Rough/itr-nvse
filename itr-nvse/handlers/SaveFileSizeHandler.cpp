@@ -115,7 +115,9 @@ namespace SaveFileSizeHandler
 			mov g_savedEntry, eax
 
 			pushad
+			pushfd
 			call CallOnSetupTile
+			popfd
 			popad
 
 			mov eax, g_chainTarget
