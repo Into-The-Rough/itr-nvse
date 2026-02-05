@@ -85,11 +85,14 @@ namespace OnEntryPointHandler {
     };
     std::vector<CallbackInfo> g_callbacks;
 
-    // Current context (captured at HandleEntryPoint start)
-    UInt8 g_currentEntryPoint = 0;
-    Actor* g_currentActor = nullptr;
-    TESForm* g_currentFilterForm1 = nullptr;
-    TESForm* g_currentFilterForm2 = nullptr;
+    //context stack for reentrancy safety - nested perk evaluations won't clobber outer context
+    struct EntryPointContext {
+        UInt8 entryPoint;
+        Actor* actor;
+        TESForm* filterForm1;
+        BGSEntryPointPerkEntry* perkEntry;
+    };
+    std::vector<EntryPointContext> g_contextStack;
 
     bool g_hookInstalled = false;
     bool g_mapBuilt = false;
@@ -152,27 +155,47 @@ void OEPH_BuildEntryMap()
     OnEntryPointHandler::g_mapBuilt = true;
 }
 
-// Globals for hook communication
-static BGSEntryPointPerkEntry* g_currentPerkEntry = nullptr;
-
 // PlayerCharacter singleton
 static Actor** g_thePlayer = (Actor**)0x011DEA3C;
 
-// Dispatch the entry point event
+//push context onto stack (called from asm hook before ExecuteFunction)
+static void __cdecl PushContext(UInt32 entryPoint, Actor* actor, TESForm* filterForm1, BGSEntryPointPerkEntry* perkEntry)
+{
+    OnEntryPointHandler::EntryPointContext ctx;
+    ctx.entryPoint = (UInt8)entryPoint;
+    ctx.actor = actor;
+    ctx.filterForm1 = filterForm1;
+    ctx.perkEntry = perkEntry;
+    OnEntryPointHandler::g_contextStack.push_back(ctx);
+}
+
+//pop context from stack (called from asm hook after dispatch)
+static void __cdecl PopContext()
+{
+    if (!OnEntryPointHandler::g_contextStack.empty())
+        OnEntryPointHandler::g_contextStack.pop_back();
+}
+
+// Dispatch the entry point event using top of context stack
 static void DispatchEntryPointEvent()
 {
-    if (!g_currentPerkEntry) return;
+    if (OnEntryPointHandler::g_contextStack.empty()) return;
     if (!OnEntryPointHandler::g_mapBuilt) return;
     if (OnEntryPointHandler::g_callbacks.empty()) return;
 
+    //use top of stack (current context)
+    const auto& ctx = OnEntryPointHandler::g_contextStack.back();
+
+    if (!ctx.perkEntry) return;
+
     // Look up parent perk
-    auto it = OnEntryPointHandler::g_entryToPerkMap.find((UInt32)g_currentPerkEntry);
+    auto it = OnEntryPointHandler::g_entryToPerkMap.find((UInt32)ctx.perkEntry);
     if (it == OnEntryPointHandler::g_entryToPerkMap.end()) return;
 
     BGSPerk* perk = it->second;
-    UInt8 entryPoint = OnEntryPointHandler::g_currentEntryPoint;
-    Actor* actor = OnEntryPointHandler::g_currentActor;
-    TESForm* filter1 = OnEntryPointHandler::g_currentFilterForm1;
+    UInt8 entryPoint = ctx.entryPoint;
+    Actor* actor = ctx.actor;
+    TESForm* filter1 = ctx.filterForm1;
 
     // Fire callbacks that match the filter
     for (const auto& cb : OnEntryPointHandler::g_callbacks) {
@@ -224,30 +247,25 @@ static __declspec(naked) void Hook_ExecuteFunctionCall()
         pop eax
         mov s_savedReturnAddr, eax
 
-        // Capture entry point ID (it's a UInt8)
+        //push context onto stack for reentrancy safety
+        //PushContext(entryPoint, actor, filterForm1, perkEntry)
+        push [ebp-0x74]           //perkEntry
+        push [ebp+0x10]           //filterForm1
+        push [ebp+0x0C]           //actor
         movzx eax, byte ptr [ebp+0x08]
-        mov OnEntryPointHandler::g_currentEntryPoint, al
-
-        // Capture actor
-        mov eax, [ebp+0x0C]
-        mov OnEntryPointHandler::g_currentActor, eax
-
-        // Capture filter form 1 (weapon, etc.)
-        mov eax, [ebp+0x10]
-        mov OnEntryPointHandler::g_currentFilterForm1, eax
-
-        // Capture perk entry
-        mov eax, [ebp-0x74]
-        mov g_currentPerkEntry, eax
+        push eax                  //entryPoint (as UInt32)
+        call PushContext
+        add esp, 16               //clean up 4 args (cdecl)
 
         // Call the original ExecuteFunction
         // Stack is now exactly as original code expected
         call dword ptr [s_ExecuteFunctionAddr]
 
-        // ExecuteFunction returned - NOW dispatch the event
+        // ExecuteFunction returned - NOW dispatch the event, then pop context
         pushad
         pushfd
         call DoDispatch
+        call PopContext
         popfd
         popad
 
@@ -386,4 +404,5 @@ unsigned int OEPH_GetOpcode()
 void OEPH_ClearCallbacks()
 {
     OnEntryPointHandler::g_callbacks.clear();
+    OnEntryPointHandler::g_contextStack.clear();
 }

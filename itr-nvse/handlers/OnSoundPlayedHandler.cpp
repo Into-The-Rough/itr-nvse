@@ -133,6 +133,14 @@ static void QueueSoundEvent(const char* filePath, UInt32 flags, TESSound* source
 {
     if (!OnSoundPlayedHandler::g_lockInitialized) return;
 
+    //prevent unbounded queue growth
+    constexpr size_t kMaxQueueSize = 256;
+    {
+        ScopedLock lock(&OnSoundPlayedHandler::g_queueLock);
+        if (OnSoundPlayedHandler::g_pendingEvents.size() >= kMaxQueueSize)
+            return;
+    }
+
     QueuedSoundEvent evt;
 
     // Copy file path
@@ -160,6 +168,14 @@ static void QueueVoiceTracking(UInt32 soundID, const char* filePath, UInt32 flag
 {
     if (!OnSoundPlayedHandler::g_lockInitialized) return;
     if (soundID == 0 || soundID == 0xFFFFFFFF) return;
+
+    //prevent unbounded tracking list growth
+    constexpr size_t kMaxTrackedSounds = 64;
+    {
+        ScopedLock lock(&OnSoundPlayedHandler::g_queueLock);
+        if (OnSoundPlayedHandler::g_trackedSounds.size() >= kMaxTrackedSounds)
+            return;
+    }
 
     TrackedVoiceSound tracked;
     tracked.soundID = soundID;

@@ -130,14 +130,18 @@ namespace VATSLimbFix
 
 	void Init()
 	{
-		memcpy(g_trampolineSetPartitionVisible, (void*)kAddr_SetPartitionVisible, 6);
-		g_trampolineSetPartitionVisible[6] = 0xE9;
-		*(uint32_t*)(g_trampolineSetPartitionVisible + 7) = (kAddr_SetPartitionVisible + 6) - ((uintptr_t)g_trampolineSetPartitionVisible + 11);
+		//prologue at 0x5E4810: push ebp (1) + mov ebp,esp (2) + sub esp,8 (3) = 6 bytes
+		constexpr size_t kPrologueSize = 6;
+
+		memcpy(g_trampolineSetPartitionVisible, (void*)kAddr_SetPartitionVisible, kPrologueSize);
+		g_trampolineSetPartitionVisible[kPrologueSize] = 0xE9;
+		*(uint32_t*)(g_trampolineSetPartitionVisible + kPrologueSize + 1) =
+			(kAddr_SetPartitionVisible + kPrologueSize) - ((uintptr_t)g_trampolineSetPartitionVisible + kPrologueSize + 5);
 		DWORD oldProtect;
 		VirtualProtect(g_trampolineSetPartitionVisible, sizeof(g_trampolineSetPartitionVisible), PAGE_EXECUTE_READWRITE, &oldProtect);
 
 		WriteRelJump(kAddr_SetPartitionVisible, (uintptr_t)SetPartitionVisible_Hook);
-		PatchWrite8(kAddr_SetPartitionVisible + 5, 0x90);
+		PatchWrite8(kAddr_SetPartitionVisible + 5, 0x90); //nop leftover byte
 		Log("VATSLimbFix installed");
 	}
 }

@@ -33,6 +33,7 @@ namespace ExplodingPantsFix
 	}
 
 	bool __fastcall Hook_IsAltTrigger(void* projBase, void* projectileRef) {
+		if (!projBase) return false;
 		if (((bool(__thiscall*)(void*))kAddr_IsAltTrigger)(projBase))
 			return true;
 		//flag 0x400 at offset 0xC8
