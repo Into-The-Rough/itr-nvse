@@ -440,6 +440,21 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 		case NVSEMessagingInterface::kMessage_NewGame:
 		case NVSEMessagingInterface::kMessage_PostLoadGame:
+			//clear all script callbacks - scripts from previous save are no longer valid
+			OFTH_ClearCallbacks();
+			OWJH_ClearCallbacks();
+			OSH_ClearCallbacks();
+			CMH_ClearCallbacks();
+			OEPH_ClearCallbacks();
+			OCPH_ClearCallbacks();
+			OFH_ClearCallbacks();
+			OWDH_ClearCallbacks();
+			OSPH_ClearCallbacks();
+			OMFCH_ClearCallbacks();
+			OMSCH_ClearCallbacks();
+			DTF_ClearCallbacks();
+			Log("Script callbacks cleared for new/loaded game");
+
 			OEPH_BuildEntryMap();
 			if (Settings::bAutoGodMode && !g_godModeExecuted)
 			{

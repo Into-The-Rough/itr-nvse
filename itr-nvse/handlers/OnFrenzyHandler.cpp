@@ -264,3 +264,9 @@ bool OFH_Init(void* nvseInterface) {
     OFH_Log("OnFrenzyHandler initialized successfully");
     return true;
 }
+
+void OFH_ClearCallbacks()
+{
+    g_callbacks.clear();
+    OFH_Log("Callbacks cleared on game load");
+}

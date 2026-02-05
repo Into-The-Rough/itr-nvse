@@ -412,3 +412,9 @@ unsigned int OCPH_GetOpcode()
 {
     return g_ocphOpcode;
 }
+
+void OCPH_ClearCallbacks()
+{
+    OnCombatProcedureHandler::g_callbacks.clear();
+    OCPH_Log("Callbacks cleared on game load");
+}

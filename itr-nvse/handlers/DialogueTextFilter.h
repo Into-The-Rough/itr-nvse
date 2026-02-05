@@ -10,6 +10,7 @@ bool DTF_Init(void* nvseInterface);
 bool DTF_AddFilter(const char* filterText, void* callback);
 bool DTF_RemoveFilter(const char* filterText, void* callback);
 unsigned int DTF_GetOpcode();
+void DTF_ClearCallbacks();
 
 //native callback type for other plugins
 //duration is in seconds, calculated from text length * fNoticeTextTimePerCharacter

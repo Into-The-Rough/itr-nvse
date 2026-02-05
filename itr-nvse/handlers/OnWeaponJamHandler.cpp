@@ -330,3 +330,9 @@ unsigned int OWJH_GetOpcode()
 {
     return g_owjhOpcode;
 }
+
+void OWJH_ClearCallbacks()
+{
+    OnWeaponJamHandler::g_callbacks.clear();
+    OWJH_Log("Callbacks cleared on game load");
+}

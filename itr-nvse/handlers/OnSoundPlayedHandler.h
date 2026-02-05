@@ -3,3 +3,4 @@
 bool OSPH_Init(void* nvseInterface);
 unsigned int OSPH_GetOpcode();
 void OSPH_Update();
+void OSPH_ClearCallbacks();

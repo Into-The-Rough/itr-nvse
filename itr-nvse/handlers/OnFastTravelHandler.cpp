@@ -281,3 +281,9 @@ unsigned int OFTH_GetOpcode()
 {
     return g_ofthOpcode;
 }
+
+void OFTH_ClearCallbacks()
+{
+    OnFastTravelHandler::g_callbacks.clear();
+    OFTH_Log("Callbacks cleared on game load");
+}
