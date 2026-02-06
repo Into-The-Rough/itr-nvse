@@ -45,6 +45,7 @@
     <ClCompile Include="test_stringmatch.cpp" />
     <ClCompile Include="test_cooldowntracker.cpp" />
     <ClCompile Include="test_safewrite.cpp" />
+    <ClCompile Include="test_hooklogic.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="test.h" />
