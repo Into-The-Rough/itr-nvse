@@ -592,6 +592,14 @@ static ActorProcessManager* g_actorProcessManager = (ActorProcessManager*)0x11E0
 typedef void (__thiscall *_ActorResurrect)(Actor*, bool, bool, bool);
 static const _ActorResurrect ActorResurrect = (_ActorResurrect)0x89F780;
 
+//Update3D to properly reload model after resurrection
+typedef void (__thiscall *_TESObjectREFR_Set3D)(TESObjectREFR*, void*, bool);
+static const _TESObjectREFR_Set3D TESObjectREFR_Set3D = (_TESObjectREFR_Set3D)0x94EB40;
+
+static void** g_modelLoader = (void**)0x11C3B3C;
+typedef void (__thiscall *_ModelLoader_QueueReference)(void*, TESObjectREFR*, UInt32, bool);
+static const _ModelLoader_QueueReference ModelLoader_QueueReference = (_ModelLoader_QueueReference)0x444850;
+
 DEFINE_COMMAND_PLUGIN(ResurrectAll, "Resurrects all dead actors in high process", 0, 0, nullptr);
 
 //ForceReload - forces actor to play reload animation and refill ammo
@@ -675,7 +683,15 @@ bool Cmd_ResurrectAll_Execute(COMMAND_ARGS)
 			Actor* actor = (Actor*)refr;
 			if (actor->lifeState != 2) continue;
 
-			ActorResurrect(actor, false, true, false);
+			//clear 3D first so resurrection doesn't reuse dismembered model
+			TESObjectREFR_Set3D(refr, nullptr, true);
+
+			ActorResurrect(actor, true, true, false);
+
+			//queue model reload
+			if (*g_modelLoader)
+				ModelLoader_QueueReference(*g_modelLoader, refr, 1, false);
+
 			count++;
 		}
 	};
