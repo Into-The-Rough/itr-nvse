@@ -2,6 +2,7 @@
 #pragma once
 #include <Windows.h>
 #include <cstdint>
+#include <cstring>
 
 namespace Detours {
 
@@ -13,12 +14,11 @@ public:
 		if (*reinterpret_cast<UInt8*>(src) != 0xE8)
 			return false;
 
-		overwritten_addr = *(UInt32*)(src + 1) + src + 5;
-
 		DWORD oldProtect;
 		if (!VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect))
 			return false;
 
+		overwritten_addr = *(UInt32*)(src + 1) + src + 5;
 		*(UInt32*)(src + 1) = dst - src - 5;
 		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
 		return true;
