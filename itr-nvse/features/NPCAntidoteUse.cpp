@@ -9,6 +9,7 @@ static FILE* g_logFile = nullptr;
 
 static void Log(const char* fmt, ...)
 {
+	return; //disabled for release
 	if (!g_logFile)
 	{
 		g_logFile = fopen("NPCAntidoteUse.log", "a");

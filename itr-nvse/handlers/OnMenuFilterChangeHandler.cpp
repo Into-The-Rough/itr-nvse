@@ -217,7 +217,7 @@ bool OMFCH_Init(void* nvseInterface) {
     char* lastSlash = strrchr(logPath, '\\');
     if (lastSlash) *lastSlash = '\0';
     strcat_s(logPath, "\\Data\\NVSE\\Plugins\\OnMenuFilterChangeHandler.log");
-    g_omfchLogFile = fopen(logPath, "w");
+    //g_omfchLogFile = fopen(logPath, "w"); //disabled for release
 
     OMFCH_Log("OnMenuFilterChangeHandler initializing (polling mode)...");
 

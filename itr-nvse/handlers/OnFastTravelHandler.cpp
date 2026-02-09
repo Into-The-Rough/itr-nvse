@@ -238,7 +238,7 @@ bool OFTH_Init(void* nvseInterface)
     char* lastSlash = strrchr(logPath, '\\');
     if (lastSlash) *lastSlash = '\0';
     strcat_s(logPath, "\\Data\\NVSE\\Plugins\\OnFastTravelHandler.log");
-    g_ofthLogFile = fopen(logPath, "w");
+    //g_ofthLogFile = fopen(logPath, "w"); //disabled for release
 
     OFTH_Log("OnFastTravelHandler module initializing...");
 

@@ -277,7 +277,7 @@ bool OWDH_Init(void* nvseInterface)
     char* lastSlash = strrchr(logPath, '\\');
     if (lastSlash) *lastSlash = '\0';
     strcat_s(logPath, "\\Data\\NVSE\\Plugins\\OnWeaponDropHandler.log");
-    g_owdhLogFile = fopen(logPath, "w");
+    //g_owdhLogFile = fopen(logPath, "w"); //disabled for release
 
     OWDH_Log("OnWeaponDropHandler module initializing...");
 

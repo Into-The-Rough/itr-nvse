@@ -352,7 +352,7 @@ bool OKSH_Init(void* nvseInterface)
     char* lastSlash = strrchr(logPath, '\\');
     if (lastSlash) *lastSlash = '\0';
     strcat_s(logPath, "\\Data\\NVSE\\Plugins\\OnKeyStateHandler.log");
-    g_okshLogFile = fopen(logPath, "w");
+    //g_okshLogFile = fopen(logPath, "w"); //disabled for release
 
     OKSH_Log("OnKeyStateHandler module initializing...");
 
