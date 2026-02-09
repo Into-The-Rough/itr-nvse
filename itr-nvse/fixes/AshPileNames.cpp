@@ -1,5 +1,5 @@
 //shows original NPC name for ash piles
-//NOT hot-reloadable - requires game restart
+//hook is installed once; behavior is gated at runtime via Settings::bAshPileNames
 
 #include "AshPileNames.h"
 #include "nvse/GameObjects.h"
@@ -10,6 +10,7 @@
 #include <cstring>
 
 extern void Log(const char* fmt, ...);
+namespace Settings { extern int bAshPileNames; }
 
 namespace AshPileNames
 {
@@ -18,6 +19,7 @@ namespace AshPileNames
 
 	typedef const char* (__thiscall* GetBaseFullName_t)(TESObjectREFR* thisRef);
 	static Detours::JumpDetour s_detour;
+	static bool s_hookInstalled = false;
 
 	static BSExtraData* GetExtraDataByType(BaseExtraList* list, UInt32 type)
 	{
@@ -59,6 +61,10 @@ namespace AshPileNames
 
 	static const char* __fastcall Hook_GetBaseFullName(TESObjectREFR* thisRef, void* edx)
 	{
+		// Allow live toggling via MCM/ReloadPluginConfig without reinstalling hooks.
+		if (!Settings::bAshPileNames)
+			return s_detour.GetTrampoline<GetBaseFullName_t>()(thisRef);
+
 		const char* actorName = GetActorNameFromAshPile(thisRef);
 		if (actorName)
 			return actorName;
@@ -68,8 +74,18 @@ namespace AshPileNames
 	//prologue: push ebp (1) + mov ebp,esp (2) + push ecx (1) + mov [ebp-4],ecx (3) = 7 bytes
 	void Init()
 	{
+		if (s_hookInstalled)
+			return;
+
 		if (s_detour.WriteRelJump(kGetBaseFullNameAddr, Hook_GetBaseFullName, 7))
+		{
+			s_hookInstalled = true;
 			Log("AshPileNames installed");
+		}
+		else
+		{
+			Log("AshPileNames failed to install");
+		}
 	}
 }
 
