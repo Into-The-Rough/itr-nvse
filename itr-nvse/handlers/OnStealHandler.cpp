@@ -273,7 +273,7 @@ bool OSH_Init(void* nvseInterface)
     char* lastSlash = strrchr(logPath, '\\');
     if (lastSlash) *lastSlash = '\0';
     strcat_s(logPath, "\\Data\\NVSE\\Plugins\\OnStealHandler.log");
-    g_oshLogFile = fopen(logPath, "w");
+    //g_oshLogFile = fopen(logPath, "w"); //disabled for release
 
     OSH_Log("OnStealHandler module initializing...");
 

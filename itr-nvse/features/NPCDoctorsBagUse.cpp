@@ -9,6 +9,7 @@ static FILE* g_logFile2 = nullptr;
 
 static void Log2(const char* fmt, ...)
 {
+	return; //disabled for release
 	if (!g_logFile2)
 	{
 		g_logFile2 = fopen("NPCDoctorsBagUse.log", "a");

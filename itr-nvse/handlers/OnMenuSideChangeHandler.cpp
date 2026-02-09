@@ -188,7 +188,7 @@ bool OMSCH_Init(void* nvseInterface) {
     char* lastSlash = strrchr(logPath, '\\');
     if (lastSlash) *lastSlash = '\0';
     strcat_s(logPath, "\\Data\\NVSE\\Plugins\\OnMenuSideChangeHandler.log");
-    g_omschLogFile = fopen(logPath, "w");
+    //g_omschLogFile = fopen(logPath, "w"); //disabled for release
 
     OMSCH_Log("OnMenuSideChangeHandler initializing (polling mode)...");
 
