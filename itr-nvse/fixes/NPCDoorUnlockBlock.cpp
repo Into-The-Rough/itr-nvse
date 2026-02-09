@@ -6,6 +6,8 @@
 #include "common/ITypes.h"
 #include "internal/Detours.h"
 
+extern void Log(const char* fmt, ...);
+
 namespace NPCDoorUnlockBlock
 {
 	static int g_blockLevel = 0;
@@ -62,7 +64,8 @@ namespace NPCDoorUnlockBlock
 	//prologue: push ebp; mov ebp, esp = 5 bytes
 	void Init()
 	{
-		s_detour.WriteRelJump(kAddr_CanActorIgnoreLock, CanActorIgnoreLock_Hook, 5);
+		if (!s_detour.WriteRelJump(kAddr_CanActorIgnoreLock, CanActorIgnoreLock_Hook, 5))
+			Log("ERROR: NPCDoorUnlockBlock hook failed");
 	}
 }
 

@@ -10,12 +10,15 @@ class CallDetour {
 	UInt32 overwritten_addr = 0;
 public:
 	bool WriteRelCall(UInt32 src, UInt32 dst) {
-		if (*reinterpret_cast<UInt8*>(src) != 0xE8) {
+		if (*reinterpret_cast<UInt8*>(src) != 0xE8)
 			return false;
-		}
+
 		overwritten_addr = *(UInt32*)(src + 1) + src + 5;
+
 		DWORD oldProtect;
-		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
+		if (!VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect))
+			return false;
+
 		*(UInt32*)(src + 1) = dst - src - 5;
 		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
 		return true;
@@ -42,10 +45,14 @@ public:
 		}
 	}
 
-	//src: address to hook, dst: hook function, size: bytes to copy (must be >= 5)
+	//src: address to hook, dst: hook function, size: bytes to copy (must be 5-27)
 	bool WriteRelJump(UInt32 src, UInt32 dst, UInt32 size) {
-		if (size < 5) return false;
+		if (size < 5 || size > 27) return false; //5 min for jmp, 27 max (32 - 5 for footer)
 		if (trampoline) return false; //already initialized
+
+		//reject if already hooked (starts with JMP)
+		if (*reinterpret_cast<UInt8*>(src) == 0xE9)
+			return false;
 
 		prologueSize = size;
 
@@ -62,14 +69,18 @@ public:
 
 		//patch source with jmp to hook
 		DWORD oldProtect;
-		VirtualProtect((void*)src, size, PAGE_EXECUTE_READWRITE, &oldProtect);
+		if (!VirtualProtect((void*)src, size, PAGE_EXECUTE_READWRITE, &oldProtect)) {
+			VirtualFree(trampoline, 0, MEM_RELEASE);
+			trampoline = nullptr;
+			return false;
+		}
+
 		*(UInt8*)src = 0xE9;
 		*(UInt32*)(src + 1) = dst - src - 5;
-		//nop remaining bytes
 		for (UInt32 i = 5; i < size; i++)
 			*(UInt8*)(src + i) = 0x90;
-		VirtualProtect((void*)src, size, oldProtect, &oldProtect);
 
+		VirtualProtect((void*)src, size, oldProtect, &oldProtect);
 		return true;
 	}
 
