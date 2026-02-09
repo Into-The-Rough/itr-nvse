@@ -44,7 +44,8 @@ static void DispatchConsoleOpenEvent()
 {
     OCH_Log("=== CONSOLE OPEN EVENT ===");
 
-    for (Script* callback : OnConsoleHandler::g_openCallbacks) {
+    const std::vector<Script*> callbackSnapshot = OnConsoleHandler::g_openCallbacks;
+    for (Script* callback : callbackSnapshot) {
         if (g_ochScript && callback) {
             // Call with no arguments
             g_ochScript->CallFunctionAlt(callback, nullptr, 0);
@@ -56,7 +57,8 @@ static void DispatchConsoleCloseEvent()
 {
     OCH_Log("=== CONSOLE CLOSE EVENT ===");
 
-    for (Script* callback : OnConsoleHandler::g_closeCallbacks) {
+    const std::vector<Script*> callbackSnapshot = OnConsoleHandler::g_closeCallbacks;
+    for (Script* callback : callbackSnapshot) {
         if (g_ochScript && callback) {
             // Call with no arguments
             g_ochScript->CallFunctionAlt(callback, nullptr, 0);
@@ -83,8 +85,16 @@ static void __cdecl Hook_ConsoleClose()
     }
 }
 
-static UInt32 ReadCallTarget(UInt32 callAddr) {
-    return *(UInt32*)(callAddr + 1) + callAddr + 5;
+static bool ReadCallTargetIfCall(UInt32 callAddr, UInt32& outTarget)
+{
+    if (*(UInt8*)callAddr != 0xE8)
+    {
+        OCH_Log("ERROR: Expected CALL opcode at 0x%08X, found 0x%02X", callAddr, *(UInt8*)callAddr);
+        return false;
+    }
+
+    outTarget = *(UInt32*)(callAddr + 1) + callAddr + 5;
+    return true;
 }
 
 static void InitHooks()
@@ -92,8 +102,12 @@ static void InitHooks()
     if (OnConsoleHandler::g_hooksInstalled) return;
 
     // Save original targets
-    OnConsoleHandler::s_originalOpenTarget = ReadCallTarget(kAddr_ConsoleOpenHook);
-    OnConsoleHandler::s_originalCloseTarget = ReadCallTarget(kAddr_ConsoleCloseHook);
+    if (!ReadCallTargetIfCall(kAddr_ConsoleOpenHook, OnConsoleHandler::s_originalOpenTarget) ||
+        !ReadCallTargetIfCall(kAddr_ConsoleCloseHook, OnConsoleHandler::s_originalCloseTarget))
+    {
+        OCH_Log("ERROR: Console hook install aborted due to unexpected callsite bytes");
+        return;
+    }
 
     // Install our hooks
     SafeWrite::WriteRelCall(kAddr_ConsoleOpenHook, (UInt32)Hook_ConsoleOpen);
