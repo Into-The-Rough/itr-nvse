@@ -37,13 +37,27 @@ struct CallbackEntry {
     SInt32 procFilter;
 };
 
-static void* g_combatController = nullptr;
-static void* g_procedure = nullptr;
-static bool g_isActionProcedure = false;
+struct QueuedCombatEvent {
+    Actor* actor;
+    UInt32 procType;
+    bool isActionProcedure;
+};
+
+class ScopedLock {
+    CRITICAL_SECTION* cs;
+public:
+    explicit ScopedLock(CRITICAL_SECTION* c) : cs(c) { EnterCriticalSection(cs); }
+    ~ScopedLock() { LeaveCriticalSection(cs); }
+    ScopedLock(const ScopedLock&) = delete;
+    ScopedLock& operator=(const ScopedLock&) = delete;
+};
 
 namespace OnCombatProcedureHandler {
     std::vector<CallbackEntry> g_callbacks;
+    std::vector<QueuedCombatEvent> g_pendingEvents;
     bool g_hookInstalled = false;
+    CRITICAL_SECTION g_queueLock;
+    bool g_lockInitialized = false;
     static UInt32 s_trampolineActionAddr = 0;
     static UInt32 s_trampolineMovementAddr = 0;
 }
@@ -147,47 +161,73 @@ static bool PassesProcFilter(UInt32 procType, SInt32 filter)
     return (SInt32)procType == filter;
 }
 
-static void DispatchCombatProcedureEvent()
+static void __cdecl QueueCombatProcedureEvent(void* combatController, void* procedure, UInt32 isActionProcedure)
 {
-    if (!g_combatController || !g_procedure) return;
+    if (!combatController || !procedure) return;
+    if (!OnCombatProcedureHandler::g_lockInitialized) return;
 
-    Actor* actor = GetPackageOwner(g_combatController);
+    Actor* actor = GetPackageOwner(combatController);
     if (!actor) return;
 
-    UInt32 procType = GetProcedureType(g_procedure);
+    UInt32 procType = GetProcedureType(procedure);
 
-    OCPH_Log("DispatchCombatProcedureEvent: actor=0x%08X procType=%d isAction=%d",
-             actor, procType, g_isActionProcedure ? 1 : 0);
+    // Prevent unbounded growth during heavy AI activity.
+    constexpr size_t kMaxQueuedEvents = 256;
+    {
+        ScopedLock lock(&OnCombatProcedureHandler::g_queueLock);
+        if (OnCombatProcedureHandler::g_pendingEvents.size() >= kMaxQueuedEvents) {
+            return;
+        }
+        OnCombatProcedureHandler::g_pendingEvents.push_back({actor, procType, isActionProcedure != 0});
+    }
+}
 
-    for (const CallbackEntry& entry : OnCombatProcedureHandler::g_callbacks) {
-        if (!g_ocphScript || !entry.callback) continue;
+void OCPH_Update()
+{
+    if (!OnCombatProcedureHandler::g_lockInitialized) return;
+    if (!g_ocphScript || OnCombatProcedureHandler::g_callbacks.empty()) return;
 
-        if (!PassesActorFilter(actor, entry.actorFilter)) continue;
-        if (!PassesProcFilter(procType, entry.procFilter)) continue;
+    std::vector<QueuedCombatEvent> queuedEvents;
+    {
+        ScopedLock lock(&OnCombatProcedureHandler::g_queueLock);
+        queuedEvents.swap(OnCombatProcedureHandler::g_pendingEvents);
+    }
 
-        OCPH_Log("  Calling callback 0x%08X", entry.callback);
-        g_ocphScript->CallFunctionAlt(
-            entry.callback,
-            reinterpret_cast<TESObjectREFR*>(actor),
-            3,
-            actor,
-            procType,
-            g_isActionProcedure ? 1 : 0
-        );
+    for (const QueuedCombatEvent& evt : queuedEvents) {
+        if (!evt.actor) continue;
+
+        OCPH_Log("DispatchCombatProcedureEvent: actor=0x%08X procType=%d isAction=%d",
+                 evt.actor, evt.procType, evt.isActionProcedure ? 1 : 0);
+
+        for (const CallbackEntry& entry : OnCombatProcedureHandler::g_callbacks) {
+            if (!entry.callback) continue;
+            if (!PassesActorFilter(evt.actor, entry.actorFilter)) continue;
+            if (!PassesProcFilter(evt.procType, entry.procFilter)) continue;
+
+            g_ocphScript->CallFunctionAlt(
+                entry.callback,
+                reinterpret_cast<TESObjectREFR*>(evt.actor),
+                3,
+                evt.actor,
+                evt.procType,
+                evt.isActionProcedure ? 1 : 0
+            );
+        }
     }
 }
 
 static __declspec(naked) void Hook_SetActionProcedure()
 {
     __asm {
-        mov g_combatController, ecx
         mov eax, [esp+4]
-        mov g_procedure, eax
-        mov g_isActionProcedure, 1
 
         pushad
         pushfd
-        call DispatchCombatProcedureEvent
+        push 1
+        push eax
+        push ecx
+        call QueueCombatProcedureEvent
+        add esp, 12
         popfd
         popad
 
@@ -198,14 +238,15 @@ static __declspec(naked) void Hook_SetActionProcedure()
 static __declspec(naked) void Hook_SetMovementProcedure()
 {
     __asm {
-        mov g_combatController, ecx
         mov eax, [esp+4]
-        mov g_procedure, eax
-        mov g_isActionProcedure, 0
 
         pushad
         pushfd
-        call DispatchCombatProcedureEvent
+        push 0
+        push eax
+        push ecx
+        call QueueCombatProcedureEvent
+        add esp, 12
         popfd
         popad
 
@@ -220,16 +261,32 @@ static void InitHooks()
 
     OCPH_Log("InitHooks: Installing combat procedure hooks...");
 
-    if (!s_actionDetour.WriteRelJump(kAddr_SetActionProcedure, Hook_SetActionProcedure, 6) ||
-        !s_movementDetour.WriteRelJump(kAddr_SetMovementProcedure, Hook_SetMovementProcedure, 6))
-    {
-        OCPH_Log("ERROR: Failed to install hooks");
+    if (!s_actionDetour.WriteRelJump(kAddr_SetActionProcedure, Hook_SetActionProcedure, 6)) {
+        OCPH_Log("ERROR: Failed to install action hook");
+        return;
+    }
+    OnCombatProcedureHandler::s_trampolineActionAddr = s_actionDetour.GetOverwrittenAddr();
+    if (!OnCombatProcedureHandler::s_trampolineActionAddr) {
+        OCPH_Log("ERROR: Action hook installed but trampoline missing; rolling back");
+        s_actionDetour.Remove();
         return;
     }
 
-    //store trampoline addresses for inline asm indirect jumps
-    OnCombatProcedureHandler::s_trampolineActionAddr = s_actionDetour.GetOverwrittenAddr();
+    if (!s_movementDetour.WriteRelJump(kAddr_SetMovementProcedure, Hook_SetMovementProcedure, 6)) {
+        OCPH_Log("ERROR: Failed to install movement hook; rolling back action hook");
+        s_actionDetour.Remove();
+        OnCombatProcedureHandler::s_trampolineActionAddr = 0;
+        return;
+    }
     OnCombatProcedureHandler::s_trampolineMovementAddr = s_movementDetour.GetOverwrittenAddr();
+    if (!OnCombatProcedureHandler::s_trampolineMovementAddr) {
+        OCPH_Log("ERROR: Movement hook installed but trampoline missing; rolling back both hooks");
+        s_movementDetour.Remove();
+        s_actionDetour.Remove();
+        OnCombatProcedureHandler::s_trampolineActionAddr = 0;
+        OnCombatProcedureHandler::s_trampolineMovementAddr = 0;
+        return;
+    }
 
     OnCombatProcedureHandler::g_hookInstalled = true;
     OCPH_Log("InitHooks: Hooks installed successfully");
@@ -371,6 +428,11 @@ bool OCPH_Init(void* nvseInterface)
     g_ExtractArgsEx = g_ocphScript->ExtractArgsEx;
     OCPH_Log("Script interface at 0x%08X", g_ocphScript);
 
+    if (!OnCombatProcedureHandler::g_lockInitialized) {
+        InitializeCriticalSection(&OnCombatProcedureHandler::g_queueLock);
+        OnCombatProcedureHandler::g_lockInitialized = true;
+    }
+
     nvse->SetOpcodeBase(0x4015);
     nvse->RegisterCommand(&kCommandInfo_SetOnCombatProcedureStartEventHandler);
     g_ocphOpcode = 0x4015;
@@ -389,5 +451,9 @@ unsigned int OCPH_GetOpcode()
 void OCPH_ClearCallbacks()
 {
     OnCombatProcedureHandler::g_callbacks.clear();
+    if (OnCombatProcedureHandler::g_lockInitialized) {
+        ScopedLock lock(&OnCombatProcedureHandler::g_queueLock);
+        OnCombatProcedureHandler::g_pendingEvents.clear();
+    }
     OCPH_Log("Callbacks cleared on game load");
 }
