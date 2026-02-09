@@ -21,6 +21,7 @@ public:
 		overwritten_addr = *(UInt32*)(src + 1) + src + 5;
 		*(UInt32*)(src + 1) = dst - src - 5;
 		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
+		FlushInstructionCache(GetCurrentProcess(), (void*)src, 5);
 		return true;
 	}
 
@@ -81,6 +82,7 @@ public:
 			*(UInt8*)(src + i) = 0x90;
 
 		VirtualProtect((void*)src, size, oldProtect, &oldProtect);
+		FlushInstructionCache(GetCurrentProcess(), (void*)src, size);
 		return true;
 	}
 
