@@ -440,8 +440,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			case NVSEMessagingInterface::kMessage_PostPostLoad:
 				if (Settings::bDialogueCamera)
 					DCH_InstallCameraHooks();
-				if (Settings::bAshPileNames)
-					AshPileNames_Init();
+				AshPileNames_Init();
 				if (Settings::bVATSExtender)
 					VATSExtender_Init();
 				if (Settings::bSuppressObjectives || Settings::bSuppressReputation)
