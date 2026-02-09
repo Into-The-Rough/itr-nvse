@@ -293,28 +293,49 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
     }
 }
 
+static void __cdecl LogSkippedRunResult(TESTopicInfo* topicInfo, Actor* speaker, UInt32 param) {
+    if (!g_dtfLogFile) return;
+    DTF_Log("=== SKIPPED (param=%d) === topicInfo=0x%08X speaker=0x%08X", param, topicInfo, speaker);
+    if (IsValidFormPointer(topicInfo) && IsValidFormPointer(speaker)) {
+        TESTopicInfoResponse** ppResponse = ThisStdCall<TESTopicInfoResponse**>(
+            kAddr_GetResponses, topicInfo, nullptr);
+        if (ppResponse && *ppResponse) {
+            const char* text = (*ppResponse)->responseText.CStr();
+            DTF_Log("  Skipped text: '%s'", text ? text : "(null)");
+        }
+    }
+}
+
 static auto g_hookCallback = &HookCallback;
 static UInt32 g_chainAddr = 0;
 
 static __declspec(naked) void DialogueTextHook() {
-    static UInt32 s_thisPtr;
-    static UInt32 s_speakerPtr;
     __asm {
         cmp     dword ptr [esp+4], 0
-        jnz     skip_filter
-
-        mov     s_thisPtr, ecx
-        mov     eax, [esp+8]
-        mov     s_speakerPtr, eax
+        jnz     log_and_skip
 
         pushad
         pushfd
 
-        push    s_speakerPtr
-        push    s_thisPtr
+        //speaker was at [esp+8] before pushad(0x20)+pushfd(0x4)
+        push    dword ptr [esp+0x2C]
+        push    ecx
         call    [g_hookCallback]
         add     esp, 8
 
+        popfd
+        popad
+        jmp     skip_filter
+
+    log_and_skip:
+        pushad
+        pushfd
+        //log what we're skipping: LogSkippedRunResult(topicInfo, speaker, param)
+        push    dword ptr [esp+0x28]  //param (esp+4 shifted by pushad+pushfd)
+        push    dword ptr [esp+0x30]  //speaker (esp+8 shifted, +4 for prev push)
+        push    ecx                   //topicInfo
+        call    LogSkippedRunResult
+        add     esp, 12
         popfd
         popad
 
