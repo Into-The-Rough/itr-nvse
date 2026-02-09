@@ -285,3 +285,9 @@ bool DTH_Init(void* nvseInterface) {
     DTH_Log("DoubleTapHandler initialized successfully");
     return true;
 }
+
+void DTH_ClearCallbacks()
+{
+    g_handlers.clear();
+    DTH_Log("Callbacks cleared on game load");
+}
