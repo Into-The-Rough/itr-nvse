@@ -308,7 +308,11 @@ namespace QuickReadNote
 	}
 
 	static UInt32 GetMaxLines() {
-		if (g_maxLines > 0) return g_maxLines;
+		if (g_maxLines > 0) {
+			if (g_maxLines < 8) return 8;
+			if (g_maxLines > 48) return 48;
+			return g_maxLines;
+		}
 		UInt32 screenHeight = GAME_SCREEN_HEIGHT;
 		if (screenHeight < 480 || screenHeight > 4320)
 			screenHeight = GetSystemMetrics(SM_CYSCREEN);

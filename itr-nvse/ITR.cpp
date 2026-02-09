@@ -252,19 +252,23 @@ namespace NoWeaponSearch
 		if (Settings::bNPCDoctorsBagUse)
 			NPCDoctorsBagUse_Check(combatState);
 
+		bool isDisabled = false;
 		{
 			ScopedLock lock(&g_lock);
-			if (g_count == 0)
-				return Original(combatState);
-
-			void* controller = *(void**)((char*)combatState + 0x1C4);
-			if (controller)
+			if (g_count > 0)
 			{
-				Actor* actor = GetPackageOwner(controller);
-				if (actor && IsDisabled_Unlocked(actor->refID))
-					return false;
+				void* controller = *(void**)((char*)combatState + 0x1C4);
+				if (controller)
+				{
+					Actor* actor = GetPackageOwner(controller);
+					if (actor && IsDisabled_Unlocked(actor->refID))
+						isDisabled = true;
+				}
 			}
 		}
+
+		if (isDisabled)
+			return false;
 
 		return Original(combatState);
 	}
