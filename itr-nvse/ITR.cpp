@@ -684,7 +684,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 		Log("OnCombatProcedureHandler module failed to initialize");
 
 	if (OSPH_Init((void*)nvse))
-		Log("OnSoundPlayedHandler module initialized (opcode 0x%04X)", OSPH_GetOpcode());
+		Log("OnSoundPlayedHandler module initialized (play=0x%04X, completed=0x%04X)", OSPH_GetOpcode(), OSPH_GetCompletionOpcode());
 	else
 		Log("OnSoundPlayedHandler module failed to initialize");
 
