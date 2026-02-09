@@ -108,6 +108,9 @@ namespace Settings
 	// CompanionNoInfamy settings
 	int bCompanionNoInfamy = 1;  // Enabled by default - companions killing faction members doesn't give player infamy
 
+	// MusicResetOnLoad settings
+	int bMusicResetOnLoad = 1;  // Enabled by default - reset music state when loading a save
+
 	static char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -179,6 +182,8 @@ namespace Settings
 		fDoctorsBagUseTimer = (float)GetINIInt("NPCDoctorsBagUse", "iUseTimer", 15);
 
 		bCompanionNoInfamy = GetINIInt("Tweaks", "bCompanionNoInfamy", 1);
+
+		bMusicResetOnLoad = GetINIInt("Tweaks", "bMusicResetOnLoad", 1);
 
 	}
 }
