@@ -5,41 +5,12 @@
 #include <cstdint>
 #include <cstring>
 #include "internal/Detours.h"
+#include "internal/NVSEMinimal.h"
 
 extern void Log(const char* fmt, ...);
 
-
-struct ParamInfo;
-struct TESObjectREFR;
-struct Script;
-struct ScriptEventList;
-struct Actor;
-
-#define COMMAND_ARGS ParamInfo* paramInfo, void* scriptData, TESObjectREFR* thisObj, TESObjectREFR* containingObj, Script* scriptObj, ScriptEventList* eventList, double* result, UInt32* opcodeOffsetPtr
+//local ExtractArgs differs from NVSEScriptInterface version
 #define EXTRACT_ARGS paramInfo, scriptData, opcodeOffsetPtr, thisObj, containingObj, scriptObj, eventList
-
-enum ParamType { kParamType_Integer = 1 };
-struct ParamInfo { const char* name; UInt32 type; UInt32 isOptional; };
-struct CommandInfo {
-	const char* longName;
-	const char* shortName;
-	UInt32 opcode;
-	const char* helpText;
-	UInt16 needsParent;
-	UInt16 numParams;
-	ParamInfo* params;
-	void* execute;
-	void* parse;
-	void* eval;
-	UInt32 flags;
-};
-struct NVSEInterface {
-	UInt32 nvseVersion, runtimeVersion, editorVersion, isEditor;
-	bool (*RegisterCommand)(CommandInfo* info);
-	void (*SetOpcodeBase)(UInt32 opcode);
-	void* pad[4];
-};
-
 typedef bool (*ExtractArgs_t)(ParamInfo*, void*, UInt32*, TESObjectREFR*, TESObjectREFR*, Script*, ScriptEventList*, ...);
 static ExtractArgs_t ExtractArgs = (ExtractArgs_t)0x5ACCB0;
 
@@ -193,12 +164,12 @@ static ParamInfo kParams_SetPreventWeaponSwitch[1] = {
 
 static CommandInfo kCommandInfo_SetPreventWeaponSwitch = {
 	"SetPreventWeaponSwitch", "", 0, "Prevent actor from switching weapons",
-	1, 1, kParams_SetPreventWeaponSwitch, (void*)Cmd_SetPreventWeaponSwitch_Execute, 0, 0, 0
+	1, 1, kParams_SetPreventWeaponSwitch, Cmd_SetPreventWeaponSwitch_Execute, nullptr, nullptr, 0
 };
 
 static CommandInfo kCommandInfo_GetPreventWeaponSwitch = {
 	"GetPreventWeaponSwitch", "", 0, "Check if actor weapon switching is prevented",
-	1, 0, 0, (void*)Cmd_GetPreventWeaponSwitch_Execute, 0, 0, 0
+	1, 0, nullptr, Cmd_GetPreventWeaponSwitch_Execute, nullptr, nullptr, 0
 };
 
 void PreventWeaponSwitch_RegisterCommands(const void* nvse)
