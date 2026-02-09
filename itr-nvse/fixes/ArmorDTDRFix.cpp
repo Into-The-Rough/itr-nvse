@@ -32,11 +32,30 @@ namespace ArmorDTDRFix
 		return ((T_Ret(__thiscall*)(void*, Args...))addr)(_this, args...);
 	}
 
+	typedef void(__thiscall* ResetArmorRating_t)(void*);
+
 	static Detours::JumpDetour s_detour;
+	static ResetArmorRating_t s_originalResetArmorRating = nullptr;
+	static bool s_disabled = false;
 
 	void __fastcall Hook_ResetArmorRating(void* character, void* edx) {
-		typedef void(__thiscall* ResetArmorRating_t)(void*);
-		s_detour.GetTrampoline<ResetArmorRating_t>()(character);
+		if (!character || s_disabled || !s_originalResetArmorRating) return;
+
+		__try {
+			s_originalResetArmorRating(character);
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER) {
+			Log("ArmorDTDRFix: exception calling ResetArmorRating trampoline, disabling fix");
+			s_disabled = true;
+			s_originalResetArmorRating = nullptr;
+			s_detour.Remove();
+			return;
+		}
+
+		//baseProcess is uninitialized during Character::Character construction
+		//refID is 0 until the form is fully created, skip cache dirtying for half-constructed actors
+		uint32_t refID = *(uint32_t*)((char*)character + 0x0C);
+		if (!refID) return;
 
 		BaseProcess* process = ((Actor*)character)->baseProcess;
 		if (process && process->processLevel == 0) {
@@ -47,8 +66,19 @@ namespace ArmorDTDRFix
 
 	//prologue: 7 bytes
 	void Init() {
-		if (s_detour.WriteRelJump(kAddr_ResetArmorRating, Hook_ResetArmorRating, 7))
+		if (s_detour.WriteRelJump(kAddr_ResetArmorRating, Hook_ResetArmorRating, 7)) {
+			s_originalResetArmorRating = s_detour.GetTrampoline<ResetArmorRating_t>();
+			if (!s_originalResetArmorRating) {
+				Log("ArmorDTDRFix failed: trampoline not created");
+				s_disabled = true;
+				s_detour.Remove();
+				return;
+			}
 			Log("ArmorDTDRFix installed");
+		}
+		else {
+			Log("ArmorDTDRFix failed to install");
+		}
 	}
 }
 
