@@ -128,7 +128,7 @@ bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 	ProcessCell(playerCell);
 
 	TESWorldSpace* world = playerCell->worldSpace;
-	if (world && cellDepth > 0 && !playerCell->IsInterior() && playerCell->coords)
+	if (world && world->cellMap && cellDepth > 0 && !playerCell->IsInterior() && playerCell->coords)
 	{
 		SInt32 baseX = (SInt32)playerCell->coords->x;
 		SInt32 baseY = (SInt32)playerCell->coords->y;
@@ -493,7 +493,7 @@ static void* GetCombatTargetData(Actor* observer, Actor* target)
 //helper to create position array from CombatTarget offset
 static bool CreatePositionArray(COMMAND_ARGS, void* combatTarget, UInt32 offset)
 {
-	if (!combatTarget) return false;
+	if (!combatTarget || !g_arrInterface) return false;
 
 	float* pos = (float*)((UInt8*)combatTarget + offset);
 
@@ -699,7 +699,7 @@ bool Cmd_ResurrectAll_Execute(COMMAND_ARGS)
 	ProcessCell(player->parentCell);
 
 	TESWorldSpace* world = player->parentCell->worldSpace;
-	if (world && !player->parentCell->IsInterior() && player->parentCell->coords)
+	if (world && world->cellMap && !player->parentCell->IsInterior() && player->parentCell->coords)
 	{
 		SInt32 baseX = (SInt32)player->parentCell->coords->x;
 		SInt32 baseY = (SInt32)player->parentCell->coords->y;
@@ -724,6 +724,92 @@ bool Cmd_ResurrectAll_Execute(COMMAND_ARGS)
 	return true;
 }
 
+//TESDataHandler::CreateFormFromID - allocates a blank form of given type
+typedef TESForm* (*_CreateFormInstance)(UInt8 type);
+static const _CreateFormInstance CreateFormInstance = (_CreateFormInstance)0x465110;
+
+//DataHandler::DoAddForm - registers form in game DB, assigns runtime 0xFF formID
+typedef UInt32 (__thiscall *_DataHandler_DoAddForm)(void*, TESForm*);
+static const _DataHandler_DoAddForm DataHandler_DoAddForm = (_DataHandler_DoAddForm)0x4603B0;
+static void** g_dataHandler = (void**)0x11C3F2C;
+
+static ParamInfo kParams_SetRaceAlt[1] = {
+	{ "race", kParamType_Race, 0 },
+};
+
+DEFINE_COMMAND_PLUGIN(SetRaceAlt, "Sets race on a per-reference basis by cloning the base NPC", 1, 1, kParams_SetRaceAlt);
+
+bool Cmd_SetRaceAlt_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+
+	TESForm* raceForm = nullptr;
+	if (!ExtractArgs(EXTRACT_ARGS, &raceForm))
+		return true;
+
+	if (!thisObj || !thisObj->baseForm || !raceForm)
+	{
+		if (IsConsoleMode())
+			Console_Print("SetRaceAlt >> Need an NPC ref and a race");
+		return true;
+	}
+
+	if (thisObj->baseForm->typeID != kFormType_NPC)
+	{
+		if (IsConsoleMode())
+			Console_Print("SetRaceAlt >> Not an NPC ref");
+		return true;
+	}
+
+	TESNPC* origNPC = (TESNPC*)thisObj->baseForm;
+	TESRace* newRace = (TESRace*)raceForm;
+	TESNPC* targetNPC = origNPC;
+
+	//if base is already a runtime clone (0xFF prefix), reuse it
+	if ((origNPC->refID >> 24) == 0xFF)
+	{
+		targetNPC = origNPC;
+	}
+	else
+	{
+		TESForm* cloneForm = CreateFormInstance(kFormType_NPC);
+		if (!cloneForm)
+		{
+			if (IsConsoleMode())
+				Console_Print("SetRaceAlt >> Failed to create NPC form");
+			return true;
+		}
+
+		//virtual CopyFrom copies all NPC data (AI, spells, race, facegen, etc)
+		cloneForm->CopyFrom(origNPC);
+
+		if (*g_dataHandler)
+			DataHandler_DoAddForm(*g_dataHandler, cloneForm);
+
+		targetNPC = (TESNPC*)cloneForm;
+		thisObj->baseForm = cloneForm;
+
+		Log("SetRaceAlt: cloned %08X -> %08X for ref %08X",
+			origNPC->refID, cloneForm->refID, thisObj->refID);
+	}
+
+	targetNPC->race.race = newRace;
+
+	//refresh 3D
+	TESObjectREFR_Set3D(thisObj, nullptr, true);
+	if (*g_modelLoader)
+		ModelLoader_QueueReference(*g_modelLoader, thisObj, 1, false);
+
+	*result = 1;
+
+	if (IsConsoleMode())
+		Console_Print("SetRaceAlt >> Set race to %s on %08X (base %08X)",
+			newRace->fullName.name.m_data ? newRace->fullName.name.m_data : "???",
+			thisObj->refID, targetNPC->refID);
+
+	return true;
+}
+
 bool ImperativeCommands_Init(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
@@ -744,7 +830,10 @@ bool ImperativeCommands_Init(void* nvsePtr)
 	/*4036*/ nvse->RegisterCommand(&kCommandInfo_ResurrectAll);
 	/*4037*/ nvse->RegisterCommand(&kCommandInfo_ForceReload);
 
-	Log("Registered ImperativeCommands at 0x4021-0x4029, 0x4035-0x4037");
+	nvse->SetOpcodeBase(0x403B);
+	/*403B*/ nvse->RegisterCommand(&kCommandInfo_SetRaceAlt);
+
+	Log("Registered ImperativeCommands at 0x4021-0x4029, 0x4035-0x4037, 0x403B");
 
 	return true;
 }
