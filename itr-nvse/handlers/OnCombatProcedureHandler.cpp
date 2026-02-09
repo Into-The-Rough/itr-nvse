@@ -6,6 +6,7 @@
 
 #include "OnCombatProcedureHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/Detours.h"
 
 static FILE* g_ocphLogFile = nullptr;
 
@@ -47,8 +48,8 @@ namespace OnCombatProcedureHandler {
     static UInt32 s_trampolineMovementAddr = 0;
 }
 
-static UInt8* g_trampolineAction = nullptr;
-static UInt8* g_trampolineMovement = nullptr;
+static Detours::JumpDetour s_actionDetour;
+static Detours::JumpDetour s_movementDetour;
 
 static Actor* GetPackageOwner(void* combatController)
 {
@@ -212,54 +213,26 @@ static __declspec(naked) void Hook_SetMovementProcedure()
     }
 }
 
-static UInt8* AllocateTrampoline(UInt32 funcAddr, UInt32 prologueSize)
-{
-    UInt8* buffer = (UInt8*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-    if (!buffer) return nullptr;
-
-    memcpy(buffer, (void*)funcAddr, prologueSize);
-
-    buffer[prologueSize] = 0xE9;
-    UInt32 jumpTarget = funcAddr + prologueSize;
-    *(UInt32*)(buffer + prologueSize + 1) = jumpTarget - (UInt32)(buffer + prologueSize) - 5;
-
-    return buffer;
-}
-
+//both functions: push ebp; mov ebp,esp; sub esp,10h = 6 bytes
 static void InitHooks()
 {
     if (OnCombatProcedureHandler::g_hookInstalled) return;
 
     OCPH_Log("InitHooks: Installing combat procedure hooks...");
 
-    //both functions: push ebp; mov ebp,esp; sub esp,10h = 6 bytes
-    constexpr UInt32 kPrologueSize = 6;
-
-    g_trampolineAction = AllocateTrampoline(kAddr_SetActionProcedure, kPrologueSize);
-    g_trampolineMovement = AllocateTrampoline(kAddr_SetMovementProcedure, kPrologueSize);
-
-    if (!g_trampolineAction || !g_trampolineMovement) {
-        OCPH_Log("ERROR: Failed to allocate trampolines");
+    if (!s_actionDetour.WriteRelJump(kAddr_SetActionProcedure, Hook_SetActionProcedure, 6) ||
+        !s_movementDetour.WriteRelJump(kAddr_SetMovementProcedure, Hook_SetMovementProcedure, 6))
+    {
+        OCPH_Log("ERROR: Failed to install hooks");
         return;
     }
 
-    OnCombatProcedureHandler::s_trampolineActionAddr = (UInt32)g_trampolineAction;
-    OnCombatProcedureHandler::s_trampolineMovementAddr = (UInt32)g_trampolineMovement;
-
-    OCPH_Log("Trampolines created:");
-    OCPH_Log("  Action: 0x%08X", g_trampolineAction);
-    OCPH_Log("  Movement: 0x%08X", g_trampolineMovement);
-
-    SafeWrite::WriteRelJump(kAddr_SetActionProcedure, (UInt32)Hook_SetActionProcedure);
-    SafeWrite::Write8(kAddr_SetActionProcedure + 5, 0x90);
-
-    SafeWrite::WriteRelJump(kAddr_SetMovementProcedure, (UInt32)Hook_SetMovementProcedure);
-    SafeWrite::Write8(kAddr_SetMovementProcedure + 5, 0x90);
+    //store trampoline addresses for inline asm indirect jumps
+    OnCombatProcedureHandler::s_trampolineActionAddr = s_actionDetour.GetOverwrittenAddr();
+    OnCombatProcedureHandler::s_trampolineMovementAddr = s_movementDetour.GetOverwrittenAddr();
 
     OnCombatProcedureHandler::g_hookInstalled = true;
     OCPH_Log("InitHooks: Hooks installed successfully");
-    OCPH_Log("  ActionProcedure: 0x%08X -> Hook -> Trampoline", kAddr_SetActionProcedure);
-    OCPH_Log("  MovementProcedure: 0x%08X -> Hook -> Trampoline", kAddr_SetMovementProcedure);
 }
 
 static bool AddCallback(Script* callback, TESForm* actorFilter, SInt32 procFilter)
@@ -381,7 +354,7 @@ bool OCPH_Init(void* nvseInterface)
     char* lastSlash = strrchr(logPath, '\\');
     if (lastSlash) *lastSlash = '\0';
     strcat_s(logPath, "\\Data\\NVSE\\Plugins\\OnCombatProcedureHandler.log");
-    g_ocphLogFile = fopen(logPath, "w");
+    //g_ocphLogFile = fopen(logPath, "w"); //disabled for release
 
     OCPH_Log("OnCombatProcedureHandler module initializing...");
 

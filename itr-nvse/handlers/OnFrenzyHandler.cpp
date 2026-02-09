@@ -6,6 +6,7 @@
 
 #include "OnFrenzyHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/Detours.h"
 
 static FILE* g_ofhLogFile = nullptr;
 
@@ -37,10 +38,9 @@ static std::vector<FrenzyCallback> g_callbacks;
 
 //AV::LimbCondition::HandleChange - called when limb condition changes
 // void __cdecl HandleChange(ActorValueOwner* a1, int avIndex, float oldValue, float delta, ActorValueOwner* attacker)
-// Prologue: 55 8B EC 81 EC 10 03 00 00 = push ebp; mov ebp, esp; sub esp, 0x310 (9 bytes)
+// Prologue: push ebp; mov ebp, esp; sub esp, 0x310 = 9 bytes
 constexpr UInt32 kAddr_LimbCondition_HandleChange = 0x8B9240;
-constexpr int kPrologueBytes = 9;
-static UInt32 g_originalHandleChange = 0;
+static Detours::JumpDetour s_detour;
 
 static void DispatchFrenzyEvent(Actor* actor) {
     if (!g_ofhScript || !actor) return;
@@ -106,9 +106,8 @@ static void __cdecl Hook_LimbCondition_HandleChange(
     }
 
     // Call original
-    ((void(__cdecl*)(void*, UInt32, float, float, void*))g_originalHandleChange)(
-        actorValueOwner, avIndex, oldValue, delta, attackerAVO
-    );
+    typedef void(__cdecl* HandleChange_t)(void*, UInt32, float, float, void*);
+    s_detour.GetTrampoline<HandleChange_t>()(actorValueOwner, avIndex, oldValue, delta, attackerAVO);
 
     // Dispatch frenzy event if brain went to 0
     if (willFrenzy && actor && g_callbacks.size() > 0) {
@@ -116,36 +115,12 @@ static void __cdecl Hook_LimbCondition_HandleChange(
     }
 }
 
-// Trampoline for original function
-static UInt8* g_trampolineAddr = nullptr;
-
 static void InstallHook() {
-    // Allocate executable memory for trampoline
-    g_trampolineAddr = (UInt8*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-    if (!g_trampolineAddr) {
-        OFH_Log("ERROR: Failed to allocate trampoline memory");
+    if (!s_detour.WriteRelJump(kAddr_LimbCondition_HandleChange, Hook_LimbCondition_HandleChange, 9)) {
+        OFH_Log("ERROR: Failed to install hook");
         return;
     }
-
-    // Copy original prologue bytes (9 bytes: push ebp; mov ebp, esp; sub esp, 0x310)
-    DWORD oldProtect;
-    VirtualProtect((void*)kAddr_LimbCondition_HandleChange, kPrologueBytes, PAGE_EXECUTE_READWRITE, &oldProtect);
-    memcpy(g_trampolineAddr, (void*)kAddr_LimbCondition_HandleChange, kPrologueBytes);
-    VirtualProtect((void*)kAddr_LimbCondition_HandleChange, kPrologueBytes, oldProtect, &oldProtect);
-
-    // Add jump back to original + kPrologueBytes
-    g_trampolineAddr[kPrologueBytes] = 0xE9;  // jmp
-    *(UInt32*)(g_trampolineAddr + kPrologueBytes + 1) = (kAddr_LimbCondition_HandleChange + kPrologueBytes) - ((UInt32)g_trampolineAddr + kPrologueBytes + 5);
-
-    g_originalHandleChange = (UInt32)g_trampolineAddr;
-
-    // Write jump to our hook at the original location (overwrites 5 bytes, NOP remaining 4)
-    SafeWrite::WriteRelJump(kAddr_LimbCondition_HandleChange, (UInt32)Hook_LimbCondition_HandleChange);
-    for (int i = 5; i < kPrologueBytes; i++) {
-        SafeWrite::Write8(kAddr_LimbCondition_HandleChange + i, 0x90);
-    }
-
-    OFH_Log("Hook installed at 0x%08X, trampoline at 0x%08X", kAddr_LimbCondition_HandleChange, g_trampolineAddr);
+    OFH_Log("Hook installed at 0x%08X", kAddr_LimbCondition_HandleChange);
 }
 
 static ParamInfo kParams_SetOnFrenzyEventHandler[3] = {
@@ -221,7 +196,7 @@ bool OFH_Init(void* nvseInterface) {
     char* lastSlash = strrchr(logPath, '\\');
     if (lastSlash) *lastSlash = '\0';
     strcat_s(logPath, "\\Data\\NVSE\\Plugins\\OnFrenzyHandler.log");
-    g_ofhLogFile = fopen(logPath, "w");
+    //g_ofhLogFile = fopen(logPath, "w"); //disabled for release
 
     OFH_Log("OnFrenzyHandler initializing...");
 
