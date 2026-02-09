@@ -4,114 +4,114 @@
 namespace Settings
 {
 	// Tweaks
-	int bAutoGodMode = 0;
-	int bAutoQuickLoad = 0;
-	int bMessageBoxQuickClose = 1;  // Enabled by default
-	int bConsoleLogCleaner = 1;     // Enabled by default
-	int bAltTabMute = 1;            // Enabled by default
-	int bQuickDrop = 0;             // Disabled by default (needs keybind config)
-	int bQuick180 = 0;              // Disabled by default (needs keybind config)
+	inline int bAutoGodMode = 0;
+	inline int bAutoQuickLoad = 0;
+	inline int bMessageBoxQuickClose = 1;  // Enabled by default
+	inline int bConsoleLogCleaner = 1;     // Enabled by default
+	inline int bAltTabMute = 1;            // Enabled by default
+	inline int bQuickDrop = 0;             // Disabled by default (needs keybind config)
+	inline int bQuick180 = 0;              // Disabled by default (needs keybind config)
 
 	// AutoQuickLoad settings
-	int iAutoQuickLoadFrameDelay = 5;
+	inline int iAutoQuickLoadFrameDelay = 5;
 
 	// QuickDrop settings
-	int iQuickDropModifierKey = VK_SHIFT;
-	int iQuickDropControlID = 7;  // Ready weapon control
+	inline int iQuickDropModifierKey = VK_SHIFT;
+	inline int iQuickDropControlID = 7;  // Ready weapon control
 
 	// Quick180 settings
-	int iQuick180ModifierKey = VK_SHIFT;
-	int iQuick180ControlID = 5;   // Run control
+	inline int iQuick180ModifierKey = VK_SHIFT;
+	inline int iQuick180ControlID = 5;   // Run control
 
 	// SlowMotionPhysicsFix settings
-	int bSlowMotionPhysicsFix = 1;  // Enabled by default
+	inline int bSlowMotionPhysicsFix = 1;  // Enabled by default
 
 	// ExplodingPantsFix settings
-	int bExplodingPantsFix = 1;  // Enabled by default
+	inline int bExplodingPantsFix = 1;  // Enabled by default
 
 	// KillActorXPFix settings
-	int bKillActorXPFix = 1;  // Enabled by default - prevents XP from kill command on already-dead actors
+	inline int bKillActorXPFix = 1;  // Enabled by default - prevents XP from kill command on already-dead actors
 
 	// ReversePickpocketNoKarma settings
-	int bReversePickpocketNoKarma = 1;  // Enabled by default - no karma loss when placing items (except live grenades)
+	inline int bReversePickpocketNoKarma = 1;  // Enabled by default - no karma loss when placing items (except live grenades)
 
 	// SaveFileSize settings
-	int bSaveFileSize = 1;  // Enabled by default - show file size in save/load menu
+	inline int bSaveFileSize = 1;  // Enabled by default - show file size in save/load menu
 
 	// OwnerNameInfo settings
-	int bOwnerNameInfo = 1;  // Enabled by default - show owner name on crosshair prompt
+	inline int bOwnerNameInfo = 1;  // Enabled by default - show owner name on crosshair prompt
 
 	// DialogueCamera settings
-	int bDialogueCamera = 0;  // Disabled by default - cinematic camera angles during dialogue
+	inline int bDialogueCamera = 0;  // Disabled by default - cinematic camera angles during dialogue
 
 	// VATSProjectileFix settings
-	int bVATSProjectileFix = 1;  // Enabled by default - fix projectile hit chance in VATS
+	inline int bVATSProjectileFix = 1;  // Enabled by default - fix projectile hit chance in VATS
 
 	// VATSLimbFix settings
-	int bVATSLimbFix = 0;  // Disabled by default - hide dismembered limbs in VATS
+	inline int bVATSLimbFix = 0;  // Disabled by default - hide dismembered limbs in VATS
 
 	// OwnedBeds settings
-	int bOwnedBeds = 0;  // Disabled by default - allow sleeping in owned beds with consequences
+	inline int bOwnedBeds = 0;  // Disabled by default - allow sleeping in owned beds with consequences
 
 	// AshPileNames settings
-	int bAshPileNames = 0;  // Disabled by default - show original NPC name for ash piles
+	inline int bAshPileNames = 0;  // Disabled by default - show original NPC name for ash piles
 
 	// LocationVisitPopup settings
-	int bLocationVisitPopup = 1;  // Enabled by default - show popup when revisiting discovered locations
-	int iLocationVisitCooldownSeconds = 300;  // Cooldown between popups for same location
-	int bLocationVisitDisableSound = 0;  // Play sound with popup
+	inline int bLocationVisitPopup = 1;  // Enabled by default - show popup when revisiting discovered locations
+	inline int iLocationVisitCooldownSeconds = 300;  // Cooldown between popups for same location
+	inline int bLocationVisitDisableSound = 0;  // Play sound with popup
 
 	// VATSExtender settings
-	int bVATSExtender = 1;  // Enabled by default - extend VATS target highlighting limit
+	inline int bVATSExtender = 1;  // Enabled by default - extend VATS target highlighting limit
 
 	// ELMO settings - convert popups to corner messages
-	int bSuppressObjectives = 1;  // Enabled by default - quest objectives as corner messages
-	int bSuppressReputation = 1;  // Enabled by default - reputation changes as corner messages
+	inline int bSuppressObjectives = 1;  // Enabled by default - quest objectives as corner messages
+	inline int bSuppressReputation = 1;  // Enabled by default - reputation changes as corner messages
 
 	// FriendlyFire settings
-	int bFriendlyFire = 0;  // Disabled by default - allow player to damage allies
+	inline int bFriendlyFire = 0;  // Disabled by default - allow player to damage allies
 
 	// NoDoorFade settings
-	int bNoDoorFade = 0;  // Disabled by default - skip actor fade-out when entering doors
+	inline int bNoDoorFade = 0;  // Disabled by default - skip actor fade-out when entering doors
 
 	// ArmorDTDRFix settings
-	int bArmorDTDRFix = 1;  // Enabled by default - fix NPC armor DT/DR not updating on equip
+	inline int bArmorDTDRFix = 1;  // Enabled by default - fix NPC armor DT/DR not updating on equip
 
 	// QuickReadNote settings
-	int bQuickReadNote = 1;  // Enabled by default - quick view notes on pickup
-	int iQuickReadNoteTimeoutMs = 5000;
-	int iQuickReadNoteControlID = 6;  // Aim/Block
-	int iQuickReadNoteMaxLines = 0;  // 0 = auto-calculate from screen height
+	inline int bQuickReadNote = 1;  // Enabled by default - quick view notes on pickup
+	inline int iQuickReadNoteTimeoutMs = 5000;
+	inline int iQuickReadNoteControlID = 6;  // Aim/Block
+	inline int iQuickReadNoteMaxLines = 0;  // 0 = auto-calculate from screen height
 
 	// DoorPackageOwnershipFix settings
-	int bDoorPackageOwnershipFix = 1;  // Enabled by default - fix NPCs locking doors they don't own
+	inline int bDoorPackageOwnershipFix = 1;  // Enabled by default - fix NPCs locking doors they don't own
 
 	// NPCDoorUnlockBlock settings
 	// 0 = vanilla, 1 = only direct door owners can bypass locks, 2 = must use key/lockpicks
-	int iNPCDoorUnlockBlock = 0;
+	inline int iNPCDoorUnlockBlock = 0;
 
 	// VATSSpeechFix settings
-	int bVATSSpeechFix = 1;
+	inline int bVATSSpeechFix = 1;
 
 	// CombatItemTimerFix settings
-	int bCombatItemTimerFix = 1;  // Enabled by default - fixes stimpak timer using wrong game setting
+	inline int bCombatItemTimerFix = 1;  // Enabled by default - fixes stimpak timer using wrong game setting
 
 	// NPCAntidoteUse settings
-	int bNPCAntidoteUse = 1;  // Enabled by default - NPCs use antidotes when poisoned
-	float fCombatItemCureTimer = 10.0f;  // Cooldown between cure item uses
-	float fCureHealthThreshold = 25.0f;  // Don't cure if health below this (prioritize stimpak)
+	inline int bNPCAntidoteUse = 1;  // Enabled by default - NPCs use antidotes when poisoned
+	inline float fCombatItemCureTimer = 10.0f;  // Cooldown between cure item uses
+	inline float fCureHealthThreshold = 25.0f;  // Don't cure if health below this (prioritize stimpak)
 
 	// NPCDoctorsBagUse settings
-	int bNPCDoctorsBagUse = 1;  // Enabled by default - NPCs use doctor's bags when crippled
-	float fDoctorsBagUseTimer = 15.0f;  // Cooldown between uses
+	inline int bNPCDoctorsBagUse = 1;  // Enabled by default - NPCs use doctor's bags when crippled
+	inline float fDoctorsBagUseTimer = 15.0f;  // Cooldown between uses
 
 	// CompanionNoInfamy settings
-	int bCompanionNoInfamy = 1;  // Enabled by default - companions killing faction members doesn't give player infamy
+	inline int bCompanionNoInfamy = 1;  // Enabled by default - companions killing faction members doesn't give player infamy
 
 	// MusicResetOnLoad settings
-	int bMusicResetOnLoad = 1;  // Enabled by default - reset music state when loading a save
+	inline int bMusicResetOnLoad = 1;  // Enabled by default - reset music state when loading a save
 
-	static char iniPath[MAX_PATH];
+	inline char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
 	{
