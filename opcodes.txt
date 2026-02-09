@@ -25,9 +25,9 @@ itr-nvse opcode allocations
 0x4016  SetOnSoundPlayedHandler
 0x4017  SetFallDamageMult
 0x4018  GetFallDamageMult
-0x4019  (unused)
+0x4019  ClearFallDamageMult
 0x401A  FakeHit
-0x401B  (unused)
+0x401B  FakeHitEx
 0x401C  SetOnFastTravelHandler
 0x401D  SetCameraAngle
 0x401E  sv_RegexMatch
@@ -60,3 +60,4 @@ itr-nvse opcode allocations
 0x4039  SetDialogueInfoFlags
 0x403A  GetDisplayedDialogueInfos
 0x403B  SetRaceAlt
+0x403C  SetOnSoundCompletedHandler

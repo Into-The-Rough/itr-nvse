@@ -64,6 +64,7 @@
 - SetOnCombatProcedureStartEventHandler - fires on combat AI change
 - SetOnEntryPointEventHandler - fires when perk entry points execute
 - SetOnSoundPlayedEventHandler - fires on any sound playback
+- SetOnSoundCompletedEventHandler - fires when tracked voice sounds complete
 - SetCornerMessageHandler - fires on HUD corner message
 - SetOnDialogueTextEventHandler - fires on dialogue text display
 - SetOnKeyDisabledEventHandler - fires when key disabled
