@@ -53,6 +53,9 @@ struct TrackedVoiceSound
     char filePath[260];
     UInt32 soundFlags;
     TESSound* sourceSound;
+    BSSoundHandle handleState;
+    bool hasEverPlayed;
+    UInt32 pollCount;
 };
 
 //BSSoundHandle::IsPlaying - checks if sound is still playing
@@ -162,7 +165,7 @@ static void QueueSoundEvent(const char* filePath, UInt32 flags, TESSound* source
 }
 
 // Queue a voice sound for completion tracking
-static void QueueVoiceTracking(UInt32 soundID, const char* filePath, UInt32 flags, TESSound* sourceSound)
+static void QueueVoiceTracking(UInt32 soundID, const char* filePath, UInt32 flags, TESSound* sourceSound, const BSSoundHandle* handle)
 {
     if (!OnSoundPlayedHandler::g_lockInitialized) return;
     if (soundID == 0 || soundID == 0xFFFFFFFF) return;
@@ -179,6 +182,20 @@ static void QueueVoiceTracking(UInt32 soundID, const char* filePath, UInt32 flag
     tracked.soundID = soundID;
     tracked.soundFlags = flags;
     tracked.sourceSound = sourceSound;
+    tracked.hasEverPlayed = false;
+    tracked.pollCount = 0;
+
+    if (handle)
+    {
+        tracked.handleState = *handle;
+    }
+    else
+    {
+        tracked.handleState.uiSoundID = soundID;
+        tracked.handleState.bAssumeSuccess = 1;
+        tracked.handleState.uiState = 0;
+        tracked.handleState.pad[0] = tracked.handleState.pad[1] = tracked.handleState.pad[2] = 0;
+    }
 
     if (filePath && filePath[0])
     {
@@ -229,7 +246,7 @@ static BSSoundHandle* __fastcall HookedGetSoundHandle(
     {
         if (result && result->uiSoundID != 0 && result->uiSoundID != 0xFFFFFFFF)
         {
-            QueueVoiceTracking(result->uiSoundID, apName, aeAudioFlags, apSound);
+            QueueVoiceTracking(result->uiSoundID, apName, aeAudioFlags, apSound, result);
         }
     }
 
@@ -285,22 +302,22 @@ void OSPH_Update()
     // Check tracked voice sounds for completion
     if (!soundsToCheck.empty() && !completionCallbacks.empty())
     {
-        std::vector<UInt32> completedIDs;
+        std::vector<TrackedVoiceSound> completedSounds;
+        std::vector<TrackedVoiceSound> updatedSounds;
+        completedSounds.reserve(soundsToCheck.size());
+        updatedSounds.reserve(soundsToCheck.size());
 
-        for (const auto& tracked : soundsToCheck)
+        for (auto& tracked : soundsToCheck)
         {
-            //build a temp BSSoundHandle to check
-            BSSoundHandle tempHandle;
-            tempHandle.uiSoundID = tracked.soundID;
-            tempHandle.bAssumeSuccess = 0;
-            tempHandle.uiState = 0;
+            ++tracked.pollCount;
+            bool stillPlaying = BSSoundHandle_IsPlaying(&tracked.handleState);
+            if (stillPlaying)
+                tracked.hasEverPlayed = true;
 
-            bool stillPlaying = BSSoundHandle_IsPlaying(&tempHandle);
-
-            if (!stillPlaying)
+            if (!stillPlaying && tracked.hasEverPlayed)
             {
                 OSPH_Log("Voice completed: ID=%08X Path=%s", tracked.soundID, tracked.filePath);
-                completedIDs.push_back(tracked.soundID);
+                completedSounds.push_back(tracked);
 
                 //fire completion callbacks
                 for (Script* callback : completionCallbacks)
@@ -318,17 +335,62 @@ void OSPH_Update()
                     }
                 }
             }
+            else
+            {
+                // Drop stuck entries that never report playing to prevent list starvation.
+                constexpr UInt32 kMaxPollsWithoutPlayback = 180;
+                if (!tracked.hasEverPlayed && tracked.pollCount >= kMaxPollsWithoutPlayback)
+                {
+                    OSPH_Log("Dropping stalled voice tracking entry: ID=%08X Path=%s", tracked.soundID, tracked.filePath);
+                    completedSounds.push_back(tracked);
+                }
+                else
+                {
+                    updatedSounds.push_back(tracked);
+                }
+            }
         }
 
-        //remove completed sounds from tracking
-        if (!completedIDs.empty())
+        auto isSameTracked = [](const TrackedVoiceSound& a, const TrackedVoiceSound& b) -> bool
+        {
+            return a.soundID == b.soundID &&
+                   a.sourceSound == b.sourceSound &&
+                   std::strcmp(a.filePath, b.filePath) == 0;
+        };
+
+        // Persist updated handle state and remove completed entries.
         {
             ScopedLock lock(&OnSoundPlayedHandler::g_queueLock);
-            for (UInt32 id : completedIDs)
+            auto& liveTracked = OnSoundPlayedHandler::g_trackedSounds;
+
+            for (const auto& updated : updatedSounds)
             {
-                auto& vec = OnSoundPlayedHandler::g_trackedSounds;
-                vec.erase(std::remove_if(vec.begin(), vec.end(),
-                    [id](const TrackedVoiceSound& s) { return s.soundID == id; }), vec.end());
+                for (auto& live : liveTracked)
+                {
+                    if (isSameTracked(live, updated))
+                    {
+                        live.handleState = updated.handleState;
+                        live.hasEverPlayed = updated.hasEverPlayed;
+                        live.pollCount = updated.pollCount;
+                        break;
+                    }
+                }
+            }
+
+            if (!completedSounds.empty())
+            {
+                liveTracked.erase(
+                    std::remove_if(liveTracked.begin(), liveTracked.end(),
+                        [&](const TrackedVoiceSound& live)
+                        {
+                            for (const auto& completed : completedSounds)
+                            {
+                                if (isSameTracked(live, completed))
+                                    return true;
+                            }
+                            return false;
+                        }),
+                    liveTracked.end());
             }
         }
     }
