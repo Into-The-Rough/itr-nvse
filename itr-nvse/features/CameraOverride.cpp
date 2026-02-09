@@ -19,6 +19,7 @@ namespace CameraOverride
 	static int g_logThrottle = 0;
 
 	static void CamLog(const char* fmt, ...) {
+		return; //disabled for release
 		if (!g_camLog) {
 			g_camLog = fopen("CameraOverride.log", "w");
 			if (!g_camLog) return;

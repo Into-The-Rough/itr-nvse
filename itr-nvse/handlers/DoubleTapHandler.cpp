@@ -261,7 +261,7 @@ bool DTH_Init(void* nvseInterface) {
     char* lastSlash = strrchr(logPath, '\\');
     if (lastSlash) *lastSlash = '\0';
     strcat_s(logPath, "\\Data\\NVSE\\Plugins\\DoubleTapHandler.log");
-    g_dthLogFile = fopen(logPath, "w");
+    //g_dthLogFile = fopen(logPath, "w"); //disabled for release
 
     DTH_Log("DoubleTapHandler initializing...");
 

@@ -300,7 +300,7 @@ bool OCH_Init(void* nvseInterface)
     char* lastSlash = strrchr(logPath, '\\');
     if (lastSlash) *lastSlash = '\0';
     strcat_s(logPath, "\\Data\\NVSE\\Plugins\\OnConsoleHandler.log");
-    g_ochLogFile = fopen(logPath, "w");
+    //g_ochLogFile = fopen(logPath, "w"); //disabled for release
 
     OCH_Log("OnConsoleHandler module initializing...");
 

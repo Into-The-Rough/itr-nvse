@@ -297,7 +297,7 @@ bool OWJH_Init(void* nvseInterface)
     char* lastSlash = strrchr(logPath, '\\');
     if (lastSlash) *lastSlash = '\0';
     strcat_s(logPath, "\\Data\\NVSE\\Plugins\\OnWeaponJamHandler.log");
-    g_owjhLogFile = fopen(logPath, "w");
+    //g_owjhLogFile = fopen(logPath, "w"); //disabled for release
 
     OWJH_Log("OnWeaponJamHandler module initializing...");
 

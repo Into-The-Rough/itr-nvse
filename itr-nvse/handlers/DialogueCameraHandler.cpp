@@ -59,10 +59,8 @@ namespace CameraHooks {
 	static FILE* g_hookLog = nullptr;
 
 	static void HookLog(const char* fmt, ...) {
-		if (!g_hookLog) {
-			g_hookLog = fopen("CameraHooks.log", "w");
-			if (!g_hookLog) return;
-		}
+		//disabled for release
+		return;
 		va_list args;
 		va_start(args, fmt);
 		vfprintf(g_hookLog, fmt, args);
@@ -717,7 +715,7 @@ void Update() {
 
 bool Init(NVSEConsoleInterface* console) {
 	g_console = console;
-	fopen_s(&g_log, "DialogueCameraHandler.log", "w");
+	//fopen_s(&g_log, "DialogueCameraHandler.log", "w"); //disabled for release
 	Log("Init called, console=%p", console);
 
 	//force 3rd person in dialogue (from RealTimeMenus)

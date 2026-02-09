@@ -279,7 +279,7 @@ bool KHH_Init(void* nvseInterface) {
     char* lastSlash = strrchr(logPath, '\\');
     if (lastSlash) *lastSlash = '\0';
     strcat_s(logPath, "\\Data\\NVSE\\Plugins\\KeyHeldHandler.log");
-    g_khhLogFile = fopen(logPath, "w");
+    //g_khhLogFile = fopen(logPath, "w"); //disabled for release
 
     KHH_Log("KeyHeldHandler initializing...");
 
