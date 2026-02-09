@@ -76,6 +76,7 @@ static PluginHandle g_osphPluginHandle = kPluginHandle_Invalid;
 static NVSEScriptInterface* g_osphScript = nullptr;
 static bool (*g_ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, ...) = nullptr;
 static UInt32 g_osphOpcode = 0;
+static UInt32 g_osphCompletionOpcode = 0;
 
 class ScopedLock {
     CRITICAL_SECTION* cs;
@@ -204,8 +205,17 @@ static BSSoundHandle* __fastcall HookedGetSoundHandle(
     UInt32 aeAudioFlags,
     TESSound* apSound)
 {
+    bool hasPlayCallbacks = false;
+    bool hasCompletionCallbacks = false;
+    if (OnSoundPlayedHandler::g_lockInitialized)
+    {
+        ScopedLock lock(&OnSoundPlayedHandler::g_queueLock);
+        hasPlayCallbacks = !OnSoundPlayedHandler::g_callbacks.empty();
+        hasCompletionCallbacks = !OnSoundPlayedHandler::g_completionCallbacks.empty();
+    }
+
     // Queue event if we have callbacks
-    if (!OnSoundPlayedHandler::g_callbacks.empty() && apName && apName[0])
+    if (hasPlayCallbacks && apName && apName[0])
     {
         QueueSoundEvent(apName, aeAudioFlags, apSound);
     }
@@ -214,7 +224,7 @@ static BSSoundHandle* __fastcall HookedGetSoundHandle(
     BSSoundHandle* result = s_detour.GetTrampoline<GetSoundHandleByFilePath_t>()(mgr, arData, apName, aeAudioFlags, apSound);
 
     // Track voice sounds for completion detection
-    if (!OnSoundPlayedHandler::g_completionCallbacks.empty() &&
+    if (hasCompletionCallbacks &&
         (aeAudioFlags & kSoundFlag_IsVoice) && apName && apName[0])
     {
         if (result && result->uiSoundID != 0 && result->uiSoundID != 0xFFFFFFFF)
@@ -233,15 +243,19 @@ void OSPH_Update()
     // Swap out the pending events under lock
     std::vector<QueuedSoundEvent> eventsToProcess;
     std::vector<TrackedVoiceSound> soundsToCheck;
+    std::vector<Script*> playCallbacks;
+    std::vector<Script*> completionCallbacks;
 
     {
         ScopedLock lock(&OnSoundPlayedHandler::g_queueLock);
         eventsToProcess.swap(OnSoundPlayedHandler::g_pendingEvents);
         soundsToCheck = OnSoundPlayedHandler::g_trackedSounds; //copy for checking
+        playCallbacks = OnSoundPlayedHandler::g_callbacks;
+        completionCallbacks = OnSoundPlayedHandler::g_completionCallbacks;
     }
 
     // Process sound started events
-    if (!eventsToProcess.empty() && !OnSoundPlayedHandler::g_callbacks.empty())
+    if (!eventsToProcess.empty() && !playCallbacks.empty())
     {
         for (const auto& evt : eventsToProcess)
         {
@@ -251,7 +265,7 @@ void OSPH_Update()
                      evt.soundFlags, GetSoundCategory(evt.soundFlags),
                      filePath, evt.sourceSound);
 
-            for (Script* callback : OnSoundPlayedHandler::g_callbacks)
+            for (Script* callback : playCallbacks)
             {
                 if (g_osphScript && callback)
                 {
@@ -269,7 +283,7 @@ void OSPH_Update()
     }
 
     // Check tracked voice sounds for completion
-    if (!soundsToCheck.empty() && !OnSoundPlayedHandler::g_completionCallbacks.empty())
+    if (!soundsToCheck.empty() && !completionCallbacks.empty())
     {
         std::vector<UInt32> completedIDs;
 
@@ -289,7 +303,7 @@ void OSPH_Update()
                 completedIDs.push_back(tracked.soundID);
 
                 //fire completion callbacks
-                for (Script* callback : OnSoundPlayedHandler::g_completionCallbacks)
+                for (Script* callback : completionCallbacks)
                 {
                     if (g_osphScript && callback)
                     {
@@ -349,23 +363,28 @@ static bool AddCallback(Script* callback)
     OSPH_Log("AddCallback called with callback=0x%08X", callback);
     if (!callback) return false;
 
-    // Check for duplicates
-    for (Script* s : OnSoundPlayedHandler::g_callbacks)
-    {
-        if (s == callback)
-        {
-            OSPH_Log("Callback already registered");
-            return false;
-        }
-    }
-
-    OnSoundPlayedHandler::g_callbacks.push_back(callback);
-    OSPH_Log("Callback added, total: %d", (int)OnSoundPlayedHandler::g_callbacks.size());
-
-    // Install hook on first callback
     if (!OnSoundPlayedHandler::g_hookInstalled)
     {
         InitHook();
+    }
+
+    if (!OnSoundPlayedHandler::g_lockInitialized) return false;
+
+    {
+        ScopedLock lock(&OnSoundPlayedHandler::g_queueLock);
+
+        // Check for duplicates
+        for (Script* s : OnSoundPlayedHandler::g_callbacks)
+        {
+            if (s == callback)
+            {
+                OSPH_Log("Callback already registered");
+                return false;
+            }
+        }
+
+        OnSoundPlayedHandler::g_callbacks.push_back(callback);
+        OSPH_Log("Callback added, total: %d", (int)OnSoundPlayedHandler::g_callbacks.size());
     }
 
     return true;
@@ -376,22 +395,26 @@ static bool AddCompletionCallback(Script* callback)
     OSPH_Log("AddCompletionCallback called with callback=0x%08X", callback);
     if (!callback) return false;
 
-    for (Script* s : OnSoundPlayedHandler::g_completionCallbacks)
-    {
-        if (s == callback)
-        {
-            OSPH_Log("Completion callback already registered");
-            return false;
-        }
-    }
-
-    OnSoundPlayedHandler::g_completionCallbacks.push_back(callback);
-    OSPH_Log("Completion callback added, total: %d", (int)OnSoundPlayedHandler::g_completionCallbacks.size());
-
-    // Install hook if not already
     if (!OnSoundPlayedHandler::g_hookInstalled)
     {
         InitHook();
+    }
+
+    if (!OnSoundPlayedHandler::g_lockInitialized) return false;
+
+    {
+        ScopedLock lock(&OnSoundPlayedHandler::g_queueLock);
+        for (Script* s : OnSoundPlayedHandler::g_completionCallbacks)
+        {
+            if (s == callback)
+            {
+                OSPH_Log("Completion callback already registered");
+                return false;
+            }
+        }
+
+        OnSoundPlayedHandler::g_completionCallbacks.push_back(callback);
+        OSPH_Log("Completion callback added, total: %d", (int)OnSoundPlayedHandler::g_completionCallbacks.size());
     }
 
     return true;
@@ -400,15 +423,19 @@ static bool AddCompletionCallback(Script* callback)
 static bool RemoveCompletionCallback(Script* callback)
 {
     if (!callback) return false;
+    if (!OnSoundPlayedHandler::g_lockInitialized) return false;
 
-    for (auto it = OnSoundPlayedHandler::g_completionCallbacks.begin();
-         it != OnSoundPlayedHandler::g_completionCallbacks.end(); ++it)
     {
-        if (*it == callback)
+        ScopedLock lock(&OnSoundPlayedHandler::g_queueLock);
+        for (auto it = OnSoundPlayedHandler::g_completionCallbacks.begin();
+             it != OnSoundPlayedHandler::g_completionCallbacks.end(); ++it)
         {
-            OnSoundPlayedHandler::g_completionCallbacks.erase(it);
-            OSPH_Log("Removed completion callback: 0x%08X", callback);
-            return true;
+            if (*it == callback)
+            {
+                OnSoundPlayedHandler::g_completionCallbacks.erase(it);
+                OSPH_Log("Removed completion callback: 0x%08X", callback);
+                return true;
+            }
         }
     }
     return false;
@@ -417,15 +444,19 @@ static bool RemoveCompletionCallback(Script* callback)
 static bool RemoveCallback(Script* callback)
 {
     if (!callback) return false;
+    if (!OnSoundPlayedHandler::g_lockInitialized) return false;
 
-    for (auto it = OnSoundPlayedHandler::g_callbacks.begin();
-         it != OnSoundPlayedHandler::g_callbacks.end(); ++it)
     {
-        if (*it == callback)
+        ScopedLock lock(&OnSoundPlayedHandler::g_queueLock);
+        for (auto it = OnSoundPlayedHandler::g_callbacks.begin();
+             it != OnSoundPlayedHandler::g_callbacks.end(); ++it)
         {
-            OnSoundPlayedHandler::g_callbacks.erase(it);
-            OSPH_Log("Removed callback: 0x%08X", callback);
-            return true;
+            if (*it == callback)
+            {
+                OnSoundPlayedHandler::g_callbacks.erase(it);
+                OSPH_Log("Removed callback: 0x%08X", callback);
+                return true;
+            }
         }
     }
     return false;
@@ -438,6 +469,9 @@ static ParamInfo kParams_SoundPlayedHandler[2] = {
 
 DEFINE_COMMAND_PLUGIN(SetOnSoundPlayedEventHandler,
     "Registers/unregisters a callback for sound played events. Callback receives: filePath, soundFlags, TESSound",
+    0, 2, kParams_SoundPlayedHandler);
+DEFINE_COMMAND_PLUGIN(SetOnSoundCompletedEventHandler,
+    "Registers/unregisters a callback for voice completion events. Callback receives: filePath, soundFlags, TESSound",
     0, 2, kParams_SoundPlayedHandler);
 
 bool Cmd_SetOnSoundPlayedEventHandler_Execute(COMMAND_ARGS)
@@ -499,6 +533,64 @@ bool Cmd_SetOnSoundPlayedEventHandler_Execute(COMMAND_ARGS)
     return true;
 }
 
+bool Cmd_SetOnSoundCompletedEventHandler_Execute(COMMAND_ARGS)
+{
+    *result = 0;
+    OSPH_Log("SetOnSoundCompletedEventHandler called");
+
+    TESForm* callbackForm = nullptr;
+    UInt32 addRemove = 0;
+
+    if (!g_ExtractArgsEx(
+            reinterpret_cast<ParamInfo*>(paramInfo),
+            scriptData,
+            opcodeOffsetPtr,
+            scriptObj,
+            eventList,
+            &callbackForm,
+            &addRemove))
+    {
+        OSPH_Log("Failed to extract args");
+        return true;
+    }
+
+    OSPH_Log("Extracted completion args: callback=0x%08X, add=%d", callbackForm, addRemove);
+
+    if (!callbackForm)
+    {
+        OSPH_Log("Completion callback is null");
+        return true;
+    }
+
+    UInt8 typeID = *((UInt8*)callbackForm + 4);
+    if (typeID != kFormType_Script)
+    {
+        OSPH_Log("Completion callback is not a script (typeID: %02X)", typeID);
+        return true;
+    }
+
+    Script* callback = reinterpret_cast<Script*>(callbackForm);
+
+    if (addRemove)
+    {
+        if (AddCompletionCallback(callback))
+        {
+            *result = 1;
+            OSPH_Log("Completion callback added successfully");
+        }
+    }
+    else
+    {
+        if (RemoveCompletionCallback(callback))
+        {
+            *result = 1;
+            OSPH_Log("Completion callback removed successfully");
+        }
+    }
+
+    return true;
+}
+
 bool OSPH_Init(void* nvseInterface)
 {
     NVSEInterface* nvse = reinterpret_cast<NVSEInterface*>(nvseInterface);
@@ -530,12 +622,17 @@ bool OSPH_Init(void* nvseInterface)
     g_ExtractArgsEx = g_osphScript->ExtractArgsEx;
     OSPH_Log("Script interface at 0x%08X", g_osphScript);
 
-    // Register commands at opcode 0x3B19
+    // Register commands
     nvse->SetOpcodeBase(0x4016);
     nvse->RegisterCommand(&kCommandInfo_SetOnSoundPlayedEventHandler);
     g_osphOpcode = 0x4016;
 
+    nvse->SetOpcodeBase(0x403C);
+    nvse->RegisterCommand(&kCommandInfo_SetOnSoundCompletedEventHandler);
+    g_osphCompletionOpcode = 0x403C;
+
     OSPH_Log("SoundPlayed: name=%s execute=0x%08X", kCommandInfo_SetOnSoundPlayedEventHandler.longName, (UInt32)kCommandInfo_SetOnSoundPlayedEventHandler.execute);
+    OSPH_Log("SoundCompleted: name=%s execute=0x%08X", kCommandInfo_SetOnSoundCompletedEventHandler.longName, (UInt32)kCommandInfo_SetOnSoundCompletedEventHandler.execute);
 
     //install hook at init time to avoid race conditions
     InitHook();
@@ -550,8 +647,24 @@ unsigned int OSPH_GetOpcode()
     return g_osphOpcode;
 }
 
+unsigned int OSPH_GetCompletionOpcode()
+{
+    return g_osphCompletionOpcode;
+}
+
 void OSPH_ClearCallbacks()
 {
+    if (!OnSoundPlayedHandler::g_lockInitialized)
+    {
+        OnSoundPlayedHandler::g_callbacks.clear();
+        OnSoundPlayedHandler::g_completionCallbacks.clear();
+        return;
+    }
+
+    ScopedLock lock(&OnSoundPlayedHandler::g_queueLock);
     OnSoundPlayedHandler::g_callbacks.clear();
+    OnSoundPlayedHandler::g_completionCallbacks.clear();
+    OnSoundPlayedHandler::g_pendingEvents.clear();
+    OnSoundPlayedHandler::g_trackedSounds.clear();
     OSPH_Log("Callbacks cleared on game load");
 }
