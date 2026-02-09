@@ -74,11 +74,18 @@ static void DispatchFastTravelEvent()
 
     if (OnFastTravelHandler::g_callbacks.empty()) return;
 
-    for (const auto& entry : OnFastTravelHandler::g_callbacks) {
-        if (g_ofthScript && entry.callback) {
+    std::vector<Script*> callbackSnapshot;
+    callbackSnapshot.reserve(OnFastTravelHandler::g_callbacks.size());
+    for (const auto& entry : OnFastTravelHandler::g_callbacks)
+    {
+        callbackSnapshot.push_back(entry.callback);
+    }
+
+    for (Script* callback : callbackSnapshot) {
+        if (g_ofthScript && callback) {
             //call the UDF with: markerRef (destination)
             g_ofthScript->CallFunctionAlt(
-                entry.callback,
+                callback,
                 OnFastTravelHandler::s_markerRef,
                 1,
                 OnFastTravelHandler::s_markerRef  //arg1: destination marker
@@ -111,9 +118,16 @@ static __declspec(naked) void FastTravelHook()
     }
 }
 
-static UInt32 ReadCallTarget(UInt32 src)
+static bool ReadCallTargetIfCall(UInt32 src, UInt32& outTarget)
 {
-    return *(UInt32*)(src + 1) + src + 5;
+    if (*(UInt8*)src != 0xE8)
+    {
+        OFTH_Log("ERROR: Expected CALL opcode at 0x%08X, found 0x%02X", src, *(UInt8*)src);
+        return false;
+    }
+
+    outTarget = *(UInt32*)(src + 1) + src + 5;
+    return true;
 }
 
 static void InitHook()
@@ -121,7 +135,12 @@ static void InitHook()
     if (OnFastTravelHandler::g_hookInstalled) return;
 
     //read existing target before we overwrite (could be JIP's hook or original)
-    g_previousTarget = ReadCallTarget(kAddr_FastTravelCall);
+    if (!ReadCallTargetIfCall(kAddr_FastTravelCall, g_previousTarget))
+    {
+        OFTH_Log("ERROR: Fast travel hook install aborted due to unexpected callsite bytes");
+        return;
+    }
+
     OFTH_Log("Previous call target: 0x%08X", g_previousTarget);
 
     //replace call at 0x93BF22 with call to our hook
@@ -142,6 +161,10 @@ static bool AddCallback_Internal(Script* callback)
         }
     }
 
+    if (g_CaptureLambdaVars) {
+        g_CaptureLambdaVars(callback);
+    }
+
     OnFastTravelHandler::g_callbacks.emplace_back(callback);
 
     if (!OnFastTravelHandler::g_hookInstalled) {
@@ -158,6 +181,9 @@ static bool RemoveCallback_Internal(Script* callback)
 
     for (auto it = OnFastTravelHandler::g_callbacks.begin(); it != OnFastTravelHandler::g_callbacks.end(); ++it) {
         if (it->callback == callback) {
+            if (g_UncaptureLambdaVars) {
+                g_UncaptureLambdaVars(it->callback);
+            }
             OnFastTravelHandler::g_callbacks.erase(it);
             OFTH_Log("Removed callback: 0x%08X", callback);
             return true;
@@ -284,6 +310,14 @@ unsigned int OFTH_GetOpcode()
 
 void OFTH_ClearCallbacks()
 {
+    if (g_UncaptureLambdaVars)
+    {
+        for (const auto& entry : OnFastTravelHandler::g_callbacks)
+        {
+            if (entry.callback)
+                g_UncaptureLambdaVars(entry.callback);
+        }
+    }
     OnFastTravelHandler::g_callbacks.clear();
     OFTH_Log("Callbacks cleared on game load");
 }
