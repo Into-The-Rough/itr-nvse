@@ -3,6 +3,7 @@
 
 #include "VATSSpeechFix.h"
 #include "nvse/PluginAPI.h"
+#include "internal/Detours.h"
 #include <Windows.h>
 
 extern void Log(const char* fmt, ...);
@@ -75,9 +76,9 @@ namespace VATSSpeechFix
 	typedef char (__thiscall *BSWin32GameSound_Func10_t)(BSWin32GameSound* thisPtr);
 	static BSWin32GameSound_Func10_t OriginalFunc10 = nullptr;
 
-	static UInt8 s_originalTimescaleBytes[14] = {0};
-	static UInt8* s_trampolineTimescale = nullptr;
-	static UInt32 s_timescalePatchAddr = GameAddr::Func10_TimescalePatch;
+	static UInt8* s_trampolineTimescale = nullptr; //for inline asm indirect jump
+	static UInt32 s_timescalePatchAddr = GameAddr::Func10_TimescalePatch; //for inline asm
+	static Detours::JumpDetour s_timescaleDetour;
 
 	__declspec(naked) void HookedTimescaleNaked()
 	{
@@ -157,24 +158,9 @@ namespace VATSSpeechFix
 		SafeWrite32(GameAddr::BSWin32GameSound_Vtbl_Func10, (UInt32)HookedFunc10);
 
 		//timescale hook - checks flag 0x200000 and skips timescale application if set
-		s_trampolineTimescale = (UInt8*)VirtualAlloc(NULL, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-		if (s_trampolineTimescale)
-		{
-			memcpy(s_originalTimescaleBytes, (void*)s_timescalePatchAddr, 14);
-			memcpy(s_trampolineTimescale, s_originalTimescaleBytes, 14);
-			s_trampolineTimescale[14] = 0xE9; //jmp
-			*(UInt32*)(s_trampolineTimescale + 15) = (s_timescalePatchAddr + 14) - (UInt32)(s_trampolineTimescale + 14) - 5;
-
-			DWORD oldProtect;
-			if (VirtualProtect((void*)s_timescalePatchAddr, 14, PAGE_EXECUTE_READWRITE, &oldProtect))
-			{
-				*((UInt8*)s_timescalePatchAddr) = 0xE9; //jmp
-				*((UInt32*)(s_timescalePatchAddr + 1)) = (UInt32)HookedTimescaleNaked - s_timescalePatchAddr - 5;
-				for (int i = 5; i < 14; i++)
-					*((UInt8*)(s_timescalePatchAddr + i)) = 0x90; //nop
-				VirtualProtect((void*)s_timescalePatchAddr, 14, oldProtect, &oldProtect);
-			}
-		}
+		//prologue: 14 bytes
+		if (s_timescaleDetour.WriteRelJump(s_timescalePatchAddr, HookedTimescaleNaked, 14))
+			s_trampolineTimescale = (UInt8*)s_timescaleDetour.GetOverwrittenAddr();
 
 		g_enabled = enabled;
 		Log("VATSSpeechFix initialized (enabled=%d)", enabled);

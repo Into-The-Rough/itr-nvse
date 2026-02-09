@@ -4,6 +4,7 @@
 
 #include "ArmorDTDRFix.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/Detours.h"
 
 extern void Log(const char* fmt, ...);
 
@@ -31,10 +32,11 @@ namespace ArmorDTDRFix
 		return ((T_Ret(__thiscall*)(void*, Args...))addr)(_this, args...);
 	}
 
-	static uint32_t g_trampolineResetArmor = 0;
+	static Detours::JumpDetour s_detour;
 
 	void __fastcall Hook_ResetArmorRating(void* character, void* edx) {
-		ThisCall(g_trampolineResetArmor, character);
+		typedef void(__thiscall* ResetArmorRating_t)(void*);
+		s_detour.GetTrampoline<ResetArmorRating_t>()(character);
 
 		BaseProcess* process = ((Actor*)character)->baseProcess;
 		if (process && process->processLevel == 0) {
@@ -43,22 +45,10 @@ namespace ArmorDTDRFix
 		}
 	}
 
-	void* CreateTrampoline(uint32_t funcAddr, uint32_t prologBytes) {
-		void* trampoline = VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-		if (!trampoline) return nullptr;
-
-		memcpy(trampoline, (void*)funcAddr, prologBytes);
-		uint8_t* p = (uint8_t*)trampoline + prologBytes;
-		*p++ = 0xE9;
-		*(uint32_t*)p = (funcAddr + prologBytes) - ((uint32_t)trampoline + prologBytes) - 5;
-		return trampoline;
-	}
-
+	//prologue: 7 bytes
 	void Init() {
-		g_trampolineResetArmor = (uint32_t)CreateTrampoline(kAddr_ResetArmorRating, 7);
-		if (g_trampolineResetArmor)
-			SafeWrite::WriteRelJump(kAddr_ResetArmorRating, (UInt32)Hook_ResetArmorRating);
-		Log("ArmorDTDRFix installed");
+		if (s_detour.WriteRelJump(kAddr_ResetArmorRating, Hook_ResetArmorRating, 7))
+			Log("ArmorDTDRFix installed");
 	}
 }
 

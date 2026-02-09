@@ -4,6 +4,7 @@
 #include "NPCDoorUnlockBlock.h"
 #include <Windows.h>
 #include "common/ITypes.h"
+#include "internal/Detours.h"
 
 namespace NPCDoorUnlockBlock
 {
@@ -22,9 +23,7 @@ namespace NPCDoorUnlockBlock
 	static _IsAnOwner IsAnOwner = (_IsAnOwner)kAddr_IsAnOwner;
 	static _IsFollowing IsFollowing = (_IsFollowing)kAddr_IsFollowing;
 
-	//trampoline to call original function
-	static UInt8 g_trampoline[16];
-	static _CanActorIgnoreLock OriginalFunc = nullptr;
+	static Detours::JumpDetour s_detour;
 
 	inline void* GetPlayer()
 	{
@@ -34,15 +33,15 @@ namespace NPCDoorUnlockBlock
 	bool __cdecl CanActorIgnoreLock_Hook(void* doorRef, void* actor, bool activate, bool movement)
 	{
 		if (g_blockLevel == 0)
-			return OriginalFunc(doorRef, actor, activate, movement);
+			return s_detour.GetTrampoline<_CanActorIgnoreLock>()(doorRef, actor, activate, movement);
 
 		//always allow player
 		if (actor == GetPlayer())
-			return OriginalFunc(doorRef, actor, activate, movement);
+			return s_detour.GetTrampoline<_CanActorIgnoreLock>()(doorRef, actor, activate, movement);
 
 		//always allow companions (vanilla behavior)
 		if (IsFollowing(actor))
-			return OriginalFunc(doorRef, actor, activate, movement);
+			return s_detour.GetTrampoline<_CanActorIgnoreLock>()(doorRef, actor, activate, movement);
 
 		//level 2: nobody can bypass locks, must use key/lockpicks
 		if (g_blockLevel >= 2)
@@ -55,42 +54,15 @@ namespace NPCDoorUnlockBlock
 		return false;
 	}
 
-	void PatchMemory(UInt32 addr, const void* data, UInt32 size)
-	{
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, size, PAGE_EXECUTE_READWRITE, &oldProtect);
-		memcpy((void*)addr, data, size);
-		VirtualProtect((void*)addr, size, oldProtect, &oldProtect);
-	}
-
 	void SetLevel(int level)
 	{
 		g_blockLevel = level;
 	}
 
+	//prologue: push ebp; mov ebp, esp = 5 bytes
 	void Init()
 	{
-		//build trampoline: original prologue + jmp back
-		//original: push ebp; mov ebp, esp (5 bytes)
-		DWORD oldProtect;
-		VirtualProtect(g_trampoline, sizeof(g_trampoline), PAGE_EXECUTE_READWRITE, &oldProtect);
-
-		g_trampoline[0] = 0x55;                    //push ebp
-		g_trampoline[1] = 0x8B;                    //mov ebp, esp
-		g_trampoline[2] = 0xEC;
-		g_trampoline[3] = 0xE9;                    //jmp
-		UInt32 jmpBack = (kAddr_CanActorIgnoreLock + 5) - ((UInt32)&g_trampoline[3] + 5);
-		*(UInt32*)&g_trampoline[4] = jmpBack;
-
-		OriginalFunc = (_CanActorIgnoreLock)(void*)g_trampoline;
-
-		//patch function start with jmp to our hook
-		UInt8 patch[5];
-		patch[0] = 0xE9;  //jmp
-		UInt32 hookOffset = (UInt32)CanActorIgnoreLock_Hook - (kAddr_CanActorIgnoreLock + 5);
-		*(UInt32*)&patch[1] = hookOffset;
-
-		PatchMemory(kAddr_CanActorIgnoreLock, patch, 5);
+		s_detour.WriteRelJump(kAddr_CanActorIgnoreLock, CanActorIgnoreLock_Hook, 5);
 	}
 }
 

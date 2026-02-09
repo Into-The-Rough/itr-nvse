@@ -3,6 +3,7 @@
 
 #include "VATSLimbFix.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/Detours.h"
 #include <cstring>
 
 extern void Log(const char* fmt, ...);
@@ -14,7 +15,7 @@ namespace VATSLimbFix
 	constexpr uintptr_t kAddr_VATSTargetsList = 0x11DB150;
 	constexpr uint8_t kExtraData_DismemberedLimbs = 0x5F;
 
-	static uint8_t g_trampolineSetPartitionVisible[64];
+	static Detours::JumpDetour s_detour;
 
 	struct BSExtraData {
 		void** vtbl;
@@ -109,24 +110,14 @@ namespace VATSLimbFix
 				return;
 		}
 		typedef void (__thiscall *SetPartitionVisible_t)(void*, uint16_t, char);
-		((SetPartitionVisible_t)(void*)g_trampolineSetPartitionVisible)(skinInstance, limbID, visible);
+		s_detour.GetTrampoline<SetPartitionVisible_t>()(skinInstance, limbID, visible);
 	}
 
+	//prologue: push ebp (1) + mov ebp,esp (2) + sub esp,8 (3) = 6 bytes
 	void Init()
 	{
-		//prologue at 0x5E4810: push ebp (1) + mov ebp,esp (2) + sub esp,8 (3) = 6 bytes
-		constexpr size_t kPrologueSize = 6;
-
-		memcpy(g_trampolineSetPartitionVisible, (void*)kAddr_SetPartitionVisible, kPrologueSize);
-		g_trampolineSetPartitionVisible[kPrologueSize] = 0xE9;
-		*(uint32_t*)(g_trampolineSetPartitionVisible + kPrologueSize + 1) =
-			(kAddr_SetPartitionVisible + kPrologueSize) - ((uintptr_t)g_trampolineSetPartitionVisible + kPrologueSize + 5);
-		DWORD oldProtect;
-		VirtualProtect(g_trampolineSetPartitionVisible, sizeof(g_trampolineSetPartitionVisible), PAGE_EXECUTE_READWRITE, &oldProtect);
-
-		SafeWrite::WriteRelJump(kAddr_SetPartitionVisible, (UInt32)SetPartitionVisible_Hook);
-		SafeWrite::Write8(kAddr_SetPartitionVisible + 5, 0x90); //nop leftover byte
-		Log("VATSLimbFix installed");
+		if (s_detour.WriteRelJump(kAddr_SetPartitionVisible, SetPartitionVisible_Hook, 6))
+			Log("VATSLimbFix installed");
 	}
 }
 

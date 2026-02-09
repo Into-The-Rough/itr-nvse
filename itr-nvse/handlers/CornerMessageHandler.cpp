@@ -8,6 +8,7 @@
 
 #include "CornerMessageHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/Detours.h"
 
 static FILE* g_cmhLogFile = nullptr;
 
@@ -54,8 +55,7 @@ static bool g_hasHandlers = false;
 //bool __thiscall HUDMainMenu::ShowNotify(const char* text, eEmotion emotion,
 //    const char* iconPath, const char* soundName, float time, bool instant)
 constexpr UInt32 kAddr_HUDMainMenu_ShowNotify = 0x775380;
-constexpr int kPrologueBytes = 5; //push ebp; mov ebp, esp; push -1
-static UInt32 g_originalShowNotify = 0;
+static Detours::JumpDetour s_detour;
 
 static void DispatchCornerMessage(const char* text, UInt32 emotion,
     const char* iconPath, const char* soundPath, float displayTime)
@@ -107,33 +107,17 @@ static bool __fastcall Hook_HUDMainMenu_ShowNotify(
     //suppress sound when handlers registered, but still call original to maintain queue for other mods
     const char* finalSoundPath = g_hasHandlers ? nullptr : soundPath;
 
-    return ((bool(__thiscall*)(void*, const char*, UInt32, const char*, const char*, float, bool))g_originalShowNotify)(
-        thisPtr, text, emotion, iconPath, finalSoundPath, displayTime, instant
-    );
+    typedef bool(__thiscall* ShowNotify_t)(void*, const char*, UInt32, const char*, const char*, float, bool);
+    return s_detour.GetTrampoline<ShowNotify_t>()(thisPtr, text, emotion, iconPath, finalSoundPath, displayTime, instant);
 }
 
-static UInt8* g_trampolineAddr = nullptr;
-
+//prologue: push ebp; mov ebp, esp; push -1 = 5 bytes
 static void InstallHook() {
-    g_trampolineAddr = (UInt8*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-    if (!g_trampolineAddr) {
-        CMH_Log("ERROR: Failed to allocate trampoline memory");
+    if (!s_detour.WriteRelJump(kAddr_HUDMainMenu_ShowNotify, Hook_HUDMainMenu_ShowNotify, 5)) {
+        CMH_Log("ERROR: Failed to install hook");
         return;
     }
-
-    DWORD oldProtect;
-    VirtualProtect((void*)kAddr_HUDMainMenu_ShowNotify, kPrologueBytes, PAGE_EXECUTE_READWRITE, &oldProtect);
-    memcpy(g_trampolineAddr, (void*)kAddr_HUDMainMenu_ShowNotify, kPrologueBytes);
-    VirtualProtect((void*)kAddr_HUDMainMenu_ShowNotify, kPrologueBytes, oldProtect, &oldProtect);
-
-    g_trampolineAddr[kPrologueBytes] = 0xE9;
-    *(UInt32*)(g_trampolineAddr + kPrologueBytes + 1) = (kAddr_HUDMainMenu_ShowNotify + kPrologueBytes) - ((UInt32)g_trampolineAddr + kPrologueBytes + 5);
-
-    g_originalShowNotify = (UInt32)g_trampolineAddr;
-
-    SafeWrite::WriteRelJump(kAddr_HUDMainMenu_ShowNotify, (UInt32)Hook_HUDMainMenu_ShowNotify);
-
-    CMH_Log("Hook installed at 0x%08X, trampoline at 0x%08X", kAddr_HUDMainMenu_ShowNotify, g_trampolineAddr);
+    CMH_Log("Hook installed at 0x%08X", kAddr_HUDMainMenu_ShowNotify);
 }
 
 static ParamInfo kParams_SetCornerMessageHandler[2] = {
@@ -218,7 +202,7 @@ bool CMH_Init(void* nvseInterface) {
     char* lastSlash = strrchr(logPath, '\\');
     if (lastSlash) *lastSlash = '\0';
     strcat_s(logPath, "\\Data\\NVSE\\Plugins\\CornerMessageHandler.log");
-    g_cmhLogFile = fopen(logPath, "w");
+    //g_cmhLogFile = fopen(logPath, "w"); //disabled for release
 
     CMH_Log("CornerMessageHandler initializing...");
 

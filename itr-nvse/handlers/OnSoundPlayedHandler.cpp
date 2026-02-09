@@ -9,6 +9,7 @@
 
 #include "OnSoundPlayedHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/Detours.h"
 
 class TESSound;
 
@@ -112,10 +113,7 @@ typedef BSSoundHandle* (__thiscall* GetSoundHandleByFilePath_t)(
     UInt32 aeAudioFlags,
     TESSound* apSound
 );
-static GetSoundHandleByFilePath_t OriginalGetSoundHandle = nullptr;
-
-// Trampoline storage
-static UInt8* s_trampoline = nullptr;
+static Detours::JumpDetour s_detour;
 
 static const char* GetSoundCategory(UInt32 flags)
 {
@@ -146,8 +144,7 @@ static void QueueSoundEvent(const char* filePath, UInt32 flags, TESSound* source
     // Copy file path
     if (filePath && filePath[0])
     {
-        strncpy(evt.filePath, filePath, 259);
-        evt.filePath[259] = '\0';
+        strncpy_s(evt.filePath, sizeof(evt.filePath), filePath, _TRUNCATE);
     }
     else
     {
@@ -184,8 +181,7 @@ static void QueueVoiceTracking(UInt32 soundID, const char* filePath, UInt32 flag
 
     if (filePath && filePath[0])
     {
-        strncpy(tracked.filePath, filePath, 259);
-        tracked.filePath[259] = '\0';
+        strncpy_s(tracked.filePath, sizeof(tracked.filePath), filePath, _TRUNCATE);
     }
     else
     {
@@ -215,7 +211,7 @@ static BSSoundHandle* __fastcall HookedGetSoundHandle(
     }
 
     // Call original
-    BSSoundHandle* result = OriginalGetSoundHandle(mgr, arData, apName, aeAudioFlags, apSound);
+    BSSoundHandle* result = s_detour.GetTrampoline<GetSoundHandleByFilePath_t>()(mgr, arData, apName, aeAudioFlags, apSound);
 
     // Track voice sounds for completion detection
     if (!OnSoundPlayedHandler::g_completionCallbacks.empty() &&
@@ -337,41 +333,15 @@ static void InitHook()
 
     OSPH_Log("Installing BSAudioManager::GetSoundHandleByFilePath hook at 0x%X", kAddr_GetSoundHandleByFilePath);
 
-    // Allocate executable memory for trampoline
-    s_trampoline = (UInt8*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-    if (!s_trampoline)
+    //prologue: push ebp (1) + mov ebp,esp (2) + push -1 (2) = 5 bytes
+    if (!s_detour.WriteRelJump(kAddr_GetSoundHandleByFilePath, HookedGetSoundHandle, 5))
     {
-        OSPH_Log("ERROR: Failed to allocate trampoline memory");
+        OSPH_Log("ERROR: Failed to install hook");
         return;
     }
 
-    // Prologue at 0xAE5A50:
-    //   55       push ebp        (1 byte)
-    //   8B EC    mov ebp, esp    (2 bytes)
-    //   6A FF    push -1         (2 bytes)
-    // Total: 5 bytes - exactly what we need for JMP rel32
-
-    // Copy original bytes to trampoline (first 5 bytes of the function)
-    memcpy(s_trampoline, (void*)kAddr_GetSoundHandleByFilePath, 5);
-
-    // Add JMP back to original function + 5
-    s_trampoline[5] = 0xE9; // JMP rel32
-    *(UInt32*)(s_trampoline + 6) = (kAddr_GetSoundHandleByFilePath + 5) - (UInt32)(s_trampoline + 10);
-
-    OriginalGetSoundHandle = (GetSoundHandleByFilePath_t)s_trampoline;
-
-    // Patch the original function to jump to our hook (exactly 5 bytes)
-    DWORD oldProtect;
-    VirtualProtect((void*)kAddr_GetSoundHandleByFilePath, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-
-    UInt8* patchAddr = (UInt8*)kAddr_GetSoundHandleByFilePath;
-    patchAddr[0] = 0xE9; // JMP rel32
-    *(UInt32*)(patchAddr + 1) = (UInt32)HookedGetSoundHandle - (kAddr_GetSoundHandleByFilePath + 5);
-
-    VirtualProtect((void*)kAddr_GetSoundHandleByFilePath, 5, oldProtect, &oldProtect);
-
     OnSoundPlayedHandler::g_hookInstalled = true;
-    OSPH_Log("Hook installed successfully. Trampoline at %p", s_trampoline);
+    OSPH_Log("Hook installed successfully");
 }
 
 static bool AddCallback(Script* callback)
@@ -541,7 +511,7 @@ bool OSPH_Init(void* nvseInterface)
     char* lastSlash = strrchr(logPath, '\\');
     if (lastSlash) *lastSlash = '\0';
     strcat_s(logPath, "\\Data\\NVSE\\Plugins\\OnSoundPlayedHandler.log");
-    g_osphLogFile = fopen(logPath, "w");
+    //g_osphLogFile = fopen(logPath, "w"); //disabled for release
 
     OSPH_Log("OnSoundPlayedHandler module initializing...");
 

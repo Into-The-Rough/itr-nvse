@@ -4,6 +4,7 @@
 #include <Windows.h>
 #include <cstdint>
 #include <cstring>
+#include "internal/Detours.h"
 
 
 struct ParamInfo;
@@ -105,7 +106,7 @@ static void SetBlocked(UInt32 refID, bool block)
 
 //0x9DA7C0 = CombatProcedureSwitchWeapon::Update
 typedef void (__thiscall *SwitchWeaponUpdate_t)(void* procedure);
-static SwitchWeaponUpdate_t Original = 0;
+static Detours::JumpDetour s_detour;
 
 //0x97AE90 = CombatController::GetPackageOwner
 typedef Actor* (__thiscall *GetPackageOwner_t)(void* controller);
@@ -138,43 +139,14 @@ void __fastcall Hook_SwitchWeaponUpdate(void* procedure, void* edx)
 		*(UInt32*)((char*)procedure + 0x8) = 2;
 		return;
 	}
-	Original(procedure);
+	s_detour.GetTrampoline<SwitchWeaponUpdate_t>()(procedure);
 }
 
-//trampoline: save original bytes and jump
-//first 6 bytes: push ebp (1) + mov ebp,esp (2) + sub esp,0x24 (3)
-static UInt8 g_originalBytes[6];
-static UInt8 g_trampoline[16];
-
-static void WriteJmp(UInt32 src, UInt32 dst)
-{
-	DWORD oldProtect;
-	VirtualProtect((void*)src, 6, PAGE_EXECUTE_READWRITE, &oldProtect);
-	*(UInt8*)src = 0xE9;
-	*(UInt32*)(src + 1) = dst - src - 5;
-	*(UInt8*)(src + 5) = 0x90; //nop the 6th byte
-	VirtualProtect((void*)src, 6, oldProtect, &oldProtect);
-}
-
+//prologue: push ebp (1) + mov ebp,esp (2) + sub esp,0x24 (3) = 6 bytes
 void PreventWeaponSwitch_Init()
 {
 	EnsureLockInit();
-	const UInt32 kAddr = 0x9DA7C0;
-
-	//save original 6 bytes
-	memcpy(g_originalBytes, (void*)kAddr, 6);
-
-	//build trampoline: original bytes + jmp back
-	DWORD oldProtect;
-	VirtualProtect(g_trampoline, sizeof(g_trampoline), PAGE_EXECUTE_READWRITE, &oldProtect);
-	memcpy(g_trampoline, g_originalBytes, 6);
-	g_trampoline[6] = 0xE9; //jmp
-	*(UInt32*)(g_trampoline + 7) = (kAddr + 6) - (UInt32)(g_trampoline + 6) - 5;
-
-	Original = (SwitchWeaponUpdate_t)(void*)g_trampoline;
-
-	//install hook
-	WriteJmp(kAddr, (UInt32)Hook_SwitchWeaponUpdate);
+	s_detour.WriteRelJump(0x9DA7C0, Hook_SwitchWeaponUpdate, 6);
 }
 
 //IsActor virtual at vtable index 0x100
