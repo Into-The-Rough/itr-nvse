@@ -440,6 +440,10 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OFTH_ClearCallbacks();
 			OWJH_ClearCallbacks();
 			OSH_ClearCallbacks();
+			OCH_ClearCallbacks();
+			OKSH_ClearCallbacks();
+			KHH_ClearCallbacks();
+			DTH_ClearCallbacks();
 			CMH_ClearCallbacks();
 			OEPH_ClearCallbacks();
 			OCPH_ClearCallbacks();
@@ -517,6 +521,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			KHH_Update();
 			DTH_Update();
 			OSPH_Update();
+			OCPH_Update();
 			OMFCH_Update();
 			OMSCH_Update();
 			if (Settings::bQuickReadNote)

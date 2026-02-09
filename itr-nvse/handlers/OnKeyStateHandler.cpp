@@ -413,3 +413,10 @@ unsigned int OKSH_GetEnabledOpcode()
 {
     return g_okshEnabledOpcode;
 }
+
+void OKSH_ClearCallbacks()
+{
+    OnKeyStateHandler::g_disabledCallbacks.clear();
+    OnKeyStateHandler::g_enabledCallbacks.clear();
+    OKSH_Log("Callbacks cleared on game load");
+}

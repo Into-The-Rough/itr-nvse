@@ -303,3 +303,10 @@ bool KHH_Init(void* nvseInterface) {
     KHH_Log("KeyHeldHandler initialized successfully");
     return true;
 }
+
+void KHH_ClearCallbacks()
+{
+    g_handlers.clear();
+    g_keyStates.clear();
+    KHH_Log("Callbacks cleared on game load");
+}

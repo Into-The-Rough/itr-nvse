@@ -343,3 +343,10 @@ unsigned int OCH_GetCloseOpcode()
 {
     return g_ochCloseOpcode;
 }
+
+void OCH_ClearCallbacks()
+{
+    OnConsoleHandler::g_openCallbacks.clear();
+    OnConsoleHandler::g_closeCallbacks.clear();
+    OCH_Log("Callbacks cleared on game load");
+}
