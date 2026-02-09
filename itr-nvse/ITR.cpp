@@ -141,6 +141,13 @@ static int g_framesOnMenu = 0;
 typedef bool (__thiscall *_LoadQuicksave)(SaveGameManager* mgr);
 static const _LoadQuicksave LoadQuicksave = (_LoadQuicksave)0x8509F0;
 
+typedef void (__cdecl *_StopPlayingMusic)();
+static const _StopPlayingMusic StopPlayingMusic = (_StopPlayingMusic)0x8304A0;
+typedef void (__cdecl *_MusicClearStopFlags)();
+static const _MusicClearStopFlags MusicClearStopFlags = (_MusicClearStopFlags)0x8304C0;
+typedef void (__cdecl *_PlayingMusicClearPauseAll)();
+static const _PlayingMusicClearPauseAll PlayingMusicClearPauseAll = (_PlayingMusicClearPauseAll)0x830660;
+
 constexpr UInt32 kNumVolumeChannels = 12;
 #define INI_MUSIC_VOLUME_ADDR 0x11F6E44
 
@@ -158,6 +165,13 @@ static bool g_wasInFocus = true;
 static float g_savedVolumes[kNumVolumeChannels] = {0};
 static float g_savedIniMusicVolume = 0.0f;
 static bool g_volumesSaved = false;
+
+static void ResetMusicStateForLoad()
+{
+	StopPlayingMusic();
+	MusicClearStopFlags();
+	PlayingMusicClearPauseAll();
+}
 
 static void OnFocusLost()
 {
@@ -423,21 +437,26 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			}
 			break;
 
-		case NVSEMessagingInterface::kMessage_PostPostLoad:
-			if (Settings::bDialogueCamera)
-				DCH_InstallCameraHooks();
-			if (Settings::bAshPileNames)
-				AshPileNames_Init();
-			if (Settings::bVATSExtender)
-				VATSExtender_Init();
-			if (Settings::bSuppressObjectives || Settings::bSuppressReputation)
-				ELMO_Init(Settings::bSuppressObjectives != 0, Settings::bSuppressReputation != 0);
-			break;
+			case NVSEMessagingInterface::kMessage_PostPostLoad:
+				if (Settings::bDialogueCamera)
+					DCH_InstallCameraHooks();
+				if (Settings::bAshPileNames)
+					AshPileNames_Init();
+				if (Settings::bVATSExtender)
+					VATSExtender_Init();
+				if (Settings::bSuppressObjectives || Settings::bSuppressReputation)
+					ELMO_Init(Settings::bSuppressObjectives != 0, Settings::bSuppressReputation != 0);
+				break;
 
-		case NVSEMessagingInterface::kMessage_NewGame:
-		case NVSEMessagingInterface::kMessage_PostLoadGame:
-			//clear all script callbacks - scripts from previous save are no longer valid
-			OFTH_ClearCallbacks();
+			case NVSEMessagingInterface::kMessage_NewGame:
+			case NVSEMessagingInterface::kMessage_PostLoadGame:
+				if (msg->type == NVSEMessagingInterface::kMessage_PostLoadGame && Settings::bMusicResetOnLoad)
+				{
+					ResetMusicStateForLoad();
+					Log("Music state reset for post-load");
+				}
+				//clear all script callbacks - scripts from previous save are no longer valid
+				OFTH_ClearCallbacks();
 			OWJH_ClearCallbacks();
 			OSH_ClearCallbacks();
 			OCH_ClearCallbacks();
