@@ -359,6 +359,10 @@ namespace QuickReadNote
 		if (wordBreak > breakPoint / 2)
 			breakPoint = wordBreak;
 
+		//clamp to leave room for suffix
+		if (breakPoint > sizeof(g_truncatedBuffer) - 32)
+			breakPoint = sizeof(g_truncatedBuffer) - 32;
+
 		memcpy(g_truncatedBuffer, text, breakPoint);
 		strcpy_s(g_truncatedBuffer + breakPoint, sizeof(g_truncatedBuffer) - breakPoint, "\n\n...[Note truncated]");
 		g_noteWasTruncated = true;
