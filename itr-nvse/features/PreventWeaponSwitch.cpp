@@ -6,6 +6,8 @@
 #include <cstring>
 #include "internal/Detours.h"
 
+extern void Log(const char* fmt, ...);
+
 
 struct ParamInfo;
 struct TESObjectREFR;
@@ -146,7 +148,8 @@ void __fastcall Hook_SwitchWeaponUpdate(void* procedure, void* edx)
 void PreventWeaponSwitch_Init()
 {
 	EnsureLockInit();
-	s_detour.WriteRelJump(0x9DA7C0, Hook_SwitchWeaponUpdate, 6);
+	if (!s_detour.WriteRelJump(0x9DA7C0, Hook_SwitchWeaponUpdate, 6))
+		Log("ERROR: PreventWeaponSwitch hook failed");
 }
 
 //IsActor virtual at vtable index 0x100
