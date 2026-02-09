@@ -65,13 +65,18 @@ static void EnsureLockInit()
 	}
 }
 
-static bool IsBlocked(UInt32 refID)
+static bool IsBlocked_Unlocked(UInt32 refID)
 {
-	ScopedLock lock(&g_lock);
 	for (int i = 0; i < g_count; i++)
 		if (g_blocked[i] == refID)
 			return true;
 	return false;
+}
+
+static bool IsBlocked(UInt32 refID)
+{
+	ScopedLock lock(&g_lock);
+	return IsBlocked_Unlocked(refID);
 }
 
 static void SetBlocked(UInt32 refID, bool block)
@@ -108,24 +113,30 @@ static GetPackageOwner_t GetPackageOwner = (GetPackageOwner_t)0x97AE90;
 
 void __fastcall Hook_SwitchWeaponUpdate(void* procedure, void* edx)
 {
-	if (g_count > 0)
+	bool shouldBlock = false;
 	{
-		//CombatProcedure->pCombatController at offset 0x4
-		void* controller = *(void**)((char*)procedure + 0x4);
-		if (controller)
+		ScopedLock lock(&g_lock);
+		if (g_count > 0)
 		{
-			Actor* actor = GetPackageOwner(controller);
-			if (actor)
+			void* controller = *(void**)((char*)procedure + 0x4);
+			if (controller)
 			{
-				UInt32 refID = *(UInt32*)((char*)actor + 0x0C);
-				if (IsBlocked(refID))
+				Actor* actor = GetPackageOwner(controller);
+				if (actor)
 				{
-					//set eStatus = 2 (finished) at offset 0x8
-					*(UInt32*)((char*)procedure + 0x8) = 2;
-					return;
+					UInt32 refID = *(UInt32*)((char*)actor + 0x0C);
+					if (IsBlocked_Unlocked(refID))
+						shouldBlock = true;
 				}
 			}
 		}
+	}
+
+	if (shouldBlock)
+	{
+		//set eStatus = 2 (finished) at offset 0x8
+		*(UInt32*)((char*)procedure + 0x8) = 2;
+		return;
 	}
 	Original(procedure);
 }
