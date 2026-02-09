@@ -134,7 +134,8 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 		if (completionScript)
 		{
 			PlayerCharacter* player = PlayerCharacter::GetSingleton();
-			ThisStdCall(kAddr_Script_RunScriptEffectStart, completionScript, player, 0);
+			if (player)
+				ThisStdCall(kAddr_Script_RunScriptEffectStart, completionScript, player, 0);
 		}
 
 		//increment challenges completed stat (unless this IS a challenges completed MiscStat challenge)
