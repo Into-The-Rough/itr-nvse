@@ -38,6 +38,7 @@ public:
 class JumpDetour {
 	UInt8* trampoline = nullptr;
 	UInt32 prologueSize = 0;
+	UInt32 sourceAddr = 0;
 
 public:
 	~JumpDetour() {
@@ -49,12 +50,13 @@ public:
 	//src: address to hook, dst: hook function, size: bytes to copy (must be 5-27)
 	bool WriteRelJump(UInt32 src, UInt32 dst, UInt32 size) {
 		if (size < 5 || size > 27) return false; //5 min for jmp, 27 max (32 - 5 for footer)
-		if (trampoline) return false; //already initialized
+		if (trampoline) return false; //already initialised
 
 		//reject if already hooked (starts with JMP)
 		if (*reinterpret_cast<UInt8*>(src) == 0xE9)
 			return false;
 
+		sourceAddr = src;
 		prologueSize = size;
 
 		//allocate executable memory for trampoline
@@ -90,6 +92,26 @@ public:
 	bool WriteRelJump(UInt32 src, T dst, UInt32 size) {
 		return WriteRelJump(src, (UInt32)dst, size);
 	}
+
+	bool Remove() {
+		if (!trampoline || !sourceAddr || !prologueSize) return false;
+
+		DWORD oldProtect;
+		if (!VirtualProtect((void*)sourceAddr, prologueSize, PAGE_EXECUTE_READWRITE, &oldProtect))
+			return false;
+
+		memcpy((void*)sourceAddr, trampoline, prologueSize);
+		VirtualProtect((void*)sourceAddr, prologueSize, oldProtect, &oldProtect);
+		FlushInstructionCache(GetCurrentProcess(), (void*)sourceAddr, prologueSize);
+
+		VirtualFree(trampoline, 0, MEM_RELEASE);
+		trampoline = nullptr;
+		prologueSize = 0;
+		sourceAddr = 0;
+		return true;
+	}
+
+	bool IsInstalled() const { return trampoline != nullptr; }
 
 	UInt32 GetOverwrittenAddr() const { return (UInt32)trampoline; }
 
