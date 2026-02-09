@@ -37,7 +37,7 @@ enum SoundFlags
 // BSAudioManager - minimal definition for GetSingleton
 struct BSAudioManager
 {
-    static BSAudioManager* Get() { return *(BSAudioManager**)0x11F6EF0; }
+    static BSAudioManager* Get() { return (BSAudioManager*)0x11F6EF0; }
 };
 
 struct QueuedSoundEvent
