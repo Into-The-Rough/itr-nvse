@@ -1,6 +1,7 @@
 //dialogue text filter
 
 #include <vector>
+#include <string>
 #include <cstring>
 #include <cstdio>
 #include <Windows.h>
@@ -107,6 +108,33 @@ namespace DialogueTextFilter {
     std::vector<TextFilterEntry> g_filters;
     std::vector<DTF_NativeCallback> g_nativeCallbacks;
     bool g_hookInstalled = false;
+}
+
+static CRITICAL_SECTION g_dtfStateLock;
+static volatile LONG g_dtfStateLockInit = 0; // 0=uninitialized, 1=initializing, 2=ready
+
+class ScopedLock {
+    CRITICAL_SECTION* cs;
+public:
+    explicit ScopedLock(CRITICAL_SECTION* c) : cs(c) { EnterCriticalSection(cs); }
+    ~ScopedLock() { LeaveCriticalSection(cs); }
+    ScopedLock(const ScopedLock&) = delete;
+    ScopedLock& operator=(const ScopedLock&) = delete;
+};
+
+static void EnsureStateLockInitialized()
+{
+    if (g_dtfStateLockInit == 2) return;
+
+    if (InterlockedCompareExchange(&g_dtfStateLockInit, 1, 0) == 0)
+    {
+        InitializeCriticalSection(&g_dtfStateLock);
+        InterlockedExchange(&g_dtfStateLockInit, 2);
+        return;
+    }
+
+    while (g_dtfStateLockInit != 2)
+        Sleep(0);
 }
 
 constexpr UInt32 kAddr_RunResult = 0x61F170;
@@ -245,25 +273,29 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
     float duration = (float)strlen(text) * timePerChar;
     if (duration < 2.0f) duration = 2.0f; //minimum 2 seconds
 
+    // Copy callback/filter state under lock so dispatch can run lock-free.
+    std::vector<DTF_NativeCallback> nativeCallbacks;
+    std::vector<Script*> matchedScriptCallbacks;
+    EnsureStateLockInitialized();
+    {
+        ScopedLock lock(&g_dtfStateLock);
+        nativeCallbacks = DialogueTextFilter::g_nativeCallbacks;
+        matchedScriptCallbacks.reserve(DialogueTextFilter::g_filters.size());
+        for (const auto& filter : DialogueTextFilter::g_filters) {
+            if (filter.Matches(text) && filter.callback) {
+                matchedScriptCallbacks.push_back(filter.callback);
+            }
+        }
+    }
+
     //always call native callbacks (for other plugins like FloatingSubtitles)
-    for (auto callback : DialogueTextFilter::g_nativeCallbacks) {
+    for (auto callback : nativeCallbacks) {
         if (callback) {
             callback(speaker, text, duration, topicInfo, topic);
         }
     }
 
-    //script filters - check for matches
-    if (DialogueTextFilter::g_filters.empty()) return;
-
-    bool anyMatch = false;
-    for (const auto& filter : DialogueTextFilter::g_filters) {
-        if (filter.Matches(text)) {
-            anyMatch = true;
-            break;
-        }
-    }
-
-    if (!anyMatch) {
+    if (matchedScriptCallbacks.empty()) {
         DTF_Log("  No filter match for: '%s'", text);
         return;
     }
@@ -275,20 +307,18 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 
     DTF_Log("  Match found: '%s'", text);
 
-    for (const auto& filter : DialogueTextFilter::g_filters) {
-        if (filter.Matches(text)) {
-            if (g_dtfScript && filter.callback) {
-                g_dtfScript->CallFunctionAlt(
-                    filter.callback,
-                    reinterpret_cast<TESObjectREFR*>(speaker),
-                    5,
-                    speaker,
-                    topic,
-                    topicInfo,
-                    text,
-                    voicePath
-                );
-            }
+    for (Script* callback : matchedScriptCallbacks) {
+        if (g_dtfScript && callback) {
+            g_dtfScript->CallFunctionAlt(
+                callback,
+                reinterpret_cast<TESObjectREFR*>(speaker),
+                5,
+                speaker,
+                topic,
+                topicInfo,
+                text,
+                voicePath
+            );
         }
     }
 }
@@ -381,7 +411,11 @@ static bool AddFilter_Internal(const char* filterText, Script* callback) {
         g_CaptureLambdaVars(callback);
     }
 
-    DialogueTextFilter::g_filters.emplace_back(filterText, callback);
+    EnsureStateLockInitialized();
+    {
+        ScopedLock lock(&g_dtfStateLock);
+        DialogueTextFilter::g_filters.emplace_back(filterText, callback);
+    }
 
     if (!DialogueTextFilter::g_hookInstalled) {
         InitHook();
@@ -394,19 +428,30 @@ static bool AddFilter_Internal(const char* filterText, Script* callback) {
 static bool RemoveFilter_Internal(const char* filterText, Script* callback) {
     if (!filterText || !callback) return false;
 
-    for (auto it = DialogueTextFilter::g_filters.begin(); it != DialogueTextFilter::g_filters.end(); ++it) {
-        if (it->callback == callback &&
-            it->filterText &&
-            _stricmp(it->filterText, filterText) == 0)
-        {
-            if (g_UncaptureLambdaVars) {
-                g_UncaptureLambdaVars(it->callback);
+    bool removed = false;
+    EnsureStateLockInitialized();
+    {
+        ScopedLock lock(&g_dtfStateLock);
+        for (auto it = DialogueTextFilter::g_filters.begin(); it != DialogueTextFilter::g_filters.end(); ++it) {
+            if (it->callback == callback &&
+                it->filterText &&
+                _stricmp(it->filterText, filterText) == 0)
+            {
+                DialogueTextFilter::g_filters.erase(it);
+                removed = true;
+                break;
             }
-
-            DialogueTextFilter::g_filters.erase(it);
-            DTF_Log("Removed filter: '%s'", filterText);
-            return true;
         }
+    }
+
+    if (removed)
+    {
+        if (g_UncaptureLambdaVars) {
+            g_UncaptureLambdaVars(callback);
+        }
+
+        DTF_Log("Removed filter: '%s'", filterText);
+        return true;
     }
 
     return false;
@@ -483,6 +528,7 @@ bool DTF_Init(void* nvseInterface) {
     NVSEInterface* nvse = reinterpret_cast<NVSEInterface*>(nvseInterface);
 
     if (nvse->isEditor) return false;
+    EnsureStateLockInitialized();
 
     char logPath[MAX_PATH];
     GetModuleFileNameA(nullptr, logPath, MAX_PATH);
@@ -547,12 +593,17 @@ extern "C" {
 __declspec(dllexport) bool DTF_RegisterNativeCallback(DTF_NativeCallback callback) {
     if (!callback) return false;
 
-    //check if already registered
-    for (auto cb : DialogueTextFilter::g_nativeCallbacks) {
-        if (cb == callback) return true;
-    }
+    EnsureStateLockInitialized();
+    int callbackCount = 0;
+    {
+        ScopedLock lock(&g_dtfStateLock);
+        for (auto cb : DialogueTextFilter::g_nativeCallbacks) {
+            if (cb == callback) return true;
+        }
 
-    DialogueTextFilter::g_nativeCallbacks.push_back(callback);
+        DialogueTextFilter::g_nativeCallbacks.push_back(callback);
+        callbackCount = (int)DialogueTextFilter::g_nativeCallbacks.size();
+    }
 
     //ensure hook is installed
     if (!DialogueTextFilter::g_hookInstalled) {
@@ -560,19 +611,23 @@ __declspec(dllexport) bool DTF_RegisterNativeCallback(DTF_NativeCallback callbac
     }
 
     DTF_Log("Registered native callback: 0x%08X (total: %d)",
-            callback, DialogueTextFilter::g_nativeCallbacks.size());
+            callback, callbackCount);
     return true;
 }
 
 __declspec(dllexport) bool DTF_UnregisterNativeCallback(DTF_NativeCallback callback) {
     if (!callback) return false;
 
-    auto& callbacks = DialogueTextFilter::g_nativeCallbacks;
-    for (auto it = callbacks.begin(); it != callbacks.end(); ++it) {
-        if (*it == callback) {
-            callbacks.erase(it);
-            DTF_Log("Unregistered native callback: 0x%08X", callback);
-            return true;
+    EnsureStateLockInitialized();
+    {
+        ScopedLock lock(&g_dtfStateLock);
+        auto& callbacks = DialogueTextFilter::g_nativeCallbacks;
+        for (auto it = callbacks.begin(); it != callbacks.end(); ++it) {
+            if (*it == callback) {
+                callbacks.erase(it);
+                DTF_Log("Unregistered native callback: 0x%08X", callback);
+                return true;
+            }
         }
     }
     return false;
@@ -583,6 +638,10 @@ __declspec(dllexport) bool DTF_UnregisterNativeCallback(DTF_NativeCallback callb
 void DTF_ClearCallbacks()
 {
     //clear script callbacks only - native callbacks are from other plugins and persist
-    DialogueTextFilter::g_filters.clear();
+    EnsureStateLockInitialized();
+    {
+        ScopedLock lock(&g_dtfStateLock);
+        DialogueTextFilter::g_filters.clear();
+    }
     DTF_Log("Script callbacks cleared on game load");
 }

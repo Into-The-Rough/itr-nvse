@@ -535,6 +535,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 		case kMessage_MainGameLoop:
 			CameraOverride_Init();
+			if (Settings::bLocationVisitPopup)
+				LocationVisitPopup_Update();
 			ONI_Update();
 			KHH_Update();
 			DTH_Update();
