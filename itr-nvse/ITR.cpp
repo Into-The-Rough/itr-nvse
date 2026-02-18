@@ -8,6 +8,7 @@
 #include "nvse/ParamInfos.h"
 #include "nvse/SafeWrite.h"
 #include "internal/SafeWrite.h"
+#include "internal/ScopedLock.h"
 
 #include "internal/settings.h"
 
@@ -24,7 +25,7 @@
 #include "handlers/OnEntryPointHandler.h"
 #include "handlers/OnCombatProcedureHandler.h"
 #include "handlers/OnSoundPlayedHandler.h"
-#include "handlers/OnFastTravelHandler.h"
+#include "handlers/OnJumpLandHandler.h"
 #include "handlers/FallDamageHandler.h"
 #include "handlers/DialogueCameraHandler.h"
 #include "handlers/FakeHitHandler.h"
@@ -49,6 +50,10 @@
 #include "fixes/VATSSpeechFix.h"
 #include "fixes/CombatItemTimerFix.h"
 #include "fixes/CompanionNoInfamy.h"
+#include "fixes/CompanionWeightlessOverencumberedFix.h"
+#include "fixes/PathingNullActorFix.h"
+#include "fixes/NavMeshInfoCrashFix.h"
+#include "fixes/InitHavokCrashFix.h"
 #include "features/MessageBoxQuickClose.h"
 #include "features/PreventWeaponSwitch.h"
 #include "features/ELMO.h"
@@ -65,6 +70,7 @@
 #include "commands/RadioCommands.h"
 #include "commands/ChallengeCommands.h"
 #include "commands/DialogueCommands.h"
+#include "commands/WeaponEmissiveCommands.h"
 
 #include <cstdio>
 #include <cstring>
@@ -212,6 +218,14 @@ void Log(const char* fmt, ...)
 	va_end(args);
 }
 
+static bool IsGameLoading()
+{
+	//BGSSaveLoadManager singleton at 0x11DE134, bIsLoadingGame at offset 0x26
+	void* mgr = *(void**)0x11DE134;
+	if (!mgr) return false;
+	return *(bool*)((char*)mgr + 0x26);
+}
+
 namespace NoWeaponSearch
 {
 	static const int MAX_DISABLED = 64;
@@ -219,15 +233,6 @@ namespace NoWeaponSearch
 	static int g_count = 0;
 	static CRITICAL_SECTION g_lock;
 	static bool g_lockInit = false;
-
-	class ScopedLock {
-		CRITICAL_SECTION* cs;
-	public:
-		ScopedLock(CRITICAL_SECTION* c) : cs(c) { EnterCriticalSection(cs); }
-		~ScopedLock() { LeaveCriticalSection(cs); }
-		ScopedLock(const ScopedLock&) = delete;
-		ScopedLock& operator=(const ScopedLock&) = delete;
-	};
 
 	static void EnsureLockInit()
 	{
@@ -260,7 +265,17 @@ namespace NoWeaponSearch
 
 	bool __fastcall Hook(void* combatState, void* edx)
 	{
-		//NPC item use checks only run if features enabled
+		if (IsGameLoading())
+			return Original(combatState);
+
+		//bail if actor isn't fully loaded (cell transition)
+		void* controller = *(void**)((char*)combatState + 0x1C4);
+		if (!controller)
+			return Original(combatState);
+		Actor* actor = (Actor*)GetPackageOwner(controller);
+		if (!actor || !*(void**)((char*)actor + 0x68) || !*(void**)((char*)actor + 0x64))
+			return Original(combatState);
+
 		if (Settings::bNPCAntidoteUse)
 			NPCAntidoteUse_Check(combatState);
 		if (Settings::bNPCDoctorsBagUse)
@@ -269,16 +284,8 @@ namespace NoWeaponSearch
 		bool isDisabled = false;
 		{
 			ScopedLock lock(&g_lock);
-			if (g_count > 0)
-			{
-				void* controller = *(void**)((char*)combatState + 0x1C4);
-				if (controller)
-				{
-					Actor* actor = GetPackageOwner(controller);
-					if (actor && IsDisabled_Unlocked(actor->refID))
-						isDisabled = true;
-				}
-			}
+			if (g_count > 0 && IsDisabled_Unlocked(actor->refID))
+				isDisabled = true;
 		}
 
 		if (isDisabled)
@@ -433,6 +440,13 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bNPCDoctorsBagUse)
 					NPCDoctorsBagUse_Init(Settings::fDoctorsBagUseTimer);
 				CompanionNoInfamy_Init(Settings::bCompanionNoInfamy != 0);
+				CompanionWeightlessOverencumberedFix_Init(Settings::bCompanionWeightlessOverencumberedFix != 0);
+				if (Settings::bPathingNullActorFix)
+					PathingNullActorFix_Init();
+				if (Settings::bNavMeshInfoCrashFix)
+					NavMeshInfoCrashFix_Init();
+				if (Settings::bInitHavokCrashFix)
+					InitHavokCrashFix_Init();
 				g_hooksInstalled = true;
 			}
 			break;
@@ -455,32 +469,33 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					Log("Music state reset for post-load");
 				}
 				//clear all script callbacks - scripts from previous save are no longer valid
-				OFTH_ClearCallbacks();
-			OWJH_ClearCallbacks();
-			OSH_ClearCallbacks();
-			OCH_ClearCallbacks();
-			OKSH_ClearCallbacks();
-			KHH_ClearCallbacks();
-			DTH_ClearCallbacks();
-			CMH_ClearCallbacks();
-			OEPH_ClearCallbacks();
-			OCPH_ClearCallbacks();
-			OFH_ClearCallbacks();
-			OWDH_ClearCallbacks();
-			OSPH_ClearCallbacks();
-			OMFCH_ClearCallbacks();
-			OMSCH_ClearCallbacks();
-			DTF_ClearCallbacks();
-			Log("Script callbacks cleared for new/loaded game");
+				OWJH_ClearCallbacks();
+				OSH_ClearCallbacks();
+				OCH_ClearCallbacks();
+				OKSH_ClearCallbacks();
+				KHH_ClearCallbacks();
+				DTH_ClearCallbacks();
+				CMH_ClearCallbacks();
+				OEPH_ClearCallbacks();
+				OCPH_ClearCallbacks();
+				OFH_ClearCallbacks();
+				OWDH_ClearCallbacks();
+				OSPH_ClearCallbacks();
+				OJLH_ClearCallbacks();
+				OMFCH_ClearCallbacks();
+				OMSCH_ClearCallbacks();
+				DTF_ClearCallbacks();
+				WeaponEmissive_ClearState();
+				Log("Script callbacks cleared for new/loaded game");
 
-			OEPH_BuildEntryMap();
-			if (Settings::bAutoGodMode && !g_godModeExecuted)
-			{
-				*(UInt8*)0x11E07BA = 1;
-				g_godModeExecuted = true;
-				Log("AutoGodMode: Enabled god mode");
-			}
-			break;
+				OEPH_BuildEntryMap();
+				if (Settings::bAutoGodMode && !g_godModeExecuted)
+				{
+					*(UInt8*)0x11E07BA = 1;
+					g_godModeExecuted = true;
+					Log("AutoGodMode: Enabled god mode");
+				}
+				break;
 
 		case kMessage_ReloadConfig:
 			//dataLen = length of plugin name, data = const char* pluginName
@@ -512,6 +527,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					VATSSpeechFix_SetEnabled(Settings::bVATSSpeechFix != 0);
 					ReversePickpocketNoKarmaFix_SetEnabled(Settings::bReversePickpocketNoKarma != 0);
 					CompanionNoInfamy_SetEnabled(Settings::bCompanionNoInfamy != 0);
+					CompanionWeightlessOverencumberedFix_SetEnabled(Settings::bCompanionWeightlessOverencumberedFix != 0);
 					NPCDoorUnlockBlock_SetLevel(Settings::iNPCDoorUnlockBlock);
 
 					//apply god mode immediately if setting changed
@@ -528,19 +544,21 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 					Log("Config reloaded via ReloadPluginConfig");
 					Console_Print("itr-nvse: Config reloaded");
-					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180, OwnerNameInfo, QuickReadNote, FriendlyFire, OwnedBeds, KillActorXPFix, NoDoorFade, VATSSpeechFix, ReversePickpocket, CompanionNoInfamy, NPCDoorUnlockBlock");
+					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180, OwnerNameInfo, QuickReadNote, FriendlyFire, OwnedBeds, KillActorXPFix, NoDoorFade, VATSSpeechFix, ReversePickpocket, CompanionNoInfamy, CompanionWeightlessOverencumberedFix, NPCDoorUnlockBlock");
 				}
 			}
 			break;
 
 		case kMessage_MainGameLoop:
 			CameraOverride_Init();
+			DTF_Update();
 			if (Settings::bLocationVisitPopup)
 				LocationVisitPopup_Update();
 			ONI_Update();
 			KHH_Update();
 			DTH_Update();
 			OSPH_Update();
+			OJLH_Update();
 			OCPH_Update();
 			OMFCH_Update();
 			OMSCH_Update();
@@ -629,6 +647,7 @@ static void LogSettings()
 	Log("  bNPCAntidoteUse: %d", Settings::bNPCAntidoteUse);
 	Log("  bNPCDoctorsBagUse: %d", Settings::bNPCDoctorsBagUse);
 	Log("  bCompanionNoInfamy: %d", Settings::bCompanionNoInfamy);
+	Log("  bCompanionWeightlessOverencumberedFix: %d", Settings::bCompanionWeightlessOverencumberedFix);
 	Log("  iAutoQuickLoadFrameDelay: %d", Settings::iAutoQuickLoadFrameDelay);
 
 	if (Settings::bQuickDrop) Log("QuickDrop enabled (modifier=%d, control=%d)", Settings::iQuickDropModifierKey, Settings::iQuickDropControlID);
@@ -708,10 +727,10 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	else
 		Log("OnSoundPlayedHandler module failed to initialize");
 
-	if (OFTH_Init((void*)nvse))
-		Log("OnFastTravelHandler module initialized (opcode 0x%04X)", OFTH_GetOpcode());
+	if (OJLH_Init((void*)nvse))
+		Log("OnJumpLandHandler module initialized (landed=0x%04X, jump=0x%04X)", OJLH_GetLandedOpcode(), OJLH_GetJumpOpcode());
 	else
-		Log("OnFastTravelHandler module failed to initialize");
+		Log("OnJumpLandHandler module failed to initialize");
 
 	if (FDH_Init((void*)nvse))
 		Log("FallDamageHandler module initialized (SetMult=0x%04X, GetMult=0x%04X)", FDH_GetSetMultOpcode(), FDH_GetGetMultOpcode());
@@ -807,6 +826,7 @@ namespace ITR
 		RadioCommands_Init((void*)nvse);
 		ChallengeCommands_Init((void*)nvse);
 		DialogueCommands_Init((void*)nvse);
+		WeaponEmissiveCommands_Init((void*)nvse);
 		RegisterHandlers(nvse);
 
 		Log("itr-nvse loaded successfully");

@@ -7,7 +7,8 @@
 #include <vector>
 #include <cstring>
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
+#include "internal/ScopedLock.h"
 
 namespace LocationVisitPopup
 {
@@ -20,16 +21,6 @@ namespace LocationVisitPopup
 	struct PendingPopup
 	{
 		char name[260];
-	};
-
-	class ScopedLock
-	{
-		CRITICAL_SECTION* cs;
-	public:
-		explicit ScopedLock(CRITICAL_SECTION* c) : cs(c) { EnterCriticalSection(cs); }
-		~ScopedLock() { LeaveCriticalSection(cs); }
-		ScopedLock(const ScopedLock&) = delete;
-		ScopedLock& operator=(const ScopedLock&) = delete;
 	};
 
 	static CooldownTracker<256> s_tracker;
@@ -58,18 +49,11 @@ namespace LocationVisitPopup
 	static SetCustomQuestText_t SetCustomQuestText = (SetCustomQuestText_t)0x76B960;
 
 	static void* GetHUDMainMenuTile() {
-		__try
-		{
-			void** g_interfaceManager = (void**)0x11D8A80;
-			if (!*g_interfaceManager) return nullptr;
-			void* hudMenu = *(void**)((UInt8*)*g_interfaceManager + 0x64);
-			if (!hudMenu) return nullptr;
-			return *(void**)((UInt8*)hudMenu + 0x30);
-		}
-		__except (EXCEPTION_EXECUTE_HANDLER)
-		{
-			return nullptr;
-		}
+		void** g_interfaceManager = (void**)0x11D8A80;
+		if (!*g_interfaceManager) return nullptr;
+		void* hudMenu = *(void**)((UInt8*)*g_interfaceManager + 0x64);
+		if (!hudMenu) return nullptr;
+		return *(void**)((UInt8*)hudMenu + 0x30);
 	}
 
 	static bool CheckMUXInstalled() {
@@ -139,7 +123,7 @@ namespace LocationVisitPopup
 			MarkShown(markerRefID);
 		}
 
-		// This hook can run on AI worker threads; defer UI access to main thread.
+		//can run on AI worker threads, defer UI to main thread
 		if (GetCurrentThreadId() == g_mainThreadId)
 			ShowPopup(name);
 		else

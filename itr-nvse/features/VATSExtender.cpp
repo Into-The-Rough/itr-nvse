@@ -6,7 +6,7 @@
 #include "nvse/GameObjects.h"
 #include "internal/SafeWrite.h"
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 template <typename T_Ret = uint32_t, typename ...Args>
 __forceinline T_Ret VE_ThisCall(uint32_t _addr, const void* _this, Args ...args) {

@@ -8,7 +8,7 @@
 #include <string>
 #include <algorithm>
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 extern NVSEArrayVarInterface* g_arrInterface;
 
 static NVSEStringVarInterface* g_strInterface = nullptr;

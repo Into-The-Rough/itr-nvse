@@ -2,40 +2,19 @@
 //uses polling to avoid hook conflicts with JIP NVSE
 
 #include <vector>
-#include <cstdio>
 #include <Windows.h>
 
 #include "OnMenuFilterChangeHandler.h"
 #include "internal/NVSEMinimal.h"
 
-//menu IDs
-constexpr UInt32 kMenuType_Inventory = 1002;
 constexpr UInt32 kMenuType_Container = 1008;
 constexpr UInt32 kMenuType_Barter = 1053;
 
-//menu pointer addresses
-constexpr UInt32 kAddr_InventoryMenuPtr = 0x11D9EA4;
-constexpr UInt32 kAddr_ContainerMenuPtr = 0x11D93F8;
-constexpr UInt32 kAddr_BarterMenuPtr = 0x11D8FA4;
-
-//filter offsets
 constexpr UInt32 kOffset_InventoryMenu_Filter = 0x84;
 constexpr UInt32 kOffset_ContainerMenu_LeftFilter = 0x8C;
 constexpr UInt32 kOffset_ContainerMenu_RightFilter = 0x90;
 constexpr UInt32 kOffset_BarterMenu_LeftFilter = 0x9C;
 constexpr UInt32 kOffset_BarterMenu_RightFilter = 0xA0;
-
-static FILE* g_omfchLogFile = nullptr;
-
-static void OMFCH_Log(const char* fmt, ...) {
-    if (!g_omfchLogFile) return;
-    va_list args;
-    va_start(args, fmt);
-    vfprintf(g_omfchLogFile, fmt, args);
-    fprintf(g_omfchLogFile, "\n");
-    fflush(g_omfchLogFile);
-    va_end(args);
-}
 
 static NVSEScriptInterface* g_omfchScript = nullptr;
 static bool (*g_ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, ...) = nullptr;
@@ -62,12 +41,11 @@ static void DispatchFilterChangeEvent(UInt32 menuID, UInt32 oldFilter, UInt32 ne
     if (!g_omfchScript || g_callbacks.empty()) return;
     if (oldFilter == newFilter) return;
 
-    OMFCH_Log("Filter change: menu=%d old=%d new=%d side=%d", menuID, oldFilter, newFilter, side);
+    const auto snapshot = g_callbacks;
 
-    for (const auto& cb : g_callbacks) {
+    for (const auto& cb : snapshot) {
         if (cb.menuFilter == 0 || cb.menuFilter == menuID) {
             if (cb.script) {
-                OMFCH_Log("  Dispatching to callback 0x%08X", cb.script);
                 g_omfchScript->CallFunctionAlt(cb.script, nullptr, 4, menuID, oldFilter, newFilter, side);
             }
         }
@@ -78,16 +56,15 @@ void OMFCH_Update() {
     if (g_callbacks.empty()) return;
 
     //check inventory menu
-    void* invMenu = *(void**)kAddr_InventoryMenuPtr;
+    void* invMenu = *(void**)0x11D9EA4; //InventoryMenu
     if (invMenu) {
         if (invMenu != g_lastInventoryMenu) {
-            //menu just opened, initialize cache
             g_lastInventoryFilter = *(UInt32*)((UInt8*)invMenu + kOffset_InventoryMenu_Filter);
             g_lastInventoryMenu = invMenu;
         } else {
             UInt32 currentFilter = *(UInt32*)((UInt8*)invMenu + kOffset_InventoryMenu_Filter);
             if (currentFilter != g_lastInventoryFilter && g_lastInventoryFilter != 0xFFFFFFFF) {
-                DispatchFilterChangeEvent(kMenuType_Inventory, g_lastInventoryFilter, currentFilter, 0);
+                DispatchFilterChangeEvent(1002, g_lastInventoryFilter, currentFilter, 0); //InventoryMenu
             }
             g_lastInventoryFilter = currentFilter;
         }
@@ -97,7 +74,7 @@ void OMFCH_Update() {
     }
 
     //check container menu
-    void* contMenu = *(void**)kAddr_ContainerMenuPtr;
+    void* contMenu = *(void**)0x11D93F8; //ContainerMenu
     if (contMenu) {
         if (contMenu != g_lastContainerMenu) {
             g_lastContainerLeftFilter = *(UInt32*)((UInt8*)contMenu + kOffset_ContainerMenu_LeftFilter);
@@ -122,7 +99,7 @@ void OMFCH_Update() {
     }
 
     //check barter menu
-    void* bartMenu = *(void**)kAddr_BarterMenuPtr;
+    void* bartMenu = *(void**)0x11D8FA4; //BarterMenu
     if (bartMenu) {
         if (bartMenu != g_lastBarterMenu) {
             g_lastBarterLeftFilter = *(UInt32*)((UInt8*)bartMenu + kOffset_BarterMenu_LeftFilter);
@@ -166,12 +143,10 @@ bool Cmd_SetOnMenuFilterChangeEventHandler_Execute(COMMAND_ARGS) {
 
     if (!g_ExtractArgsEx((ParamInfo*)paramInfo, scriptData, opcodeOffsetPtr,
             scriptObj, eventList, &setOrRemove, &handlerForm, &menuFilter)) {
-        OMFCH_Log("SetOnMenuFilterChangeEventHandler: Failed to extract args");
         return true;
     }
 
     if (!handlerForm || *((UInt8*)handlerForm + 4) != kFormType_Script) {
-        OMFCH_Log("SetOnMenuFilterChangeEventHandler: Invalid handler script");
         return true;
     }
 
@@ -187,14 +162,12 @@ bool Cmd_SetOnMenuFilterChangeEventHandler_Execute(COMMAND_ARGS) {
         }
         if (!found) {
             g_callbacks.push_back({script, menuFilter});
-            OMFCH_Log("SetOnMenuFilterChangeEventHandler: Added callback 0x%08X menuFilter=%d", script, menuFilter);
         }
         *result = 1;
     } else {
         for (auto it = g_callbacks.begin(); it != g_callbacks.end(); ++it) {
             if (it->script == script && it->menuFilter == menuFilter) {
                 g_callbacks.erase(it);
-                OMFCH_Log("SetOnMenuFilterChangeEventHandler: Removed callback 0x%08X", script);
                 *result = 1;
                 break;
             }
@@ -212,18 +185,8 @@ bool OMFCH_Init(void* nvseInterface) {
     NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
     if (nvse->isEditor) return false;
 
-    char logPath[MAX_PATH];
-    GetModuleFileNameA(nullptr, logPath, MAX_PATH);
-    char* lastSlash = strrchr(logPath, '\\');
-    if (lastSlash) *lastSlash = '\0';
-    strcat_s(logPath, "\\Data\\NVSE\\Plugins\\OnMenuFilterChangeHandler.log");
-    //g_omfchLogFile = fopen(logPath, "w"); //disabled for release
-
-    OMFCH_Log("OnMenuFilterChangeHandler initializing (polling mode)...");
-
     g_omfchScript = (NVSEScriptInterface*)nvse->QueryInterface(kInterface_Script);
     if (!g_omfchScript) {
-        OMFCH_Log("ERROR: Failed to get script interface");
         return false;
     }
     g_ExtractArgsEx = g_omfchScript->ExtractArgsEx;
@@ -234,13 +197,10 @@ bool OMFCH_Init(void* nvseInterface) {
     nvse->RegisterCommand(&kCommandInfo_SetOnMenuFilterChangeEventHandler);
     g_registeredOpcode = 0x4032;
 
-    OMFCH_Log("Registered SetOnMenuFilterChangeEventHandler at opcode 0x4032");
-    OMFCH_Log("OnMenuFilterChangeHandler initialized successfully");
     return true;
 }
 
 void OMFCH_ClearCallbacks()
 {
     g_callbacks.clear();
-    OMFCH_Log("Callbacks cleared on game load");
 }

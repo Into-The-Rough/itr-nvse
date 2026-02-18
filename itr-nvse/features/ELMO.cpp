@@ -2,10 +2,11 @@
 //NOT hot-reloadable - mid-function patches break instruction boundaries
 
 #include "ELMO.h"
+#include "handlers/CornerMessageHandler.h"
 #include "internal/SafeWrite.h"
 #include <cstdio>
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 namespace ELMO
 {
@@ -23,8 +24,9 @@ namespace ELMO
 	void __cdecl ShowAsCornerMessage(const char* text, UInt32 isCompleted, UInt32 allowDisplayMultiple)
 	{
 		if (text) {
-			const char* metaPath = isCompleted ? "ELMO:objective:completed" : "ELMO:objective:displayed";
-			QueueUIMsg(text, 2, metaPath, nullptr, 10.0f, false);
+			const int metaType = isCompleted ? kCornerMeta_ObjectiveCompleted : kCornerMeta_ObjectiveDisplayed;
+			CMH_TrackMessageMeta(text, 10.0f, metaType);
+			QueueUIMsg(text, 2, nullptr, nullptr, 10.0f, false);
 		}
 	}
 
@@ -80,16 +82,22 @@ namespace ELMO
 			add ecx, 0x18
 			call getFactionName
 			push eax
-			call FormatReputationMessage
-			add esp, 0xC
-			push 0
-			push 0x41000000
-			push 0
-			push 0
-			push 2
-			push eax
-			call queueUIMsg
-			add esp, 0x18
+				call FormatReputationMessage
+				add esp, 0xC
+				mov esi, eax
+				push 3
+				push 0x41000000
+				push esi
+				call CMH_TrackMessageMeta
+				add esp, 0xC
+				push 0
+				push 0x41000000
+				push 0
+				push 0
+				push 2
+				push esi
+				call queueUIMsg
+				add esp, 0x18
 			popfd
 			popad
 			pop ebp
@@ -119,16 +127,22 @@ namespace ELMO
 			add ecx, 0x18
 			call getFactionName
 			push eax
-			call FormatReputationMessage
-			add esp, 0xC
-			push 0
-			push 0x41000000
-			push 0
-			push 0
-			push 2
-			push eax
-			call queueUIMsg
-			add esp, 0x18
+				call FormatReputationMessage
+				add esp, 0xC
+				mov esi, eax
+				push 3
+				push 0x41000000
+				push esi
+				call CMH_TrackMessageMeta
+				add esp, 0xC
+				push 0
+				push 0x41000000
+				push 0
+				push 0
+				push 2
+				push esi
+				call queueUIMsg
+				add esp, 0x18
 			popfd
 			popad
 			jmp returnAddr
@@ -157,16 +171,22 @@ namespace ELMO
 			add ecx, 0x18
 			call getFactionName
 			push eax
-			call FormatReputationMessage
-			add esp, 0xC
-			push 0
-			push 0x41000000
-			push 0
-			push 0
-			push 2
-			push eax
-			call queueUIMsg
-			add esp, 0x18
+				call FormatReputationMessage
+				add esp, 0xC
+				mov esi, eax
+				push 3
+				push 0x41000000
+				push esi
+				call CMH_TrackMessageMeta
+				add esp, 0xC
+				push 0
+				push 0x41000000
+				push 0
+				push 0
+				push 2
+				push esi
+				call queueUIMsg
+				add esp, 0x18
 			popfd
 			popad
 			jmp returnAddr
@@ -195,16 +215,22 @@ namespace ELMO
 			add ecx, 0x18
 			call getFactionName
 			push eax
-			call FormatReputationMessage
-			add esp, 0xC
-			push 0
-			push 0x41000000
-			push 0
-			push 0
-			push 2
-			push eax
-			call queueUIMsg
-			add esp, 0x18
+				call FormatReputationMessage
+				add esp, 0xC
+				mov esi, eax
+				push 3
+				push 0x41000000
+				push esi
+				call CMH_TrackMessageMeta
+				add esp, 0xC
+				push 0
+				push 0x41000000
+				push 0
+				push 0
+				push 2
+				push esi
+				call queueUIMsg
+				add esp, 0x18
 			popfd
 			popad
 			jmp returnAddr
@@ -233,16 +259,22 @@ namespace ELMO
 			add ecx, 0x18
 			call getFactionName
 			push eax
-			call FormatReputationMessage
-			add esp, 0xC
-			push 0
-			push 0x41000000
-			push 0
-			push 0
-			push 2
-			push eax
-			call queueUIMsg
-			add esp, 0x18
+				call FormatReputationMessage
+				add esp, 0xC
+				mov esi, eax
+				push 3
+				push 0x41000000
+				push esi
+				call CMH_TrackMessageMeta
+				add esp, 0xC
+				push 0
+				push 0x41000000
+				push 0
+				push 0
+				push 2
+				push esi
+				call queueUIMsg
+				add esp, 0x18
 			popfd
 			popad
 			jmp returnAddr

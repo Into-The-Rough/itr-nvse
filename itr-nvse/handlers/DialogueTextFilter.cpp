@@ -3,12 +3,13 @@
 #include <vector>
 #include <string>
 #include <cstring>
-#include <cstdio>
 #include <Windows.h>
 
 #include "DialogueTextFilter.h"
 #include "internal/StringMatch.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/ScopedLock.h"
+#include <cstdio>
 
 class TESTopicInfo;
 class TESTopic;
@@ -37,19 +38,6 @@ struct ModInfo {
 template <typename T, typename... Args>
 __forceinline T ThisStdCall(UInt32 addr, void* thisPtr, Args... args) {
     return ((T(__thiscall*)(void*, Args...))addr)(thisPtr, args...);
-}
-
-static FILE* g_dtfLogFile = nullptr;
-
-static void DTF_Log(const char* fmt, ...)
-{
-    if (!g_dtfLogFile) return;
-    va_list args;
-    va_start(args, fmt);
-    vfprintf(g_dtfLogFile, fmt, args);
-    fprintf(g_dtfLogFile, "\n");
-    fflush(g_dtfLogFile);
-    va_end(args);
 }
 
 static PluginHandle g_dtfPluginHandle = kPluginHandle_Invalid;
@@ -104,23 +92,28 @@ struct TextFilterEntry {
     }
 };
 
+struct QueuedDialogueEvent
+{
+    UInt32 speakerRefID;
+    UInt32 topicInfoRefID;
+    UInt32 topicRefID;
+    float duration;
+    char text[512];
+    char voicePath[512];
+};
+
 namespace DialogueTextFilter {
     std::vector<TextFilterEntry> g_filters;
     std::vector<DTF_NativeCallback> g_nativeCallbacks;
+    std::vector<QueuedDialogueEvent> g_pendingEvents;
     bool g_hookInstalled = false;
+    DWORD g_mainThreadId = 0;
+    UInt32 g_droppedEvents = 0;
+    DWORD g_lastDropLogTick = 0;
 }
 
 static CRITICAL_SECTION g_dtfStateLock;
-static volatile LONG g_dtfStateLockInit = 0; // 0=uninitialized, 1=initializing, 2=ready
-
-class ScopedLock {
-    CRITICAL_SECTION* cs;
-public:
-    explicit ScopedLock(CRITICAL_SECTION* c) : cs(c) { EnterCriticalSection(cs); }
-    ~ScopedLock() { LeaveCriticalSection(cs); }
-    ScopedLock(const ScopedLock&) = delete;
-    ScopedLock& operator=(const ScopedLock&) = delete;
-};
+static volatile LONG g_dtfStateLockInit = 0;
 
 static void EnsureStateLockInitialized()
 {
@@ -140,6 +133,25 @@ static void EnsureStateLockInitialized()
 constexpr UInt32 kAddr_RunResult = 0x61F170;
 constexpr UInt32 kAddr_RunResultBody = 0x61F176;
 constexpr UInt32 kAddr_GetResponses = 0x61E780;
+
+static UInt32 ReadRefID(const void* form)
+{
+    return form ? *(const UInt32*)((const UInt8*)form + 0x0C) : 0;
+}
+
+static TESForm* LookupFormByID(UInt32 refID)
+{
+    if (!refID) return nullptr;
+    struct Entry { Entry* next; UInt32 key; TESForm* form; };
+    UInt8* map = *(UInt8**)0x11C54C0;
+    if (!map) return nullptr;
+    UInt32 numBuckets = *(UInt32*)(map + 4);
+    Entry** buckets = *(Entry***)(map + 8);
+    if (!buckets || !numBuckets) return nullptr;
+    for (Entry* e = buckets[refID % numBuckets]; e; e = e->next)
+        if (e->key == refID) return e->form;
+    return nullptr;
+}
 
 static const char* GetModName(UInt8 modIndex) {
     void* dh = *(void**)0x11C3F2C;
@@ -225,12 +237,13 @@ static bool BuildVoicePath(char* outPath, size_t outSize,
 
 static bool IsValidFormPointer(void* form) {
     if (!form) return false;
+    //SEH required: called from AI thread where form pointers can be dangling
     __try {
         UInt32 refID = *(UInt32*)((UInt8*)form + 0x0C);
         UInt32 flags = *(UInt32*)((UInt8*)form + 0x08);
         if (refID == 0) return false;
-        if (flags & 0x20) return false;  //deleted
-        if (flags & 0x800) return false; //temporary/invalid
+        if (flags & 0x20) return false;  //kFormFlags_Deleted
+        if (flags & 0x800) return false; //kFormFlags_Temporary
         return true;
     } __except(EXCEPTION_EXECUTE_HANDLER) {
         return false;
@@ -238,10 +251,8 @@ static bool IsValidFormPointer(void* form) {
 }
 
 static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
-    DTF_Log("=== HOOK FIRED === topicInfo=0x%08X speaker=0x%08X", topicInfo, speaker);
 
     if (!IsValidFormPointer(topicInfo) || !IsValidFormPointer(speaker)) {
-        DTF_Log("  Invalid form pointer, skipping");
         return;
     }
 
@@ -249,89 +260,57 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
         kAddr_GetResponses, topicInfo, nullptr);
 
     if (!ppResponse || !*ppResponse) {
-        DTF_Log("  No responses found");
         return;
     }
 
     TESTopic* topic = *(TESTopic**)((UInt8*)topicInfo + 0x50);
     UInt32 topicInfoFormID = *(UInt32*)((UInt8*)topicInfo + 0x0C);
 
-    DTF_Log("  FormID: %08X", topicInfoFormID);
-
     TESTopicInfoResponse* response = *ppResponse;
     const char* text = response ? response->responseText.CStr() : nullptr;
 
     if (!text || !*text) {
-        DTF_Log("  No text");
         return;
     }
 
-    //calculate duration using game's formula: strlen * fNoticeTextTimePerCharacter
-    //Setting at 0x11D2178, float value at offset 0x04
+    //strlen * fNoticeTextTimePerCharacter (setting at 0x11D2178, float at +0x04)
     float timePerChar = *(float*)(0x11D2178 + 0x04);
-    if (timePerChar <= 0.0f) timePerChar = 0.08f; //fallback
+    if (timePerChar <= 0.0f) timePerChar = 0.08f;
     float duration = (float)strlen(text) * timePerChar;
-    if (duration < 2.0f) duration = 2.0f; //minimum 2 seconds
+    if (duration < 2.0f) duration = 2.0f;
 
-    // Copy callback/filter state under lock so dispatch can run lock-free.
-    std::vector<DTF_NativeCallback> nativeCallbacks;
-    std::vector<Script*> matchedScriptCallbacks;
+    QueuedDialogueEvent evt{};
+    evt.speakerRefID = ReadRefID(speaker);
+    evt.topicInfoRefID = ReadRefID(topicInfo);
+    evt.topicRefID = ReadRefID(topic);
+    evt.duration = duration;
+    strncpy_s(evt.text, sizeof(evt.text), text, _TRUNCATE);
+    evt.voicePath[0] = '\0';
+
     EnsureStateLockInitialized();
     {
         ScopedLock lock(&g_dtfStateLock);
-        nativeCallbacks = DialogueTextFilter::g_nativeCallbacks;
-        matchedScriptCallbacks.reserve(DialogueTextFilter::g_filters.size());
-        for (const auto& filter : DialogueTextFilter::g_filters) {
-            if (filter.Matches(text) && filter.callback) {
-                matchedScriptCallbacks.push_back(filter.callback);
-            }
+        if (DialogueTextFilter::g_nativeCallbacks.empty() &&
+            DialogueTextFilter::g_filters.empty()) {
+            return;
         }
-    }
 
-    //always call native callbacks (for other plugins like FloatingSubtitles)
-    for (auto callback : nativeCallbacks) {
-        if (callback) {
-            callback(speaker, text, duration, topicInfo, topic);
+        constexpr size_t kMaxQueuedDialogueEvents = 256;
+        if (DialogueTextFilter::g_pendingEvents.size() >= kMaxQueuedDialogueEvents) {
+            ++DialogueTextFilter::g_droppedEvents;
+            return;
         }
-    }
 
-    if (matchedScriptCallbacks.empty()) {
-        DTF_Log("  No filter match for: '%s'", text);
-        return;
-    }
-
-    static char voicePath[512];
-    if (!BuildVoicePath(voicePath, sizeof(voicePath), topicInfo, speaker, response)) {
-        voicePath[0] = '\0';
-    }
-
-    DTF_Log("  Match found: '%s'", text);
-
-    for (Script* callback : matchedScriptCallbacks) {
-        if (g_dtfScript && callback) {
-            g_dtfScript->CallFunctionAlt(
-                callback,
-                reinterpret_cast<TESObjectREFR*>(speaker),
-                5,
-                speaker,
-                topic,
-                topicInfo,
-                text,
-                voicePath
-            );
-        }
+        DialogueTextFilter::g_pendingEvents.push_back(evt);
     }
 }
 
 static void __cdecl LogSkippedRunResult(TESTopicInfo* topicInfo, Actor* speaker, UInt32 param) {
-    if (!g_dtfLogFile) return;
-    DTF_Log("=== SKIPPED (param=%d) === topicInfo=0x%08X speaker=0x%08X", param, topicInfo, speaker);
     if (IsValidFormPointer(topicInfo) && IsValidFormPointer(speaker)) {
         TESTopicInfoResponse** ppResponse = ThisStdCall<TESTopicInfoResponse**>(
             kAddr_GetResponses, topicInfo, nullptr);
         if (ppResponse && *ppResponse) {
             const char* text = (*ppResponse)->responseText.CStr();
-            DTF_Log("  Skipped text: '%s'", text ? text : "(null)");
         }
     }
 }
@@ -347,7 +326,7 @@ static __declspec(naked) void DialogueTextHook() {
         pushad
         pushfd
 
-        //speaker was at [esp+8] before pushad(0x20)+pushfd(0x4)
+        //speaker at [esp+8] before pushad(0x20)+pushfd(0x4)
         push    dword ptr [esp+0x2C]
         push    ecx
         call    [g_hookCallback]
@@ -360,7 +339,6 @@ static __declspec(naked) void DialogueTextHook() {
     log_and_skip:
         pushad
         pushfd
-        //log what we're skipping: LogSkippedRunResult(topicInfo, speaker, param)
         push    dword ptr [esp+0x28]  //param (esp+4 shifted by pushad+pushfd)
         push    dword ptr [esp+0x30]  //speaker (esp+8 shifted, +4 for prev push)
         push    ecx                   //topicInfo
@@ -391,17 +369,14 @@ static void InitHook() {
     UInt8 firstByte = *(UInt8*)kAddr_RunResult;
     if (firstByte == 0xE9) {
         g_chainAddr = SafeWrite::GetRelJumpTarget(kAddr_RunResult);
-        DTF_Log("Detected existing hook at 0x%08X, chaining to 0x%08X", kAddr_RunResult, g_chainAddr);
     } else {
         g_chainAddr = 0;
-        DTF_Log("No existing hook at 0x%08X", kAddr_RunResult);
     }
 
     SafeWrite::WriteRelJump(kAddr_RunResult, (UInt32)DialogueTextHook);
     SafeWrite::Write8(kAddr_RunResult + 5, 0x90);
 
     DialogueTextFilter::g_hookInstalled = true;
-    DTF_Log("Hook installed at 0x%08X", kAddr_RunResult);
 }
 
 static bool AddFilter_Internal(const char* filterText, Script* callback) {
@@ -411,17 +386,18 @@ static bool AddFilter_Internal(const char* filterText, Script* callback) {
         g_CaptureLambdaVars(callback);
     }
 
+    bool installHook = false;
     EnsureStateLockInitialized();
     {
         ScopedLock lock(&g_dtfStateLock);
         DialogueTextFilter::g_filters.emplace_back(filterText, callback);
+        installHook = !DialogueTextFilter::g_hookInstalled;
     }
 
-    if (!DialogueTextFilter::g_hookInstalled) {
+    if (installHook) {
         InitHook();
     }
 
-    DTF_Log("Added filter: '%s' (callback: 0x%08X)", filterText, callback);
     return true;
 }
 
@@ -450,7 +426,6 @@ static bool RemoveFilter_Internal(const char* filterText, Script* callback) {
             g_UncaptureLambdaVars(callback);
         }
 
-        DTF_Log("Removed filter: '%s'", filterText);
         return true;
     }
 
@@ -469,7 +444,6 @@ DEFINE_COMMAND_PLUGIN(SetOnDialogueTextEventHandler,
 
 bool Cmd_SetOnDialogueTextEventHandler_Execute(COMMAND_ARGS) {
     *result = 0;
-    DTF_Log("Command called!");
 
     char filterText[512] = {0};
     TESForm* callbackForm = nullptr;
@@ -485,35 +459,25 @@ bool Cmd_SetOnDialogueTextEventHandler_Execute(COMMAND_ARGS) {
             &callbackForm,
             &addRemove))
     {
-        DTF_Log("Failed to extract args");
         return true;
     }
 
-    DTF_Log("Extracted args: filter='%s', callback=0x%08X, add=%d",
-             filterText, callbackForm, addRemove);
-
     if (!callbackForm) {
-        DTF_Log("Callback is null");
         return true;
     }
 
     UInt8 typeID = *((UInt8*)callbackForm + 4);
-    DTF_Log("Callback typeID: 0x%02X (expected 0x%02X)", typeID, kFormType_Script);
 
     if (typeID != kFormType_Script) {
-        DTF_Log("Callback is not a script (typeID: %02X)", typeID);
         return true;
     }
 
     Script* callback = reinterpret_cast<Script*>(callbackForm);
 
     if (addRemove) {
-        DTF_Log("Adding filter...");
         if (AddFilter_Internal(filterText, callback)) {
             *result = 1;
-            DTF_Log("Filter added successfully");
         } else {
-            DTF_Log("Failed to add filter");
         }
     } else {
         if (RemoveFilter_Internal(filterText, callback)) {
@@ -529,15 +493,8 @@ bool DTF_Init(void* nvseInterface) {
 
     if (nvse->isEditor) return false;
     EnsureStateLockInitialized();
-
-    char logPath[MAX_PATH];
-    GetModuleFileNameA(nullptr, logPath, MAX_PATH);
-    char* lastSlash = strrchr(logPath, '\\');
-    if (lastSlash) *lastSlash = '\0';
-    strcat_s(logPath, "\\Data\\NVSE\\Plugins\\DialogueTextFilter.log");
-    g_dtfLogFile = fopen(logPath, "w");
-
-    DTF_Log("DialogueTextFilter module initializing...");
+    DialogueTextFilter::g_mainThreadId = 0;
+    DialogueTextFilter::g_lastDropLogTick = GetTickCount();
 
     g_dtfPluginHandle = nvse->GetPluginHandle();
 
@@ -545,13 +502,10 @@ bool DTF_Init(void* nvseInterface) {
         nvse->QueryInterface(kInterface_Script));
 
     if (!g_dtfScript) {
-        DTF_Log("ERROR: Failed to get script interface");
         return false;
     }
 
     g_ExtractArgsEx = g_dtfScript->ExtractArgsEx;
-    DTF_Log("Script interface at 0x%08X, ExtractArgsEx at 0x%08X",
-            g_dtfScript, g_ExtractArgsEx);
 
     NVSEDataInterface* nvseData = reinterpret_cast<NVSEDataInterface*>(
         nvse->QueryInterface(kInterface_Data));
@@ -561,16 +515,11 @@ bool DTF_Init(void* nvseInterface) {
             nvseData->GetFunc(NVSEDataInterface::kNVSEData_LambdaSaveVariableList));
         g_UncaptureLambdaVars = reinterpret_cast<_UncaptureLambdaVars>(
             nvseData->GetFunc(NVSEDataInterface::kNVSEData_LambdaUnsaveVariableList));
-        DTF_Log("Lambda capture: save=0x%08X unsave=0x%08X",
-                g_CaptureLambdaVars, g_UncaptureLambdaVars);
     }
 
     nvse->SetOpcodeBase(0x4000);
     nvse->RegisterCommand(&kCommandInfo_SetOnDialogueTextEventHandler);
     g_dtfOpcode = 0x4000;
-
-    DTF_Log("Registered SetOnDialogueTextEventHandler at opcode 0x%04X", g_dtfOpcode);
-    DTF_Log("DialogueTextFilter module initialized successfully");
 
     return true;
 }
@@ -587,6 +536,83 @@ unsigned int DTF_GetOpcode() {
     return g_dtfOpcode;
 }
 
+void DTF_Update()
+{
+    if (!g_dtfScript) return;
+    EnsureStateLockInitialized();
+
+    DWORD now = GetTickCount();
+    DWORD currentThreadId = GetCurrentThreadId();
+    if (!DialogueTextFilter::g_mainThreadId)
+        DialogueTextFilter::g_mainThreadId = currentThreadId;
+    if (currentThreadId != DialogueTextFilter::g_mainThreadId)
+        return;
+
+    UInt32 droppedToLog = 0;
+    std::vector<QueuedDialogueEvent> pendingEvents;
+    {
+        ScopedLock lock(&g_dtfStateLock);
+        pendingEvents.swap(DialogueTextFilter::g_pendingEvents);
+
+        if (DialogueTextFilter::g_droppedEvents &&
+            (now - DialogueTextFilter::g_lastDropLogTick) >= 5000)
+        {
+            droppedToLog = DialogueTextFilter::g_droppedEvents;
+            DialogueTextFilter::g_droppedEvents = 0;
+            DialogueTextFilter::g_lastDropLogTick = now;
+        }
+    }
+
+    for (const auto& evt : pendingEvents) {
+        std::vector<DTF_NativeCallback> nativeCallbacks;
+        std::vector<Script*> matchedScriptCallbacks;
+        {
+            ScopedLock lock(&g_dtfStateLock);
+            nativeCallbacks = DialogueTextFilter::g_nativeCallbacks;
+            matchedScriptCallbacks.reserve(DialogueTextFilter::g_filters.size());
+            for (const auto& filter : DialogueTextFilter::g_filters) {
+                if (filter.Matches(evt.text) && filter.callback) {
+                    matchedScriptCallbacks.push_back(filter.callback);
+                }
+            }
+        }
+
+        Actor* speaker = reinterpret_cast<Actor*>(LookupFormByID(evt.speakerRefID));
+        TESTopicInfo* topicInfo = reinterpret_cast<TESTopicInfo*>(LookupFormByID(evt.topicInfoRefID));
+        TESTopic* topic = reinterpret_cast<TESTopic*>(LookupFormByID(evt.topicRefID));
+
+        for (auto callback : nativeCallbacks) {
+            if (callback) {
+                callback(speaker, evt.text, evt.duration, topicInfo, topic);
+            }
+        }
+
+        if (!matchedScriptCallbacks.empty() && topicInfo && speaker) {
+            char voicePath[512] = {0};
+            TESTopicInfoResponse** ppResp = ThisStdCall<TESTopicInfoResponse**>(
+                kAddr_GetResponses, topicInfo, nullptr);
+            TESTopicInfoResponse* resp = (ppResp && *ppResp) ? *ppResp : nullptr;
+            if (!BuildVoicePath(voicePath, sizeof(voicePath), topicInfo, speaker, resp))
+                voicePath[0] = '\0';
+
+            for (Script* callback : matchedScriptCallbacks) {
+                if (callback) {
+                    g_dtfScript->CallFunctionAlt(
+                        callback,
+                        reinterpret_cast<TESObjectREFR*>(speaker),
+                        5,
+                        speaker,
+                        topic,
+                        topicInfo,
+                        evt.text,
+                        voicePath
+                    );
+                }
+            }
+        }
+    }
+}
+
 //native callback registration for inter-plugin communication
 extern "C" {
 
@@ -595,6 +621,7 @@ __declspec(dllexport) bool DTF_RegisterNativeCallback(DTF_NativeCallback callbac
 
     EnsureStateLockInitialized();
     int callbackCount = 0;
+    bool installHook = false;
     {
         ScopedLock lock(&g_dtfStateLock);
         for (auto cb : DialogueTextFilter::g_nativeCallbacks) {
@@ -603,15 +630,13 @@ __declspec(dllexport) bool DTF_RegisterNativeCallback(DTF_NativeCallback callbac
 
         DialogueTextFilter::g_nativeCallbacks.push_back(callback);
         callbackCount = (int)DialogueTextFilter::g_nativeCallbacks.size();
+        installHook = !DialogueTextFilter::g_hookInstalled;
     }
 
-    //ensure hook is installed
-    if (!DialogueTextFilter::g_hookInstalled) {
+    if (installHook) {
         InitHook();
     }
 
-    DTF_Log("Registered native callback: 0x%08X (total: %d)",
-            callback, callbackCount);
     return true;
 }
 
@@ -625,7 +650,6 @@ __declspec(dllexport) bool DTF_UnregisterNativeCallback(DTF_NativeCallback callb
         for (auto it = callbacks.begin(); it != callbacks.end(); ++it) {
             if (*it == callback) {
                 callbacks.erase(it);
-                DTF_Log("Unregistered native callback: 0x%08X", callback);
                 return true;
             }
         }
@@ -637,11 +661,12 @@ __declspec(dllexport) bool DTF_UnregisterNativeCallback(DTF_NativeCallback callb
 
 void DTF_ClearCallbacks()
 {
-    //clear script callbacks only - native callbacks are from other plugins and persist
+    //native callbacks persist across game loads (other plugins own them)
     EnsureStateLockInitialized();
     {
         ScopedLock lock(&g_dtfStateLock);
         DialogueTextFilter::g_filters.clear();
+        DialogueTextFilter::g_pendingEvents.clear();
+        DialogueTextFilter::g_droppedEvents = 0;
     }
-    DTF_Log("Script callbacks cleared on game load");
 }

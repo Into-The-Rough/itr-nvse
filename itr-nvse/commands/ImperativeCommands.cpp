@@ -9,6 +9,7 @@
 #include "nvse/GameForms.h"
 #include "nvse/GameData.h"
 #include "nvse/GameProcess.h"
+#include "nvse/GameExtraData.h"
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
 #include <vector>
@@ -16,12 +17,330 @@
 #include <cmath>
 
 extern const _ExtractArgs ExtractArgs;
-extern bool IsConsoleMode();
-extern void Console_Print(const char* fmt, ...);
+#include "internal/globals.h"
 extern NVSEArrayVarInterface* g_arrInterface;
-extern void Log(const char* fmt, ...);
 
 using namespace FormUtils;
+
+namespace
+{
+	struct EventResultElement
+	{
+		enum Type : UInt8
+		{
+			kType_Invalid = 0,
+			kType_Numeric = 1,
+			kType_Form = 2,
+			kType_String = 3,
+			kType_Array = 4
+		};
+
+		union
+		{
+			UInt32 raw;
+			char* str;
+			void* arr;
+			TESForm* form;
+			double num;
+		};
+		UInt8 type;
+
+		bool IsValid() const { return type != kType_Invalid; }
+	};
+
+	struct EventManagerInterfaceEx
+	{
+		enum DispatchReturn : SInt32
+		{
+			kRetn_UnknownEvent = -2,
+			kRetn_GenericError = -1,
+			kRetn_Normal = 0,
+			kRetn_EarlyBreak = 1,
+			kRetn_Deferred = 2
+		};
+
+		using DispatchCallback = bool (*)(EventResultElement& result, void* anyData);
+
+		bool (*RegisterEvent)(const char* name, UInt8 numParams, UInt8* paramTypes, UInt32 flags);
+		bool (*DispatchEvent)(const char* eventName, TESObjectREFR* thisObj, ...);
+		DispatchReturn (*DispatchEventAlt)(const char* eventName, DispatchCallback resultCallback, void* anyData, TESObjectREFR* thisObj, ...);
+	};
+
+	struct Setting
+	{
+		void* vtbl;
+		union
+		{
+			UInt32 uint;
+			SInt32 i;
+			float f;
+			char* str;
+		} data;
+		const char* name;
+	};
+
+	using QueueUIMessage_t = bool (*)(const char* msgText, UInt32 iconType, const char* iconPath, const char* soundPath, float displayTime, UInt8 unk5);
+	using InventoryRefCreateEntry_t = TESObjectREFR* (__stdcall *)(TESObjectREFR* container, TESForm* itemForm, SInt32 countDelta, ExtraDataList* xData);
+	using BaseExtraListGetByType_t = BSExtraData* (__thiscall *)(BaseExtraList* extraList, UInt32 type);
+
+	constexpr UInt32 kInterface_EventManager = 8;
+	constexpr UInt32 kNVSEData_InventoryReferenceCreateEntry = 7;
+	constexpr UInt32 kAVCode_PerceptionCondition = 0x19;
+	constexpr UInt32 kAVCode_RightMobilityCondition = 0x1E;
+	constexpr UInt32 kAVCode_IgnoreCrippledLimbs = 0x48;
+
+	static EventManagerInterfaceEx* g_eventInterface = nullptr;
+	static InventoryRefCreateEntry_t g_inventoryRefCreateEntry = nullptr;
+	static BaseExtraListGetByType_t s_getExtraDataByType = reinterpret_cast<BaseExtraListGetByType_t>(0x410220); //BaseExtraList::GetByType
+	static QueueUIMessage_t s_queueUIMessage = reinterpret_cast<QueueUIMessage_t>(0x7052F0); //QueueUIMessage
+	static Setting* g_sFullHealth = reinterpret_cast<Setting*>(0x11D2AF0);
+	static BGSDefaultObjectManager** g_defaultObjectManager = reinterpret_cast<BGSDefaultObjectManager**>(0x11CA80C);
+
+	struct RadioData
+	{
+		void* voiceList;
+		UInt32 unk04;
+		UInt32 offset;
+		UInt32 soundTimeRemaining;
+	};
+
+	struct RadioEntry
+	{
+		TESObjectREFR* radioRef;
+		RadioData data;
+	};
+
+	using GetRadioEntryFromActivator_t = RadioEntry* (__cdecl*)(void*);
+	using DisableNPCRadio_t = void(__cdecl*)(Actor*);
+	using SetNPCRadio_t = void(__cdecl*)(Actor*, TESObjectREFR*);
+
+	struct RadioSoundKey
+	{
+		UInt32 soundKey;
+		UInt8 byte04;
+		UInt8 pad05[3];
+		UInt32 unk08;
+	};
+
+	struct DynamicRadio
+	{
+		TESObjectREFR* ref;
+		RadioSoundKey sound;
+		RadioSoundKey radioStaticSound;
+		UInt8 isActive;
+		UInt8 pad[3];
+	};
+
+	struct ExtraRadioDataLite //kExtraData_RadioData (0x68)
+	{
+		UInt8 pad00[0x10];
+		UInt32 rangeType;
+		float staticPerc;
+		TESObjectREFR* positionRef;
+	};
+
+	struct BSGameSound
+	{
+		void* vtbl;
+		UInt32 mapKey;
+		UInt32 audioFlags;
+		UInt32 flags00C;
+		UInt32 stateFlags;
+		UInt32 duration;
+		UInt16 staticAttenuation;
+		UInt16 unk01A;
+		UInt16 unk01C;
+		UInt16 unk01E;
+		UInt16 unk020;
+		UInt16 unk022;
+		float volume;
+		float flt028;
+		float flt02C;
+		UInt32 unk030;
+		UInt16 baseSamplingFreq;
+		char filePath[254];
+	};
+
+	struct SoundMapEntry
+	{
+		SoundMapEntry* next;
+		UInt32 key;
+		void* data;
+	};
+
+	struct SoundMap
+	{
+		void* vtbl;
+		UInt32 numBuckets;
+		SoundMapEntry** buckets;
+		UInt32 numItems;
+
+		BSGameSound* Lookup(UInt32 key) const
+		{
+			if (!buckets || !numBuckets) return nullptr;
+			for (SoundMapEntry* entry = buckets[key % numBuckets]; entry; entry = entry->next)
+			{
+				if (entry->key == key)
+					return reinterpret_cast<BSGameSound*>(entry->data);
+			}
+			return nullptr;
+		}
+	};
+
+	static RadioEntry** g_currentRadio = reinterpret_cast<RadioEntry**>(0x11DD42C);
+	static tList<DynamicRadio>* g_dynamicRadios = reinterpret_cast<tList<DynamicRadio>*>(0x11DD58C);
+	static UInt8* g_radioEnabled = reinterpret_cast<UInt8*>(0x11DD434);
+	static char* g_currentSongPath = reinterpret_cast<char*>(0x11DD448);
+	static SoundMap* g_playingSounds = reinterpret_cast<SoundMap*>(0x11F6EF0 + 0x54);
+	static GetRadioEntryFromActivator_t s_getRadioEntryFromActivator = reinterpret_cast<GetRadioEntryFromActivator_t>(0x832830);
+	static DisableNPCRadio_t s_disableNPCRadio = reinterpret_cast<DisableNPCRadio_t>(0x835980);
+	static SetNPCRadio_t s_setNPCRadio = reinterpret_cast<SetNPCRadio_t>(0x835810);
+
+	static const char* GetSoundPath(UInt32 soundKey)
+	{
+		if (!soundKey || soundKey == 0xFFFFFFFF || !g_playingSounds)
+			return "<none>";
+		BSGameSound* sound = g_playingSounds->Lookup(soundKey);
+		if (!sound || !sound->filePath[0])
+			return "<unresolved>";
+		return sound->filePath;
+	}
+
+	static bool IsActorRef(TESObjectREFR* ref)
+	{
+		if (!ref || !ref->baseForm) return false;
+		return ref->baseForm->typeID == kFormType_Creature || ref->baseForm->typeID == kFormType_NPC;
+	}
+
+	static bool HasCrippledLimb(Actor* actor)
+	{
+		float ignoreFlag = actor->avOwner.Fn_03(kAVCode_IgnoreCrippledLimbs);
+		if (ignoreFlag != 0.0f)
+			return false;
+
+		for (UInt32 avCode = kAVCode_PerceptionCondition; avCode <= kAVCode_RightMobilityCondition; avCode++)
+		{
+			float condition = actor->avOwner.Fn_03(avCode);
+			if (condition <= 0.0f)
+				return true;
+		}
+
+		return false;
+	}
+
+	static double GetActorHealthPercent(Actor* actor)
+	{
+		if (!actor)
+			return 1.0;
+
+		const float baseHealth = actor->avOwner.Fn_01(eActorVal_Health);
+		if (baseHealth <= 0.0f)
+			return 1.0;
+
+		const float currentHealth = actor->avOwner.Fn_03(eActorVal_Health);
+		return static_cast<double>(currentHealth / baseHealth);
+	}
+
+	static bool CanUseAidItemVanilla(Actor* actor, TESForm* item)
+	{
+		if (!actor || !item)
+			return false;
+
+		BGSDefaultObjectManager* defObjMgr = g_defaultObjectManager ? *g_defaultObjectManager : nullptr;
+		if (!defObjMgr)
+			return true;
+
+		auto showBlockedMessage = []()
+		{
+			if (g_sFullHealth && g_sFullHealth->data.str)
+				s_queueUIMessage(g_sFullHealth->data.str, 0, nullptr, nullptr, 2.0f, 0);
+		};
+
+		if (item == defObjMgr->defaultObjects.asStruct.Stimpak || item == defObjMgr->defaultObjects.asStruct.SuperStimpak)
+		{
+			double healthPercent = GetActorHealthPercent(actor);
+			if (healthPercent >= 1.0)
+			{
+				showBlockedMessage();
+				return false;
+			}
+		}
+		else if (item == defObjMgr->defaultObjects.asStruct.DoctorsBag)
+		{
+			if (!HasCrippledLimb(actor))
+			{
+				showBlockedMessage();
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	static bool EventResultAsBool(const EventResultElement& result)
+	{
+		switch (result.type)
+		{
+		case EventResultElement::kType_Numeric:
+			return result.num != 0.0;
+		case EventResultElement::kType_Form:
+			return result.form != nullptr;
+		case EventResultElement::kType_Array:
+			return result.arr != nullptr;
+		case EventResultElement::kType_String:
+			return result.str && result.str[0] != '\0';
+		default:
+			return false;
+		}
+	}
+
+	static bool CanUseItemRef(TESObjectREFR* invRef)
+	{
+		if (!g_eventInterface || !invRef || !invRef->baseForm)
+			return true;
+
+		PlayerCharacter* player = PlayerCharacter::GetSingleton();
+		if (!player)
+			return true;
+
+		UInt32 shouldActivate = 1;
+
+		auto resultCallback = [](EventResultElement& result, void* shouldActivateAddr) -> bool
+		{
+			UInt32& shouldActivateRef = *static_cast<UInt32*>(shouldActivateAddr);
+			if (shouldActivateRef && result.IsValid())
+				shouldActivateRef = EventResultAsBool(result) ? 1 : 0;
+			return true;
+		};
+
+		auto retn = g_eventInterface->DispatchEventAlt(
+			"ShowOff:OnPreActivateInventoryItem",
+			resultCallback,
+			&shouldActivate,
+			player,
+			invRef->baseForm,
+			invRef,
+			&shouldActivate,
+			static_cast<UInt32>(0));
+
+		UInt32 isSpecialActivation = 0;
+		g_eventInterface->DispatchEventAlt(
+			"ShowOff:OnPreActivateInventoryItemAlt",
+			resultCallback,
+			&shouldActivate,
+			player,
+			invRef->baseForm,
+			invRef,
+			&shouldActivate,
+			static_cast<UInt32>(0),
+			isSpecialActivation);
+
+		if (retn == EventManagerInterfaceEx::kRetn_UnknownEvent)
+			return true;
+
+		return shouldActivate != 0;
+	}
+}
 
 static ParamInfo kParams_GetRefsSortedByDistance[5] = {
 	{ "maxDistance",      kParamType_Float,   0 },
@@ -327,34 +646,6 @@ bool Cmd_GetAvailableRecipes_Execute(COMMAND_ARGS)
 	return true;
 }
 
-typedef bool (__thiscall *_ClampToGround)(TESObjectREFR*);
-static const _ClampToGround RefClampToGround = (_ClampToGround)0x576470;
-
-typedef void (__thiscall *_SetLocationOnReference)(TESObjectREFR*, float*);
-static const _SetLocationOnReference SetLocationOnReference = (_SetLocationOnReference)0x575830;
-
-DEFINE_COMMAND_PLUGIN(ClampToGround, "Clamps the reference to the ground", 1, 0, nullptr);
-
-bool Cmd_ClampToGround_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-
-	if (!thisObj)
-	{
-		if (IsConsoleMode())
-			Console_Print("ClampToGround >> No reference selected");
-		return true;
-	}
-
-	if (RefClampToGround(thisObj))
-	{
-		SetLocationOnReference(thisObj, &thisObj->posX);
-		*result = 1;
-	}
-
-	return true;
-}
-
 //debug command to dump CombatTarget memory for offset verification
 static ParamInfo kParams_DumpCombatTarget[1] = {
 	{ "target", kParamType_Actor, 0 },
@@ -565,7 +856,248 @@ static ParamInfo kParams_SetCreatureCombatSkill[2] = {
 	{ "creature", kParamType_AnyForm,  1 },
 };
 
+static ParamInfo kParams_UseAidItem[1] = {
+	{ "item", kParamType_AnyForm, 0 },
+};
+
+DEFINE_COMMAND_PLUGIN(ChangeRadioTrack, "Forces active radio station to advance to next track", 0, 0, nullptr);
+DEFINE_COMMAND_PLUGIN(IsRadioPlaying, "Returns 1 if any pip-boy or ambient radio is currently playing", 0, 0, nullptr);
+DEFINE_COMMAND_PLUGIN(UseAidItem, "Uses an aid item (AlchemyItem) on the calling actor", 1, 1, kParams_UseAidItem);
 DEFINE_COMMAND_PLUGIN(SetCreatureCombatSkill, "Sets creature combat skill (0-255)", 0, 2, kParams_SetCreatureCombatSkill);
+
+//resolve TalkingActivator or Activator->radioStation from a base form
+static void* ResolveRadioActivator(TESForm* baseForm)
+{
+	if (!baseForm) return nullptr;
+	if (baseForm->typeID == kFormType_TalkingActivator)
+		return baseForm;
+	if (baseForm->typeID == kFormType_Activator)
+	{
+		auto* actBase = static_cast<TESObjectACTI*>(baseForm);
+		if (actBase->radioStation)
+			return actBase->radioStation;
+		return baseForm;
+	}
+	return nullptr;
+}
+
+static void StopRadioSound(RadioSoundKey* key)
+{
+	using SoundStop_t = void(__thiscall*)(RadioSoundKey*);
+	static auto Sound_Stop = reinterpret_cast<SoundStop_t>(0xAD88F0);
+	RadioSoundKey copy = *key;
+	Sound_Stop(&copy);
+	key->soundKey = 0xFFFFFFFF;
+}
+
+static bool AdvanceDynamicRadios(double* result)
+{
+	if (!g_dynamicRadios)
+		return false;
+
+	UInt32 stoppedCount = 0, advancedCount = 0, reseatCount = 0;
+
+	for (auto iter = g_dynamicRadios->Begin(); !iter.End(); ++iter)
+	{
+		DynamicRadio* dr = iter.Get();
+		if (!dr || !dr->isActive)
+			continue;
+
+		TESObjectREFR* stationRef = nullptr;
+		Actor* sourceActor = nullptr;
+		void* activator = nullptr;
+
+		if (dr->ref)
+		{
+			stationRef = dr->ref;
+			TESForm* baseForm = dr->ref->baseForm;
+			if (baseForm)
+			{
+				UInt8 baseType = baseForm->typeID;
+				if (baseType == kFormType_NPC || baseType == kFormType_Creature)
+					sourceActor = static_cast<Actor*>(dr->ref);
+				activator = ResolveRadioActivator(baseForm);
+			}
+
+			auto* xRadio = reinterpret_cast<ExtraRadioDataLite*>(
+				s_getExtraDataByType(reinterpret_cast<BaseExtraList*>(&dr->ref->extraDataList), kExtraData_RadioData));
+			if (xRadio && xRadio->positionRef)
+			{
+				stationRef = xRadio->positionRef;
+				activator = ResolveRadioActivator(stationRef->baseForm);
+			}
+		}
+
+		if (activator)
+		{
+			RadioEntry* entry = s_getRadioEntryFromActivator(activator);
+			if (entry)
+			{
+				entry->data.soundTimeRemaining = 1;
+				advancedCount++;
+			}
+		}
+
+		UInt32 soundKey = dr->sound.soundKey;
+		UInt32 staticKey = dr->radioStaticSound.soundKey;
+
+		if (soundKey && soundKey != 0xFFFFFFFF)
+		{
+			StopRadioSound(&dr->sound);
+			stoppedCount++;
+		}
+		if (staticKey && staticKey != 0xFFFFFFFF)
+		{
+			StopRadioSound(&dr->radioStaticSound);
+			stoppedCount++;
+		}
+
+		//if station entry couldn't be advanced directly, reseat the radio
+		if (!advancedCount && stationRef)
+		{
+			Actor* reseatActor = sourceActor ? sourceActor : PlayerCharacter::GetSingleton();
+			if (reseatActor && s_disableNPCRadio && s_setNPCRadio)
+			{
+				s_disableNPCRadio(reseatActor);
+				s_setNPCRadio(reseatActor, stationRef);
+				reseatCount++;
+			}
+		}
+	}
+
+	if (stoppedCount || advancedCount || reseatCount)
+	{
+		if (IsConsoleMode())
+			Console_Print("ChangeRadioTrack >> stopped=%d advanced=%d reseat=%d",
+				stoppedCount, advancedCount, reseatCount);
+		*result = 1;
+		return true;
+	}
+
+	if (IsConsoleMode())
+		Console_Print("ChangeRadioTrack >> no active ambient radio");
+	return false;
+}
+
+static bool AdvanceCurrentRadioTrack(double* result)
+{
+	*result = 0;
+
+	if (!g_currentRadio)
+		return true;
+
+	UInt8 radioEnabled = g_radioEnabled ? *g_radioEnabled : 0;
+	RadioEntry* radio = radioEnabled ? *g_currentRadio : nullptr;
+
+	//pip-boy radio disabled or no entry - try ambient/dynamic radios
+	if (!radio)
+	{
+		AdvanceDynamicRadios(result);
+		return true;
+	}
+
+	//force one tick remaining so the engine advances to next track
+	radio->data.soundTimeRemaining = 1;
+	*result = 1;
+	return true;
+}
+
+bool Cmd_ChangeRadioTrack_Execute(COMMAND_ARGS)
+{
+	return AdvanceCurrentRadioTrack(result);
+}
+
+bool Cmd_IsRadioPlaying_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+
+	// Pip-boy radio song playback path.
+	if (g_currentSongPath && g_currentSongPath[0])
+	{
+		*result = 1;
+		return true;
+	}
+
+	//pip-boy radio voice queue
+	if (g_radioEnabled && *g_radioEnabled && g_currentRadio && *g_currentRadio)
+	{
+		if ((*g_currentRadio)->data.soundTimeRemaining)
+		{
+			*result = 1;
+			return true;
+		}
+	}
+
+	// Ambient/dynamic radio path.
+	if (!g_dynamicRadios)
+		return true;
+
+	for (auto iter = g_dynamicRadios->Begin(); !iter.End(); ++iter)
+	{
+		DynamicRadio* dr = iter.Get();
+		if (!dr)
+			continue;
+
+		if (!dr->isActive)
+			continue;
+
+		UInt32 soundKey = dr->sound.soundKey;
+		UInt32 staticKey = dr->radioStaticSound.soundKey;
+		if ((soundKey && soundKey != 0xFFFFFFFF) || (staticKey && staticKey != 0xFFFFFFFF))
+		{
+			*result = 1;
+			return true;
+		}
+	}
+
+	return true;
+}
+
+bool Cmd_UseAidItem_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+
+	TESForm* item = nullptr;
+	if (!ExtractArgs(EXTRACT_ARGS, &item))
+		return true;
+
+	if (!item || item->typeID != kFormType_AlchemyItem)
+		return true;
+
+	if (!IsActorRef(thisObj))
+		return true;
+
+	Actor* actor = static_cast<Actor*>(thisObj);
+	BSExtraData* xContainerChanges = s_getExtraDataByType(reinterpret_cast<BaseExtraList*>(&actor->extraDataList), kExtraData_ContainerChanges);
+	ExtraContainerChanges* xChanges = static_cast<ExtraContainerChanges*>(xContainerChanges);
+	if (!xChanges || !xChanges->data || !xChanges->data->objList)
+		return true;
+
+	ExtraContainerChanges::EntryData* entry = xChanges->data->objList->Find(ItemInEntryDataListMatcher(item));
+	if (!entry)
+		return true;
+
+	if (!CanUseAidItemVanilla(actor, item))
+		return true;
+
+	if (g_eventInterface && g_inventoryRefCreateEntry)
+	{
+		ExtraDataList* xData = nullptr;
+		if (entry->extendData)
+		{
+			auto it = entry->extendData->Begin();
+			if (!it.End())
+				xData = it.Get();
+		}
+		TESObjectREFR* invRef = g_inventoryRefCreateEntry(thisObj, entry->type, entry->countDelta, xData);
+		if (invRef && !CanUseItemRef(invRef))
+			return true;
+	}
+
+	ThisStdCall(0x88C650, actor, item, 1, 0, 1, 0, 1); //Actor::EquipItem
+	*result = 1;
+	return true;
+}
 
 bool Cmd_SetCreatureCombatSkill_Execute(COMMAND_ARGS)
 {
@@ -814,16 +1346,33 @@ bool ImperativeCommands_Init(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 
+	g_eventInterface = reinterpret_cast<EventManagerInterfaceEx*>(nvse->QueryInterface(kInterface_EventManager));
+	g_inventoryRefCreateEntry = nullptr;
+
+	NVSEDataInterface* dataInterface = reinterpret_cast<NVSEDataInterface*>(nvse->QueryInterface(kInterface_Data));
+	if (dataInterface)
+	{
+		g_inventoryRefCreateEntry = reinterpret_cast<InventoryRefCreateEntry_t>(
+			dataInterface->GetFunc(kNVSEData_InventoryReferenceCreateEntry));
+	}
+
 	nvse->SetOpcodeBase(0x4021);
 	/*4021*/ nvse->RegisterTypedCommand(&kCommandInfo_GetRefsSortedByDistance, kRetnType_Array);
 	/*4022*/ nvse->RegisterTypedCommand(&kCommandInfo_Duplicate, kRetnType_Form);
 	/*4023*/ nvse->RegisterTypedCommand(&kCommandInfo_GetAvailableRecipes, kRetnType_Array);
-	/*4024*/ nvse->RegisterCommand(&kCommandInfo_ClampToGround);
+
+	nvse->SetOpcodeBase(0x4024);
+	/*4024*/ bool itrChangeRadioTrackRegistered = nvse->RegisterCommand(&kCommandInfo_ChangeRadioTrack);
+
+	nvse->SetOpcodeBase(0x4025);
 	/*4025*/ nvse->RegisterCommand(&kCommandInfo_DumpCombatTarget);
 	/*4026*/ nvse->RegisterTypedCommand(&kCommandInfo_GetTargetLastSeenLocation, kRetnType_Array);
 	/*4027*/ nvse->RegisterTypedCommand(&kCommandInfo_GetTargetDetectedLocation, kRetnType_Array);
 	/*4028*/ nvse->RegisterTypedCommand(&kCommandInfo_GetTargetLastFullyVisibleLocation, kRetnType_Array);
 	/*4029*/ nvse->RegisterTypedCommand(&kCommandInfo_GetTargetInitialLocation, kRetnType_Array);
+
+	nvse->SetOpcodeBase(0x4030);
+	/*4030*/ nvse->RegisterCommand(&kCommandInfo_UseAidItem);
 
 	nvse->SetOpcodeBase(0x4035);
 	/*4035*/ nvse->RegisterCommand(&kCommandInfo_SetCreatureCombatSkill);
@@ -833,7 +1382,12 @@ bool ImperativeCommands_Init(void* nvsePtr)
 	nvse->SetOpcodeBase(0x403B);
 	/*403B*/ nvse->RegisterCommand(&kCommandInfo_SetRaceAlt);
 
-	Log("Registered ImperativeCommands at 0x4021-0x4029, 0x4035-0x4037, 0x403B");
+	nvse->SetOpcodeBase(0x401C);
+	/*401C*/ bool isRadioPlayingRegistered = nvse->RegisterCommand(&kCommandInfo_IsRadioPlaying);
+
+	Log("Registered ImperativeCommands at 0x401C, 0x4021-0x4030, 0x4035-0x4037, 0x403B");
+	Log("Register ChangeRadioTrack (0x4024): %s", itrChangeRadioTrackRegistered ? "OK" : "FAILED");
+	Log("Register IsRadioPlaying (0x401C): %s", isRadioPlayingRegistered ? "OK" : "FAILED");
 
 	return true;
 }

@@ -13,60 +13,30 @@
 
 extern const _ExtractArgs ExtractArgs;
 
-//TESChallenge offsets (from JIP)
-constexpr UInt32 kOffset_Challenge_FullName = 0x18;   //TESFullName
-constexpr UInt32 kOffset_Challenge_Description = 0x24; //TESDescription
-constexpr UInt32 kOffset_Challenge_Icon = 0x38;       //TESIcon
-constexpr UInt32 kOffset_Challenge_Type = 0x54;       //data.type
-constexpr UInt32 kOffset_Challenge_Threshold = 0x58;  //data.threshold
-constexpr UInt32 kOffset_Challenge_DataFlags = 0x5C;  //data.flags - bit 1 = recurring
-constexpr UInt32 kOffset_Challenge_Interval = 0x60;   //data.interval (default 100)
-constexpr UInt32 kOffset_Challenge_Value1 = 0x64;     //data.value1 (UInt16)
 constexpr UInt32 kOffset_Challenge_Amount = 0x6C;     //current progress
-constexpr UInt32 kOffset_Challenge_Flags = 0x70;      //bit 1 = completed, bit 2 = flag4, bit 3 = norecur
-constexpr UInt32 kOffset_Challenge_SNAM = 0x74;       //completion script
-
-//vanilla getter function addresses
-//4230560 decimal = 0x408DA0 hex
-constexpr UInt32 kAddr_TESFullName_GetName = 0x408DA0;
-//4777776 decimal = 0x48E730 hex
-constexpr UInt32 kAddr_TESTexture_GetTextureName = 0x48E730;
-
-//function addresses
 constexpr UInt32 kAddr_TESChallenge_IncrementAmount = 0x5F60E0;
-constexpr UInt32 kAddr_TESChallenge_ToggleIsCompleted = 0x5F6000;
-constexpr UInt32 kAddr_TESChallenge_ClearProgress = 0x5F5820;
-constexpr UInt32 kAddr_TESChallenge_ToggleFlag4 = 0x5F6060;
-constexpr UInt32 kAddr_IncPCMiscStat = 0x4D5C60;
-constexpr UInt32 kAddr_Script_RunScriptEffectStart = 0x5AC340;
-constexpr UInt32 kAddr_Interface_ShowNotify = 0x7052F0;
-constexpr UInt32 kAddr_PlayMenuSound = 0x706F30;
-constexpr UInt32 kAddr_InitChallengesList = 0x5F5880;
-//TESDescription::Get is at vtable[4] (after 4 BaseFormComponent virtuals)
-//chunk ID for description is 'DESC' = 0x43534544
-constexpr UInt32 kChunkID_DESC = 0x43534544;
-typedef const char* (__thiscall *_TESDescriptionGet)(void*, TESForm*, UInt32);
-
 constexpr UInt32 kMiscStat_ChallengesCompleted = 27;
-constexpr UInt32 kChallengeType_MiscStat = 11;
+
+//TESDescription::Get is at vtable[4] (after 4 BaseFormComponent virtuals)
+typedef const char* (__thiscall *_TESDescriptionGet)(void*, TESForm*, UInt32);
 
 //helper to show challenge notification
 static void ShowChallengeNotification(UInt8* challenge, TESForm* form, UInt32 currentAmount, UInt32 threshold)
 {
-	void* fullNameObj = challenge + kOffset_Challenge_FullName;
-	const char* name = (const char*)ThisStdCall(kAddr_TESFullName_GetName, fullNameObj);
+	void* fullNameObj = challenge + 0x18; //TESFullName
+	const char* name = (const char*)ThisStdCall(0x408DA0, fullNameObj); //TESFullName::GetName
 
 	//get description via vtable[4] - TESDescription::Get(overrideForm, chunkID)
-	void* descObj = challenge + kOffset_Challenge_Description;
+	void* descObj = challenge + 0x24; //TESDescription
 	void** descVtbl = *(void***)descObj;
-	const char* desc = ((_TESDescriptionGet)descVtbl[4])(descObj, nullptr, kChunkID_DESC);
+	const char* desc = ((_TESDescriptionGet)descVtbl[4])(descObj, nullptr, 0x43534544); //'DESC' chunk ID
 
-	const char* iconPath = ((const char*(__cdecl*)(TESForm*, void*))kAddr_TESTexture_GetTextureName)(form, nullptr);
+	const char* iconPath = ((const char*(__cdecl*)(TESForm*, void*))0x48E730)(form, nullptr); //TESTexture::GetTextureName
 
 	char msg[512];
 	snprintf(msg, 512, "%s   %d\\%d\n%s", name ? name : "", currentAmount, threshold, desc ? desc : "");
 
-	((void(__cdecl*)(const char*, eEmotion, const char*, const char*, float, bool))kAddr_Interface_ShowNotify)
+	((void(__cdecl*)(const char*, eEmotion, const char*, const char*, float, bool))0x7052F0) //Interface::ShowNotify
 		(msg, neutral, iconPath, nullptr, 2.0f, false);
 }
 
@@ -86,8 +56,8 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 	UInt8* challenge = (UInt8*)form;
 
 	//get flags
-	UInt32 flags = *(UInt32*)(challenge + kOffset_Challenge_Flags);
-	UInt32 dataFlags = *(UInt32*)(challenge + kOffset_Challenge_DataFlags);
+	UInt32 flags = *(UInt32*)(challenge + 0x70); //bit 1=completed, bit 2=flag4, bit 3=norecur
+	UInt32 dataFlags = *(UInt32*)(challenge + 0x5C); //data.flags - bit 1=recurring
 	bool isCompleted = (flags & 2) != 0;
 	bool isRecurring = (dataFlags & 2) != 0;
 	bool isNoRecur = (flags & 8) != 0;
@@ -100,10 +70,10 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 	}
 
 	//get challenge data
-	UInt32 threshold = *(UInt32*)(challenge + kOffset_Challenge_Threshold);
+	UInt32 threshold = *(UInt32*)(challenge + 0x58); //data.threshold
 	UInt32 oldAmount = *(UInt32*)(challenge + kOffset_Challenge_Amount);
-	UInt32 challengeType = *(UInt32*)(challenge + kOffset_Challenge_Type);
-	UInt16 value1 = *(UInt16*)(challenge + kOffset_Challenge_Value1);
+	UInt32 challengeType = *(UInt32*)(challenge + 0x54); //data.type
+	UInt16 value1 = *(UInt16*)(challenge + 0x64); //data.value1
 
 	//increment the amount
 	ThisStdCall(kAddr_TESChallenge_IncrementAmount, form, amount);
@@ -114,7 +84,7 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 	//show progress notification at interval boundaries (vanilla behavior)
 	if (newAmount < threshold)
 	{
-		UInt32 interval = *(UInt32*)(challenge + kOffset_Challenge_Interval);
+		UInt32 interval = *(UInt32*)(challenge + 0x60); //data.interval
 		if (interval == 0) interval = 100; //default
 
 		//check if we crossed an interval boundary
@@ -130,38 +100,37 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 	if (oldAmount < threshold && newAmount >= threshold)
 	{
 		//run completion script if present
-		Script* completionScript = *(Script**)(challenge + kOffset_Challenge_SNAM);
+		Script* completionScript = *(Script**)(challenge + 0x74); //SNAM completion script
 		if (completionScript)
 		{
 			PlayerCharacter* player = PlayerCharacter::GetSingleton();
 			if (player)
-				ThisStdCall(kAddr_Script_RunScriptEffectStart, completionScript, player, 0);
+				ThisStdCall(0x5AC340, completionScript, player, 0); //Script::RunScriptEffectStart
 		}
 
 		//increment challenges completed stat (unless this IS a challenges completed MiscStat challenge)
-		if (challengeType != kChallengeType_MiscStat || value1 != kMiscStat_ChallengesCompleted)
+		if (challengeType != 11 || value1 != kMiscStat_ChallengesCompleted) //11=MiscStat type
 		{
-			((void(__cdecl*)(UInt32))kAddr_IncPCMiscStat)(kMiscStat_ChallengesCompleted);
+			((void(__cdecl*)(UInt32))0x4D5C60)(kMiscStat_ChallengesCompleted); //IncPCMiscStat
 		}
 
 		//show completion notification and play sound
 		ShowChallengeNotification(challenge, form, threshold, threshold);
-		((void(__cdecl*)(int))kAddr_PlayMenuSound)(21);
+		((void(__cdecl*)(int))0x706F30)(21); //PlayMenuSound
 
 		//handle completion vs recurring
 		if (!isRecurring || isNoRecur)
 		{
 			//mark as completed
-			ThisStdCall(kAddr_TESChallenge_ToggleIsCompleted, form, 1);
-			//refresh challenge lists
-			((void(__cdecl*)())kAddr_InitChallengesList)();
+			ThisStdCall(0x5F6000, form, 1); //TESChallenge::ToggleIsCompleted
+			((void(__cdecl*)())0x5F5880)(); //InitChallengesList
 		}
 		else
 		{
 			//recurring: clear progress, set flag4, keep overflow
 			UInt32 overflow = newAmount - threshold;
-			ThisStdCall(kAddr_TESChallenge_ClearProgress, form);
-			ThisStdCall(kAddr_TESChallenge_ToggleFlag4, form, 1);
+			ThisStdCall(0x5F5820, form); //TESChallenge::ClearProgress
+			ThisStdCall(0x5F6060, form, 1); //TESChallenge::ToggleFlag4
 			if (overflow > 0)
 			{
 				ThisStdCall(kAddr_TESChallenge_IncrementAmount, form, (SInt32)overflow);
