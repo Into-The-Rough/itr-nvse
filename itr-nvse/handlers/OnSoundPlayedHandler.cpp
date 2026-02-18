@@ -295,9 +295,6 @@ void OSPH_Update()
         }
     }
 
-    if (droppedPlayToLog)
-    if (droppedTrackedToLog)
-
     if (!eventsToProcess.empty() && !playCallbacks.empty())
     {
         for (const auto& evt : eventsToProcess)
