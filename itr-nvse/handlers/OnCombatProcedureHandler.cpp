@@ -222,7 +222,6 @@ void OCPH_Update()
         }
     }
 
-    if (droppedToLog)
     if (callbackSnapshot.empty()) return;
 
     for (const QueuedCombatEvent& evt : queuedEvents) {

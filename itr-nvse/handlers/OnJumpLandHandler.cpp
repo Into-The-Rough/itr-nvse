@@ -4,6 +4,7 @@
 #include <vector>
 #include <algorithm>
 #include <cstring>
+#include <cstdint>
 #include <Windows.h>
 
 #include "OnJumpLandHandler.h"
@@ -48,8 +49,14 @@ struct CallbackEntry
 struct QueuedEvent
 {
     UInt8 eventType;
-    UInt32 actorRefID;
+    UInt32 actorRefID; //resolved in-hook from lookup table
     float preClearFallTime;
+};
+
+struct ControllerMapping
+{
+    void* charCtrl;
+    UInt32 refID;
 };
 
 namespace OnJumpLandHandler
@@ -58,12 +65,12 @@ namespace OnJumpLandHandler
     std::vector<CallbackEntry> g_jumpCallbacks;
     std::vector<QueuedEvent> g_pendingEvents;
     std::vector<void*> g_activeJumpControllers;
+    std::vector<ControllerMapping> g_controllerMap;
 
     CRITICAL_SECTION g_stateLock;
     volatile LONG g_stateLockInit = 0;
     DWORD g_mainThreadId = 0;
     UInt32 g_droppedEvents = 0;
-    DWORD g_lastDropLogTick = 0;
 
     bool g_hooksInstalled = false;
 }
@@ -91,14 +98,6 @@ static UInt32 ReadRefID(const void* form)
 static TESForm* ReadBaseForm(void* actor)
 {
     return actor ? *(TESForm**)((UInt8*)actor + 0x20) : nullptr; //baseForm
-}
-
-static void* GetCharacterControllerFromActor(void* actor)
-{
-    if (!actor) return nullptr;
-    void* process = *(void**)((UInt8*)actor + 0x68); //currentProcess
-    if (!process) return nullptr;
-    return *(void**)((UInt8*)process + 0x138); //charCtrl
 }
 
 static UInt32 ReadControllerState(const void* charCtrl)
@@ -137,37 +136,132 @@ static TESForm* LookupFormByID_Local(UInt32 refID)
     return nullptr;
 }
 
-static UInt32 ResolveActorRefIDFromController(void* charCtrl)
+static bool IsReadableAddress(const void* ptr, size_t size = sizeof(void*))
 {
-    if (!charCtrl)
-        return 0;
+    if (!ptr)
+        return false;
 
-    void* player = g_thePlayer ? *g_thePlayer : nullptr;
-    if (player && GetCharacterControllerFromActor(player) == charCtrl)
-        return ReadRefID(player);
+    MEMORY_BASIC_INFORMATION mbi{};
+    if (!VirtualQuery(ptr, &mbi, sizeof(mbi)))
+        return false;
+    if (mbi.State != MEM_COMMIT)
+        return false;
 
-    auto ResolveFromListAtOffset = [&](UInt32 listOffset) -> UInt32
+    const DWORD protect = mbi.Protect;
+    if ((protect & PAGE_GUARD) != 0)
+        return false;
+    if ((protect & 0xFF) == PAGE_NOACCESS)
+        return false;
+
+    const DWORD baseProtect = protect & 0xFF;
+    if (baseProtect != PAGE_READONLY &&
+        baseProtect != PAGE_READWRITE &&
+        baseProtect != PAGE_WRITECOPY &&
+        baseProtect != PAGE_EXECUTE_READ &&
+        baseProtect != PAGE_EXECUTE_READWRITE &&
+        baseProtect != PAGE_EXECUTE_WRITECOPY)
     {
-        if (!g_actorProcessManager) return 0;
+        return false;
+    }
 
-        ListNode* node = (ListNode*)((UInt8*)g_actorProcessManager + listOffset);
-        UInt32 guard = 0;
-        while (node && guard++ < 2048)
-        {
-            void* actor = node->item;
-            if (actor && GetCharacterControllerFromActor(actor) == charCtrl)
-                return ReadRefID(actor);
-            node = node->next;
-        }
-        return 0;
-    };
+    const uintptr_t start = reinterpret_cast<uintptr_t>(ptr);
+    const uintptr_t end = start + (size ? (size - 1) : 0);
+    const uintptr_t regionStart = reinterpret_cast<uintptr_t>(mbi.BaseAddress);
+    const uintptr_t regionEnd = regionStart + mbi.RegionSize - 1;
+    return start >= regionStart && end <= regionEnd;
+}
 
-    //NVSE ActorProcessManager has highActors at 0x5C, JIP at 0x80
-    UInt32 refID = ResolveFromListAtOffset(0x5C);
-    if (refID) return refID;
-    refID = ResolveFromListAtOffset(0x80);
-    if (refID) return refID;
+static void AddControllerForActor(std::vector<ControllerMapping>& outMap, void* actor)
+{
+    if (!actor)
+        return;
+    if (!IsReadableAddress(actor, 0x6C))
+        return;
 
+    const UInt8 typeID = *((UInt8*)actor + 4);
+    if (typeID != 0x3B && typeID != 0x3C)
+        return;
+
+    void* process = *(void**)((UInt8*)actor + 0x68);
+    if (!process)
+        return;
+    if (!IsReadableAddress(process, 0x13C))
+        return;
+
+    UInt32 processLevel = *(UInt32*)((UInt8*)process + 0x28);
+    if (processLevel > 1)
+        return;
+
+    void* charCtrl = *(void**)((UInt8*)process + 0x138);
+    if (!charCtrl)
+        return;
+
+    UInt32 refID = ReadRefID(actor);
+    if (!refID)
+        return;
+
+    for (const auto& mapping : outMap)
+    {
+        if (mapping.charCtrl == charCtrl)
+            return;
+    }
+
+    outMap.push_back({charCtrl, refID});
+}
+
+static void CollectControllersFromList(std::vector<ControllerMapping>& outMap, UInt32 listOffset)
+{
+    if (!g_actorProcessManager)
+        return;
+
+    ListNode* node = (ListNode*)((UInt8*)g_actorProcessManager + listOffset);
+    UInt32 guard = 0;
+    while (node && guard++ < 4096)
+    {
+        if (!IsReadableAddress(node, sizeof(ListNode)))
+            break;
+
+        void* actor = node->item;
+        ListNode* next = node->next;
+
+        if (actor)
+            AddControllerForActor(outMap, actor);
+
+        node = next;
+    }
+}
+
+//main thread: rebuild charCtrl->refID lookup table from ActorProcessManager lists
+//AI hooks read this under lock to resolve charCtrl to a stable refID
+static void RebuildControllerMap()
+{
+    void* player = g_thePlayer ? *g_thePlayer : nullptr;
+    if (!player)
+    {
+        ScopedLock lock(&OnJumpLandHandler::g_stateLock);
+        OnJumpLandHandler::g_controllerMap.clear();
+        return;
+    }
+
+    std::vector<ControllerMapping> newMap;
+    newMap.reserve(64);
+
+    //ActorProcessManager::middleHighActors at +0x00, highActors at +0x5C
+    CollectControllersFromList(newMap, 0x00);
+    CollectControllersFromList(newMap, 0x5C);
+
+    //explicit player fallback in case list state is transient
+    AddControllerForActor(newMap, player);
+
+    ScopedLock lock(&OnJumpLandHandler::g_stateLock);
+    OnJumpLandHandler::g_controllerMap = std::move(newMap);
+}
+
+//called from AI hooks, lock must already be held
+static UInt32 LookupRefIDFromController(void* charCtrl)
+{
+    for (const auto& m : OnJumpLandHandler::g_controllerMap)
+        if (m.charCtrl == charCtrl) return m.refID;
     return 0;
 }
 
@@ -182,21 +276,6 @@ static bool PassesActorFilter(void* actor, TESForm* filter)
     return false;
 }
 
-static void QueueEvent(UInt8 eventType, UInt32 actorRefID, float preClearFallTime)
-{
-    if (!actorRefID || OnJumpLandHandler::g_stateLockInit != 2)
-        return;
-
-    ScopedLock lock(&OnJumpLandHandler::g_stateLock);
-    if (OnJumpLandHandler::g_pendingEvents.size() >= 256)
-    {
-        ++OnJumpLandHandler::g_droppedEvents;
-        return;
-    }
-
-    OnJumpLandHandler::g_pendingEvents.push_back({eventType, actorRefID, preClearFallTime});
-}
-
 typedef void (__thiscall *StateUpdateVelocity_t)(void* state, void* charCtrl);
 static StateUpdateVelocity_t s_originalJumpingUpdateVelocity = nullptr;
 static StateUpdateVelocity_t s_originalInAirUpdateVelocity = nullptr;
@@ -209,26 +288,26 @@ static void __fastcall Hook_bhkCharacterStateJumping_UpdateVelocity(void* state,
     if (!charCtrl || OnJumpLandHandler::g_stateLockInit != 2)
         return;
 
-    bool shouldEmit = false;
-    {
-        ScopedLock lock(&OnJumpLandHandler::g_stateLock);
+    ScopedLock lock(&OnJumpLandHandler::g_stateLock);
 
-        if (OnJumpLandHandler::g_jumpCallbacks.empty())
-            return;
-
-        auto& active = OnJumpLandHandler::g_activeJumpControllers;
-        if (std::find(active.begin(), active.end(), charCtrl) == active.end())
-        {
-            active.push_back(charCtrl);
-            shouldEmit = true;
-        }
-    }
-
-    if (!shouldEmit)
+    if (OnJumpLandHandler::g_jumpCallbacks.empty())
         return;
 
-    const UInt32 actorRefID = ResolveActorRefIDFromController(charCtrl);
-    QueueEvent(kEvent_JumpStart, actorRefID, 0.0f);
+    auto& active = OnJumpLandHandler::g_activeJumpControllers;
+    if (std::find(active.begin(), active.end(), charCtrl) != active.end())
+        return;
+
+    UInt32 refID = LookupRefIDFromController(charCtrl);
+    if (!refID) return;
+
+    active.push_back(charCtrl);
+
+    if (OnJumpLandHandler::g_pendingEvents.size() >= 256)
+    {
+        ++OnJumpLandHandler::g_droppedEvents;
+        return;
+    }
+    OnJumpLandHandler::g_pendingEvents.push_back({kEvent_JumpStart, refID, 0.0f});
 }
 
 static void __fastcall Hook_bhkCharacterStateInAir_UpdateVelocity(void* state, void* edx, void* charCtrl)
@@ -247,23 +326,25 @@ static void __fastcall Hook_bhkCharacterStateInAir_UpdateVelocity(void* state, v
 
     if (newState == 0 || (newState & 0x2) == 0) //onGround or not inAir
     {
-        bool hasLandedCallbacks = false;
+        ScopedLock lock(&OnJumpLandHandler::g_stateLock);
 
-        {
-            ScopedLock lock(&OnJumpLandHandler::g_stateLock);
-            auto& active = OnJumpLandHandler::g_activeJumpControllers;
-            auto it = std::find(active.begin(), active.end(), charCtrl);
-            if (it != active.end())
-                active.erase(it);
+        auto& active = OnJumpLandHandler::g_activeJumpControllers;
+        auto it = std::find(active.begin(), active.end(), charCtrl);
+        if (it != active.end())
+            active.erase(it);
 
-            hasLandedCallbacks = !OnJumpLandHandler::g_landedCallbacks.empty();
-        }
-
-        if (!hasLandedCallbacks)
+        if (OnJumpLandHandler::g_landedCallbacks.empty())
             return;
 
-        const UInt32 actorRefID = ResolveActorRefIDFromController(charCtrl);
-        QueueEvent(kEvent_Landed, actorRefID, preClearFallTime);
+        UInt32 refID = LookupRefIDFromController(charCtrl);
+        if (!refID) return;
+
+        if (OnJumpLandHandler::g_pendingEvents.size() >= 256)
+        {
+            ++OnJumpLandHandler::g_droppedEvents;
+            return;
+        }
+        OnJumpLandHandler::g_pendingEvents.push_back({kEvent_Landed, refID, preClearFallTime});
     }
 }
 
@@ -480,31 +561,32 @@ void OJLH_Update()
     std::vector<CallbackEntry> jumpSnapshot;
     std::vector<Script*> badLandedCallbacks;
     std::vector<Script*> badJumpCallbacks;
-    UInt32 droppedToLog = 0;
-    DWORD now = GetTickCount();
 
     {
         ScopedLock lock(&OnJumpLandHandler::g_stateLock);
+
+        bool hasCallbacks = !OnJumpLandHandler::g_jumpCallbacks.empty()
+                         || !OnJumpLandHandler::g_landedCallbacks.empty();
+        if (!hasCallbacks)
+        {
+            OnJumpLandHandler::g_pendingEvents.clear();
+            OnJumpLandHandler::g_controllerMap.clear();
+            return;
+        }
+
         queuedEvents.swap(OnJumpLandHandler::g_pendingEvents);
         landedSnapshot = OnJumpLandHandler::g_landedCallbacks;
         jumpSnapshot = OnJumpLandHandler::g_jumpCallbacks;
-
-        if (OnJumpLandHandler::g_droppedEvents &&
-            (now - OnJumpLandHandler::g_lastDropLogTick) >= 5000)
-        {
-            droppedToLog = OnJumpLandHandler::g_droppedEvents;
-            OnJumpLandHandler::g_droppedEvents = 0;
-            OnJumpLandHandler::g_lastDropLogTick = now;
-        }
     }
 
-    if (droppedToLog)
+    RebuildControllerMap();
 
     for (const auto& evt : queuedEvents)
     {
-        void* actor = LookupFormByID_Local(evt.actorRefID);
-        if (!actor)
+        TESForm* actorForm = LookupFormByID_Local(evt.actorRefID);
+        if (!actorForm)
             continue;
+        void* actor = actorForm;
 
         if (evt.eventType == kEvent_Landed)
         {
@@ -620,7 +702,6 @@ bool OJLH_Init(void* nvseInterface)
 
     EnsureStateLockInitialized();
     OnJumpLandHandler::g_mainThreadId = GetCurrentThreadId();
-    OnJumpLandHandler::g_lastDropLogTick = GetTickCount();
 
     if (!InstallHooks())
         return false;
