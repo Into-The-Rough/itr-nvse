@@ -1,6 +1,3 @@
-//fires script callbacks for jump start and actor landing events
-//landing callback includes pre-clear fallTimeElapsed from the character controller
-
 #include <vector>
 #include <algorithm>
 #include <cstring>
@@ -23,6 +20,7 @@ constexpr UInt32 kVtbl_bhkCharacterStateInAir = 0x10CB36C;
 constexpr UInt32 kVtbl_bhkCharacterStateJumping = 0x10CB398;
 constexpr UInt32 kVFuncIdx_UpdateVelocity = 8;
 constexpr UInt32 kOffset_RefID = 0x0C;
+constexpr size_t kMaxPendingEvents = 256;
 
 struct ListNode
 {
@@ -49,7 +47,7 @@ struct CallbackEntry
 struct QueuedEvent
 {
     UInt8 eventType;
-    UInt32 actorRefID; //resolved in-hook from lookup table
+    UInt32 actorRefID;
     float preClearFallTime;
 };
 
@@ -70,7 +68,6 @@ namespace OnJumpLandHandler
     CRITICAL_SECTION g_stateLock;
     volatile LONG g_stateLockInit = 0;
     DWORD g_mainThreadId = 0;
-    UInt32 g_droppedEvents = 0;
 
     bool g_hooksInstalled = false;
 }
@@ -97,17 +94,17 @@ static UInt32 ReadRefID(const void* form)
 
 static TESForm* ReadBaseForm(void* actor)
 {
-    return actor ? *(TESForm**)((UInt8*)actor + 0x20) : nullptr; //baseForm
+    return actor ? *(TESForm**)((UInt8*)actor + 0x20) : nullptr;
 }
 
 static UInt32 ReadControllerState(const void* charCtrl)
 {
-    return charCtrl ? *(const UInt32*)((const UInt8*)charCtrl + 0x3F0) : 0xFFFFFFFF; //chrContext.hkState
+    return charCtrl ? *(const UInt32*)((const UInt8*)charCtrl + 0x3F0) : 0xFFFFFFFF;
 }
 
 static float ReadControllerFallTime(const void* charCtrl)
 {
-    return charCtrl ? *(const float*)((const UInt8*)charCtrl + 0x548) : 0.0f; //fallTimeElapsed
+    return charCtrl ? *(const float*)((const UInt8*)charCtrl + 0x548) : 0.0f;
 }
 
 static TESForm* LookupFormByID_Local(UInt32 refID)
@@ -265,6 +262,18 @@ static UInt32 LookupRefIDFromController(void* charCtrl)
     return 0;
 }
 
+static bool QueuePendingEventLocked(UInt8 eventType, UInt32 actorRefID, float preClearFallTime)
+{
+    if (!actorRefID)
+        return false;
+
+    if (OnJumpLandHandler::g_pendingEvents.size() >= kMaxPendingEvents)
+        return false;
+
+    OnJumpLandHandler::g_pendingEvents.push_back({eventType, actorRefID, preClearFallTime});
+    return true;
+}
+
 static bool PassesActorFilter(void* actor, TESForm* filter)
 {
     if (!filter) return true;
@@ -298,16 +307,11 @@ static void __fastcall Hook_bhkCharacterStateJumping_UpdateVelocity(void* state,
         return;
 
     UInt32 refID = LookupRefIDFromController(charCtrl);
-    if (!refID) return;
+    if (!refID)
+        return;
 
     active.push_back(charCtrl);
-
-    if (OnJumpLandHandler::g_pendingEvents.size() >= 256)
-    {
-        ++OnJumpLandHandler::g_droppedEvents;
-        return;
-    }
-    OnJumpLandHandler::g_pendingEvents.push_back({kEvent_JumpStart, refID, 0.0f});
+    QueuePendingEventLocked(kEvent_JumpStart, refID, 0.0f);
 }
 
 static void __fastcall Hook_bhkCharacterStateInAir_UpdateVelocity(void* state, void* edx, void* charCtrl)
@@ -324,7 +328,7 @@ static void __fastcall Hook_bhkCharacterStateInAir_UpdateVelocity(void* state, v
     if (newState == 0xFFFFFFFF)
         return;
 
-    if (newState == 0 || (newState & 0x2) == 0) //onGround or not inAir
+    if (newState == 0 || (newState & 0x2) == 0)
     {
         ScopedLock lock(&OnJumpLandHandler::g_stateLock);
 
@@ -337,14 +341,10 @@ static void __fastcall Hook_bhkCharacterStateInAir_UpdateVelocity(void* state, v
             return;
 
         UInt32 refID = LookupRefIDFromController(charCtrl);
-        if (!refID) return;
-
-        if (OnJumpLandHandler::g_pendingEvents.size() >= 256)
-        {
-            ++OnJumpLandHandler::g_droppedEvents;
+        if (!refID)
             return;
-        }
-        OnJumpLandHandler::g_pendingEvents.push_back({kEvent_Landed, refID, preClearFallTime});
+
+        QueuePendingEventLocked(kEvent_Landed, refID, preClearFallTime);
     }
 }
 
@@ -412,7 +412,6 @@ static bool AddCallback(std::vector<CallbackEntry>& callbacks, Script* callback,
     EnsureStateLockInitialized();
     ScopedLock lock(&OnJumpLandHandler::g_stateLock);
 
-    //dedupe by formID + filter, not pointer
     for (const auto& entry : callbacks)
     {
         if (entry.callbackFormID == formID && entry.actorFilter == actorFilter)
@@ -595,7 +594,6 @@ void OJLH_Update()
                 if (!cb.callback || !cb.callbackFormID) continue;
                 if (!PassesActorFilter(actor, cb.actorFilter)) continue;
 
-                //validate callback form is still alive
                 TESForm* resolved = LookupFormByID_Local(cb.callbackFormID);
                 if (!resolved || resolved != (TESForm*)cb.callback)
                 {
@@ -620,7 +618,6 @@ void OJLH_Update()
                 if (!cb.callback || !cb.callbackFormID) continue;
                 if (!PassesActorFilter(actor, cb.actorFilter)) continue;
 
-                //validate callback form is still alive
                 TESForm* resolved = LookupFormByID_Local(cb.callbackFormID);
                 if (!resolved || resolved != (TESForm*)cb.callback)
                 {
@@ -746,5 +743,4 @@ void OJLH_ClearCallbacks()
     OnJumpLandHandler::g_jumpCallbacks.clear();
     OnJumpLandHandler::g_pendingEvents.clear();
     OnJumpLandHandler::g_activeJumpControllers.clear();
-    OnJumpLandHandler::g_droppedEvents = 0;
 }
