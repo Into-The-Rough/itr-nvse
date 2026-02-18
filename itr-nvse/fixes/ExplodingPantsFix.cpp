@@ -4,17 +4,15 @@
 #include "ExplodingPantsFix.h"
 #include "internal/NVSEMinimal.h"
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 namespace ExplodingPantsFix
 {
-	static const uint32_t kAddr_IsAltTriggerCall = 0x9C3204;
-	static const uint32_t kAddr_IsAltTrigger = 0x975300;
 	static constexpr uint32_t g_retAddr = 0x9C3209;
 
 	bool __fastcall Hook_IsAltTrigger(void* projBase, void* projectileRef) {
 		if (!projBase) return false;
-		if (((bool(__thiscall*)(void*))kAddr_IsAltTrigger)(projBase))
+		if (((bool(__thiscall*)(void*))0x975300)(projBase)) //BGSProjectile::IsAltTrigger
 			return true;
 		//flag 0x400 at offset 0xC8
 		if (projectileRef && (*(uint32_t*)((uint8_t*)projectileRef + 0xC8) & 0x400))
@@ -31,7 +29,7 @@ namespace ExplodingPantsFix
 	}
 
 	void Init() {
-		SafeWrite::WriteRelJump(kAddr_IsAltTriggerCall, (UInt32)Hook_IsAltTrigger_Wrapper);
+		SafeWrite::WriteRelJump(0x9C3204, (UInt32)Hook_IsAltTrigger_Wrapper);
 		Log("ExplodingPantsFix installed");
 	}
 }

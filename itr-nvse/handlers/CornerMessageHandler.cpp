@@ -3,24 +3,13 @@
 
 #include <vector>
 #include <string>
-#include <cstdio>
 #include <Windows.h>
+#include <cmath>
 
 #include "CornerMessageHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/ScopedLock.h"
 #include "internal/Detours.h"
-
-static FILE* g_cmhLogFile = nullptr;
-
-static void CMH_Log(const char* fmt, ...) {
-    if (!g_cmhLogFile) return;
-    va_list args;
-    va_start(args, fmt);
-    vfprintf(g_cmhLogFile, fmt, args);
-    fprintf(g_cmhLogFile, "\n");
-    fflush(g_cmhLogFile);
-    va_end(args);
-}
 
 static NVSEScriptInterface* g_cmhScript = nullptr;
 static bool (*g_ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, ...) = nullptr;
@@ -46,19 +35,103 @@ struct QueuedMessage {
     std::string soundPath;
     float displayTime;
     bool instant;
+    int metaType;
 };
 
 static std::vector<QueuedMessage> g_queuedMessages;
 static bool g_hasHandlers = false;
 
+struct PendingMetaEntry {
+    std::string text;
+    float displayTime;
+    int metaType;
+    DWORD tick;
+};
+
+static std::vector<PendingMetaEntry> g_pendingMeta;
+static CRITICAL_SECTION g_metaLock;
+static volatile LONG g_metaLockInit = 0;
+
+static void EnsureMetaLockInitialized()
+{
+    if (g_metaLockInit == 2) return;
+
+    if (InterlockedCompareExchange(&g_metaLockInit, 1, 0) == 0) {
+        InitializeCriticalSection(&g_metaLock);
+        InterlockedExchange(&g_metaLockInit, 2);
+        return;
+    }
+
+    while (g_metaLockInit != 2) {
+        Sleep(0);
+    }
+}
+
+static int NormalizeMetaType(int metaType)
+{
+    if (metaType < kCornerMeta_Generic || metaType > kCornerMeta_ReputationChange)
+        return kCornerMeta_Generic;
+    return metaType;
+}
+
+static int ConsumeMessageMeta(const char* text, float displayTime)
+{
+    if (g_metaLockInit != 2 || !text || !text[0]) {
+        return kCornerMeta_Generic;
+    }
+
+    const DWORD now = GetTickCount();
+    constexpr DWORD kMetaTtlMs = 60000;
+    constexpr float kDisplayTimeTolerance = 0.25f;
+
+    ScopedLock lock(&g_metaLock);
+
+    for (auto it = g_pendingMeta.begin(); it != g_pendingMeta.end();) {
+        if ((now - it->tick) > kMetaTtlMs) {
+            it = g_pendingMeta.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    for (auto it = g_pendingMeta.begin(); it != g_pendingMeta.end(); ++it) {
+        if (it->text == text && std::fabs(it->displayTime - displayTime) <= kDisplayTimeTolerance) {
+            int metaType = it->metaType;
+            g_pendingMeta.erase(it);
+            return metaType;
+        }
+    }
+
+    return kCornerMeta_Generic;
+}
+
+void CMH_TrackMessageMeta(const char* text, float displayTime, int metaType)
+{
+    if (!text || !text[0]) return;
+    EnsureMetaLockInitialized();
+
+    PendingMetaEntry entry;
+    entry.text = text;
+    entry.displayTime = displayTime;
+    entry.metaType = NormalizeMetaType(metaType);
+    entry.tick = GetTickCount();
+
+    ScopedLock lock(&g_metaLock);
+    constexpr size_t kMaxMetaEntries = 256;
+    if (g_pendingMeta.size() >= kMaxMetaEntries) {
+        g_pendingMeta.erase(g_pendingMeta.begin());
+    }
+    g_pendingMeta.push_back(entry);
+}
+
 //HUDMainMenu::ShowNotify at 0x775380
-//bool __thiscall HUDMainMenu::ShowNotify(const char* text, eEmotion emotion,
+//bool __thiscall ShowNotify(const char* text, eEmotion emotion,
 //    const char* iconPath, const char* soundName, float time, bool instant)
 constexpr UInt32 kAddr_HUDMainMenu_ShowNotify = 0x775380;
 static Detours::JumpDetour s_detour;
 
 static void DispatchCornerMessage(const char* text, UInt32 emotion,
-    const char* iconPath, const char* soundPath, float displayTime)
+    const char* iconPath, const char* soundPath, float displayTime, int metaType)
 {
     if (!g_cmhScript) return;
 
@@ -66,14 +139,10 @@ static void DispatchCornerMessage(const char* text, UInt32 emotion,
     const char* safeIcon = iconPath ? iconPath : "";
     const char* safeSound = soundPath ? soundPath : "";
 
-    CMH_Log("Corner message: text='%s' emotion=%u icon='%s' sound='%s' time=%.2f",
-            safeText, emotion, safeIcon, safeSound, displayTime);
-
     for (const auto& cb : g_callbacks) {
         if (cb.script) {
-            CMH_Log("  Dispatching to callback 0x%08X", cb.script);
-            g_cmhScript->CallFunctionAlt(cb.script, nullptr, 5,
-                safeText, emotion, safeIcon, safeSound, *(UInt32*)&displayTime);
+            g_cmhScript->CallFunctionAlt(cb.script, nullptr, 6,
+                safeText, emotion, safeIcon, safeSound, *(UInt32*)&displayTime, metaType);
         }
     }
 }
@@ -88,9 +157,11 @@ static bool __fastcall Hook_HUDMainMenu_ShowNotify(
     float displayTime,
     bool instant
 ) {
+    int metaType = ConsumeMessageMeta(text, displayTime);
+
     if (text && text[0]) {
         if (g_hasHandlers) {
-            DispatchCornerMessage(text, emotion, iconPath, soundPath, displayTime);
+            DispatchCornerMessage(text, emotion, iconPath, soundPath, displayTime, metaType);
         } else {
             QueuedMessage msg;
             msg.text = text;
@@ -99,25 +170,20 @@ static bool __fastcall Hook_HUDMainMenu_ShowNotify(
             msg.soundPath = soundPath ? soundPath : "";
             msg.displayTime = displayTime;
             msg.instant = instant;
+            msg.metaType = metaType;
             g_queuedMessages.push_back(msg);
-            CMH_Log("Queued early message: '%s' (queue size: %zu)", text, g_queuedMessages.size());
         }
     }
 
-    //suppress sound when handlers registered, but still call original to maintain queue for other mods
-    const char* finalSoundPath = g_hasHandlers ? nullptr : soundPath;
-
     typedef bool(__thiscall* ShowNotify_t)(void*, const char*, UInt32, const char*, const char*, float, bool);
-    return s_detour.GetTrampoline<ShowNotify_t>()(thisPtr, text, emotion, iconPath, finalSoundPath, displayTime, instant);
+    return s_detour.GetTrampoline<ShowNotify_t>()(thisPtr, text, emotion, iconPath, soundPath, displayTime, instant);
 }
 
 //prologue: push ebp; mov ebp, esp; push -1 = 5 bytes
 static void InstallHook() {
     if (!s_detour.WriteRelJump(kAddr_HUDMainMenu_ShowNotify, Hook_HUDMainMenu_ShowNotify, 5)) {
-        CMH_Log("ERROR: Failed to install hook");
         return;
     }
-    CMH_Log("Hook installed at 0x%08X", kAddr_HUDMainMenu_ShowNotify);
 }
 
 static ParamInfo kParams_SetCornerMessageHandler[2] = {
@@ -126,7 +192,7 @@ static ParamInfo kParams_SetCornerMessageHandler[2] = {
 };
 
 DEFINE_COMMAND_PLUGIN(SetCornerMessageHandler,
-    "Registers/unregisters callback for corner message events.",
+    "Registers/unregisters callback for corner message events. Callback args: text, emotion, iconPath, soundPath, displayTime, metaType",
     0, 2, kParams_SetCornerMessageHandler);
 
 bool Cmd_SetCornerMessageHandler_Execute(COMMAND_ARGS) {
@@ -137,12 +203,10 @@ bool Cmd_SetCornerMessageHandler_Execute(COMMAND_ARGS) {
 
     if (!g_ExtractArgsEx((ParamInfo*)paramInfo, scriptData, opcodeOffsetPtr,
             scriptObj, eventList, &setOrRemove, &handlerForm)) {
-        CMH_Log("SetCornerMessageHandler: Failed to extract args");
         return true;
     }
 
     if (!handlerForm || *((UInt8*)handlerForm + 4) != kFormType_Script) {
-        CMH_Log("SetCornerMessageHandler: Invalid handler script");
         return true;
     }
 
@@ -159,15 +223,13 @@ bool Cmd_SetCornerMessageHandler_Execute(COMMAND_ARGS) {
         if (!found) {
             g_callbacks.push_back({script});
             g_hasHandlers = true;
-            CMH_Log("SetCornerMessageHandler: Added callback 0x%08X", script);
 
             if (!g_queuedMessages.empty()) {
-                CMH_Log("Replaying %zu queued messages to new handler", g_queuedMessages.size());
                 for (const auto& msg : g_queuedMessages) {
                     if (g_cmhScript) {
-                        g_cmhScript->CallFunctionAlt(script, nullptr, 5,
+                        g_cmhScript->CallFunctionAlt(script, nullptr, 6,
                             msg.text.c_str(), msg.emotion, msg.iconPath.c_str(),
-                            msg.soundPath.c_str(), *(UInt32*)&msg.displayTime);
+                            msg.soundPath.c_str(), *(UInt32*)&msg.displayTime, msg.metaType);
                     }
                 }
                 g_queuedMessages.clear();
@@ -178,7 +240,6 @@ bool Cmd_SetCornerMessageHandler_Execute(COMMAND_ARGS) {
         for (auto it = g_callbacks.begin(); it != g_callbacks.end(); ++it) {
             if (it->script == script) {
                 g_callbacks.erase(it);
-                CMH_Log("SetCornerMessageHandler: Removed callback 0x%08X", script);
                 *result = 1;
                 break;
             }
@@ -197,21 +258,12 @@ bool CMH_Init(void* nvseInterface) {
     NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
     if (nvse->isEditor) return false;
 
-    char logPath[MAX_PATH];
-    GetModuleFileNameA(nullptr, logPath, MAX_PATH);
-    char* lastSlash = strrchr(logPath, '\\');
-    if (lastSlash) *lastSlash = '\0';
-    strcat_s(logPath, "\\Data\\NVSE\\Plugins\\CornerMessageHandler.log");
-    //g_cmhLogFile = fopen(logPath, "w"); //disabled for release
-
-    CMH_Log("CornerMessageHandler initializing...");
-
     g_cmhScript = (NVSEScriptInterface*)nvse->QueryInterface(kInterface_Script);
     if (!g_cmhScript) {
-        CMH_Log("ERROR: Failed to get script interface");
         return false;
     }
     g_ExtractArgsEx = g_cmhScript->ExtractArgsEx;
+    EnsureMetaLockInitialized();
 
     InstallHook();
 
@@ -219,13 +271,16 @@ bool CMH_Init(void* nvseInterface) {
     nvse->RegisterCommand(&kCommandInfo_SetCornerMessageHandler);
     g_registeredOpcode = 0x4013;
 
-    CMH_Log("Registered SetCornerMessageHandler at opcode 0x4013");
-    CMH_Log("CornerMessageHandler initialized successfully");
     return true;
 }
 
 void CMH_ClearCallbacks()
 {
     g_callbacks.clear();
-    CMH_Log("Callbacks cleared on game load");
+    g_queuedMessages.clear();
+    g_hasHandlers = false;
+    if (g_metaLockInit == 2) {
+        ScopedLock lock(&g_metaLock);
+        g_pendingMeta.clear();
+    }
 }

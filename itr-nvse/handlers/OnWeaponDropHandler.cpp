@@ -1,24 +1,10 @@
 //hooks Actor::TryDropWeapon (0x89F580) to dispatch events when actors drop weapons
 
 #include <vector>
-#include <cstdio>
 #include <Windows.h>
 
 #include "OnWeaponDropHandler.h"
 #include "internal/NVSEMinimal.h"
-
-static FILE* g_owdhLogFile = nullptr;
-
-static void OWDH_Log(const char* fmt, ...)
-{
-    if (!g_owdhLogFile) return;
-    va_list args;
-    va_start(args, fmt);
-    vfprintf(g_owdhLogFile, fmt, args);
-    fprintf(g_owdhLogFile, "\n");
-    fflush(g_owdhLogFile);
-    va_end(args);
-}
 
 static PluginHandle g_owdhPluginHandle = kPluginHandle_Invalid;
 static NVSEScriptInterface* g_owdhScript = nullptr;
@@ -52,104 +38,76 @@ namespace OnWeaponDropHandler {
     std::vector<WeaponDropCallbackEntry> g_callbacks;
     bool g_hookInstalled = false;
 
-    // Captured data from hook
     static Actor* s_actor = nullptr;
     static TESObjectWEAP* s_weapon = nullptr;
 }
 
-// Address constants
-// Actor::TryDropWeapon at 0x89F580
-// void __thiscall Actor::TryDropWeapon(Actor *this)
-// Prologue: push ebp; mov ebp,esp; sub esp,3Ch (6 bytes total)
+//Actor::TryDropWeapon - prologue: push ebp; mov ebp,esp; sub esp,3Ch (6 bytes)
 constexpr UInt32 kAddr_TryDropWeapon = 0x89F580;
-constexpr UInt32 kAddr_TryDropWeaponBody = 0x89F586;  // After 6-byte prologue
+constexpr UInt32 kAddr_TryDropWeaponBody = 0x89F586;
 
-
-//offsets verified from Fallout-Real-Time-Menus headers:
-// - MobileObject inherits from TESObjectREFR (0x68 bytes)
-// - pCurrentProcess is first field in MobileObject, so at offset 0x68
-// - BaseProcess::GetCurrentWeapon is vtable index 82 (0x148 byte offset)
-// - ItemChange structure:
-//   - 0x00: pExtraLists (BSSimpleList<ExtraDataList*>*)
-//   - 0x04: iCountDelta (int32_t)
-//   - 0x08: pObject (TESBoundObject*) <-- the weapon form
-
-constexpr UInt32 kOffset_MobileObject_pCurrentProcess = 0x68;
-constexpr UInt32 kVtableIndex_GetCurrentWeapon = 82;
-constexpr UInt32 kOffset_ItemChange_pObject = 0x08;
-
-// Helper to get weapon from actor's current process via virtual call
 static TESObjectWEAP* GetActorCurrentWeapon(Actor* actor)
 {
     if (!actor) return nullptr;
 
-    // Get pCurrentProcess at offset 0x68
-    UInt32 pProcess = *(UInt32*)((UInt8*)actor + kOffset_MobileObject_pCurrentProcess);
+    UInt32 pProcess = *(UInt32*)((UInt8*)actor + 0x68); //MobileObject::pCurrentProcess
     if (!pProcess) return nullptr;
 
-    // Call BaseProcess::GetCurrentWeapon() via vtable
-    // vtable is at offset 0 of the object, function pointer at index 82
     UInt32 vtable = *(UInt32*)pProcess;
     if (!vtable) return nullptr;
 
-    // GetCurrentWeapon returns ItemChange* (thiscall, no args besides this)
-    typedef UInt32 (__thiscall *GetCurrentWeapon_t)(UInt32 pProcess);
-    GetCurrentWeapon_t GetCurrentWeapon = (GetCurrentWeapon_t)(*(UInt32*)(vtable + kVtableIndex_GetCurrentWeapon * 4));
+    typedef UInt32 (__thiscall *GetCurrentWeapon_t)(UInt32 pProcess); //vtable[82]
+    GetCurrentWeapon_t GetCurrentWeapon = (GetCurrentWeapon_t)(*(UInt32*)(vtable + 82 * 4));
 
     UInt32 itemChange = GetCurrentWeapon(pProcess);
     if (!itemChange) return nullptr;
 
-    // ItemChange+0x08 = pObject (TESBoundObject*, the weapon)
-    return (TESObjectWEAP*)(*(UInt32*)(itemChange + kOffset_ItemChange_pObject));
+    return (TESObjectWEAP*)(*(UInt32*)(itemChange + 0x08)); //ContChangesEntry::pObject
 }
 
 static void DispatchWeaponDropEvent()
 {
-    // Get weapon before it's dropped
     OnWeaponDropHandler::s_weapon = GetActorCurrentWeapon(OnWeaponDropHandler::s_actor);
 
-    OWDH_Log("=== WEAPON DROP EVENT === actor=0x%08X weapon=0x%08X",
-            OnWeaponDropHandler::s_actor, OnWeaponDropHandler::s_weapon);
-
     if (OnWeaponDropHandler::g_callbacks.empty()) return;
-    if (!OnWeaponDropHandler::s_weapon) return;  // No weapon to drop
+    if (!OnWeaponDropHandler::s_weapon) return;
 
-    for (const auto& entry : OnWeaponDropHandler::g_callbacks) {
-        if (g_owdhScript && entry.callback) {
-            // Call the UDF with: actor, weapon
+    //snapshot for reentrancy safety
+    std::vector<Script*> snapshot;
+    snapshot.reserve(OnWeaponDropHandler::g_callbacks.size());
+    for (const auto& entry : OnWeaponDropHandler::g_callbacks)
+        if (entry.callback) snapshot.push_back(entry.callback);
+
+    for (Script* cb : snapshot) {
+        if (g_owdhScript) {
             g_owdhScript->CallFunctionAlt(
-                entry.callback,
+                cb,
                 reinterpret_cast<TESObjectREFR*>(OnWeaponDropHandler::s_actor),
                 2,
-                OnWeaponDropHandler::s_actor,   // arg1: actor dropping weapon
-                OnWeaponDropHandler::s_weapon   // arg2: weapon being dropped
+                OnWeaponDropHandler::s_actor,
+                OnWeaponDropHandler::s_weapon
             );
         }
     }
 }
 
-// Naked hook at start of Actor::TryDropWeapon
-// ecx = Actor* this
 static __declspec(naked) void TryDropWeaponHook()
 {
     __asm
     {
-        // Save actor (ecx)
         mov     OnWeaponDropHandler::s_actor, ecx
 
-        // Call our dispatcher (preserves all registers)
         pushad
         pushfd
         call    DispatchWeaponDropEvent
         popfd
         popad
 
-        // Execute original prologue (6 bytes we overwrote)
+        //original prologue
         push    ebp
         mov     ebp, esp
         sub     esp, 3Ch
 
-        // Jump to rest of original function
         mov     eax, kAddr_TryDropWeaponBody
         jmp     eax
     }
@@ -159,23 +117,18 @@ static void InitHook()
 {
     if (OnWeaponDropHandler::g_hookInstalled) return;
 
-    // Overwrite first 6 bytes of Actor::TryDropWeapon
-    // Original: 55 8B EC 83 EC 3C = push ebp; mov ebp,esp; sub esp,3Ch
     SafeWrite::WriteRelJump(kAddr_TryDropWeapon, (UInt32)TryDropWeaponHook);
-    SafeWrite::Write8(kAddr_TryDropWeapon + 5, 0x90);  // NOP the 6th byte
+    SafeWrite::Write8(kAddr_TryDropWeapon + 5, 0x90); //nop 6th byte
 
     OnWeaponDropHandler::g_hookInstalled = true;
-    OWDH_Log("Hook installed at 0x%08X, jumps back to 0x%08X", kAddr_TryDropWeapon, kAddr_TryDropWeaponBody);
 }
 
 static bool AddCallback_Internal(Script* callback)
 {
     if (!callback) return false;
 
-    // Check if already registered
     for (const auto& entry : OnWeaponDropHandler::g_callbacks) {
         if (entry.callback == callback) {
-            OWDH_Log("Callback 0x%08X already registered", callback);
             return false;
         }
     }
@@ -186,7 +139,6 @@ static bool AddCallback_Internal(Script* callback)
         InitHook();
     }
 
-    OWDH_Log("Added callback: 0x%08X (total: %d)", callback, OnWeaponDropHandler::g_callbacks.size());
     return true;
 }
 
@@ -197,7 +149,6 @@ static bool RemoveCallback_Internal(Script* callback)
     for (auto it = OnWeaponDropHandler::g_callbacks.begin(); it != OnWeaponDropHandler::g_callbacks.end(); ++it) {
         if (it->callback == callback) {
             OnWeaponDropHandler::g_callbacks.erase(it);
-            OWDH_Log("Removed callback: 0x%08X", callback);
             return true;
         }
     }
@@ -217,7 +168,6 @@ DEFINE_COMMAND_PLUGIN(SetOnWeaponDropEventHandler,
 bool Cmd_SetOnWeaponDropEventHandler_Execute(COMMAND_ARGS)
 {
     *result = 0;
-    OWDH_Log("SetOnWeaponDropEventHandler called");
 
     TESForm* callbackForm = nullptr;
     UInt32 addRemove = 0;
@@ -231,20 +181,15 @@ bool Cmd_SetOnWeaponDropEventHandler_Execute(COMMAND_ARGS)
             &callbackForm,
             &addRemove))
     {
-        OWDH_Log("Failed to extract args");
         return true;
     }
 
-    OWDH_Log("Extracted args: callback=0x%08X, add=%d", callbackForm, addRemove);
-
     if (!callbackForm) {
-        OWDH_Log("Callback is null");
         return true;
     }
 
     UInt8 typeID = *((UInt8*)callbackForm + 4);
     if (typeID != kFormType_Script) {
-        OWDH_Log("Callback is not a script (typeID: %02X)", typeID);
         return true;
     }
 
@@ -253,12 +198,10 @@ bool Cmd_SetOnWeaponDropEventHandler_Execute(COMMAND_ARGS)
     if (addRemove) {
         if (AddCallback_Internal(callback)) {
             *result = 1;
-            OWDH_Log("Callback added successfully");
         }
     } else {
         if (RemoveCallback_Internal(callback)) {
             *result = 1;
-            OWDH_Log("Callback removed successfully");
         }
     }
 
@@ -271,37 +214,20 @@ bool OWDH_Init(void* nvseInterface)
 
     if (nvse->isEditor) return false;
 
-    // Open log file
-    char logPath[MAX_PATH];
-    GetModuleFileNameA(nullptr, logPath, MAX_PATH);
-    char* lastSlash = strrchr(logPath, '\\');
-    if (lastSlash) *lastSlash = '\0';
-    strcat_s(logPath, "\\Data\\NVSE\\Plugins\\OnWeaponDropHandler.log");
-    //g_owdhLogFile = fopen(logPath, "w"); //disabled for release
-
-    OWDH_Log("OnWeaponDropHandler module initializing...");
-
     g_owdhPluginHandle = nvse->GetPluginHandle();
 
-    // Get script interface
     g_owdhScript = reinterpret_cast<NVSEScriptInterface*>(
         nvse->QueryInterface(kInterface_Script));
 
     if (!g_owdhScript) {
-        OWDH_Log("ERROR: Failed to get script interface");
         return false;
     }
 
     g_ExtractArgsEx = g_owdhScript->ExtractArgsEx;
-    OWDH_Log("Script interface at 0x%08X", g_owdhScript);
 
-    // Register command at opcode 0x3B02
     nvse->SetOpcodeBase(0x4002);
     nvse->RegisterCommand(&kCommandInfo_SetOnWeaponDropEventHandler);
     g_owdhOpcode = 0x4002;
-
-    OWDH_Log("Registered SetOnWeaponDropEventHandler at opcode 0x%04X", g_owdhOpcode);
-    OWDH_Log("OnWeaponDropHandler module initialized successfully");
 
     return true;
 }
@@ -314,5 +240,4 @@ unsigned int OWDH_GetOpcode()
 void OWDH_ClearCallbacks()
 {
     OnWeaponDropHandler::g_callbacks.clear();
-    OWDH_Log("Callbacks cleared on game load");
 }

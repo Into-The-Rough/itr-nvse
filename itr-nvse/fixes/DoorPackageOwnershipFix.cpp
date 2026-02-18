@@ -9,25 +9,13 @@
 
 namespace DoorPackageOwnershipFix
 {
-	//addresses
-	constexpr UInt32 kAddr_IsAnOwner = 0x5785E0;
-	constexpr UInt32 kAddr_GetOwner = 0x567790;              //GetOwnerRawForm - returns explicit owner only for doors
-	constexpr UInt32 kAddr_IsInFaction = 0x89A9A0;           //Actor::IsInFaction
-
-	//call sites for IsAnOwner in lock/unlock functions
-	constexpr UInt32 kCall_LockIsAnOwner = 0x90D528;         //9491752 - call in LockDoorsAtLocation
-	constexpr UInt32 kCall_UnlockIsAnOwner = 0x90D5DE;       //9491934 - call in UnlockDoorsAtLocation
-
-	constexpr UInt8 kFormType_Faction = 0x06;
-	constexpr UInt8 kExtraData_Ownership = 0x21;
-
 	typedef bool (__thiscall* _IsAnOwner)(void* refr, void* actor, bool checkFaction);
 	typedef void* (__thiscall* _GetOwner)(void* refr);
 	typedef bool (__thiscall* _IsInFaction)(void* actor, void* faction);
 
-	static _IsAnOwner OriginalIsAnOwner = (_IsAnOwner)kAddr_IsAnOwner;
-	static _GetOwner GetOwner = (_GetOwner)kAddr_GetOwner;
-	static _IsInFaction IsInFaction = (_IsInFaction)kAddr_IsInFaction;
+	static _IsAnOwner OriginalIsAnOwner = (_IsAnOwner)0x5785E0;
+	static _GetOwner GetOwner = (_GetOwner)0x567790;       //GetOwnerRawForm
+	static _IsInFaction IsInFaction = (_IsInFaction)0x89A9A0;
 
 	inline UInt8 GetFormTypeDirect(void* form) {
 		return form ? *(UInt8*)((char*)form + 0x04) : 0;
@@ -63,7 +51,7 @@ namespace DoorPackageOwnershipFix
 		while (current)
 		{
 			UInt8 type = *(UInt8*)((char*)current + 0x04);
-			if (type == kExtraData_Ownership)
+			if (type == 0x21) //ExtraOwnership
 			{
 				return *(void**)((char*)current + 0x0C);
 			}
@@ -85,7 +73,7 @@ namespace DoorPackageOwnershipFix
 
 		//check if cell owner is a faction
 		UInt8 ownerType = GetFormTypeDirect(cellOwner);
-		if (ownerType == kFormType_Faction)
+		if (ownerType == 0x06) //kFormType_Faction
 		{
 			return IsInFaction(actor, cellOwner);
 		}
@@ -139,8 +127,8 @@ namespace DoorPackageOwnershipFix
 
 	void Init()
 	{
-		ReplaceCall(kCall_LockIsAnOwner, (UInt32)IsAnOwner_Hook);
-		ReplaceCall(kCall_UnlockIsAnOwner, (UInt32)IsAnOwner_Hook);
+		ReplaceCall(0x90D528, (UInt32)IsAnOwner_Hook);  //LockDoorsAtLocation
+		ReplaceCall(0x90D5DE, (UInt32)IsAnOwner_Hook);  //UnlockDoorsAtLocation
 	}
 }
 

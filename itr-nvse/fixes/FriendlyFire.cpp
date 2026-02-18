@@ -4,7 +4,7 @@
 #include <Windows.h>
 #include <cstdint>
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 namespace FriendlyFire
 {

@@ -130,7 +130,7 @@
     <ClCompile Include="handlers\OnEntryPointHandler.cpp" />
     <ClCompile Include="handlers\OnCombatProcedureHandler.cpp" />
     <ClCompile Include="handlers\OnSoundPlayedHandler.cpp" />
-    <ClCompile Include="handlers\OnFastTravelHandler.cpp" />
+    <ClCompile Include="handlers\OnJumpLandHandler.cpp" />
     <ClCompile Include="handlers\FallDamageHandler.cpp" />
     <ClCompile Include="handlers\DialogueCameraHandler.cpp" />
     <ClCompile Include="handlers\FakeHitHandler.cpp" />
@@ -154,6 +154,10 @@
     <ClCompile Include="fixes\VATSSpeechFix.cpp" />
     <ClCompile Include="fixes\CombatItemTimerFix.cpp" />
     <ClCompile Include="fixes\CompanionNoInfamy.cpp" />
+    <ClCompile Include="fixes\CompanionWeightlessOverencumberedFix.cpp" />
+    <ClCompile Include="fixes\PathingNullActorFix.cpp" />
+    <ClCompile Include="fixes\NavMeshInfoCrashFix.cpp" />
+    <ClCompile Include="fixes\InitHavokCrashFix.cpp" />
     <ClCompile Include="features\MessageBoxQuickClose.cpp">
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">internal/prefix.h</ForcedIncludeFiles>
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">internal/prefix.h</ForcedIncludeFiles>
@@ -183,6 +187,7 @@
     <ClCompile Include="commands\RadioCommands.cpp" />
     <ClCompile Include="commands\ChallengeCommands.cpp" />
     <ClCompile Include="commands\DialogueCommands.cpp" />
+    <ClCompile Include="commands\WeaponEmissiveCommands.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ITR.h" />
@@ -204,7 +209,7 @@
     <ClInclude Include="handlers\OnEntryPointHandler.h" />
     <ClInclude Include="handlers\OnCombatProcedureHandler.h" />
     <ClInclude Include="handlers\OnSoundPlayedHandler.h" />
-    <ClInclude Include="handlers\OnFastTravelHandler.h" />
+    <ClInclude Include="handlers\OnJumpLandHandler.h" />
     <ClInclude Include="handlers\FallDamageHandler.h" />
     <ClInclude Include="handlers\DialogueCameraHandler.h" />
     <ClInclude Include="handlers\FakeHitHandler.h" />
@@ -228,6 +233,10 @@
     <ClInclude Include="fixes\VATSSpeechFix.h" />
     <ClInclude Include="fixes\CombatItemTimerFix.h" />
     <ClInclude Include="fixes\CompanionNoInfamy.h" />
+    <ClInclude Include="fixes\CompanionWeightlessOverencumberedFix.h" />
+    <ClInclude Include="fixes\PathingNullActorFix.h" />
+    <ClInclude Include="fixes\NavMeshInfoCrashFix.h" />
+    <ClInclude Include="fixes\InitHavokCrashFix.h" />
     <ClInclude Include="features\MessageBoxQuickClose.h" />
     <ClInclude Include="features\PreventWeaponSwitch.h" />
     <ClInclude Include="features\ELMO.h" />
@@ -243,6 +252,7 @@
     <ClInclude Include="commands\RadioCommands.h" />
     <ClInclude Include="commands\ChallengeCommands.h" />
     <ClInclude Include="commands\DialogueCommands.h" />
+    <ClInclude Include="commands\WeaponEmissiveCommands.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />

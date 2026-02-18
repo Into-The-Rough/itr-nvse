@@ -3,26 +3,11 @@
 #include "OwnedBeds.h"
 #include "internal/NVSEMinimal.h"
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 namespace OwnedBeds
 {
 	static bool g_enabled = false;
-
-	constexpr UInt32 kAddr_IsAnOwner = 0x5785E0;
-	constexpr UInt32 kAddr_IsAnOwnerCall = 0x509679;
-	constexpr UInt32 kAddr_ResolveOwnership = 0x567790;
-	constexpr UInt32 kAddr_PlayerSingleton = 0x011DEA3C;
-	constexpr UInt32 kAddr_ProcessListsSingleton = 0x11E0E80;
-	constexpr UInt32 kAddr_AttackAlarm = 0x8C0460;
-	constexpr UInt32 kAddr_GetActorRefInHigh = 0x970B30;
-	constexpr UInt32 kAddr_GetActorRefInHigh_0 = 0x970A20;
-	constexpr UInt32 kAddr_GetDetectionLevelAgainstActor = 0x8A0D10;
-	constexpr UInt32 kAddr_GetCurrentProcess = 0x8D8520;
-	constexpr UInt32 kAddr_GetTopic = 0x61A2D0;
-	constexpr UInt32 kAddr_ProcessGreet = 0x8DBE30;
-	constexpr UInt8 kFormType_TESFaction = 8;
-	constexpr UInt32 DT_COMBAT = 4;
 
 	static bool g_playerWarnedAboutBed = false;
 
@@ -36,28 +21,28 @@ namespace OwnedBeds
 	}
 
 	typedef bool (__thiscall *_IsAnOwner)(void* thisObj, void* actor, bool checkFaction);
-	static _IsAnOwner IsAnOwner = (_IsAnOwner)kAddr_IsAnOwner;
+	static _IsAnOwner IsAnOwner = (_IsAnOwner)0x5785E0;
 
 	typedef void* (__cdecl *_GetTopic)(UInt32 type, int index);
-	static _GetTopic GetTopic = (_GetTopic)kAddr_GetTopic;
+	static _GetTopic GetTopic = (_GetTopic)0x61A2D0;
 
 	typedef void* (__thiscall *_MobileGetProcess)(void* actor);
-	static _MobileGetProcess MobileGetProcess = (_MobileGetProcess)kAddr_GetCurrentProcess;
+	static _MobileGetProcess MobileGetProcess = (_MobileGetProcess)0x8D8520;
 
 	typedef void (__thiscall *_ProcessGreet)(void* process, void* actor, void* topic, bool forceSub, bool stop, bool queue, bool sayCallback);
-	static _ProcessGreet ProcessGreet = (_ProcessGreet)kAddr_ProcessGreet;
+	static _ProcessGreet ProcessGreet = (_ProcessGreet)0x8DBE30;
 
 	static void SendAssaultAlarmToBedOwner(void* bedRef, void* owner) {
-		void* player = *(void**)kAddr_PlayerSingleton;
-		void* processList = (void*)kAddr_ProcessListsSingleton;
+		void* player = *(void**)0x11DEA3C;
+		void* processList = (void*)0x11E0E80;
 		void* nearbyActor = nullptr;
 
 		UInt8 formType = GetFormType(owner);
 
-		if (formType == kFormType_TESFaction) {
-			nearbyActor = OBThisCall<void*>(kAddr_GetActorRefInHigh, processList, owner, true, true);
+		if (formType == 8) { //kFormType_TESFaction
+			nearbyActor = OBThisCall<void*>(0x970B30, processList, owner, true, true);
 		} else {
-			nearbyActor = OBThisCall<void*>(kAddr_GetActorRefInHigh_0, processList, owner, 0);
+			nearbyActor = OBThisCall<void*>(0x970A20, processList, owner, 0);
 		}
 
 		if (!nearbyActor || nearbyActor == player)
@@ -65,14 +50,14 @@ namespace OwnedBeds
 
 		bool hasLOS = false;
 		bool a8 = false;
-		SInt32 detectionLevel = OBThisCall<SInt32>(kAddr_GetDetectionLevelAgainstActor,
+		SInt32 detectionLevel = OBThisCall<SInt32>(0x8A0D10,
 			nearbyActor, true, player, &hasLOS, false, false, 0, &a8);
 
 		if (detectionLevel <= 0)
 			return;
 
 		if (!g_playerWarnedAboutBed) {
-			void* topic = GetTopic(DT_COMBAT, 9);
+			void* topic = GetTopic(4, 9); //DT_COMBAT
 			if (topic) {
 				void* process = MobileGetProcess(nearbyActor);
 				if (process) {
@@ -81,7 +66,7 @@ namespace OwnedBeds
 			}
 			g_playerWarnedAboutBed = true;
 		} else {
-			OBThisCall(kAddr_AttackAlarm, nearbyActor, player, false, 1);
+			OBThisCall(0x8C0460, nearbyActor, player, false, 1); //AttackAlarm
 		}
 	}
 
@@ -93,7 +78,7 @@ namespace OwnedBeds
 		bool isOwner = IsAnOwner(bedRef, actor, checkFaction);
 
 		if (!isOwner) {
-			void* owner = OBThisCall<void*>(kAddr_ResolveOwnership, bedRef);
+			void* owner = OBThisCall<void*>(0x567790, bedRef); //GetOwnerRawForm
 			if (owner) {
 				SendAssaultAlarmToBedOwner(bedRef, owner);
 			}
@@ -109,7 +94,7 @@ namespace OwnedBeds
 
 	void Init(bool enabled)
 	{
-		SafeWrite::WriteRelCall(kAddr_IsAnOwnerCall, (UInt32)IsAnOwnerHook);
+		SafeWrite::WriteRelCall(0x509679, (UInt32)IsAnOwnerHook);
 		g_enabled = enabled;
 		Log("OwnedBeds initialized (enabled=%d)", enabled);
 	}

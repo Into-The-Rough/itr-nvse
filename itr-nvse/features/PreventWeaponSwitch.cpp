@@ -7,28 +7,19 @@
 #include "internal/Detours.h"
 #include "internal/NVSEMinimal.h"
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
+#include "internal/ScopedLock.h"
 
-//local ExtractArgs differs from NVSEScriptInterface version
+//local ExtractArgs, different from NVSEScriptInterface version
 #define EXTRACT_ARGS paramInfo, scriptData, opcodeOffsetPtr, thisObj, containingObj, scriptObj, eventList
 typedef bool (*ExtractArgs_t)(ParamInfo*, void*, UInt32*, TESObjectREFR*, TESObjectREFR*, Script*, ScriptEventList*, ...);
 static ExtractArgs_t ExtractArgs = (ExtractArgs_t)0x5ACCB0;
 
-//storage for blocked actors
 static const int MAX_BLOCKED = 64;
 static UInt32 g_blocked[MAX_BLOCKED] = {0};
 static int g_count = 0;
 static CRITICAL_SECTION g_lock;
 static bool g_lockInit = false;
-
-class ScopedLock {
-	CRITICAL_SECTION* cs;
-public:
-	ScopedLock(CRITICAL_SECTION* c) : cs(c) { EnterCriticalSection(cs); }
-	~ScopedLock() { LeaveCriticalSection(cs); }
-	ScopedLock(const ScopedLock&) = delete;
-	ScopedLock& operator=(const ScopedLock&) = delete;
-};
 
 static void EnsureLockInit()
 {
@@ -108,14 +99,14 @@ void __fastcall Hook_SwitchWeaponUpdate(void* procedure, void* edx)
 
 	if (shouldBlock)
 	{
-		//set eStatus = 2 (finished) at offset 0x8
+		//eStatus = 2 (finished) at offset 0x8
 		*(UInt32*)((char*)procedure + 0x8) = 2;
 		return;
 	}
 	s_detour.GetTrampoline<SwitchWeaponUpdate_t>()(procedure);
 }
 
-//prologue: push ebp (1) + mov ebp,esp (2) + sub esp,0x24 (3) = 6 bytes
+//prologue: 6 bytes
 void PreventWeaponSwitch_Init()
 {
 	EnsureLockInit();
@@ -123,7 +114,7 @@ void PreventWeaponSwitch_Init()
 		Log("ERROR: PreventWeaponSwitch hook failed");
 }
 
-//IsActor virtual at vtable index 0x100
+//vtable index 0x100
 inline bool IsActorRef(TESObjectREFR* ref) {
 	if (!ref) return false;
 	UInt32 vtable = *(UInt32*)ref;

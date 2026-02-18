@@ -5,12 +5,10 @@
 #include "CombatItemTimerFix.h"
 #include "internal/NVSEMinimal.h"
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 namespace CombatItemTimerFix
 {
-	constexpr uint32_t kAddr_CallSite = 0x9DAB61;
-
 	//combat item types
 	enum { COMBAT_ITEM_RESTORE = 0, COMBAT_ITEM_BUFF = 1, COMBAT_ITEM_COUNT = 2 };
 
@@ -58,7 +56,7 @@ namespace CombatItemTimerFix
 
 	void Init()
 	{
-		SafeWrite::WriteRelCall(kAddr_CallSite, (UInt32)Hook_ResetCombatItemTimer);
+		SafeWrite::WriteRelCall(0x9DAB61, (UInt32)Hook_ResetCombatItemTimer);
 		Log("CombatItemTimerFix installed");
 	}
 }

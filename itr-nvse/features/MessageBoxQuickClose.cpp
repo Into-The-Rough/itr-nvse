@@ -1,6 +1,3 @@
-// MessageBoxQuickClose.cpp - Isolated module using JIP-LN-NVSE headers
-// This file must NOT include nvse/prefix.h (NVSE-Plugins-main headers)
-// It uses JIP-LN-NVSE headers directly
 //NOT hot-reloadable - requires game restart
 
 #include "nvse/PluginAPI.h"
@@ -62,7 +59,6 @@ static float GetTileValueFloat(const Tile* tile, UInt32 id)
 	return value ? value->num : 0.0f;
 }
 
-// Hook for keyboard quick-close (Enter/Space clicks first button)
 bool __fastcall MessageMenu_HandleSpecialKeyInput_Hook(MessageMenu* menu, void* edx, int code, float keyState)
 {
 	using namespace MessageBoxQuickClose;
@@ -85,7 +81,7 @@ bool __fastcall MessageMenu_HandleSpecialKeyInput_Hook(MessageMenu* menu, void* 
 	return OriginalHandleSpecialKeyInput ? OriginalHandleSpecialKeyInput(menu, code, keyState) : false;
 }
 
-// Hook to fix controller always clicking first button instead of selected button
+//fix controller always clicking first button instead of selected button
 void __fastcall MessageMenu_HandleClick_Hook(MessageMenu* menu, void* edx, SInt32 tileID, Tile* clickedTile)
 {
 	using namespace MessageBoxQuickClose;
@@ -97,8 +93,6 @@ void __fastcall MessageMenu_HandleClick_Hook(MessageMenu* menu, void* edx, SInt3
 		return;
 	}
 
-	// If there's a selected button and it's different from the clicked tile,
-	// use the selected button instead (fixes controller always clicking first button)
 	Tile* selectedTile = menu->buttonList.selected;
 	if (selectedTile && selectedTile != clickedTile)
 	{

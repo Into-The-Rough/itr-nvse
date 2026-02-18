@@ -4,7 +4,7 @@
 #include "VATSProjectileFix.h"
 #include "internal/NVSEMinimal.h"
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 namespace VATSProjectileFix
 {
@@ -40,11 +40,7 @@ namespace VATSProjectileFix
 		bool bNeedsRecalc;
 	};
 
-	constexpr UInt32 kAddr_VATSMenuUpdate = 0x7F3E00;
-	constexpr UInt32 kAddr_UpdateHitChance = 0x7F1290;
-	constexpr UInt32 kAddr_FindTarget = 0x7F3C90;
 	constexpr UInt32 kAddr_HookSite = 0x7ED349;
-	constexpr UInt32 kAddr_pTargetRef = 0x11F21CC;
 
 	static UInt32 s_originalVATSMenuUpdate = 0;
 
@@ -58,11 +54,11 @@ namespace VATSProjectileFix
 		bool result = VATSThisCall<bool>(s_originalVATSMenuUpdate, pThis);
 		if (!result) return result;
 
-		void** ppTargetRef = (void**)kAddr_pTargetRef;
+		void** ppTargetRef = (void**)0x11F21CC;
 		void* pTargetRef = *ppTargetRef;
 		if (!pTargetRef) return result;
 
-		SimpleListNode* pTargetEntry = VATSThisCall<SimpleListNode*>(kAddr_FindTarget, pThis, pTargetRef);
+		SimpleListNode* pTargetEntry = VATSThisCall<SimpleListNode*>(0x7F3C90, pThis, pTargetRef);
 		if (!pTargetEntry || pTargetEntry->IsEmpty()) return result;
 
 		VATSTarget* pTarget = (VATSTarget*)pTargetEntry->item;
@@ -77,7 +73,7 @@ namespace VATSProjectileFix
 			if (pPart) {
 				pPart->fPercentVisible = 1.0f;
 				pPart->bChanceCalculated = true;
-				VATSThisCall<double>(kAddr_UpdateHitChance, pThis, pIter);
+				VATSThisCall<double>(0x7F1290, pThis, pIter);
 			}
 			pIter = pIter->GetNext();
 		}

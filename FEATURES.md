@@ -11,7 +11,6 @@
 - GetRefsSortedByDistance - refs sorted by distance with filters
 - Duplicate - duplicate a form
 - GetAvailableRecipes - get available crafting recipes
-- ClampToGround - clamp reference to ground
 
 **Fall Damage**
 - SetFallDamageMult - set fall damage multiplier per actor
@@ -32,6 +31,8 @@
 - GetPreventWeaponSwitch - get weapon switch prevention state
 
 **Radio**
+- ChangeRadioTrack - force active radio station to advance to next track
+- IsRadioPlaying - returns 1 if pip-boy or ambient radio is currently playing
 - GetPlayingRadioTrack - returns TESSound or TESTopicInfo for playing radio track
 - GetPlayingRadioTrackFileName - returns file path of playing radio track
 - GetPlayingRadioText - returns dialogue text of playing radio voice line
@@ -65,6 +66,8 @@
 - SetOnEntryPointEventHandler - fires when perk entry points execute
 - SetOnSoundPlayedEventHandler - fires on any sound playback
 - SetOnSoundCompletedEventHandler - fires when tracked voice sounds complete
+- SetOnActorLandedEventHandler - fires when actor lands, with pre-clear fall time
+- SetOnJumpStartEventHandler - fires when actor jump starts
 - SetCornerMessageHandler - fires on HUD corner message
 - SetOnDialogueTextEventHandler - fires on dialogue text display
 - SetOnKeyDisabledEventHandler - fires when key disabled
@@ -97,6 +100,7 @@
 - NoDoorFade - no actor fade on door enter
 - OwnedBeds - sleep in owned beds with consequences
 - ReversePickpocketNoKarmaFix - no karma loss for reverse pickpocket
+- CompanionWeightlessOverencumberedFix - allow weightless transfers to overencumbered companions
 - SlowMotionPhysicsFix - stable ragdoll physics in VATS
 - VATSLimbFix - hide dismembered limbs in VATS
 - VATSProjectileFix - fix projectile hit chance in VATS
