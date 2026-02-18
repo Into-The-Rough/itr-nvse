@@ -77,9 +77,6 @@ namespace OnSoundPlayedHandler {
 
     std::vector<TrackedVoiceSound> g_trackedSounds;
     DWORD g_mainThreadId = 0;
-    UInt32 g_droppedPlayEvents = 0;
-    UInt32 g_droppedTrackedEvents = 0;
-    DWORD g_lastDropLogTick = 0;
 }
 
 static void EnsureStateLockInitialized()
@@ -116,8 +113,6 @@ static TESForm* LookupFormByID(UInt32 refID)
     return nullptr;
 }
 
-constexpr UInt32 kAddr_GetSoundHandleByFilePath = 0xAE5A50; //BSAudioManager::GetSoundHandleByFilePath
-
 typedef BSSoundHandle* (__thiscall* GetSoundHandleByFilePath_t)(
     BSAudioManager* mgr,
     BSSoundHandle* arData,
@@ -126,17 +121,6 @@ typedef BSSoundHandle* (__thiscall* GetSoundHandleByFilePath_t)(
     TESSound* apSound
 );
 static Detours::JumpDetour s_detour;
-
-static const char* GetSoundCategory(UInt32 flags)
-{
-    if (flags & kSoundFlag_IsVoice) return "Voice";
-    if (flags & kSoundFlag_IsMusic) return "Music";
-    if (flags & kSoundFlag_IsRadio) return "Radio";
-    if (flags & kSoundFlag_IsFootsteps) return "Footsteps";
-    if (flags & kSoundFlag_3D) return "3D";
-    if (flags & kSoundFlag_2D) return "2D";
-    return "Unknown";
-}
 
 //queue a sound event (may be called from audio thread - must be thread-safe)
 static void QueueSoundEvent(const char* filePath, UInt32 flags, UInt32 soundFormID)
@@ -148,7 +132,6 @@ static void QueueSoundEvent(const char* filePath, UInt32 flags, UInt32 soundForm
     {
         ScopedLock lock(&OnSoundPlayedHandler::g_stateLock);
         if (OnSoundPlayedHandler::g_pendingEvents.size() >= kMaxQueueSize) {
-            ++OnSoundPlayedHandler::g_droppedPlayEvents;
             return;
         }
     }
@@ -183,7 +166,6 @@ static void QueueVoiceTracking(UInt32 soundID, const char* filePath, UInt32 flag
     {
         ScopedLock lock(&OnSoundPlayedHandler::g_stateLock);
         if (OnSoundPlayedHandler::g_trackedSounds.size() >= kMaxTrackedSounds) {
-            ++OnSoundPlayedHandler::g_droppedTrackedEvents;
             return;
         }
     }
@@ -274,9 +256,6 @@ void OSPH_Update()
     std::vector<TrackedVoiceSound> soundsToCheck;
     std::vector<Script*> playCallbacks;
     std::vector<Script*> completionCallbacks;
-    UInt32 droppedPlayToLog = 0;
-    UInt32 droppedTrackedToLog = 0;
-    DWORD now = GetTickCount();
 
     {
         ScopedLock lock(&OnSoundPlayedHandler::g_stateLock);
@@ -284,15 +263,6 @@ void OSPH_Update()
         soundsToCheck = OnSoundPlayedHandler::g_trackedSounds; //copy for checking
         playCallbacks = OnSoundPlayedHandler::g_callbacks;
         completionCallbacks = OnSoundPlayedHandler::g_completionCallbacks;
-
-        if ((now - OnSoundPlayedHandler::g_lastDropLogTick) >= 5000)
-        {
-            droppedPlayToLog = OnSoundPlayedHandler::g_droppedPlayEvents;
-            droppedTrackedToLog = OnSoundPlayedHandler::g_droppedTrackedEvents;
-            OnSoundPlayedHandler::g_droppedPlayEvents = 0;
-            OnSoundPlayedHandler::g_droppedTrackedEvents = 0;
-            OnSoundPlayedHandler::g_lastDropLogTick = now;
-        }
     }
 
     if (!eventsToProcess.empty() && !playCallbacks.empty())
@@ -419,7 +389,7 @@ static void InitHook()
     EnsureStateLockInitialized();
 
     //prologue: push ebp (1) + mov ebp,esp (2) + push -1 (2) = 5 bytes
-    if (!s_detour.WriteRelJump(kAddr_GetSoundHandleByFilePath, HookedGetSoundHandle, 5))
+    if (!s_detour.WriteRelJump(0xAE5A50, HookedGetSoundHandle, 5))
     {
         return;
     }
@@ -652,7 +622,6 @@ bool OSPH_Init(void* nvseInterface)
 
     EnsureStateLockInitialized();
     OnSoundPlayedHandler::g_mainThreadId = GetCurrentThreadId();
-    OnSoundPlayedHandler::g_lastDropLogTick = GetTickCount();
 
     nvse->SetOpcodeBase(0x4016);
     nvse->RegisterCommand(&kCommandInfo_SetOnSoundPlayedEventHandler);
@@ -687,6 +656,4 @@ void OSPH_ClearCallbacks()
     OnSoundPlayedHandler::g_completionCallbacks.clear();
     OnSoundPlayedHandler::g_pendingEvents.clear();
     OnSoundPlayedHandler::g_trackedSounds.clear();
-    OnSoundPlayedHandler::g_droppedPlayEvents = 0;
-    OnSoundPlayedHandler::g_droppedTrackedEvents = 0;
 }
