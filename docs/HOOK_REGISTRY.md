@@ -59,6 +59,15 @@ Prevents karma loss when reverse pickpocketing non-grenades.
 
 Stack: ECX=menu, [esp+8]=actor. Calls ShouldSkipKarma to decide.
 
+### CompanionWeightlessOverencumberedFix
+Allows giving zero-weight items to overencumbered companions.
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x75DE17 | jump | 5 | 0x75DE1C/0x75DEA5 | conditional | Hook_OverburdenedBranch |
+
+Stack: uses EBP frame locals in `ContainerMenu::TransferItem` to compute added transfer weight (`[ebp-0x14C] - [ebp-0x144]`).
+
 ### SlowMotionPhysicsFix
 Prevents physics explosion during extreme slowmo.
 
@@ -167,6 +176,15 @@ Plus camera hooks installed via CameraHooks::InstallHooks().
 | 0x8A63EC | jump | 5 | 0x8A63F5 | no | Hook |
 
 Stack: [ebp-0x54]=actor, [ebp-0x28]=damage. Applies multiplier via GetFallDamageMultForActor.
+
+### OnJumpLandHandler
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x10CB398 + (8*4) | vtable patch | 4 | n/a | yes | Hook_bhkCharacterStateJumping_UpdateVelocity |
+| 0x10CB36C + (8*4) | vtable patch | 4 | n/a | yes | Hook_bhkCharacterStateInAir_UpdateVelocity |
+
+Captures jump start and landing transitions. Landing queues pre-clear `fallTimeElapsed`.
 
 ### OnCombatProcedureHandler
 

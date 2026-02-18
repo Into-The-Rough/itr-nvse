@@ -1,0 +1,1 @@
+SetEventHandler "MCMExtUpdate" (CompileScript "itr-nvse\OnMCMUpdate.gek")

@@ -6,15 +6,10 @@
 #include "internal/Detours.h"
 #include <cstring>
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 namespace VATSLimbFix
 {
-	constexpr uintptr_t kAddr_SetPartitionVisible = 0x5E4810;
-	constexpr uintptr_t kAddr_VATSTargetRef = 0x11F21CC;
-	constexpr uintptr_t kAddr_VATSTargetsList = 0x11DB150;
-	constexpr uint8_t kExtraData_DismemberedLimbs = 0x5F;
-
 	static Detours::JumpDetour s_detour;
 
 	struct BSExtraData {
@@ -76,19 +71,19 @@ namespace VATSLimbFix
 
 	uint16_t GetDismemberMask(LimbFixREFR* ref) {
 		if (!ref) return 0;
-		ExtraDismemberedLimbs* xDismember = (ExtraDismemberedLimbs*)GetExtraDataByType(&ref->extraDataList, kExtraData_DismemberedLimbs);
+		ExtraDismemberedLimbs* xDismember = (ExtraDismemberedLimbs*)GetExtraDataByType(&ref->extraDataList, 0x5F);
 		return xDismember ? xDismember->dismemberedMask : 0;
 	}
 
 	bool IsLimbDismemberedOnAnyVATSTarget(uint16_t limbID) {
-		LimbFixREFR** pTargetRef = (LimbFixREFR**)kAddr_VATSTargetRef;
+		LimbFixREFR** pTargetRef = (LimbFixREFR**)0x11F21CC;
 		if (pTargetRef && *pTargetRef) {
 			uint16_t mask = GetDismemberMask(*pTargetRef);
 			if (mask & (1 << limbID))
 				return true;
 		}
 
-		VATSTargetList* targetList = (VATSTargetList*)kAddr_VATSTargetsList;
+		VATSTargetList* targetList = (VATSTargetList*)0x11DB150;
 		if (targetList) {
 			VATSTargetNode* node = &targetList->head;
 			while (node && node->data) {
@@ -116,7 +111,7 @@ namespace VATSLimbFix
 	//prologue: push ebp (1) + mov ebp,esp (2) + sub esp,8 (3) = 6 bytes
 	void Init()
 	{
-		if (s_detour.WriteRelJump(kAddr_SetPartitionVisible, SetPartitionVisible_Hook, 6))
+		if (s_detour.WriteRelJump(0x5E4810, SetPartitionVisible_Hook, 6))
 			Log("VATSLimbFix installed");
 	}
 }

@@ -1,0 +1,4 @@
+Begin Function {}
+ReloadPluginConfig "itr-nvse"
+
+end

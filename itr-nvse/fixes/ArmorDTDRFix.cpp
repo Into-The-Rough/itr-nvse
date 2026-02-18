@@ -6,16 +6,12 @@
 #include "internal/NVSEMinimal.h"
 #include "internal/Detours.h"
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 namespace ArmorDTDRFix
 {
-	//Character::ResetArmorRating: 9260672 dec
-	//HighProcess::DirtyCachedActorValues: 9439104 dec
-	constexpr uint32_t kAddr_ResetArmorRating = 0x8D4E80;
+	//HighProcess::DirtyCachedActorValues
 	constexpr uint32_t kAddr_DirtyCachedActorValues = 0x900780;
-	constexpr uint32_t kAV_DamageResistance = 18;
-	constexpr uint32_t kAV_DamageThreshold = 76;
 
 	struct BaseProcess {
 		char pad[0x28];
@@ -41,16 +37,7 @@ namespace ArmorDTDRFix
 	void __fastcall Hook_ResetArmorRating(void* character, void* edx) {
 		if (!character || s_disabled || !s_originalResetArmorRating) return;
 
-		__try {
-			s_originalResetArmorRating(character);
-		}
-		__except (EXCEPTION_EXECUTE_HANDLER) {
-			Log("ArmorDTDRFix: exception calling ResetArmorRating trampoline, disabling fix");
-			s_disabled = true;
-			s_originalResetArmorRating = nullptr;
-			s_detour.Remove();
-			return;
-		}
+		s_originalResetArmorRating(character);
 
 		//baseProcess is uninitialized during Character::Character construction
 		//refID is 0 until the form is fully created, skip cache dirtying for half-constructed actors
@@ -59,14 +46,14 @@ namespace ArmorDTDRFix
 
 		BaseProcess* process = ((Actor*)character)->baseProcess;
 		if (process && process->processLevel == 0) {
-			ThisCall(kAddr_DirtyCachedActorValues, process, kAV_DamageThreshold);
-			ThisCall(kAddr_DirtyCachedActorValues, process, kAV_DamageResistance);
+			ThisCall(kAddr_DirtyCachedActorValues, process, 76); //kAV_DamageThreshold
+			ThisCall(kAddr_DirtyCachedActorValues, process, 18); //kAV_DamageResistance
 		}
 	}
 
 	//prologue: 7 bytes
 	void Init() {
-		if (s_detour.WriteRelJump(kAddr_ResetArmorRating, Hook_ResetArmorRating, 7)) {
+		if (s_detour.WriteRelJump(0x8D4E80, Hook_ResetArmorRating, 7)) { //Character::ResetArmorRating
 			s_originalResetArmorRating = s_detour.GetTrampoline<ResetArmorRating_t>();
 			if (!s_originalResetArmorRating) {
 				Log("ArmorDTDRFix failed: trampoline not created");

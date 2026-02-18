@@ -10,33 +10,8 @@
 #include "OwnerNameInfoHandler.h"
 
 
-//game addresses
-constexpr UInt32 kAddr_HUDMainMenu = 0x11D96C0;
-constexpr UInt32 kAddr_Player = 0x11DEA3C;
-constexpr UInt32 kAddr_CrosshairRefName = 0x11D9C48;
-
-//form type IDs
 constexpr UInt8 kFormType_Faction = 0x08;
-constexpr UInt8 kFormType_NPC = 0x2A;
-constexpr UInt8 kFormType_Actor = 0x3B;
-
-//extra data type IDs
-constexpr UInt8 kExtraData_Ownership = 0x21;
-
-//offsets
 constexpr UInt32 kOffset_TESForm_TypeID = 0x04;
-constexpr UInt32 kOffset_TESForm_RefID = 0x0C;
-constexpr UInt32 kOffset_TESObjectREFR_ExtraDataList = 0x44;
-constexpr UInt32 kOffset_TESObjectREFR_ParentCell = 0x40;
-constexpr UInt32 kOffset_BaseExtraList_Data = 0x04;
-constexpr UInt32 kOffset_BSExtraData_Type = 0x04;
-constexpr UInt32 kOffset_BSExtraData_Next = 0x08;
-constexpr UInt32 kOffset_ExtraOwnership_Owner = 0x0C;
-constexpr UInt32 kOffset_TESObjectCELL_ExtraDataList = 0x28;
-constexpr UInt32 kOffset_HUDMainMenu_CrosshairRef = 0x1B8;
-
-//tile value IDs
-constexpr UInt32 kTileValue_string = 0xFC4;
 
 //Tile::SetStringValue at 0xA01350
 typedef void (__thiscall* _TileSetString)(void* tile, UInt32 traitID, const char* str, bool propagate);
@@ -58,14 +33,14 @@ static void* g_lastRef = nullptr;
 static void* GetExtraDataByType(void* extraDataList, UInt8 type)
 {
 	if (!extraDataList) return nullptr;
-	void* data = *(void**)((UInt8*)extraDataList + kOffset_BaseExtraList_Data);
+	void* data = *(void**)((UInt8*)extraDataList + 0x04); //BaseExtraList::data
 	int count = 0;
 	while (data && count < 100)
 	{
-		UInt8 dataType = *(UInt8*)((UInt8*)data + kOffset_BSExtraData_Type);
+		UInt8 dataType = *(UInt8*)((UInt8*)data + 0x04); //BSExtraData::type
 		if (dataType == type)
 			return data;
-		data = *(void**)((UInt8*)data + kOffset_BSExtraData_Next);
+		data = *(void**)((UInt8*)data + 0x08); //BSExtraData::next
 		count++;
 	}
 	return nullptr;
@@ -74,9 +49,9 @@ static void* GetExtraDataByType(void* extraDataList, UInt8 type)
 //get owner from extra data list
 static void* GetOwnerFromExtraList(void* extraDataList)
 {
-	void* xOwnership = GetExtraDataByType(extraDataList, kExtraData_Ownership);
+	void* xOwnership = GetExtraDataByType(extraDataList, 0x21); //ExtraOwnership
 	if (xOwnership)
-		return *(void**)((UInt8*)xOwnership + kOffset_ExtraOwnership_Owner);
+		return *(void**)((UInt8*)xOwnership + 0x0C); //ExtraOwnership::owner
 	return nullptr;
 }
 
@@ -86,15 +61,15 @@ static void* GetRefOwner(void* ref, bool* outIsFaction)
 	if (!ref) return nullptr;
 	*outIsFaction = false;
 
-	void* extraDataList = (void*)((UInt8*)ref + kOffset_TESObjectREFR_ExtraDataList);
+	void* extraDataList = (void*)((UInt8*)ref + 0x44); //TESObjectREFR::extraDataList
 	void* owner = GetOwnerFromExtraList(extraDataList);
 
 	if (!owner)
 	{
-		void* cell = *(void**)((UInt8*)ref + kOffset_TESObjectREFR_ParentCell);
+		void* cell = *(void**)((UInt8*)ref + 0x40); //TESObjectREFR::parentCell
 		if (cell)
 		{
-			void* cellExtraList = (void*)((UInt8*)cell + kOffset_TESObjectCELL_ExtraDataList);
+			void* cellExtraList = (void*)((UInt8*)cell + 0x28); //TESObjectCELL::extraDataList
 			owner = GetOwnerFromExtraList(cellExtraList);
 		}
 	}
@@ -123,7 +98,7 @@ static const char* GetOwnerName(void* owner)
 
 	if (typeID == kFormType_Faction)
 		return GetFactionName(owner);
-	else if (typeID == kFormType_NPC)
+	else if (typeID == 0x2A) //NPC
 		return *(const char**)((UInt8*)owner + 0xD4); //TESActorBase::TESFullName at 0xD0, String.data at +0x04
 
 	return nullptr;
@@ -222,11 +197,11 @@ void ONI_Update()
 	if (!g_bOwnerNameInfo)
 		return;
 
-	void* hud = *(void**)kAddr_HUDMainMenu;
+	void* hud = *(void**)0x11D96C0; //HUDMainMenu
 	if (!hud)
 		return;
 
-	void* ref = *(void**)((UInt8*)hud + kOffset_HUDMainMenu_CrosshairRef);
+	void* ref = *(void**)((UInt8*)hud + 0x1B8); //crosshairRef
 	if (!ref)
 	{
 		g_lastRef = nullptr;
@@ -236,7 +211,7 @@ void ONI_Update()
 	UInt8 refType = *(UInt8*)((UInt8*)ref + kOffset_TESForm_TypeID);
 
 	//skip actors
-	if (refType == kFormType_Actor)
+	if (refType == 0x3B) //Actor
 	{
 		g_lastRef = ref;
 		return;
@@ -259,7 +234,7 @@ void ONI_Update()
 	}
 
 	//skip if owner is player (player NPC base form = 0x7)
-	UInt32 ownerRefID = *(UInt32*)((UInt8*)owner + kOffset_TESForm_RefID);
+	UInt32 ownerRefID = *(UInt32*)((UInt8*)owner + 0x0C); //TESForm::refID
 	if (ownerRefID == 0x7)
 	{
 		g_lastRef = ref;
@@ -276,7 +251,7 @@ void ONI_Update()
 	g_lastRef = ref;
 
 	//get original item name from global buffer
-	const char* itemName = (const char*)kAddr_CrosshairRefName;
+	const char* itemName = (const char*)0x11D9C48; //crosshairRefName
 	if (!itemName || !*itemName)
 		return;
 
@@ -319,7 +294,7 @@ void ONI_Update()
 		}
 	}
 
-	TileSetString(tile, kTileValue_string, modifiedName, true);
+	TileSetString(tile, 0xFC4, modifiedName, true); //kTileValue_string
 }
 
 static char g_iniPath[MAX_PATH] = {0};

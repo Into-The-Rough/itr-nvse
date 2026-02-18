@@ -2,23 +2,10 @@
 
 #include <vector>
 #include <unordered_map>
-#include <cstdio>
 #include <Windows.h>
 
 #include "KeyHeldHandler.h"
 #include "internal/NVSEMinimal.h"
-
-static FILE* g_khhLogFile = nullptr;
-
-static void KHH_Log(const char* fmt, ...) {
-    if (!g_khhLogFile) return;
-    va_list args;
-    va_start(args, fmt);
-    vfprintf(g_khhLogFile, fmt, args);
-    fprintf(g_khhLogFile, "\n");
-    fflush(g_khhLogFile);
-    va_end(args);
-}
 
 static NVSEScriptInterface* g_khhScript = nullptr;
 static bool (*g_ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, ...) = nullptr;
@@ -74,7 +61,6 @@ static bool IsControlPressed(UInt32 controlCode) {
 
 static void DispatchHeldEvent(Script* callback, UInt32 key, float duration) {
     if (!g_khhScript || !callback) return;
-    KHH_Log("  Dispatching: key=%d duration=%.2f", key, duration);
     //pass float by reinterpreting raw bits as UInt32 to avoid varargs double promotion
     g_khhScript->CallFunctionAlt(callback, nullptr, 2, key, *(UInt32*)&duration);
 }
@@ -102,7 +88,6 @@ void KHH_Update() {
             state.isDown = true;
             state.downTime = g_currentTime;
             state.lastDispatch = 0;
-            KHH_Log("Key %d pressed at %.2f", handler.key, g_currentTime);
         }
         else if (keyDown && state.isDown) {
             float heldDuration = g_currentTime - state.downTime;
@@ -126,7 +111,6 @@ void KHH_Update() {
         }
         else if (!keyDown && state.isDown) {
             state.isDown = false;
-            KHH_Log("Key %d released", handler.key);
         }
     }
 }
@@ -151,12 +135,10 @@ bool Cmd_RegisterKeyHeld_Execute(COMMAND_ARGS) {
 
     if (!g_ExtractArgsEx((ParamInfo*)paramInfo, scriptData, opcodeOffsetPtr,
             scriptObj, eventList, &keycode, &threshold, &interval, &callbackForm)) {
-        KHH_Log("RegisterKeyHeld: Failed to extract args");
         return true;
     }
 
     if (!callbackForm || *((UInt8*)callbackForm + 4) != kFormType_Script) {
-        KHH_Log("RegisterKeyHeld: Invalid callback");
         return true;
     }
 
@@ -171,8 +153,6 @@ bool Cmd_RegisterKeyHeld_Execute(COMMAND_ARGS) {
     g_handlers.push_back(handler);
     *result = handler.id;
 
-    KHH_Log("RegisterKeyHeld: id=%d key=%d threshold=%.2f interval=%.2f",
-            handler.id, keycode, threshold, interval);
     return true;
 }
 
@@ -189,12 +169,10 @@ bool Cmd_RegisterControlHeld_Execute(COMMAND_ARGS) {
 
     if (!g_ExtractArgsEx((ParamInfo*)paramInfo, scriptData, opcodeOffsetPtr,
             scriptObj, eventList, &controlCode, &threshold, &interval, &callbackForm)) {
-        KHH_Log("RegisterControlHeld: Failed to extract args");
         return true;
     }
 
     if (!callbackForm || *((UInt8*)callbackForm + 4) != kFormType_Script) {
-        KHH_Log("RegisterControlHeld: Invalid callback");
         return true;
     }
 
@@ -209,8 +187,6 @@ bool Cmd_RegisterControlHeld_Execute(COMMAND_ARGS) {
     g_handlers.push_back(handler);
     *result = handler.id;
 
-    KHH_Log("RegisterControlHeld: id=%d control=%d threshold=%.2f interval=%.2f",
-            handler.id, controlCode, threshold, interval);
     return true;
 }
 
@@ -235,12 +211,10 @@ bool Cmd_UnregisterKeyHeld_Execute(COMMAND_ARGS) {
         if (it->id == handlerId && !it->useControlCode) {
             g_handlers.erase(it);
             *result = 1;
-            KHH_Log("UnregisterKeyHeld: removed id=%d", handlerId);
             return true;
         }
     }
 
-    KHH_Log("UnregisterKeyHeld: id=%d not found", handlerId);
     return true;
 }
 
@@ -261,12 +235,10 @@ bool Cmd_UnregisterControlHeld_Execute(COMMAND_ARGS) {
         if (it->id == handlerId && it->useControlCode) {
             g_handlers.erase(it);
             *result = 1;
-            KHH_Log("UnregisterControlHeld: removed id=%d", handlerId);
             return true;
         }
     }
 
-    KHH_Log("UnregisterControlHeld: id=%d not found", handlerId);
     return true;
 }
 
@@ -274,18 +246,8 @@ bool KHH_Init(void* nvseInterface) {
     NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
     if (nvse->isEditor) return false;
 
-    char logPath[MAX_PATH];
-    GetModuleFileNameA(nullptr, logPath, MAX_PATH);
-    char* lastSlash = strrchr(logPath, '\\');
-    if (lastSlash) *lastSlash = '\0';
-    strcat_s(logPath, "\\Data\\NVSE\\Plugins\\KeyHeldHandler.log");
-    //g_khhLogFile = fopen(logPath, "w"); //disabled for release
-
-    KHH_Log("KeyHeldHandler initializing...");
-
     g_khhScript = (NVSEScriptInterface*)nvse->QueryInterface(kInterface_Script);
     if (!g_khhScript) {
-        KHH_Log("ERROR: Failed to get script interface");
         return false;
     }
     g_ExtractArgsEx = g_khhScript->ExtractArgsEx;
@@ -299,8 +261,6 @@ bool KHH_Init(void* nvseInterface) {
     nvse->SetOpcodeBase(0x400D);
     nvse->RegisterCommand(&kCommandInfo_UnregisterControlHeld);
 
-    KHH_Log("Registered commands at opcodes 0x3B0B-0x3B0E");
-    KHH_Log("KeyHeldHandler initialized successfully");
     return true;
 }
 
@@ -308,5 +268,4 @@ void KHH_ClearCallbacks()
 {
     g_handlers.clear();
     g_keyStates.clear();
-    KHH_Log("Callbacks cleared on game load");
 }

@@ -4,14 +4,13 @@
 #include "SlowMotionPhysicsFix.h"
 #include "internal/NVSEMinimal.h"
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 namespace SlowMotionPhysicsFix
 {
 	constexpr UInt32 kAddr_StepDeltaTimeCall = 0xC6AFF9;
 	constexpr UInt32 kAddr_SetFrameTimeMarkerCall = 0xC6AF85;
 	constexpr float kMinStepTime = 0.001f;
-	constexpr int kMaxStepsPerFrame = 16;
 
 	static UInt32* g_VATSMode = (UInt32*)0x11F2258;
 	static UInt32 originalStepDeltaTime = 0;
@@ -21,7 +20,7 @@ namespace SlowMotionPhysicsFix
 
 	void __fastcall Hook_SetFrameTimeMarker(void* hkpWorld, void* edx, float delta) {
 		if (!IsVATSActive()) {
-			float maxDelta = kMaxStepsPerFrame * kMinStepTime;
+			float maxDelta = 16 * kMinStepTime;
 			if (delta > maxDelta)
 				delta = maxDelta;
 		}

@@ -1,35 +1,17 @@
 //hooks CombatController::SetActionProcedure and SetMovementProcedure to fire events
 
 #include <vector>
-#include <cstdio>
 #include <Windows.h>
 
 #include "OnCombatProcedureHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/Detours.h"
-
-static FILE* g_ocphLogFile = nullptr;
-
-static void OCPH_Log(const char* fmt, ...)
-{
-    if (!g_ocphLogFile) return;
-    va_list args;
-    va_start(args, fmt);
-    vfprintf(g_ocphLogFile, fmt, args);
-    fprintf(g_ocphLogFile, "\n");
-    fflush(g_ocphLogFile);
-    va_end(args);
-}
+#include "internal/ScopedLock.h"
 
 static PluginHandle g_ocphPluginHandle = kPluginHandle_Invalid;
 static NVSEScriptInterface* g_ocphScript = nullptr;
 static bool (*g_ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, ...) = nullptr;
 static UInt32 g_ocphOpcode = 0;
-
-constexpr UInt32 kAddr_SetActionProcedure = 0x980110;
-constexpr UInt32 kAddr_SetMovementProcedure = 0x9801B0;
-constexpr UInt32 kAddr_GetPackageOwner = 0x97AE90;
-constexpr UInt32 kAddr_GetBaseForm = 0x6F2070;
 
 struct CallbackEntry {
     Script* callback;
@@ -38,28 +20,37 @@ struct CallbackEntry {
 };
 
 struct QueuedCombatEvent {
-    Actor* actor;
+    UInt32 actorRefID;
     UInt32 procType;
     bool isActionProcedure;
-};
-
-class ScopedLock {
-    CRITICAL_SECTION* cs;
-public:
-    explicit ScopedLock(CRITICAL_SECTION* c) : cs(c) { EnterCriticalSection(cs); }
-    ~ScopedLock() { LeaveCriticalSection(cs); }
-    ScopedLock(const ScopedLock&) = delete;
-    ScopedLock& operator=(const ScopedLock&) = delete;
 };
 
 namespace OnCombatProcedureHandler {
     std::vector<CallbackEntry> g_callbacks;
     std::vector<QueuedCombatEvent> g_pendingEvents;
     bool g_hookInstalled = false;
-    CRITICAL_SECTION g_queueLock;
-    bool g_lockInitialized = false;
+    CRITICAL_SECTION g_stateLock;
+    volatile LONG g_stateLockInit = 0;
+    DWORD g_mainThreadId = 0;
+    UInt32 g_droppedEvents = 0;
+    DWORD g_lastDropLogTick = 0;
     static UInt32 s_trampolineActionAddr = 0;
     static UInt32 s_trampolineMovementAddr = 0;
+}
+
+static void EnsureStateLockInitialized()
+{
+    if (OnCombatProcedureHandler::g_stateLockInit == 2) return;
+
+    if (InterlockedCompareExchange(&OnCombatProcedureHandler::g_stateLockInit, 1, 0) == 0)
+    {
+        InitializeCriticalSection(&OnCombatProcedureHandler::g_stateLock);
+        InterlockedExchange(&OnCombatProcedureHandler::g_stateLockInit, 2);
+        return;
+    }
+
+    while (OnCombatProcedureHandler::g_stateLockInit != 2)
+        Sleep(0);
 }
 
 static Detours::JumpDetour s_actionDetour;
@@ -69,7 +60,26 @@ static Actor* GetPackageOwner(void* combatController)
 {
     if (!combatController) return nullptr;
     typedef Actor* (__thiscall *GetPackageOwner_t)(void*);
-    return ((GetPackageOwner_t)kAddr_GetPackageOwner)(combatController);
+    return ((GetPackageOwner_t)0x97AE90)(combatController); //GetPackageOwner
+}
+
+static UInt32 ReadRefID(const void* form)
+{
+    return form ? *(const UInt32*)((const UInt8*)form + 0x0C) : 0;
+}
+
+static TESForm* LookupFormByID(UInt32 refID)
+{
+    if (!refID) return nullptr;
+    struct Entry { Entry* next; UInt32 key; TESForm* form; };
+    UInt8* map = *(UInt8**)0x11C54C0;
+    if (!map) return nullptr;
+    UInt32 numBuckets = *(UInt32*)(map + 4);
+    Entry** buckets = *(Entry***)(map + 8);
+    if (!buckets || !numBuckets) return nullptr;
+    for (Entry* e = buckets[refID % numBuckets]; e; e = e->next)
+        if (e->key == refID) return e->form;
+    return nullptr;
 }
 
 //vtable addresses for each procedure type (0-12)
@@ -111,9 +121,7 @@ static void InitVtables()
     s_vtableMap[11] = ReadVtableFromConstructor(0x9DAA10);  //UseCombatItem
     s_vtableMap[12] = ReadVtableFromConstructor(0x9D3A00);  //EngageTarget
 
-    OCPH_Log("Vtables initialized:");
     for (int i = 0; i <= 12; i++) {
-        OCPH_Log("  Type %d: 0x%08X", i, s_vtableMap[i]);
     }
 
     s_vtablesInitialized = true;
@@ -135,7 +143,6 @@ static UInt32 GetProcedureType(void* procedure)
         }
     }
 
-    OCPH_Log("Unknown procedure vtable: 0x%08X", vtable);
     return (UInt32)-1;
 }
 
@@ -143,7 +150,7 @@ static TESForm* GetActorBaseForm(Actor* actor)
 {
     if (!actor) return nullptr;
     typedef TESForm* (__thiscall *GetBaseForm_t)(void*);
-    return ((GetBaseForm_t)kAddr_GetBaseForm)(actor);
+    return ((GetBaseForm_t)0x6F2070)(actor); //GetBaseForm
 }
 
 static bool PassesActorFilter(Actor* actor, TESForm* filter)
@@ -164,51 +171,74 @@ static bool PassesProcFilter(UInt32 procType, SInt32 filter)
 static void __cdecl QueueCombatProcedureEvent(void* combatController, void* procedure, UInt32 isActionProcedure)
 {
     if (!combatController || !procedure) return;
-    if (!OnCombatProcedureHandler::g_lockInitialized) return;
+    if (OnCombatProcedureHandler::g_stateLockInit != 2) return;
 
     Actor* actor = GetPackageOwner(combatController);
     if (!actor) return;
+    UInt32 actorRefID = ReadRefID(actor);
+    if (!actorRefID) return;
 
     UInt32 procType = GetProcedureType(procedure);
 
-    // Prevent unbounded growth during heavy AI activity.
     constexpr size_t kMaxQueuedEvents = 256;
     {
-        ScopedLock lock(&OnCombatProcedureHandler::g_queueLock);
-        if (OnCombatProcedureHandler::g_pendingEvents.size() >= kMaxQueuedEvents) {
+        ScopedLock lock(&OnCombatProcedureHandler::g_stateLock);
+        if (OnCombatProcedureHandler::g_callbacks.empty()) {
             return;
         }
-        OnCombatProcedureHandler::g_pendingEvents.push_back({actor, procType, isActionProcedure != 0});
+        if (OnCombatProcedureHandler::g_pendingEvents.size() >= kMaxQueuedEvents) {
+            ++OnCombatProcedureHandler::g_droppedEvents;
+            return;
+        }
+        OnCombatProcedureHandler::g_pendingEvents.push_back({actorRefID, procType, isActionProcedure != 0});
     }
 }
 
 void OCPH_Update()
 {
-    if (!OnCombatProcedureHandler::g_lockInitialized) return;
-    if (!g_ocphScript || OnCombatProcedureHandler::g_callbacks.empty()) return;
+    if (OnCombatProcedureHandler::g_stateLockInit != 2) return;
+    if (!g_ocphScript) return;
+
+    DWORD currentThreadId = GetCurrentThreadId();
+    if (!OnCombatProcedureHandler::g_mainThreadId)
+        OnCombatProcedureHandler::g_mainThreadId = currentThreadId;
+    if (currentThreadId != OnCombatProcedureHandler::g_mainThreadId)
+        return;
 
     std::vector<QueuedCombatEvent> queuedEvents;
+    std::vector<CallbackEntry> callbackSnapshot;
+    UInt32 droppedToLog = 0;
+    DWORD now = GetTickCount();
     {
-        ScopedLock lock(&OnCombatProcedureHandler::g_queueLock);
+        ScopedLock lock(&OnCombatProcedureHandler::g_stateLock);
         queuedEvents.swap(OnCombatProcedureHandler::g_pendingEvents);
+        callbackSnapshot = OnCombatProcedureHandler::g_callbacks;
+        if (OnCombatProcedureHandler::g_droppedEvents &&
+            (now - OnCombatProcedureHandler::g_lastDropLogTick) >= 5000)
+        {
+            droppedToLog = OnCombatProcedureHandler::g_droppedEvents;
+            OnCombatProcedureHandler::g_droppedEvents = 0;
+            OnCombatProcedureHandler::g_lastDropLogTick = now;
+        }
     }
 
+    if (droppedToLog)
+    if (callbackSnapshot.empty()) return;
+
     for (const QueuedCombatEvent& evt : queuedEvents) {
-        if (!evt.actor) continue;
+        Actor* actor = reinterpret_cast<Actor*>(LookupFormByID(evt.actorRefID));
+        if (!actor) continue;
 
-        OCPH_Log("DispatchCombatProcedureEvent: actor=0x%08X procType=%d isAction=%d",
-                 evt.actor, evt.procType, evt.isActionProcedure ? 1 : 0);
-
-        for (const CallbackEntry& entry : OnCombatProcedureHandler::g_callbacks) {
+        for (const CallbackEntry& entry : callbackSnapshot) {
             if (!entry.callback) continue;
-            if (!PassesActorFilter(evt.actor, entry.actorFilter)) continue;
+            if (!PassesActorFilter(actor, entry.actorFilter)) continue;
             if (!PassesProcFilter(evt.procType, entry.procFilter)) continue;
 
             g_ocphScript->CallFunctionAlt(
                 entry.callback,
-                reinterpret_cast<TESObjectREFR*>(evt.actor),
+                reinterpret_cast<TESObjectREFR*>(actor),
                 3,
-                evt.actor,
+                actor,
                 evt.procType,
                 evt.isActionProcedure ? 1 : 0
             );
@@ -259,28 +289,22 @@ static void InitHooks()
 {
     if (OnCombatProcedureHandler::g_hookInstalled) return;
 
-    OCPH_Log("InitHooks: Installing combat procedure hooks...");
-
-    if (!s_actionDetour.WriteRelJump(kAddr_SetActionProcedure, Hook_SetActionProcedure, 6)) {
-        OCPH_Log("ERROR: Failed to install action hook");
+    if (!s_actionDetour.WriteRelJump(0x980110, Hook_SetActionProcedure, 6)) { //SetActionProcedure
         return;
     }
     OnCombatProcedureHandler::s_trampolineActionAddr = s_actionDetour.GetOverwrittenAddr();
     if (!OnCombatProcedureHandler::s_trampolineActionAddr) {
-        OCPH_Log("ERROR: Action hook installed but trampoline missing; rolling back");
         s_actionDetour.Remove();
         return;
     }
 
-    if (!s_movementDetour.WriteRelJump(kAddr_SetMovementProcedure, Hook_SetMovementProcedure, 6)) {
-        OCPH_Log("ERROR: Failed to install movement hook; rolling back action hook");
+    if (!s_movementDetour.WriteRelJump(0x9801B0, Hook_SetMovementProcedure, 6)) { //SetMovementProcedure
         s_actionDetour.Remove();
         OnCombatProcedureHandler::s_trampolineActionAddr = 0;
         return;
     }
     OnCombatProcedureHandler::s_trampolineMovementAddr = s_movementDetour.GetOverwrittenAddr();
     if (!OnCombatProcedureHandler::s_trampolineMovementAddr) {
-        OCPH_Log("ERROR: Movement hook installed but trampoline missing; rolling back both hooks");
         s_movementDetour.Remove();
         s_actionDetour.Remove();
         OnCombatProcedureHandler::s_trampolineActionAddr = 0;
@@ -289,47 +313,55 @@ static void InitHooks()
     }
 
     OnCombatProcedureHandler::g_hookInstalled = true;
-    OCPH_Log("InitHooks: Hooks installed successfully");
 }
 
 static bool AddCallback(Script* callback, TESForm* actorFilter, SInt32 procFilter)
 {
-    OCPH_Log("AddCallback: callback=0x%08X actorFilter=0x%08X procFilter=%d",
-             callback, actorFilter, procFilter);
 
     if (!callback) return false;
+    EnsureStateLockInitialized();
 
-    for (const CallbackEntry& entry : OnCombatProcedureHandler::g_callbacks) {
-        if (entry.callback == callback &&
-            entry.actorFilter == actorFilter &&
-            entry.procFilter == procFilter) {
-            OCPH_Log("AddCallback: Duplicate entry, skipping");
-            return false;
+    {
+        ScopedLock lock(&OnCombatProcedureHandler::g_stateLock);
+        for (const CallbackEntry& entry : OnCombatProcedureHandler::g_callbacks) {
+            if (entry.callback == callback &&
+                entry.actorFilter == actorFilter &&
+                entry.procFilter == procFilter) {
+                return false;
+            }
         }
-    }
 
-    OnCombatProcedureHandler::g_callbacks.push_back({callback, actorFilter, procFilter});
+        OnCombatProcedureHandler::g_callbacks.push_back({callback, actorFilter, procFilter});
+    }
 
     if (!OnCombatProcedureHandler::g_hookInstalled) {
         InitHooks();
     }
 
-    OCPH_Log("AddCallback: Added (total: %d)", (int)OnCombatProcedureHandler::g_callbacks.size());
+    int callbackCount = 0;
+    {
+        ScopedLock lock(&OnCombatProcedureHandler::g_stateLock);
+        callbackCount = (int)OnCombatProcedureHandler::g_callbacks.size();
+    }
+
     return true;
 }
 
 static bool RemoveCallback(Script* callback, TESForm* actorFilter, SInt32 procFilter)
 {
     if (!callback) return false;
+    EnsureStateLockInitialized();
 
-    for (auto it = OnCombatProcedureHandler::g_callbacks.begin();
-         it != OnCombatProcedureHandler::g_callbacks.end(); ++it) {
-        if (it->callback == callback &&
-            it->actorFilter == actorFilter &&
-            it->procFilter == procFilter) {
-            OnCombatProcedureHandler::g_callbacks.erase(it);
-            OCPH_Log("RemoveCallback: Removed callback 0x%08X", callback);
-            return true;
+    {
+        ScopedLock lock(&OnCombatProcedureHandler::g_stateLock);
+        for (auto it = OnCombatProcedureHandler::g_callbacks.begin();
+             it != OnCombatProcedureHandler::g_callbacks.end(); ++it) {
+            if (it->callback == callback &&
+                it->actorFilter == actorFilter &&
+                it->procFilter == procFilter) {
+                OnCombatProcedureHandler::g_callbacks.erase(it);
+                return true;
+            }
         }
     }
     return false;
@@ -349,7 +381,6 @@ DEFINE_COMMAND_PLUGIN(SetOnCombatProcedureStartEventHandler,
 bool Cmd_SetOnCombatProcedureStartEventHandler_Execute(COMMAND_ARGS)
 {
     *result = 0;
-    OCPH_Log("SetOnCombatProcedureStartEventHandler called");
 
     TESForm* callbackForm = nullptr;
     UInt32 addRemove = 0;
@@ -367,21 +398,15 @@ bool Cmd_SetOnCombatProcedureStartEventHandler_Execute(COMMAND_ARGS)
             &actorFilter,
             &procFilter))
     {
-        OCPH_Log("Failed to extract args");
         return true;
     }
 
-    OCPH_Log("Extracted: callback=0x%08X add=%d actorFilter=0x%08X procFilter=%d",
-             callbackForm, addRemove, actorFilter, procFilter);
-
     if (!callbackForm) {
-        OCPH_Log("Callback is null");
         return true;
     }
 
     UInt8 typeID = *((UInt8*)callbackForm + 4);
     if (typeID != kFormType_Script) {
-        OCPH_Log("Callback is not a script (typeID: %02X)", typeID);
         return true;
     }
 
@@ -406,39 +431,24 @@ bool OCPH_Init(void* nvseInterface)
 
     if (nvse->isEditor) return false;
 
-    char logPath[MAX_PATH];
-    GetModuleFileNameA(nullptr, logPath, MAX_PATH);
-    char* lastSlash = strrchr(logPath, '\\');
-    if (lastSlash) *lastSlash = '\0';
-    strcat_s(logPath, "\\Data\\NVSE\\Plugins\\OnCombatProcedureHandler.log");
-    //g_ocphLogFile = fopen(logPath, "w"); //disabled for release
-
-    OCPH_Log("OnCombatProcedureHandler module initializing...");
-
     g_ocphPluginHandle = nvse->GetPluginHandle();
 
     g_ocphScript = reinterpret_cast<NVSEScriptInterface*>(
         nvse->QueryInterface(kInterface_Script));
 
     if (!g_ocphScript) {
-        OCPH_Log("ERROR: Failed to get script interface");
         return false;
     }
 
     g_ExtractArgsEx = g_ocphScript->ExtractArgsEx;
-    OCPH_Log("Script interface at 0x%08X", g_ocphScript);
 
-    if (!OnCombatProcedureHandler::g_lockInitialized) {
-        InitializeCriticalSection(&OnCombatProcedureHandler::g_queueLock);
-        OnCombatProcedureHandler::g_lockInitialized = true;
-    }
+    EnsureStateLockInitialized();
+    OnCombatProcedureHandler::g_mainThreadId = GetCurrentThreadId();
+    OnCombatProcedureHandler::g_lastDropLogTick = GetTickCount();
 
     nvse->SetOpcodeBase(0x4015);
     nvse->RegisterCommand(&kCommandInfo_SetOnCombatProcedureStartEventHandler);
     g_ocphOpcode = 0x4015;
-
-    OCPH_Log("Registered SetOnCombatProcedureStartEventHandler at opcode 0x%04X", g_ocphOpcode);
-    OCPH_Log("OnCombatProcedureHandler module initialized successfully");
 
     return true;
 }
@@ -450,10 +460,10 @@ unsigned int OCPH_GetOpcode()
 
 void OCPH_ClearCallbacks()
 {
+    if (OnCombatProcedureHandler::g_stateLockInit != 2) return;
+
+    ScopedLock lock(&OnCombatProcedureHandler::g_stateLock);
     OnCombatProcedureHandler::g_callbacks.clear();
-    if (OnCombatProcedureHandler::g_lockInitialized) {
-        ScopedLock lock(&OnCombatProcedureHandler::g_queueLock);
-        OnCombatProcedureHandler::g_pendingEvents.clear();
-    }
-    OCPH_Log("Callbacks cleared on game load");
+    OnCombatProcedureHandler::g_pendingEvents.clear();
+    OnCombatProcedureHandler::g_droppedEvents = 0;
 }

@@ -3,19 +3,12 @@
 #include "PlayerUpdateHook.h"
 #include "internal/SafeWrite.h"
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 namespace PlayerUpdateHook
 {
 	constexpr float PI = 3.14159265358979323846f;
-	constexpr uint32_t kAddr_OSGlobals = 0x11DEA0C;
-	constexpr uint32_t kAddr_OSInputGlobals = 0x11F35CC;
-	constexpr uint32_t kAddr_GetControlState = 0xA24660;
 	constexpr uint32_t kAddr_PlayerUpdateCall = 0x940C78;
-	constexpr uint32_t kAddr_TryDropWeapon = 0x89F580;
-	constexpr uint32_t kAddr_GetEquippedWeapon = 0x8A1710;
-	constexpr uint32_t kOffset_OSGlobals_Window = 0x08;
-	constexpr uint32_t kOffset_Actor_RotZ = 0x2C;
 
 	enum KeyState { isHeld, isPressed, isDepressed, isChanged };
 
@@ -31,19 +24,19 @@ namespace PlayerUpdateHook
 	uint32_t g_originalCallTarget = 0;
 
 	bool GetControlState(void* input, uint32_t controlCode, KeyState state) {
-		return ((bool(__thiscall*)(void*, uint32_t, KeyState))kAddr_GetControlState)(input, controlCode, state);
+		return ((bool(__thiscall*)(void*, uint32_t, KeyState))0xA24660)(input, controlCode, state);
 	}
 
 	void* GetEquippedWeapon(void* actor) {
-		return ((void*(__thiscall*)(void*))kAddr_GetEquippedWeapon)(actor);
+		return ((void*(__thiscall*)(void*))0x8A1710)(actor);
 	}
 
 	void TryDropWeapon(void* actor) {
-		((void(__thiscall*)(void*))kAddr_TryDropWeapon)(actor);
+		((void(__thiscall*)(void*))0x89F580)(actor);
 	}
 
 	void RotatePlayer180(void* player) {
-		float* rotZ = (float*)((uint8_t*)player + kOffset_Actor_RotZ);
+		float* rotZ = (float*)((uint8_t*)player + 0x2C); //rotZ
 		*rotZ += PI;
 		while (*rotZ > PI) *rotZ -= 2.0f * PI;
 		while (*rotZ < -PI) *rotZ += 2.0f * PI;
@@ -52,8 +45,8 @@ namespace PlayerUpdateHook
 	void __fastcall PlayerUpdate_Hook(void* player, void* edx, float timeDelta) {
 		((void(__thiscall*)(void*, float))g_originalCallTarget)(player, timeDelta);
 
-		void* osGlobals = *(void**)kAddr_OSGlobals;
-		void* inputGlobals = *(void**)kAddr_OSInputGlobals;
+		void* osGlobals = *(void**)0x11DEA0C;
+		void* inputGlobals = *(void**)0x11F35CC;
 
 		if (!osGlobals) {
 			g_quickDropLastPressed = false;
@@ -61,7 +54,7 @@ namespace PlayerUpdateHook
 			return;
 		}
 
-		HWND gameWindow = *(HWND*)((uint8_t*)osGlobals + kOffset_OSGlobals_Window);
+		HWND gameWindow = *(HWND*)((uint8_t*)osGlobals + 0x08); //hWnd
 		if (GetForegroundWindow() != gameWindow) {
 			g_quickDropLastPressed = false;
 			g_quick180LastPressed = false;

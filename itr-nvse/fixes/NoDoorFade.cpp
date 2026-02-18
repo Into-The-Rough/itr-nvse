@@ -6,21 +6,14 @@
 #include <Windows.h>
 #include <cstdint>
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 namespace NoDoorFade
 {
 	static bool g_enabled = false;
 
-	constexpr uint32_t kAddr_FadeOutCall = 0x51895B;
-	constexpr uint32_t kAddr_FadeOut = 0x8FE960;
-
-	//HighProcess offsets
-	constexpr uint32_t kOffset_eFadeState = 0x3E8;
-	constexpr uint32_t kOffset_fFadeAlpha = 0x3EC;
-
 	typedef void (__thiscall* FadeOut_t)(void* process, void* actor, void* doorRef, bool teleport);
-	FadeOut_t Original_FadeOut = (FadeOut_t)kAddr_FadeOut;
+	FadeOut_t Original_FadeOut = (FadeOut_t)0x8FE960; //HighProcess::FadeOut
 
 	void __fastcall Hook_FadeOut(void* process, void* edx, void* actor, void* doorRef, bool teleport)
 	{
@@ -30,7 +23,7 @@ namespace NoDoorFade
 		//if enabled, immediately zero alpha so fade completes next frame
 		if (g_enabled && teleport)
 		{
-			float* fadeAlpha = (float*)((uint8_t*)process + kOffset_fFadeAlpha);
+			float* fadeAlpha = (float*)((uint8_t*)process + 0x3EC); //fFadeAlpha
 			*fadeAlpha = 0.0f;
 		}
 	}
@@ -51,7 +44,7 @@ namespace NoDoorFade
 
 	void Init(bool enabled)
 	{
-		PatchCall(kAddr_FadeOutCall, (uint32_t)Hook_FadeOut);
+		PatchCall(0x51895B, (uint32_t)Hook_FadeOut);
 		g_enabled = enabled;
 		Log("NoDoorFade initialized (enabled=%d)", enabled);
 	}

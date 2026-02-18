@@ -3,32 +3,27 @@
 #include "ReversePickpocketNoKarmaFix.h"
 #include "internal/NVSEMinimal.h"
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 namespace ReversePickpocketNoKarmaFix
 {
 	static bool g_enabled = false;
 
-	constexpr UInt32 kAddr_TryPickpocket = 0x75E0B0;
-	constexpr UInt32 kAddr_IsLiveGrenade = 0x75D510;
-	constexpr UInt32 kAddr_CallSite1 = 0x75DBDA;
-	constexpr UInt32 kAddr_CallSite2 = 0x75DFA7;
-	constexpr UInt32 kAddr_CurrentEntry = 0x11D93FC;
-	constexpr UInt32 kAddr_Player = 0x11DEA3C;
+	constexpr UInt32 kAddr_TryPickpocket = 0x75E0B0; //used in naked asm
 
 	typedef bool (__thiscall *_IsLiveGrenade)(void*, void*, void*, void*);
 
 	bool __fastcall ShouldSkipKarma(void* menu, void* actor)
 	{
-		void* entry = *(void**)kAddr_CurrentEntry;
-		void* player = *(void**)kAddr_Player;
+		void* entry = *(void**)0x11D93FC;
+		void* player = *(void**)0x11DEA3C;
 
 		uint32_t currentItems = *(uint32_t*)((uint32_t)menu + 0xF8);
 		bool isReverse = (currentItems == (uint32_t)menu + 0x98);
 
 		if (isReverse && entry)
 		{
-			bool isLiveGrenade = ((_IsLiveGrenade)kAddr_IsLiveGrenade)(menu, entry, player, actor);
+			bool isLiveGrenade = ((_IsLiveGrenade)0x75D510)(menu, entry, player, actor);
 			if (!isLiveGrenade)
 				return true;
 		}
@@ -67,8 +62,8 @@ namespace ReversePickpocketNoKarmaFix
 
 	void Init(bool enabled)
 	{
-		SafeWrite::WriteRelCall(kAddr_CallSite1, (UInt32)Hook_TryPickpocket);
-		SafeWrite::WriteRelCall(kAddr_CallSite2, (UInt32)Hook_TryPickpocket);
+		SafeWrite::WriteRelCall(0x75DBDA, (UInt32)Hook_TryPickpocket);
+		SafeWrite::WriteRelCall(0x75DFA7, (UInt32)Hook_TryPickpocket);
 		g_enabled = enabled;
 		Log("ReversePickpocketNoKarmaFix initialized (enabled=%d)", enabled);
 	}

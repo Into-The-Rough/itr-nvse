@@ -5,7 +5,7 @@
 #include "QuickReadNote.h"
 #include "internal/SafeWrite.h"
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 static void QRN_SafeWrite32(UInt32 addr, UInt32 data) {
 	DWORD oldProtect;
@@ -32,12 +32,6 @@ namespace QuickReadNote
 
 	constexpr UInt32 kVtbl_MessageMenu = 0x107566C;
 	constexpr UInt32 kOffset_HandleClick = 0x0C;
-	constexpr UInt32 kInterfaceManager_msgBoxButton_Offset = 0xE4;
-	constexpr UInt32 kTab_Misc = 0x23;
-	constexpr UInt32 kMapMenu_currentTab_Offset = 0x80;
-	constexpr UInt32 kMapMenu_tiles_base = 0x28; //tiles[0]
-	constexpr UInt32 kMapMenu_tiles13_Offset = 0x5C; //data panel tile
-	constexpr UInt32 kMapMenu_tiles17_Offset = 0x6C;
 
 	#define GameHeapAlloc(size) ((void*(__thiscall*)(void*, UInt32))(0xAA3E40))((void*)0x11F6238, size)
 	#define GameHeapFree(ptr) ((void(__thiscall*)(void*, void*))(0xAA4060))((void*)0x11F6238, ptr)
@@ -180,18 +174,11 @@ namespace QuickReadNote
 		UInt8 pad0C[0x1BC];
 	};
 
-	//MapMenu offsets (Menu base is 0x28)
 	constexpr UInt32 kMapMenu_currentNote = 0x90;
 	constexpr UInt32 kMapMenu_holotapeDialogues = 0x98;
 	constexpr UInt32 kMapMenu_holotapeSubtitles = 0xA8;
-	constexpr UInt32 kMapMenu_currentHolotapeDialogueSound = 0xB8;
 	constexpr UInt32 kMapMenu_isHolotapeVoicePlaying = 0xBC;
-	constexpr UInt32 kMapMenu_holotapeTotalTime = 0xC0;
-	constexpr UInt32 kMapMenu_holotapePlayStartTime = 0xC4;
-	//ListBox: vtable+0x00, list head at +0x04/+0x08, parentTile +0x0C, selected +0x10
-	constexpr UInt32 kMapMenu_noteList = 0x160;
-	constexpr UInt32 kMapMenu_noteList_head = 0x164; //first ListNode inline (data ptr)
-	constexpr UInt32 kMapMenu_noteList_selected = 0x170;
+	constexpr UInt32 kMapMenu_noteList_head = 0x164;
 
 	struct ListBoxItem {
 		Tile* tile;
@@ -212,7 +199,7 @@ namespace QuickReadNote
 	}
 
 	static void StopHolotape(void* map) {
-		SoundList** currentSound = (SoundList**)((UInt8*)map + kMapMenu_currentHolotapeDialogueSound);
+		SoundList** currentSound = (SoundList**)((UInt8*)map + 0xB8); //currentHolotapeDialogueSound
 		if (*currentSound && (*currentSound)->data.IsPlaying())
 			(*currentSound)->data.Stop();
 		SoundList* dialogues = (SoundList*)((UInt8*)map + kMapMenu_holotapeDialogues);
@@ -220,8 +207,8 @@ namespace QuickReadNote
 		BSSimpleArrayChar* subtitles = (BSSimpleArrayChar*)((UInt8*)map + kMapMenu_holotapeSubtitles);
 		QRNThisCall<void>(0x7A1C30, subtitles, 1);
 		*currentSound = nullptr;
-		*(float*)((UInt8*)map + kMapMenu_holotapeTotalTime) = 0.0f;
-		*(UInt32*)((UInt8*)map + kMapMenu_holotapePlayStartTime) = 0;
+		*(float*)((UInt8*)map + 0xC0) = 0.0f; //holotapeTotalTime
+		*(UInt32*)((UInt8*)map + 0xC4) = 0; //holotapePlayStartTime
 		*(UInt8*)((UInt8*)map + kMapMenu_isHolotapeVoicePlaying) = 0;
 		if (!g_noHolotapeStopSound) {
 			BSSoundHandle handle = BSWin32Audio::GetSingleton()->GetSoundHandleByEditorName(
@@ -385,9 +372,9 @@ namespace QuickReadNote
 		//noteList at 0x160 is ListBox which has vtable at +0, list at +4, selected at +10
 		ListBoxItem* firstData = *(ListBoxItem**)((UInt8*)mapMenu + kMapMenu_noteList_head);
 		ListNode* nextNode = *(ListNode**)((UInt8*)mapMenu + kMapMenu_noteList_head + 4);
-		Tile** selectedPtr = (Tile**)((UInt8*)mapMenu + kMapMenu_noteList_selected);
+		Tile** selectedPtr = (Tile**)((UInt8*)mapMenu + 0x170); //noteList selected
 		BGSNote** currentNotePtr = (BGSNote**)((UInt8*)mapMenu + kMapMenu_currentNote);
-		Tile* dataPanelTile = *(Tile**)((UInt8*)mapMenu + kMapMenu_tiles13_Offset);
+		Tile* dataPanelTile = *(Tile**)((UInt8*)mapMenu + 0x5C); //tiles[13] data panel
 
 		Tile* foundTile = nullptr;
 
@@ -431,7 +418,7 @@ namespace QuickReadNote
 	static void SwitchToMiscTab() {
 		void* mapMenu = g_mapMenuPtr;
 		if (!mapMenu) return;
-		void* tiles17 = *(void**)((UInt8*)mapMenu + kMapMenu_tiles17_Offset);
+		void* tiles17 = *(void**)((UInt8*)mapMenu + 0x6C); //tiles[17]
 		if (!tiles17) return;
 		UInt32 traitID = *(UInt32*)0x11DA360;
 		if (traitID == 0 || traitID == 0xFFFFFFFF) {
@@ -439,7 +426,7 @@ namespace QuickReadNote
 			traitID = ((_Tile_TextToTrait)0xA01860)("_CurrentTab");
 		}
 		QRNThisCall<void>(0x700320, tiles17, traitID, 3);
-		*(UInt8*)((UInt8*)mapMenu + kMapMenu_currentTab_Offset) = kTab_Misc;
+		*(UInt8*)((UInt8*)mapMenu + 0x80) = 0x23; //currentTab = misc
 		((void(__cdecl*)())0x79ABA0)();
 
 		if (g_noteToSelect) {
@@ -502,7 +489,7 @@ namespace QuickReadNote
 		if (wasOurMessage) {
 			void* im = InterfaceManager_Singleton;
 			if (im) {
-				UInt8 buttonIndex = *(UInt8*)((UInt8*)im + kInterfaceManager_msgBoxButton_Offset);
+				UInt8 buttonIndex = *(UInt8*)((UInt8*)im + 0xE4); //msgBoxButton
 				if (buttonIndex == 1) {
 					g_openPipBoyPending = true;
 					g_noteToSelect = noteToOpen;

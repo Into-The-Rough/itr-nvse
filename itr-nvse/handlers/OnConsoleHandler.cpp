@@ -1,24 +1,10 @@
 //hooks console open (0x71D665) and close (0x71D720) to dispatch events
 
 #include <vector>
-#include <cstdio>
 #include <Windows.h>
 
 #include "OnConsoleHandler.h"
 #include "internal/NVSEMinimal.h"
-
-static FILE* g_ochLogFile = nullptr;
-
-static void OCH_Log(const char* fmt, ...)
-{
-    if (!g_ochLogFile) return;
-    va_list args;
-    va_start(args, fmt);
-    vfprintf(g_ochLogFile, fmt, args);
-    fprintf(g_ochLogFile, "\n");
-    fflush(g_ochLogFile);
-    va_end(args);
-}
 
 static PluginHandle g_ochPluginHandle = kPluginHandle_Invalid;
 static NVSEScriptInterface* g_ochScript = nullptr;
@@ -31,23 +17,19 @@ namespace OnConsoleHandler {
     std::vector<Script*> g_closeCallbacks;
     bool g_hooksInstalled = false;
 
-    // Original function addresses (to chain calls)
     static UInt32 s_originalOpenTarget = 0;
     static UInt32 s_originalCloseTarget = 0;
 }
 
-// Hook addresses from Stewie Tweaks
 constexpr UInt32 kAddr_ConsoleOpenHook = 0x71D665;
 constexpr UInt32 kAddr_ConsoleCloseHook = 0x71D720;
 
 static void DispatchConsoleOpenEvent()
 {
-    OCH_Log("=== CONSOLE OPEN EVENT ===");
 
     const std::vector<Script*> callbackSnapshot = OnConsoleHandler::g_openCallbacks;
     for (Script* callback : callbackSnapshot) {
         if (g_ochScript && callback) {
-            // Call with no arguments
             g_ochScript->CallFunctionAlt(callback, nullptr, 0);
         }
     }
@@ -55,22 +37,18 @@ static void DispatchConsoleOpenEvent()
 
 static void DispatchConsoleCloseEvent()
 {
-    OCH_Log("=== CONSOLE CLOSE EVENT ===");
 
     const std::vector<Script*> callbackSnapshot = OnConsoleHandler::g_closeCallbacks;
     for (Script* callback : callbackSnapshot) {
         if (g_ochScript && callback) {
-            // Call with no arguments
             g_ochScript->CallFunctionAlt(callback, nullptr, 0);
         }
     }
 }
 
-// Hook wrappers that call original + dispatch
 static void __cdecl Hook_ConsoleOpen()
 {
     DispatchConsoleOpenEvent();
-    // Call original function
     if (OnConsoleHandler::s_originalOpenTarget) {
         ((void(*)())OnConsoleHandler::s_originalOpenTarget)();
     }
@@ -79,7 +57,6 @@ static void __cdecl Hook_ConsoleOpen()
 static void __cdecl Hook_ConsoleClose()
 {
     DispatchConsoleCloseEvent();
-    // Call original function
     if (OnConsoleHandler::s_originalCloseTarget) {
         ((void(*)())OnConsoleHandler::s_originalCloseTarget)();
     }
@@ -89,7 +66,6 @@ static bool ReadCallTargetIfCall(UInt32 callAddr, UInt32& outTarget)
 {
     if (*(UInt8*)callAddr != 0xE8)
     {
-        OCH_Log("ERROR: Expected CALL opcode at 0x%08X, found 0x%02X", callAddr, *(UInt8*)callAddr);
         return false;
     }
 
@@ -101,22 +77,16 @@ static void InitHooks()
 {
     if (OnConsoleHandler::g_hooksInstalled) return;
 
-    // Save original targets
     if (!ReadCallTargetIfCall(kAddr_ConsoleOpenHook, OnConsoleHandler::s_originalOpenTarget) ||
         !ReadCallTargetIfCall(kAddr_ConsoleCloseHook, OnConsoleHandler::s_originalCloseTarget))
     {
-        OCH_Log("ERROR: Console hook install aborted due to unexpected callsite bytes");
         return;
     }
 
-    // Install our hooks
     SafeWrite::WriteRelCall(kAddr_ConsoleOpenHook, (UInt32)Hook_ConsoleOpen);
     SafeWrite::WriteRelCall(kAddr_ConsoleCloseHook, (UInt32)Hook_ConsoleClose);
 
     OnConsoleHandler::g_hooksInstalled = true;
-    OCH_Log("Hooks installed - Open: 0x%08X (orig 0x%08X), Close: 0x%08X (orig 0x%08X)",
-            kAddr_ConsoleOpenHook, OnConsoleHandler::s_originalOpenTarget,
-            kAddr_ConsoleCloseHook, OnConsoleHandler::s_originalCloseTarget);
 }
 
 static bool AddOpenCallback(Script* callback)
@@ -125,7 +95,6 @@ static bool AddOpenCallback(Script* callback)
 
     for (Script* s : OnConsoleHandler::g_openCallbacks) {
         if (s == callback) {
-            OCH_Log("Open callback 0x%08X already registered", callback);
             return false;
         }
     }
@@ -135,7 +104,6 @@ static bool AddOpenCallback(Script* callback)
     if (!OnConsoleHandler::g_hooksInstalled)
         InitHooks();
 
-    OCH_Log("Added open callback: 0x%08X (total: %d)", callback, OnConsoleHandler::g_openCallbacks.size());
     return true;
 }
 
@@ -146,7 +114,6 @@ static bool RemoveOpenCallback(Script* callback)
     for (auto it = OnConsoleHandler::g_openCallbacks.begin(); it != OnConsoleHandler::g_openCallbacks.end(); ++it) {
         if (*it == callback) {
             OnConsoleHandler::g_openCallbacks.erase(it);
-            OCH_Log("Removed open callback: 0x%08X", callback);
             return true;
         }
     }
@@ -159,7 +126,6 @@ static bool AddCloseCallback(Script* callback)
 
     for (Script* s : OnConsoleHandler::g_closeCallbacks) {
         if (s == callback) {
-            OCH_Log("Close callback 0x%08X already registered", callback);
             return false;
         }
     }
@@ -169,7 +135,6 @@ static bool AddCloseCallback(Script* callback)
     if (!OnConsoleHandler::g_hooksInstalled)
         InitHooks();
 
-    OCH_Log("Added close callback: 0x%08X (total: %d)", callback, OnConsoleHandler::g_closeCallbacks.size());
     return true;
 }
 
@@ -180,7 +145,6 @@ static bool RemoveCloseCallback(Script* callback)
     for (auto it = OnConsoleHandler::g_closeCallbacks.begin(); it != OnConsoleHandler::g_closeCallbacks.end(); ++it) {
         if (*it == callback) {
             OnConsoleHandler::g_closeCallbacks.erase(it);
-            OCH_Log("Removed close callback: 0x%08X", callback);
             return true;
         }
     }
@@ -203,7 +167,6 @@ DEFINE_COMMAND_PLUGIN(SetOnConsoleCloseEventHandler,
 bool Cmd_SetOnConsoleOpenEventHandler_Execute(COMMAND_ARGS)
 {
     *result = 0;
-    OCH_Log("SetOnConsoleOpenEventHandler called");
 
     TESForm* callbackForm = nullptr;
     UInt32 addRemove = 0;
@@ -217,20 +180,15 @@ bool Cmd_SetOnConsoleOpenEventHandler_Execute(COMMAND_ARGS)
             &callbackForm,
             &addRemove))
     {
-        OCH_Log("Failed to extract args");
         return true;
     }
 
-    OCH_Log("Extracted args: callback=0x%08X, add=%d", callbackForm, addRemove);
-
     if (!callbackForm) {
-        OCH_Log("Callback is null");
         return true;
     }
 
     UInt8 typeID = *((UInt8*)callbackForm + 4);
     if (typeID != kFormType_Script) {
-        OCH_Log("Callback is not a script (typeID: %02X)", typeID);
         return true;
     }
 
@@ -239,12 +197,10 @@ bool Cmd_SetOnConsoleOpenEventHandler_Execute(COMMAND_ARGS)
     if (addRemove) {
         if (AddOpenCallback(callback)) {
             *result = 1;
-            OCH_Log("Open callback added successfully");
         }
     } else {
         if (RemoveOpenCallback(callback)) {
             *result = 1;
-            OCH_Log("Open callback removed successfully");
         }
     }
 
@@ -254,7 +210,6 @@ bool Cmd_SetOnConsoleOpenEventHandler_Execute(COMMAND_ARGS)
 bool Cmd_SetOnConsoleCloseEventHandler_Execute(COMMAND_ARGS)
 {
     *result = 0;
-    OCH_Log("SetOnConsoleCloseEventHandler called");
 
     TESForm* callbackForm = nullptr;
     UInt32 addRemove = 0;
@@ -268,20 +223,15 @@ bool Cmd_SetOnConsoleCloseEventHandler_Execute(COMMAND_ARGS)
             &callbackForm,
             &addRemove))
     {
-        OCH_Log("Failed to extract args");
         return true;
     }
 
-    OCH_Log("Extracted args: callback=0x%08X, add=%d", callbackForm, addRemove);
-
     if (!callbackForm) {
-        OCH_Log("Callback is null");
         return true;
     }
 
     UInt8 typeID = *((UInt8*)callbackForm + 4);
     if (typeID != kFormType_Script) {
-        OCH_Log("Callback is not a script (typeID: %02X)", typeID);
         return true;
     }
 
@@ -290,12 +240,10 @@ bool Cmd_SetOnConsoleCloseEventHandler_Execute(COMMAND_ARGS)
     if (addRemove) {
         if (AddCloseCallback(callback)) {
             *result = 1;
-            OCH_Log("Close callback added successfully");
         }
     } else {
         if (RemoveCloseCallback(callback)) {
             *result = 1;
-            OCH_Log("Close callback removed successfully");
         }
     }
 
@@ -308,31 +256,17 @@ bool OCH_Init(void* nvseInterface)
 
     if (nvse->isEditor) return false;
 
-    // Open log file
-    char logPath[MAX_PATH];
-    GetModuleFileNameA(nullptr, logPath, MAX_PATH);
-    char* lastSlash = strrchr(logPath, '\\');
-    if (lastSlash) *lastSlash = '\0';
-    strcat_s(logPath, "\\Data\\NVSE\\Plugins\\OnConsoleHandler.log");
-    //g_ochLogFile = fopen(logPath, "w"); //disabled for release
-
-    OCH_Log("OnConsoleHandler module initializing...");
-
     g_ochPluginHandle = nvse->GetPluginHandle();
 
-    // Get script interface
     g_ochScript = reinterpret_cast<NVSEScriptInterface*>(
         nvse->QueryInterface(kInterface_Script));
 
     if (!g_ochScript) {
-        OCH_Log("ERROR: Failed to get script interface");
         return false;
     }
 
     g_ExtractArgsEx = g_ochScript->ExtractArgsEx;
-    OCH_Log("Script interface at 0x%08X", g_ochScript);
 
-    // Register commands at opcodes 0x3B04 and 0x3B05
     nvse->SetOpcodeBase(0x4003);
     nvse->RegisterCommand(&kCommandInfo_SetOnConsoleOpenEventHandler);
     g_ochOpenOpcode = 0x4003;
@@ -340,10 +274,6 @@ bool OCH_Init(void* nvseInterface)
     nvse->SetOpcodeBase(0x4004);
     nvse->RegisterCommand(&kCommandInfo_SetOnConsoleCloseEventHandler);
     g_ochCloseOpcode = 0x4004;
-
-    OCH_Log("Registered SetOnConsoleOpenEventHandler at opcode 0x%04X", g_ochOpenOpcode);
-    OCH_Log("Registered SetOnConsoleCloseEventHandler at opcode 0x%04X", g_ochCloseOpcode);
-    OCH_Log("OnConsoleHandler module initialized successfully");
 
     return true;
 }
@@ -362,5 +292,4 @@ void OCH_ClearCallbacks()
 {
     OnConsoleHandler::g_openCallbacks.clear();
     OnConsoleHandler::g_closeCallbacks.clear();
-    OCH_Log("Callbacks cleared on game load");
 }

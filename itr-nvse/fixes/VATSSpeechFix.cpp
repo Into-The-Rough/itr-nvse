@@ -6,7 +6,7 @@
 #include "internal/Detours.h"
 #include <Windows.h>
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 namespace VATSSpeechFix
 {
@@ -15,7 +15,6 @@ namespace VATSSpeechFix
 	namespace GameAddr {
 		constexpr UInt32 BSWin32GameSound_Vtbl_Func09 = 0x10A3C18;
 		constexpr UInt32 BSWin32GameSound_Vtbl_Func10 = 0x10A3C1C;
-		constexpr UInt32 Func10_TimescalePatch = 0xAEDFBD;
 	}
 
 	namespace AudioFlags {
@@ -77,7 +76,7 @@ namespace VATSSpeechFix
 	static BSWin32GameSound_Func10_t OriginalFunc10 = nullptr;
 
 	static UInt8* s_trampolineTimescale = nullptr; //for inline asm indirect jump
-	static UInt32 s_timescalePatchAddr = GameAddr::Func10_TimescalePatch; //for inline asm
+	static UInt32 s_timescalePatchAddr = 0xAEDFBD; //for inline asm
 	static Detours::JumpDetour s_timescaleDetour;
 
 	__declspec(naked) void HookedTimescaleNaked()

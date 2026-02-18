@@ -13,14 +13,12 @@ class BGSEntryPointPerkEntry;
 
 enum { kFormType_BGSPerk = 0x81 };
 
-// tList node structure
 template <typename T>
 struct tListNode {
     T* data;
     tListNode<T>* next;
 };
 
-// tList structure
 template <typename T>
 struct tList {
     tListNode<T> first;
@@ -28,8 +26,8 @@ struct tList {
     tListNode<T>* Head() { return &first; }
 };
 
-// BGSPerkEntry base class (0x08 bytes)
-class BGSPerkEntry {
+class BGSPerkEntry { //0x08
+
 public:
     void** vtable;      // 00
     UInt8 rank;         // 04
@@ -37,8 +35,8 @@ public:
     UInt16 type;        // 06
 };
 
-// BGSEntryPointPerkEntry (0x14 bytes)
-class BGSEntryPointPerkEntry : public BGSPerkEntry {
+class BGSEntryPointPerkEntry : public BGSPerkEntry { //0x14
+
 public:
     UInt8 entryPoint;   // 08
     UInt8 function;     // 09
@@ -48,25 +46,14 @@ public:
     void* conditions;   // 10
 };
 
-// BGSPerk structure (partial, just what we need)
-// Total size is 0x50, entries list at offset 0x48
-class BGSPerk {
+class BGSPerk { //0x50
 public:
-    // TESForm base (0x18 bytes)
-    // TESFullName at 0x18 (0x0C bytes)
-    // TESDescription at 0x24 (0x08 bytes)
-    // TESIcon at 0x2C (0x0C bytes)
-    // PerkData at 0x38 (0x08 bytes)
-    // ConditionList at 0x40 (0x08 bytes)
-    // entries at 0x48
-    UInt8 pad00[0x48];                  // 00-47
-    tList<BGSPerkEntry> entries;        // 48
+    UInt8 pad00[0x48];                  //00-47 (TESForm+TESFullName+TESDescription+TESIcon+PerkData+ConditionList)
+    tList<BGSPerkEntry> entries;        //48
 };
 
-// DataHandler for iterating forms
 struct DataHandler {
     UInt8 pad[0x3A0];
-    // More fields we don't need
 };
 
 static PluginHandle g_oephPluginHandle = kPluginHandle_Invalid;
@@ -75,13 +62,11 @@ static bool (*g_ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventL
 static UInt32 g_oephOpcode = 0;
 
 namespace OnEntryPointHandler {
-    // Map from perk entry pointer to parent perk
     std::unordered_map<UInt32, BGSPerk*> g_entryToPerkMap;
 
-    // Callback info with optional entry point filter
     struct CallbackInfo {
         Script* callback;
-        SInt32 entryPointFilter;  // -1 = all entry points
+        SInt32 entryPointFilter;
     };
     std::vector<CallbackInfo> g_callbacks;
 
@@ -91,6 +76,7 @@ namespace OnEntryPointHandler {
         Actor* actor;
         TESForm* filterForm1;
         BGSEntryPointPerkEntry* perkEntry;
+        UInt32 returnAddr;
     };
     std::vector<EntryPointContext> g_contextStack;
 
@@ -98,50 +84,27 @@ namespace OnEntryPointHandler {
     bool g_mapBuilt = false;
 }
 
-// VTable address for BGSEntryPointPerkEntry
-constexpr UInt32 kVtbl_BGSEntryPointPerkEntry = 0x1046D0C;
-
-// Hook addresses (IDA decimal -> hex conversion verified)
-// HandleEntryPoint: 6183152 decimal = 0x5E58F0 hex
-// ExecuteFunction:  6183744 decimal = 0x5E5B40 hex
-// Call site:        6183609 decimal = 0x5E5AB9 hex
-constexpr UInt32 kAddr_HandleEntryPoint = 0x5E58F0;
-constexpr UInt32 kAddr_ExecuteFunctionCall = 0x5E5AB9;
-constexpr UInt32 kAddr_ExecuteFunction = 0x5E5B40;
-
-// Return address after call (0x5E5AB9 + 5 = 0x5E5ABE)
-constexpr UInt32 kAddr_AfterExecuteFunctionCall = 0x5E5ABE;
-
-// Addresses for iterating forms
-constexpr UInt32 kAddr_DataHandler = 0x011C3F2C;
-
 void OEPH_BuildEntryMap()
 {
     OnEntryPointHandler::g_entryToPerkMap.clear();
 
-    // Get DataHandler
-    DataHandler** pDataHandler = (DataHandler**)kAddr_DataHandler;
+    DataHandler** pDataHandler = (DataHandler**)0x11C3F2C;
     if (!pDataHandler || !*pDataHandler) return;
 
-    // DataHandler has tList<BGSPerk> perkList at offset 0x178
-    tList<BGSPerk>* perkList = (tList<BGSPerk>*)((UInt8*)*pDataHandler + 0x178);
-
+    tList<BGSPerk>* perkList = (tList<BGSPerk>*)((UInt8*)*pDataHandler + 0x178); //perkList
     UInt32 perkCount = 0;
     UInt32 totalEntries = 0;
 
-    // Iterate the perk list
     tListNode<BGSPerk>* perkNode = (tListNode<BGSPerk>*)perkList;
     while (perkNode && perkNode->data) {
         BGSPerk* perk = perkNode->data;
         perkCount++;
 
-        // Iterate perk entries
         tListNode<BGSPerkEntry>* node = perk->entries.Head();
         while (node && node->data) {
             BGSPerkEntry* entry = node->data;
 
-            // Check if it's an entry point perk entry (check vtable)
-            if (*(UInt32*)entry == kVtbl_BGSEntryPointPerkEntry) {
+            if (*(UInt32*)entry == 0x1046D0C) { //vtbl BGSEntryPointPerkEntry
                 OnEntryPointHandler::g_entryToPerkMap[(UInt32)entry] = perk;
                 totalEntries++;
             }
@@ -155,10 +118,13 @@ void OEPH_BuildEntryMap()
     OnEntryPointHandler::g_mapBuilt = true;
 }
 
-// PlayerCharacter singleton
 static Actor** g_thePlayer = (Actor**)0x011DEA3C;
 
+static UInt32 s_ExecuteFunctionAddr = 0x5E5B40; //ExecuteFunction
+static UInt32 s_savedReturnAddr = 0;
+
 //push context onto stack (called from asm hook before ExecuteFunction)
+//s_savedReturnAddr must be set before calling this
 static void __cdecl PushContext(UInt32 entryPoint, Actor* actor, TESForm* filterForm1, BGSEntryPointPerkEntry* perkEntry)
 {
     OnEntryPointHandler::EntryPointContext ctx;
@@ -166,17 +132,10 @@ static void __cdecl PushContext(UInt32 entryPoint, Actor* actor, TESForm* filter
     ctx.actor = actor;
     ctx.filterForm1 = filterForm1;
     ctx.perkEntry = perkEntry;
+    ctx.returnAddr = s_savedReturnAddr;
     OnEntryPointHandler::g_contextStack.push_back(ctx);
 }
 
-//pop context from stack (called from asm hook after dispatch)
-static void __cdecl PopContext()
-{
-    if (!OnEntryPointHandler::g_contextStack.empty())
-        OnEntryPointHandler::g_contextStack.pop_back();
-}
-
-// Dispatch the entry point event using top of context stack
 static void DispatchEntryPointEvent()
 {
     if (OnEntryPointHandler::g_contextStack.empty()) return;
@@ -188,7 +147,6 @@ static void DispatchEntryPointEvent()
 
     if (!ctx.perkEntry) return;
 
-    // Look up parent perk
     auto it = OnEntryPointHandler::g_entryToPerkMap.find((UInt32)ctx.perkEntry);
     if (it == OnEntryPointHandler::g_entryToPerkMap.end()) return;
 
@@ -197,79 +155,63 @@ static void DispatchEntryPointEvent()
     Actor* actor = ctx.actor;
     TESForm* filter1 = ctx.filterForm1;
 
-    // Fire callbacks that match the filter
-    for (const auto& cb : OnEntryPointHandler::g_callbacks) {
+    //snapshot for reentrancy safety (perk chains can re-enter HandleEntryPoint)
+    const auto callbackSnapshot = OnEntryPointHandler::g_callbacks;
+
+    for (const auto& cb : callbackSnapshot) {
         if (cb.entryPointFilter != -1 && cb.entryPointFilter != entryPoint) {
-            continue;  // Filter doesn't match
+            continue;
         }
 
         if (g_oephScript && cb.callback) {
-            // Call UDF with: perk, entryPointID, actor, filterForm1
             g_oephScript->CallFunctionAlt(
                 cb.callback,
                 reinterpret_cast<TESObjectREFR*>(actor),
                 4,
-                perk,           // arg1: the perk
-                entryPoint,     // arg2: entry point ID
-                actor,          // arg3: actor (usually player)
-                filter1         // arg4: filter form (weapon, etc.)
+                perk,
+                entryPoint,
+                actor,
+                filter1
             );
         }
     }
 }
 
 
-// Function to dispatch event - called from asm hook
-static void __cdecl DoDispatch()
+//dispatch event then pop context, restoring return addr from stack
+static void __cdecl DoDispatchAndPop()
 {
     DispatchEntryPointEvent();
+    if (!OnEntryPointHandler::g_contextStack.empty()) {
+        s_savedReturnAddr = OnEntryPointHandler::g_contextStack.back().returnAddr;
+        OnEntryPointHandler::g_contextStack.pop_back();
+    }
 }
 
-// Address to jump to for the call site hook
-static UInt32 s_ExecuteFunctionAddr = kAddr_ExecuteFunction;
-
-// Saved return address for post-call dispatch
-static UInt32 s_savedReturnAddr = 0;
-
-// Hook at call site inside HandleEntryPoint (0x5E5AB9)
-// This lets us access HandleEntryPoint's stack frame to get perk entry
 static __declspec(naked) void Hook_ExecuteFunctionCall()
 {
     __asm {
-        // Stack: [esp] = return address (0x5E5ABE) pushed by "call Hook_ExecuteFunctionCall"
-        // ebp still points to HandleEntryPoint's frame
-        // [ebp+0x08] = entryPointID (first arg to HandleEntryPoint)
-        // [ebp+0x0C] = actor (second arg to HandleEntryPoint)
-        // [ebp+0x10] = filter1 (third arg, vararg)
-        // [ebp-0x74] = perk entry (local var v8)
-
-        // Pop the return address so stack is correct for ExecuteFunction
+        //ebp = HandleEntryPoint's frame
+        //[ebp+0x08]=entryPointID, [ebp+0x0C]=actor, [ebp+0x10]=filter1, [ebp-0x74]=perkEntry
         pop eax
         mov s_savedReturnAddr, eax
 
-        //push context onto stack for reentrancy safety
-        //PushContext(entryPoint, actor, filterForm1, perkEntry)
         push [ebp-0x74]           //perkEntry
         push [ebp+0x10]           //filterForm1
         push [ebp+0x0C]           //actor
         movzx eax, byte ptr [ebp+0x08]
-        push eax                  //entryPoint (as UInt32)
+        push eax                  //entryPoint
         call PushContext
-        add esp, 16               //clean up 4 args (cdecl)
+        add esp, 16
 
-        // Call the original ExecuteFunction
-        // Stack is now exactly as original code expected
         call dword ptr [s_ExecuteFunctionAddr]
 
-        // ExecuteFunction returned - NOW dispatch the event, then pop context
         pushad
         pushfd
-        call DoDispatch
-        call PopContext
+        call DoDispatchAndPop
         popfd
         popad
 
-        // Jump back to HandleEntryPoint (not ret, since we popped the return addr)
         jmp dword ptr [s_savedReturnAddr]
     }
 }
@@ -278,9 +220,7 @@ static void InitHooks()
 {
     if (OnEntryPointHandler::g_hookInstalled) return;
 
-    // Hook the call to ExecuteFunction inside HandleEntryPoint
-    // Call site: 6183609 decimal = 0x5E5AB9 hex
-    SafeWrite::WriteRelCall(kAddr_ExecuteFunctionCall, (UInt32)Hook_ExecuteFunctionCall);
+    SafeWrite::WriteRelCall(0x5E5AB9, (UInt32)Hook_ExecuteFunctionCall); //ExecuteFunction call site
 
     OnEntryPointHandler::g_hookInstalled = true;
 }
@@ -289,7 +229,6 @@ static bool AddCallback(Script* callback, SInt32 entryPointFilter)
 {
     if (!callback) return false;
 
-    // Check for duplicate
     for (const auto& cb : OnEntryPointHandler::g_callbacks) {
         if (cb.callback == callback && cb.entryPointFilter == entryPointFilter) {
             return false;
@@ -322,7 +261,7 @@ static bool RemoveCallback(Script* callback, SInt32 entryPointFilter)
 static ParamInfo kParams_EntryPointHandler[3] = {
     {"callback",         kParamType_AnyForm, 0},
     {"addRemove",        kParamType_Integer, 0},
-    {"entryPointFilter", kParamType_Integer, 1},  // Optional: -1 or omit for all
+    {"entryPointFilter", kParamType_Integer, 1},
 };
 
 DEFINE_COMMAND_PLUGIN(SetOnEntryPointEventHandler,
@@ -337,7 +276,7 @@ bool Cmd_SetOnEntryPointEventHandler_Execute(COMMAND_ARGS)
 
     TESForm* callbackForm = nullptr;
     UInt32 addRemove = 0;
-    SInt32 entryPointFilter = -1;  // Default: all entry points
+    SInt32 entryPointFilter = -1;
 
     if (!g_ExtractArgsEx(
             reinterpret_cast<ParamInfo*>(paramInfo),
@@ -380,7 +319,6 @@ bool OEPH_Init(void* nvseInterface)
 
     g_oephPluginHandle = nvse->GetPluginHandle();
 
-    // Get script interface
     g_oephScript = reinterpret_cast<NVSEScriptInterface*>(
         nvse->QueryInterface(kInterface_Script));
 
@@ -388,7 +326,6 @@ bool OEPH_Init(void* nvseInterface)
 
     g_ExtractArgsEx = g_oephScript->ExtractArgsEx;
 
-    // Register command at opcode 0x3B17
     nvse->SetOpcodeBase(0x4014);
     nvse->RegisterCommand(&kCommandInfo_SetOnEntryPointEventHandler);
     g_oephOpcode = 0x4014;

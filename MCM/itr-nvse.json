@@ -563,7 +563,15 @@
 						"type": 5,
 						"enable": 1,
 						"mouse": "Prevent voice/dialogue from slowing down during VATS",
-					"vars": [{ "configINI": "Tweaks:bVATSSpeechFix", "default": 1 }]
+						"vars": [{ "configINI": "Tweaks:bVATSSpeechFix", "default": 1 }]
+					},
+					"20": {
+						"title": "Companion Weightless Transfer Fix",
+						"type": 5,
+						"enable": 1,
+						"mouse": "Allow giving zero-weight items to overencumbered companions",
+						"vars": [{ "configINI": "Tweaks:bCompanionWeightlessOverencumberedFix", "default": 1 }]
+					}
 				}
 			}
 		},
@@ -616,5 +624,4 @@
 				}
 			}
 		}
-	}
 }

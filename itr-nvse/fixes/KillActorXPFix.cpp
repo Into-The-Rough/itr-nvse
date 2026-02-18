@@ -3,7 +3,7 @@
 #include "KillActorXPFix.h"
 #include "internal/NVSEMinimal.h"
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 namespace KillActorXPFix
 {
@@ -13,7 +13,6 @@ namespace KillActorXPFix
 	constexpr uint32_t kAddr_XPBlockEnd = 0x5BE3FA;
 	constexpr uint32_t kAddr_ActorGetLevel = 0x87F9F0;
 	constexpr uint32_t kAddr_ReturnAfterHook = 0x5BE381;
-	constexpr uint32_t kOffset_Actor_LifeState = 0x108;
 
 	__declspec(naked) void Hook_XPBlockStart()
 	{

@@ -6,30 +6,24 @@
 #include "common/ITypes.h"
 #include "internal/Detours.h"
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 namespace NPCDoorUnlockBlock
 {
 	static int g_blockLevel = 0;
 
-	//addresses
-	constexpr UInt32 kAddr_CanActorIgnoreLock = 0x518F00;      //TESObjectDOOR::CanActorIgnoreLock
-	constexpr UInt32 kAddr_IsAnOwner = 0x5785E0;               //TESObjectREFR::IsAnOwner
-	constexpr UInt32 kAddr_IsFollowing = 0x8842C0;             //Actor::IsFollowing
-	constexpr UInt32 kAddr_PlayerSingleton = 0x11DEA3C;
-
 	typedef bool (__cdecl* _CanActorIgnoreLock)(void* doorRef, void* actor, bool activate, bool movement);
 	typedef bool (__thiscall* _IsAnOwner)(void* refr, void* actor, bool checkFaction);
 	typedef bool (__thiscall* _IsFollowing)(void* actor);
 
-	static _IsAnOwner IsAnOwner = (_IsAnOwner)kAddr_IsAnOwner;
-	static _IsFollowing IsFollowing = (_IsFollowing)kAddr_IsFollowing;
+	static _IsAnOwner IsAnOwner = (_IsAnOwner)0x5785E0;
+	static _IsFollowing IsFollowing = (_IsFollowing)0x8842C0;
 
 	static Detours::JumpDetour s_detour;
 
 	inline void* GetPlayer()
 	{
-		return *(void**)kAddr_PlayerSingleton;
+		return *(void**)0x11DEA3C;
 	}
 
 	bool __cdecl CanActorIgnoreLock_Hook(void* doorRef, void* actor, bool activate, bool movement)
@@ -64,7 +58,7 @@ namespace NPCDoorUnlockBlock
 	//prologue: push ebp; mov ebp, esp = 5 bytes
 	void Init()
 	{
-		if (!s_detour.WriteRelJump(kAddr_CanActorIgnoreLock, CanActorIgnoreLock_Hook, 5))
+		if (!s_detour.WriteRelJump(0x518F00, CanActorIgnoreLock_Hook, 5)) //CanActorIgnoreLock
 			Log("ERROR: NPCDoorUnlockBlock hook failed");
 	}
 }

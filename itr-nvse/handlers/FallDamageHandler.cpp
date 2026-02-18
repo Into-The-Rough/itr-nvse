@@ -17,8 +17,7 @@ static std::unordered_map<UInt32, float> g_actorFallDamageMults;
 static UInt32 s_setMultOpcode = 0;
 static UInt32 s_getMultOpcode = 0;
 
-extern void Console_Print(const char* fmt, ...);
-extern bool IsConsoleMode();
+#include "internal/globals.h"
 
 //get multiplier for actor (checks per-actor map, falls back to global)
 //returns in st(0) for asm hook

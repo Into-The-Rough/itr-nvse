@@ -2,23 +2,10 @@
 
 #include <vector>
 #include <unordered_map>
-#include <cstdio>
 #include <Windows.h>
 
 #include "DoubleTapHandler.h"
 #include "internal/NVSEMinimal.h"
-
-static FILE* g_dthLogFile = nullptr;
-
-static void DTH_Log(const char* fmt, ...) {
-    if (!g_dthLogFile) return;
-    va_list args;
-    va_start(args, fmt);
-    vfprintf(g_dthLogFile, fmt, args);
-    fprintf(g_dthLogFile, "\n");
-    fflush(g_dthLogFile);
-    va_end(args);
-}
 
 static NVSEScriptInterface* g_dthScript = nullptr;
 static bool (*g_ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, ...) = nullptr;
@@ -70,7 +57,6 @@ static bool IsControlPressed(UInt32 controlCode) {
 
 static void DispatchDoubleTapEvent(Script* callback, UInt32 key) {
     if (!g_dthScript || !callback) return;
-    DTH_Log("  Dispatching: key=%d", key);
     g_dthScript->CallFunctionAlt(callback, nullptr, 1, key);
 }
 
@@ -95,7 +81,6 @@ void DTH_Update() {
             float timeSinceLastPress = g_currentTime - handler.lastPressTime;
 
             if (handler.wasReleased && timeSinceLastPress <= handler.maxInterval) {
-                DTH_Log("Double tap detected: key=%d interval=%.3f", handler.key, timeSinceLastPress);
                 DispatchDoubleTapEvent(handler.callback, handler.key);
                 handler.wasReleased = false;
             }
@@ -129,12 +114,10 @@ bool Cmd_RegisterKeyDoubleTap_Execute(COMMAND_ARGS) {
 
     if (!g_ExtractArgsEx((ParamInfo*)paramInfo, scriptData, opcodeOffsetPtr,
             scriptObj, eventList, &keycode, &maxInterval, &callbackForm)) {
-        DTH_Log("RegisterKeyDoubleTap: Failed to extract args");
         return true;
     }
 
     if (!callbackForm || *((UInt8*)callbackForm + 4) != kFormType_Script) {
-        DTH_Log("RegisterKeyDoubleTap: Invalid callback");
         return true;
     }
 
@@ -151,8 +134,6 @@ bool Cmd_RegisterKeyDoubleTap_Execute(COMMAND_ARGS) {
     g_handlers.push_back(handler);
     *result = handler.id;
 
-    DTH_Log("RegisterKeyDoubleTap: id=%d key=%d maxInterval=%.2f",
-            handler.id, keycode, maxInterval);
     return true;
 }
 
@@ -169,12 +150,10 @@ bool Cmd_RegisterControlDoubleTap_Execute(COMMAND_ARGS) {
 
     if (!g_ExtractArgsEx((ParamInfo*)paramInfo, scriptData, opcodeOffsetPtr,
             scriptObj, eventList, &controlCode, &maxInterval, &callbackForm)) {
-        DTH_Log("RegisterControlDoubleTap: Failed to extract args");
         return true;
     }
 
     if (!callbackForm || *((UInt8*)callbackForm + 4) != kFormType_Script) {
-        DTH_Log("RegisterControlDoubleTap: Invalid callback");
         return true;
     }
 
@@ -191,8 +170,6 @@ bool Cmd_RegisterControlDoubleTap_Execute(COMMAND_ARGS) {
     g_handlers.push_back(handler);
     *result = handler.id;
 
-    DTH_Log("RegisterControlDoubleTap: id=%d control=%d maxInterval=%.2f",
-            handler.id, controlCode, maxInterval);
     return true;
 }
 
@@ -217,12 +194,10 @@ bool Cmd_UnregisterKeyDoubleTap_Execute(COMMAND_ARGS) {
         if (it->id == handlerId && !it->useControlCode) {
             g_handlers.erase(it);
             *result = 1;
-            DTH_Log("UnregisterKeyDoubleTap: removed id=%d", handlerId);
             return true;
         }
     }
 
-    DTH_Log("UnregisterKeyDoubleTap: id=%d not found", handlerId);
     return true;
 }
 
@@ -243,12 +218,10 @@ bool Cmd_UnregisterControlDoubleTap_Execute(COMMAND_ARGS) {
         if (it->id == handlerId && it->useControlCode) {
             g_handlers.erase(it);
             *result = 1;
-            DTH_Log("UnregisterControlDoubleTap: removed id=%d", handlerId);
             return true;
         }
     }
 
-    DTH_Log("UnregisterControlDoubleTap: id=%d not found", handlerId);
     return true;
 }
 
@@ -256,18 +229,8 @@ bool DTH_Init(void* nvseInterface) {
     NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
     if (nvse->isEditor) return false;
 
-    char logPath[MAX_PATH];
-    GetModuleFileNameA(nullptr, logPath, MAX_PATH);
-    char* lastSlash = strrchr(logPath, '\\');
-    if (lastSlash) *lastSlash = '\0';
-    strcat_s(logPath, "\\Data\\NVSE\\Plugins\\DoubleTapHandler.log");
-    //g_dthLogFile = fopen(logPath, "w"); //disabled for release
-
-    DTH_Log("DoubleTapHandler initializing...");
-
     g_dthScript = (NVSEScriptInterface*)nvse->QueryInterface(kInterface_Script);
     if (!g_dthScript) {
-        DTH_Log("ERROR: Failed to get script interface");
         return false;
     }
     g_ExtractArgsEx = g_dthScript->ExtractArgsEx;
@@ -281,13 +244,10 @@ bool DTH_Init(void* nvseInterface) {
     nvse->SetOpcodeBase(0x4011);
     nvse->RegisterCommand(&kCommandInfo_UnregisterControlDoubleTap);
 
-    DTH_Log("Registered commands at opcodes 0x3B0F-0x3B12");
-    DTH_Log("DoubleTapHandler initialized successfully");
     return true;
 }
 
 void DTH_ClearCallbacks()
 {
     g_handlers.clear();
-    DTH_Log("Callbacks cleared on game load");
 }

@@ -9,14 +9,11 @@
 #include <cstdint>
 #include <cstring>
 
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 namespace Settings { extern int bAshPileNames; }
 
 namespace AshPileNames
 {
-	constexpr UInt32 kGetBaseFullNameAddr = 0x55D520;
-	constexpr UInt32 kExtraData_AshPileRef = 0x89;
-
 	typedef const char* (__thiscall* GetBaseFullName_t)(TESObjectREFR* thisRef);
 	static Detours::JumpDetour s_detour;
 	static bool s_hookInstalled = false;
@@ -38,7 +35,7 @@ namespace AshPileNames
 	{
 		if (!ashPileRef) return nullptr;
 
-		BSExtraData* extraData = GetExtraDataByType(&ashPileRef->extraDataList, kExtraData_AshPileRef);
+		BSExtraData* extraData = GetExtraDataByType(&ashPileRef->extraDataList, 0x89); //kExtraData_AshPileRef
 		if (!extraData) return nullptr;
 
 		TESObjectREFR* sourceRef = *(TESObjectREFR**)((UInt8*)extraData + 0x0C);
@@ -59,10 +56,16 @@ namespace AshPileNames
 		return nullptr;
 	}
 
+	static bool IsGameLoading()
+	{
+		void* mgr = *(void**)0x11DE134;
+		if (!mgr) return false;
+		return *(bool*)((char*)mgr + 0x26);
+	}
+
 	static const char* __fastcall Hook_GetBaseFullName(TESObjectREFR* thisRef, void* edx)
 	{
-		// Allow live toggling via MCM/ReloadPluginConfig without reinstalling hooks.
-		if (!Settings::bAshPileNames)
+		if (!Settings::bAshPileNames || IsGameLoading())
 			return s_detour.GetTrampoline<GetBaseFullName_t>()(thisRef);
 
 		const char* actorName = GetActorNameFromAshPile(thisRef);
@@ -77,7 +80,7 @@ namespace AshPileNames
 		if (s_hookInstalled)
 			return;
 
-		if (s_detour.WriteRelJump(kGetBaseFullNameAddr, Hook_GetBaseFullName, 7))
+		if (s_detour.WriteRelJump(0x55D520, Hook_GetBaseFullName, 7)) //TESObjectREFR::GetBaseFullName
 		{
 			s_hookInstalled = true;
 			Log("AshPileNames installed");

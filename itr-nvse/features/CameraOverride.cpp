@@ -5,33 +5,13 @@
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
 #include <Windows.h>
-#include <cstdio>
 #include <cmath>
 
-extern void Log(const char* fmt, ...);
-extern void Console_Print(const char* fmt, ...);
-extern bool IsConsoleMode();
+#include "internal/globals.h"
 extern const _ExtractArgs ExtractArgs;
 
 namespace CameraOverride
 {
-	static FILE* g_camLog = nullptr;
-	static int g_logThrottle = 0;
-
-	static void CamLog(const char* fmt, ...) {
-		return; //disabled for release
-		if (!g_camLog) {
-			g_camLog = fopen("CameraOverride.log", "w");
-			if (!g_camLog) return;
-		}
-		va_list args;
-		va_start(args, fmt);
-		vfprintf(g_camLog, fmt, args);
-		va_end(args);
-		fprintf(g_camLog, "\n");
-		fflush(g_camLog);
-	}
-
 	struct Mat3 {
 		float m[3][3];
 
@@ -83,9 +63,6 @@ namespace CameraOverride
 	static void** g_sceneGraph = (void**)0x11DEB7C;
 	static void** g_thePlayer = (void**)0x11DEA3C;
 
-	static constexpr UInt32 kOffset_LocalRotate = 0x34;
-	static constexpr UInt32 kOffset_LocalTranslate = 0x58;
-
 	typedef void* (__thiscall *GetAt_t)(void* node, UInt32 index);
 	typedef void (__thiscall *NiAVObjectUpdate_t)(void* node, void* updateData);
 
@@ -106,7 +83,6 @@ namespace CameraOverride
 	void Init() {
 		g_rotation.Identity();
 		g_translation = {0, 0, 0};
-		//Log("CameraOverride installed (direct manipulation mode)");
 	}
 
 	void Update() {
@@ -116,24 +92,14 @@ namespace CameraOverride
 		void* cameraRoot = GetCameraRootNode();
 		if (!cameraRoot) return;
 
-		if (g_logThrottle++ % 60 == 0) {
-			CamLog("Update: cameraRoot=%p overrideRot=%d overridePos=%d", cameraRoot, g_overrideRot, g_overridePos);
-		}
-
 		if (g_overridePos) {
-			Vec3* localTranslate = (Vec3*)((UInt8*)cameraRoot + kOffset_LocalTranslate);
+			Vec3* localTranslate = (Vec3*)((UInt8*)cameraRoot + 0x58);
 			*localTranslate = g_translation;
-			if (g_logThrottle % 60 == 1) {
-				CamLog("  set translate to (%.1f, %.1f, %.1f)", g_translation.x, g_translation.y, g_translation.z);
-			}
 		}
 
 		if (g_overrideRot) {
-			Mat3* localRotate = (Mat3*)((UInt8*)cameraRoot + kOffset_LocalRotate);
+			Mat3* localRotate = (Mat3*)((UInt8*)cameraRoot + 0x34);
 			*localRotate = g_rotation;
-			if (g_logThrottle % 60 == 1) {
-				CamLog("  set rotation matrix");
-			}
 		}
 
 		void** vtable = *(void***)cameraRoot;
@@ -143,7 +109,6 @@ namespace CameraOverride
 	}
 
 	void SetRotation(bool enable, int axis, float degrees) {
-		CamLog("SetRotation: enable=%d axis=%d degrees=%.1f", enable, axis, degrees);
 		g_overrideRot = enable;
 		if (!enable) {
 			g_rotation.Identity();
@@ -160,18 +125,14 @@ namespace CameraOverride
 			default: return;
 		}
 		g_rotation = g_rotation * rot;
-		CamLog("  g_overrideRot is now %d", g_overrideRot);
 	}
 
 	void SetTranslation(bool enable, float x, float y, float z) {
-		CamLog("SetTranslation: enable=%d pos=(%.1f, %.1f, %.1f)", enable, x, y, z);
 		g_overridePos = enable;
 		g_translation = {x, y, z};
-		CamLog("  g_overridePos is now %d", g_overridePos);
 	}
 
 	void ResetRotation() {
-		CamLog("ResetRotation called");
 		g_rotation.Identity();
 	}
 }
