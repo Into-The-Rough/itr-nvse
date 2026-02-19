@@ -41,14 +41,13 @@ namespace NPCDoctorsBagUse
 		if (!HasCrippledLimb(actor)) return;
 
 		uint32_t refID = CombatItemUse::GetRefID(actor);
-		if (!s_timers.IsReady(refID, g_cooldown)) return;
+		if (!s_timers.TryAcquire(refID, g_cooldown)) return;
 
 		//NVRestoreLimbs "Restore Limb Condition" [MGEF:000FFCA0]
 		void* item = CombatItemUse::FindAlchemyItemWithEffect(actor, 0xFFCA0);
 		if (!item) return;
 
 		CombatItemUse::UseItem(actor, item);
-		s_timers.Reset(refID);
 	}
 }
 
