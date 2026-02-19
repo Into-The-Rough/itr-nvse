@@ -10,26 +10,44 @@ namespace CombatItemUse
 		uint32_t refIDs[kMax] = {0};
 		DWORD values[kMax] = {0};
 		int count = 0;
+		CRITICAL_SECTION cs;
+		volatile LONG csInit = 0;
 
-		bool IsReady(uint32_t refID, float cooldownSec)
+		void EnsureInit()
 		{
-			DWORD now = GetTickCount();
-			DWORD cooldownMs = (DWORD)(cooldownSec * 1000.0f);
-			for (int i = 0; i < count; i++)
-				if (refIDs[i] == refID)
-					return (now - values[i]) >= cooldownMs;
-			return true;
+			if (csInit == 2) return;
+			if (InterlockedCompareExchange(&csInit, 1, 0) == 0)
+			{
+				InitializeCriticalSection(&cs);
+				InterlockedExchange(&csInit, 2);
+				return;
+			}
+			while (csInit != 2) Sleep(0);
 		}
 
-		void Reset(uint32_t refID)
+		TimerPool() = default;
+		TimerPool(const TimerPool&) = delete;
+		TimerPool& operator=(const TimerPool&) = delete;
+
+		//checks cooldown and stamps timestamp atomically
+		bool TryAcquire(uint32_t refID, float cooldownSec)
 		{
+			EnsureInit();
+			EnterCriticalSection(&cs);
 			DWORD now = GetTickCount();
+			DWORD cooldownMs = (DWORD)(cooldownSec * 1000.0f);
 			for (int i = 0; i < count; i++)
 			{
 				if (refIDs[i] == refID)
 				{
+					if ((now - values[i]) < cooldownMs)
+					{
+						LeaveCriticalSection(&cs);
+						return false;
+					}
 					values[i] = now;
-					return;
+					LeaveCriticalSection(&cs);
+					return true;
 				}
 			}
 			if (count < kMax)
@@ -38,6 +56,8 @@ namespace CombatItemUse
 				values[count] = now;
 				count++;
 			}
+			LeaveCriticalSection(&cs);
+			return true;
 		}
 	};
 

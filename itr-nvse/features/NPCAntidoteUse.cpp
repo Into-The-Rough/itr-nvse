@@ -63,14 +63,13 @@ namespace NPCAntidoteUse
 		if (!IsPoisoned(actor)) return;
 
 		uint32_t refID = CombatItemUse::GetRefID(actor);
-		if (!s_timers.IsReady(refID, g_cooldown)) return;
+		if (!s_timers.TryAcquire(refID, g_cooldown)) return;
 
 		//NVAntivenomEffect "Cure Animal Poison" [MGEF:000E2C6D]
 		void* item = CombatItemUse::FindAlchemyItemWithEffect(actor, 0xE2C6D);
 		if (!item) return;
 
 		CombatItemUse::UseItem(actor, item);
-		s_timers.Reset(refID);
 	}
 }
 
