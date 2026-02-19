@@ -159,9 +159,6 @@ constexpr float PI = 3.14159265358979323846f;
 constexpr float kHavokScale = 0.1428571f; //1/7, game units to havok
 
 constexpr UInt8 LAYER_STATIC = 1;
-constexpr UInt8 LAYER_BIPED = 8;
-constexpr UInt8 LAYER_LINEOFSIGHT = 37;
-
 struct alignas(16) RayCastData {
 	float pos0[4];       //0x00
 	float pos1[4];       //0x10
@@ -309,7 +306,6 @@ enum CameraAngle {
 };
 
 static NVSEConsoleInterface* g_console = nullptr;
-static float* g_gameSecondsPassed = (float*)0x11DEA14;
 static PlayerCharacter** g_thePlayer = (PlayerCharacter**)0x11DEA3C;
 
 struct InterfaceManager {
@@ -345,15 +341,8 @@ static float g_baseCamX = 0, g_baseCamY = 0, g_baseCamZ = 0;
 static float g_baseLookX = 0, g_baseLookY = 0, g_baseLookZ = 0;
 static double g_noiseTime = 0;
 
-static const siv::PerlinNoise g_perlinX{ 1 };
-static const siv::PerlinNoise g_perlinY{ 2 };
-static const siv::PerlinNoise g_perlinZ{ 3 };
 static const siv::PerlinNoise g_perlinPitch{ 4 };
 static const siv::PerlinNoise g_perlinYaw{ 5 };
-
-static void SetCameraPosition(float x, float y, float z, float pitch, float yaw) {
-	CameraHooks::SetPosition(x, y, z, pitch, yaw);
-}
 
 static void DisableCamera() {
 	CameraHooks::Disable();
@@ -491,11 +480,6 @@ static void ApplyCameraAngle(CameraAngle angle) {
 
 	float yaw = atan2f(toDirX, toDirY) * (180.0f / PI);
 	float pitch = -atan2f(toDirZ, horizDist) * (180.0f / PI);
-
-	static const char* angleNames[] = {
-		"Vanilla", "OverShoulder", "NPCCloseup", "TwoShot", "NPCFace", "LowAngle",
-		"HighAngle", "PlayerFace", "WideShot", "NPCProfile", "PlayerProfile", "Overhead"
-	};
 
 	CameraHooks::SetPosition(camX, camY, camZ, pitch, yaw);
 }

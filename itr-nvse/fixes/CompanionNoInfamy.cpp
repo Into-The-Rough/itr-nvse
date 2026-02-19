@@ -34,15 +34,23 @@ namespace CompanionNoInfamy
 		}
 	}
 
+	//validates pointer before calling IsTeammate to prevent crash on stale/garbage pointers
+	static bool __fastcall IsValidTeammate(void* actor, void* /*edx*/)
+	{
+		if (!actor || ((UInt32)actor & 3)) return false;
+		UInt8 typeID = *((UInt8*)actor + 4);
+		if (typeID != 0x3B && typeID != 0x3C) return false; //Character or Creature
+		typedef bool (__thiscall *IsTeammate_t)(void*);
+		return ((IsTeammate_t)0x8BE4B0)(actor);
+	}
+
 	//AttackAlarm: checks if attacker at [ebp+8] is teammate
-	//note: AttackAlarm early-exits if attacker != player, so this rarely fires
 	__declspec(naked) void AttackAlarmReputationHook()
 	{
 		__asm
 		{
 			mov ecx, [ebp+8]
-			mov eax, 0x8BE4B0  //Actor::IsTeammate
-			call eax
+			call IsValidTeammate
 			test al, al
 			jnz skipAttack
 			mov eax, kAddr_HandleMajorCrimeFactionReputations

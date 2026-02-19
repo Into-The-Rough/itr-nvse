@@ -35,11 +35,10 @@ namespace DoorPackageOwnershipFix
 		return (flags2 >= 5);
 	}
 
-	//read cell owner directly from ExtraDataList - thread safe, no function calls
-	//TESObjectCELL::extraDataList at offset 0x28 (embedded, not pointer)
-	//ExtraDataList::m_data at offset 0x04 (BSExtraData* head)
-	//BSExtraData::type at 0x04, next at 0x08
-	//ExtraOwnership::owner at 0x0C
+	//read cell owner directly from ExtraDataList without function calls
+	//runs on AI thread - no lock on the ExtraData linked list. if main thread
+	//modifies cell ownership mid-traversal (rare), a freed node could crash.
+	//accepted: cell ownership changes mid-gameplay are extremely uncommon.
 	void* GetCellOwnerDirect(void* cell)
 	{
 		if (!cell) return nullptr;
