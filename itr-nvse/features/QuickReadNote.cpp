@@ -20,7 +20,8 @@ namespace QuickReadNote
 	static int g_controlID = 6;
 	static int g_maxLines = 0;
 
-	static BGSNote* g_pendingNote = nullptr;
+	static UInt32 g_pendingNoteRefID = 0;
+	static UInt8 g_pendingNoteType = 0;
 	static DWORD g_noteAddedTime = 0;
 	static bool g_controlWasPressed = false;
 	static char g_truncatedBuffer[4096];
@@ -498,9 +499,18 @@ namespace QuickReadNote
 		}
 	}
 
+	static BGSNote* ResolvePendingNote() {
+		if (!g_pendingNoteRefID) return nullptr;
+		typedef TESForm* (*LookupFormByID_t)(UInt32);
+		TESForm* form = ((LookupFormByID_t)0x483A00)(g_pendingNoteRefID);
+		if (!form || *(UInt8*)((UInt8*)form + 4) != 0x45) return nullptr;
+		return (BGSNote*)form;
+	}
+
 	void __cdecl OnNoteAddedCallback(BGSNote* note) {
 		if (note) {
-			g_pendingNote = note;
+			g_pendingNoteRefID = *(UInt32*)((UInt8*)note + 0x0C);
+			g_pendingNoteType = *(UInt8*)((UInt8*)note + 0x7C);
 			g_noteAddedTime = GetTickCount();
 			g_controlWasPressed = false;
 		}
@@ -534,10 +544,9 @@ namespace QuickReadNote
 
 	char __cdecl OnQueueUIMessageHook(char* msg, UInt32 emotion, char* imagePath,
 		char* soundName, float time, char instantEnd) {
-		if (msg && g_pendingNote) {
+		if (msg && g_pendingNoteRefID) {
 			const char* controlName = (g_controlID <= 27) ? kControlNames[g_controlID] : "Key";
-			UInt8 noteType = *(UInt8*)((UInt8*)g_pendingNote + 0x7C);
-			const char* action = (noteType == 0 || noteType == 3) ? "listen" : "view";
+			const char* action = (g_pendingNoteType == 0 || g_pendingNoteType == 3) ? "listen" : "view";
 			snprintf(s_modifiedMessage, sizeof(s_modifiedMessage), "%s. Press %s to %s.", msg, controlName, action);
 			msg = s_modifiedMessage;
 		}
@@ -581,12 +590,12 @@ namespace QuickReadNote
 			g_switchToMiscPending = false;
 			SwitchToMiscTab();
 		}
-		if (!g_pendingNote) return;
+		if (!g_pendingNoteRefID) return;
 
 		DWORD currentTime = GetTickCount();
 		DWORD elapsed = currentTime - g_noteAddedTime;
 		if (elapsed >= (DWORD)g_timeoutMs) {
-			g_pendingNote = nullptr;
+			g_pendingNoteRefID = 0;
 			return;
 		}
 
@@ -594,8 +603,9 @@ namespace QuickReadNote
 		if (!input) return;
 		bool isPressed = input->GetControlState(g_controlID, 0);
 		if (isPressed && !g_controlWasPressed) {
-			ShowNoteMenu(g_pendingNote);
-			g_pendingNote = nullptr;
+			BGSNote* note = ResolvePendingNote();
+			if (note) ShowNoteMenu(note);
+			g_pendingNoteRefID = 0;
 		}
 		g_controlWasPressed = isPressed;
 	}

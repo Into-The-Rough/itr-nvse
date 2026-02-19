@@ -264,7 +264,6 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
     }
 
     TESTopic* topic = *(TESTopic**)((UInt8*)topicInfo + 0x50);
-    UInt32 topicInfoFormID = *(UInt32*)((UInt8*)topicInfo + 0x0C);
 
     TESTopicInfoResponse* response = *ppResponse;
     const char* text = response ? response->responseText.CStr() : nullptr;
@@ -305,23 +304,13 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
     }
 }
 
-static void __cdecl LogSkippedRunResult(TESTopicInfo* topicInfo, Actor* speaker, UInt32 param) {
-    if (IsValidFormPointer(topicInfo) && IsValidFormPointer(speaker)) {
-        TESTopicInfoResponse** ppResponse = ThisStdCall<TESTopicInfoResponse**>(
-            kAddr_GetResponses, topicInfo, nullptr);
-        if (ppResponse && *ppResponse) {
-            const char* text = (*ppResponse)->responseText.CStr();
-        }
-    }
-}
-
 static auto g_hookCallback = &HookCallback;
 static UInt32 g_chainAddr = 0;
 
 static __declspec(naked) void DialogueTextHook() {
     __asm {
         cmp     dword ptr [esp+4], 0
-        jnz     log_and_skip
+        jnz     skip_filter
 
         pushad
         pushfd
@@ -332,18 +321,6 @@ static __declspec(naked) void DialogueTextHook() {
         call    [g_hookCallback]
         add     esp, 8
 
-        popfd
-        popad
-        jmp     skip_filter
-
-    log_and_skip:
-        pushad
-        pushfd
-        push    dword ptr [esp+0x28]  //param (esp+4 shifted by pushad+pushfd)
-        push    dword ptr [esp+0x30]  //speaker (esp+8 shifted, +4 for prev push)
-        push    ecx                   //topicInfo
-        call    LogSkippedRunResult
-        add     esp, 12
         popfd
         popad
 
@@ -477,7 +454,6 @@ bool Cmd_SetOnDialogueTextEventHandler_Execute(COMMAND_ARGS) {
     if (addRemove) {
         if (AddFilter_Internal(filterText, callback)) {
             *result = 1;
-        } else {
         }
     } else {
         if (RemoveFilter_Internal(filterText, callback)) {

@@ -13,8 +13,6 @@ static UInt32 g_owjhOpcode = 0;
 
 //static variables for hook - must be outside namespace for inline asm
 static Actor* g_jamActor = nullptr;
-static int g_jamAction = 0;
-static void* g_jamSequence = nullptr;
 
 namespace OnWeaponJamHandler {
     std::vector<Script*> g_callbacks;
@@ -60,9 +58,6 @@ static TESObjectWEAP* GetActorCurrentWeapon(Actor* actor)
     return weapon;
 }
 
-//PlayerCharacter singleton pointer
-static Actor** g_thePlayer = (Actor**)0x011DEA3C;
-
 static void DispatchWeaponJamEvent()
 {
 
@@ -76,7 +71,6 @@ static void DispatchWeaponJamEvent()
         return;
     }
 
-    int callbackIndex = 0;
     for (Script* callback : OnWeaponJamHandler::g_callbacks) {
         if (g_owjhScript && callback) {
             g_owjhScript->CallFunctionAlt(
@@ -86,9 +80,7 @@ static void DispatchWeaponJamEvent()
                 g_jamActor,
                 weapon
             );
-        } else {
         }
-        callbackIndex++;
     }
 
 }
