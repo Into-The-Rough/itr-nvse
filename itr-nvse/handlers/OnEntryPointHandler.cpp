@@ -6,6 +6,7 @@
 
 #include "OnEntryPointHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/EventDispatch.h"
 
 class BGSPerk;
 class BGSPerkEntry;
@@ -140,7 +141,6 @@ static void DispatchEntryPointEvent()
 {
     if (OnEntryPointHandler::g_contextStack.empty()) return;
     if (!OnEntryPointHandler::g_mapBuilt) return;
-    if (OnEntryPointHandler::g_callbacks.empty()) return;
 
     //use top of stack (current context)
     const auto& ctx = OnEntryPointHandler::g_contextStack.back();
@@ -154,6 +154,11 @@ static void DispatchEntryPointEvent()
     UInt8 entryPoint = ctx.entryPoint;
     Actor* actor = ctx.actor;
     TESForm* filter1 = ctx.filterForm1;
+
+    if (g_eventManagerInterface)
+        g_eventManagerInterface->DispatchEvent("ITR:OnEntryPoint",
+            reinterpret_cast<TESObjectREFR*>(actor),
+            (TESForm*)perk, (int)entryPoint, (TESForm*)actor, filter1);
 
     //snapshot for reentrancy safety (perk chains can re-enter HandleEntryPoint)
     const auto callbackSnapshot = OnEntryPointHandler::g_callbacks;

@@ -6,6 +6,7 @@
 
 #include "OnMenuSideChangeHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/EventDispatch.h"
 
 constexpr UInt32 kMenuType_Container = 1008;
 constexpr UInt32 kMenuType_Barter = 1053;
@@ -38,8 +39,13 @@ static UInt32 GetCurrentSide(void* menu, UInt32 menuType) {
 }
 
 static void DispatchSideChangeEvent(UInt32 menuID, UInt32 oldSide, UInt32 newSide) {
-    if (!g_omschScript || g_callbacks.empty()) return;
     if (oldSide == newSide) return;
+
+    if (g_eventManagerInterface)
+        g_eventManagerInterface->DispatchEvent("ITR:OnMenuSideChange", nullptr,
+            (int)menuID, (int)oldSide, (int)newSide);
+
+    if (!g_omschScript || g_callbacks.empty()) return;
 
     const auto snapshot = g_callbacks;
 
@@ -53,7 +59,7 @@ static void DispatchSideChangeEvent(UInt32 menuID, UInt32 oldSide, UInt32 newSid
 }
 
 void OMSCH_Update() {
-    if (g_callbacks.empty()) return;
+    if (g_callbacks.empty() && !g_eventManagerInterface) return;
 
     //check container menu
     void* contMenu = *(void**)0x11D93F8; //ContainerMenu

@@ -6,6 +6,7 @@
 
 #include "OnMenuFilterChangeHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/EventDispatch.h"
 
 constexpr UInt32 kMenuType_Container = 1008;
 constexpr UInt32 kMenuType_Barter = 1053;
@@ -38,8 +39,13 @@ static void* g_lastContainerMenu = nullptr;
 static void* g_lastBarterMenu = nullptr;
 
 static void DispatchFilterChangeEvent(UInt32 menuID, UInt32 oldFilter, UInt32 newFilter, UInt32 side) {
-    if (!g_omfchScript || g_callbacks.empty()) return;
     if (oldFilter == newFilter) return;
+
+    if (g_eventManagerInterface)
+        g_eventManagerInterface->DispatchEvent("ITR:OnMenuFilterChange", nullptr,
+            (int)menuID, (int)oldFilter, (int)newFilter, (int)side);
+
+    if (!g_omfchScript || g_callbacks.empty()) return;
 
     const auto snapshot = g_callbacks;
 
@@ -53,7 +59,7 @@ static void DispatchFilterChangeEvent(UInt32 menuID, UInt32 oldFilter, UInt32 ne
 }
 
 void OMFCH_Update() {
-    if (g_callbacks.empty()) return;
+    if (g_callbacks.empty() && !g_eventManagerInterface) return;
 
     //check inventory menu
     void* invMenu = *(void**)0x11D9EA4; //InventoryMenu

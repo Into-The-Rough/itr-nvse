@@ -7,6 +7,7 @@
 #include "DoubleTapHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/EngineFunctions.h"
+#include "internal/EventDispatch.h"
 
 static NVSEScriptInterface* g_dthScript = nullptr;
 static bool (*g_ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, ...) = nullptr;
@@ -55,6 +56,8 @@ static bool IsControlPressed(UInt32 controlCode) {
 }
 
 static void DispatchDoubleTapEvent(Script* callback, UInt32 key) {
+    if (g_eventManagerInterface)
+        g_eventManagerInterface->DispatchEvent("ITR:OnDoubleTap", nullptr, (int)key);
     if (!g_dthScript || !callback) return;
     g_dthScript->CallFunctionAlt(callback, nullptr, 1, key);
 }

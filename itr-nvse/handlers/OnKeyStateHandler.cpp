@@ -5,6 +5,7 @@
 
 #include "OnKeyStateHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/EventDispatch.h"
 #include <cstdio>
 
 static PluginHandle g_okshPluginHandle = kPluginHandle_Invalid;
@@ -21,6 +22,8 @@ namespace OnKeyStateHandler {
 
 static void DispatchKeyDisabledEvent(UInt32 keycode, UInt32 mask)
 {
+    if (g_eventManagerInterface)
+        g_eventManagerInterface->DispatchEvent("ITR:OnKeyDisabled", nullptr, (int)keycode, (int)mask);
 
     if (OnKeyStateHandler::g_disabledCallbacks.empty()) {
         return;
@@ -35,6 +38,8 @@ static void DispatchKeyDisabledEvent(UInt32 keycode, UInt32 mask)
 
 static void DispatchKeyEnabledEvent(UInt32 keycode, UInt32 mask)
 {
+    if (g_eventManagerInterface)
+        g_eventManagerInterface->DispatchEvent("ITR:OnKeyEnabled", nullptr, (int)keycode, (int)mask);
 
     if (OnKeyStateHandler::g_enabledCallbacks.empty()) {
         return;

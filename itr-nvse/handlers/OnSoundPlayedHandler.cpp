@@ -10,6 +10,7 @@
 #include "internal/NVSEMinimal.h"
 #include "internal/Detours.h"
 #include "internal/ScopedLock.h"
+#include "internal/EventDispatch.h"
 
 class TESSound;
 
@@ -79,17 +80,7 @@ namespace OnSoundPlayedHandler {
 
 static void EnsureStateLockInitialized()
 {
-    if (OnSoundPlayedHandler::g_stateLockInit == 2) return;
-
-    if (InterlockedCompareExchange(&OnSoundPlayedHandler::g_stateLockInit, 1, 0) == 0)
-    {
-        InitializeCriticalSection(&OnSoundPlayedHandler::g_stateLock);
-        InterlockedExchange(&OnSoundPlayedHandler::g_stateLockInit, 2);
-        return;
-    }
-
-    while (OnSoundPlayedHandler::g_stateLockInit != 2)
-        Sleep(0);
+    InitCriticalSectionOnce(&OnSoundPlayedHandler::g_stateLockInit, &OnSoundPlayedHandler::g_stateLock);
 }
 
 static UInt32 ReadRefID(const void* form)
@@ -97,19 +88,6 @@ static UInt32 ReadRefID(const void* form)
     return form ? *(const UInt32*)((const UInt8*)form + 0x0C) : 0;
 }
 
-static TESForm* LookupFormByID(UInt32 refID)
-{
-    if (!refID) return nullptr;
-    struct Entry { Entry* next; UInt32 key; TESForm* form; };
-    UInt8* map = *(UInt8**)0x11C54C0;
-    if (!map) return nullptr;
-    UInt32 numBuckets = *(UInt32*)(map + 4);
-    Entry** buckets = *(Entry***)(map + 8);
-    if (!buckets || !numBuckets) return nullptr;
-    for (Entry* e = buckets[refID % numBuckets]; e; e = e->next)
-        if (e->key == refID) return e->form;
-    return nullptr;
-}
 
 typedef BSSoundHandle* (__thiscall* GetSoundHandleByFilePath_t)(
     BSAudioManager* mgr,
@@ -220,14 +198,16 @@ static BSSoundHandle* __fastcall HookedGetSoundHandle(
         hasCompletionCallbacks = !OnSoundPlayedHandler::g_completionCallbacks.empty();
     }
 
-    if (hasPlayCallbacks && apName && apName[0])
+    bool hasEventManager = g_eventManagerInterface != nullptr;
+
+    if ((hasPlayCallbacks || hasEventManager) && apName && apName[0])
     {
         QueueSoundEvent(apName, aeAudioFlags, soundFormID);
     }
 
     BSSoundHandle* result = s_detour.GetTrampoline<GetSoundHandleByFilePath_t>()(mgr, arData, apName, aeAudioFlags, apSound);
 
-    if (hasCompletionCallbacks &&
+    if ((hasCompletionCallbacks || hasEventManager) &&
         (aeAudioFlags & kSoundFlag_IsVoice) && apName && apName[0])
     {
         if (result && result->uiSoundID != 0 && result->uiSoundID != 0xFFFFFFFF)
@@ -242,7 +222,6 @@ static BSSoundHandle* __fastcall HookedGetSoundHandle(
 void OSPH_Update()
 {
     if (OnSoundPlayedHandler::g_stateLockInit != 2) return;
-    if (!g_osphScript) return;
 
     DWORD currentThreadId = GetCurrentThreadId();
     if (!OnSoundPlayedHandler::g_mainThreadId)
@@ -263,12 +242,16 @@ void OSPH_Update()
         completionCallbacks = OnSoundPlayedHandler::g_completionCallbacks;
     }
 
-    if (!eventsToProcess.empty() && !playCallbacks.empty())
+    if (!eventsToProcess.empty())
     {
         for (const auto& evt : eventsToProcess)
         {
             const char* filePath = evt.filePath[0] ? evt.filePath : "";
-            TESForm* sourceSound = LookupFormByID(evt.soundFormID);
+            TESForm* sourceSound = (TESForm*)Engine::LookupFormByID(evt.soundFormID);
+
+            if (g_eventManagerInterface)
+                g_eventManagerInterface->DispatchEvent("ITR:OnSoundPlayed", nullptr,
+                    filePath, (int)evt.soundFlags, (TESObjectREFR*)sourceSound);
 
             for (Script* callback : playCallbacks)
             {
@@ -287,7 +270,7 @@ void OSPH_Update()
         }
     }
 
-    if (!soundsToCheck.empty() && !completionCallbacks.empty())
+    if (!soundsToCheck.empty() && (!completionCallbacks.empty() || g_eventManagerInterface))
     {
         std::vector<TrackedVoiceSound> completedSounds;
         std::vector<TrackedVoiceSound> updatedSounds;
@@ -304,7 +287,11 @@ void OSPH_Update()
             if (!stillPlaying && tracked.hasEverPlayed)
             {
                 completedSounds.push_back(tracked);
-                TESForm* sourceSound = LookupFormByID(tracked.soundFormID);
+                TESForm* sourceSound = (TESForm*)Engine::LookupFormByID(tracked.soundFormID);
+
+                if (g_eventManagerInterface)
+                    g_eventManagerInterface->DispatchEvent("ITR:OnSoundCompleted", nullptr,
+                        tracked.filePath, (int)tracked.soundFlags, (TESObjectREFR*)sourceSound);
 
                 //fire completion callbacks
                 for (Script* callback : completionCallbacks)

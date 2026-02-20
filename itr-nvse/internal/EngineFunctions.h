@@ -33,4 +33,7 @@ inline auto TESObjectREFR_GetOwnerRawForm = (void*(__thiscall*)(void*))0x567790;
 //extra data
 inline auto BaseExtraList_GetByType = (void*(__thiscall*)(void*, UInt32))0x410220;
 
+//form lookup
+inline auto LookupFormByID = (void*(__cdecl*)(unsigned int))0x4839C0;
+
 }

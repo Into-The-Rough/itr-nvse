@@ -2,6 +2,7 @@
 #include <Windows.h>
 #include <cstdint>
 #include "EngineFunctions.h"
+#include "ScopedLock.h"
 
 namespace CombatItemUse
 {
@@ -16,14 +17,7 @@ namespace CombatItemUse
 
 		void EnsureInit()
 		{
-			if (csInit == 2) return;
-			if (InterlockedCompareExchange(&csInit, 1, 0) == 0)
-			{
-				InitializeCriticalSection(&cs);
-				InterlockedExchange(&csInit, 2);
-				return;
-			}
-			while (csInit != 2) Sleep(0);
+			InitCriticalSectionOnce(&csInit, &cs);
 		}
 
 		TimerPool() = default;
@@ -150,8 +144,7 @@ namespace CombatItemUse
 		void* process = Engine::Actor_GetProcess(actor);
 		if (process)
 		{
-			typedef void* (*LookupFormByID_t)(uint32_t);
-			void* food = ((LookupFormByID_t)0x483A00)(0x00015169); //stimpak
+			void* food = Engine::LookupFormByID(0x00015169); //stimpak
 			if (food)
 			{
 				typedef void(__cdecl* SetUsedItem_t)(void*);

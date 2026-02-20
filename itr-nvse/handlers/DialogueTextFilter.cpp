@@ -9,6 +9,8 @@
 #include "internal/StringMatch.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/ScopedLock.h"
+#include "internal/EngineFunctions.h"
+#include "internal/EventDispatch.h"
 #include <cstdio>
 
 class TESTopicInfo;
@@ -118,17 +120,7 @@ static volatile LONG g_dtfStateLockInit = 0;
 
 static void EnsureStateLockInitialized()
 {
-    if (g_dtfStateLockInit == 2) return;
-
-    if (InterlockedCompareExchange(&g_dtfStateLockInit, 1, 0) == 0)
-    {
-        InitializeCriticalSection(&g_dtfStateLock);
-        InterlockedExchange(&g_dtfStateLockInit, 2);
-        return;
-    }
-
-    while (g_dtfStateLockInit != 2)
-        Sleep(0);
+    InitCriticalSectionOnce(&g_dtfStateLockInit, &g_dtfStateLock);
 }
 
 constexpr UInt32 kAddr_RunResult = 0x61F170;
@@ -140,19 +132,6 @@ static UInt32 ReadRefID(const void* form)
     return form ? *(const UInt32*)((const UInt8*)form + 0x0C) : 0;
 }
 
-static TESForm* LookupFormByID(UInt32 refID)
-{
-    if (!refID) return nullptr;
-    struct Entry { Entry* next; UInt32 key; TESForm* form; };
-    UInt8* map = *(UInt8**)0x11C54C0;
-    if (!map) return nullptr;
-    UInt32 numBuckets = *(UInt32*)(map + 4);
-    Entry** buckets = *(Entry***)(map + 8);
-    if (!buckets || !numBuckets) return nullptr;
-    for (Entry* e = buckets[refID % numBuckets]; e; e = e->next)
-        if (e->key == refID) return e->form;
-    return nullptr;
-}
 
 static const char* GetModName(UInt8 modIndex) {
     void* dh = *(void**)0x11C3F2C;
@@ -554,14 +533,26 @@ void DTF_Update()
             }
         }
 
-        Actor* speaker = reinterpret_cast<Actor*>(LookupFormByID(evt.speakerRefID));
-        TESTopicInfo* topicInfo = reinterpret_cast<TESTopicInfo*>(LookupFormByID(evt.topicInfoRefID));
-        TESTopic* topic = reinterpret_cast<TESTopic*>(LookupFormByID(evt.topicRefID));
+        Actor* speaker = reinterpret_cast<Actor*>(Engine::LookupFormByID(evt.speakerRefID));
+        TESTopicInfo* topicInfo = reinterpret_cast<TESTopicInfo*>(Engine::LookupFormByID(evt.topicInfoRefID));
+        TESTopic* topic = reinterpret_cast<TESTopic*>(Engine::LookupFormByID(evt.topicRefID));
 
         for (auto callback : nativeCallbacks) {
             if (callback) {
                 callback(speaker, evt.text, evt.duration, topicInfo, topic);
             }
+        }
+
+        if (g_eventManagerInterface && speaker && topicInfo) {
+            char evtVoicePath[512] = {0};
+            TESTopicInfoResponse** ppR = ThisStdCall<TESTopicInfoResponse**>(
+                kAddr_GetResponses, topicInfo, nullptr);
+            TESTopicInfoResponse* r = (ppR && *ppR) ? *ppR : nullptr;
+            if (!BuildVoicePath(evtVoicePath, sizeof(evtVoicePath), topicInfo, speaker, r))
+                evtVoicePath[0] = '\0';
+            g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
+                reinterpret_cast<TESObjectREFR*>(speaker),
+                speaker, topic, topicInfo, evt.text, evtVoicePath);
         }
 
         if (!matchedScriptCallbacks.empty() && topicInfo && speaker) {
