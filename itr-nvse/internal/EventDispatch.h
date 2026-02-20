@@ -1,9 +1,9 @@
 //kNVSE event registration for ITR events
 #pragma once
 
-#include "EventManagerInterface.h"
+struct NVSEEventManagerInterface;
 
-extern EventManager::Interface* g_eventManagerInterface;
+extern NVSEEventManagerInterface* g_eventManagerInterface;
 
 void ITR_InitEventManager(void* nvseInterface);
 void ITR_RegisterEvents();

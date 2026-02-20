@@ -4,6 +4,7 @@
 #include <Windows.h>
 
 #include "KeyHeldHandler.h"
+#include "internal/NVSEMinimal.h"
 #include "internal/EventDispatch.h"
 
 static int g_thresholdMs = 500;

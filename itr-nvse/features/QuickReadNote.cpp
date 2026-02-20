@@ -8,6 +8,7 @@
 
 #include "internal/globals.h"
 #include "internal/CallTemplates.h"
+#include "handlers/DialogueTextFilter.h"
 
 static void QRN_SafeWrite32(UInt32 addr, UInt32 data) {
 	DWORD oldProtect;
@@ -270,7 +271,9 @@ namespace QuickReadNote
 						BSString* voiceLineStr = &currentResponse->strResponseText;
 						ThisCall<void>(0x7A1AC0, subtitles, voiceLineStr);
 						void* topicInfo = currentItem->pTopicInfo;
+						DTF_Suppress(true);
 						ThisCall<void>(0x61F170, topicInfo, 0, character);
+						DTF_Suppress(false);
 						BSSoundHandle toPlay = BSWin32Audio::GetSingleton()->GetSoundHandleByFilePath(
 							currentResponse->strVoiceFilePath.c_str(), audioFlags, nullptr);
 						toPlay.SetVolume(0.9f);
