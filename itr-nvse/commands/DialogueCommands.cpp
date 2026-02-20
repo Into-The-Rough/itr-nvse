@@ -14,10 +14,7 @@
 extern const _ExtractArgs ExtractArgs;
 extern NVSEArrayVarInterface* g_arrInterface;
 
-template <typename T_Ret = UInt32, typename ...Args>
-__forceinline T_Ret ThisCall(UInt32 _addr, const void* _this, Args ...args) {
-	return ((T_Ret(__thiscall*)(const void*, Args...))_addr)(_this, std::forward<Args>(args)...);
-}
+#include "internal/CallTemplates.h"
 
 //DialogMenu singleton at 0x11D9510
 //DialogMenu::bIsOpen at 0x11D9514

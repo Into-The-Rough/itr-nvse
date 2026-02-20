@@ -1,5 +1,4 @@
 #pragma once
 
-bool KHH_Init(void* nvseInterface);
+bool KHH_Init();
 void KHH_Update();
-void KHH_ClearCallbacks();

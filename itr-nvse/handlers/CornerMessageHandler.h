@@ -9,6 +9,4 @@ enum CornerMessageMetaType
 };
 
 bool CMH_Init(void* nvseInterface);
-unsigned int CMH_GetOpcode();
 void CMH_TrackMessageMeta(const char* text, float displayTime, int metaType);
-void CMH_ClearCallbacks();
