@@ -6,6 +6,7 @@
 
 #include "DoubleTapHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/EngineFunctions.h"
 
 static NVSEScriptInterface* g_dthScript = nullptr;
 static bool (*g_ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, ...) = nullptr;
@@ -47,12 +48,10 @@ static bool IsRawKeyPressed(UInt32 keycode) {
 }
 
 static void* g_OSInputGlobals = nullptr;
-typedef bool (__thiscall *GetControlState_t)(void*, UInt32, UInt32);
-static GetControlState_t GetControlState = nullptr;
 
 static bool IsControlPressed(UInt32 controlCode) {
-    if (!g_OSInputGlobals || !GetControlState) return false;
-    return GetControlState(g_OSInputGlobals, controlCode, 0);
+    if (!g_OSInputGlobals) return false;
+    return Engine::OSInputGlobals_GetControlState(g_OSInputGlobals, controlCode, 0);
 }
 
 static void DispatchDoubleTapEvent(Script* callback, UInt32 key) {
@@ -67,10 +66,8 @@ void DTH_Update() {
     g_lastTickCount = currentTick;
     g_currentTime += deltaTime;
 
-    if (!g_OSInputGlobals) {
+    if (!g_OSInputGlobals)
         g_OSInputGlobals = *(void**)0x11F35CC;
-        GetControlState = (GetControlState_t)0xA24660;
-    }
 
     for (auto& handler : g_handlers) {
         bool keyDown = handler.useControlCode

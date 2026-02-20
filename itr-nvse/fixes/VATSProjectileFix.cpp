@@ -21,6 +21,7 @@ namespace VATSProjectileFix
 		UInt32 eType;
 		SimpleListNode bodyParts;
 	};
+	static_assert(offsetof(VATSTarget, bodyParts) == 0x08);
 
 	struct VATSBodyPart {
 		float screenPosX;

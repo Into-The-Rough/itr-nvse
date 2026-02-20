@@ -1,10 +1,7 @@
 #include "SaveFileSizeHandler.h"
 #include "internal/SafeWrite.h"
+#include "internal/EngineFunctions.h"
 #include <cstdio>
-
-
-typedef void (__thiscall *_Tile_SetStringValue)(void*, UInt32, const char*, bool);
-static const _Tile_SetStringValue Tile_SetStringValue = (_Tile_SetStringValue)0xA01350;
 
 static const UInt32 kTileValue_user1 = 0x1005;
 
@@ -20,6 +17,7 @@ struct BGSSaveLoadFileEntry
 	char* location;
 	char* time;
 };
+static_assert(offsetof(BGSSaveLoadFileEntry, location) == 0x14);
 
 typedef void (__thiscall *_ConstructSavegamePath)(void*, char*);
 static const _ConstructSavegamePath ConstructSavegamePath = (_ConstructSavegamePath)0x84FF30;
@@ -86,7 +84,7 @@ namespace SaveFileSizeHandler
 
 		static char newLoc[512];
 		sprintf_s(newLoc, "%s - %s", entry->location, sizeStr);
-		Tile_SetStringValue(tile, kTileValue_user1, newLoc, true);
+		Engine::Tile_SetString(tile, kTileValue_user1, newLoc, true);
 	}
 
 	static void* g_savedTile = nullptr;

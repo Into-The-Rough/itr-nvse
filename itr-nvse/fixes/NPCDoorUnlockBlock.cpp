@@ -5,6 +5,7 @@
 #include <Windows.h>
 #include "common/ITypes.h"
 #include "internal/Detours.h"
+#include "internal/EngineFunctions.h"
 
 #include "internal/globals.h"
 
@@ -13,10 +14,7 @@ namespace NPCDoorUnlockBlock
 	static int g_blockLevel = 0;
 
 	typedef bool (__cdecl* _CanActorIgnoreLock)(void* doorRef, void* actor, bool activate, bool movement);
-	typedef bool (__thiscall* _IsAnOwner)(void* refr, void* actor, bool checkFaction);
 	typedef bool (__thiscall* _IsFollowing)(void* actor);
-
-	static _IsAnOwner IsAnOwner = (_IsAnOwner)0x5785E0;
 	static _IsFollowing IsFollowing = (_IsFollowing)0x8842C0;
 
 	static Detours::JumpDetour s_detour;
@@ -44,7 +42,7 @@ namespace NPCDoorUnlockBlock
 			return false;
 
 		//level 1: only allow direct door ownership (not cell ownership, not guard status)
-		if (IsAnOwner(doorRef, actor, true))
+		if (Engine::TESObjectREFR_IsAnOwner(doorRef, actor, true))
 			return true;
 
 		return false;

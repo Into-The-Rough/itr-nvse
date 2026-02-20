@@ -2,6 +2,7 @@
 
 #include "OwnedBeds.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/EngineFunctions.h"
 
 #include "internal/globals.h"
 
@@ -20,14 +21,8 @@ namespace OwnedBeds
 		return *((UInt8*)form + 4);
 	}
 
-	typedef bool (__thiscall *_IsAnOwner)(void* thisObj, void* actor, bool checkFaction);
-	static _IsAnOwner IsAnOwner = (_IsAnOwner)0x5785E0;
-
 	typedef void* (__cdecl *_GetTopic)(UInt32 type, int index);
 	static _GetTopic GetTopic = (_GetTopic)0x61A2D0;
-
-	typedef void* (__thiscall *_MobileGetProcess)(void* actor);
-	static _MobileGetProcess MobileGetProcess = (_MobileGetProcess)0x8D8520;
 
 	typedef void (__thiscall *_ProcessGreet)(void* process, void* actor, void* topic, bool forceSub, bool stop, bool queue, bool sayCallback);
 	static _ProcessGreet ProcessGreet = (_ProcessGreet)0x8DBE30;
@@ -59,7 +54,7 @@ namespace OwnedBeds
 		if (!g_playerWarnedAboutBed) {
 			void* topic = GetTopic(4, 9); //DT_COMBAT
 			if (topic) {
-				void* process = MobileGetProcess(nearbyActor);
+				void* process = Engine::Actor_GetProcess(nearbyActor);
 				if (process) {
 					ProcessGreet(process, nearbyActor, topic, false, false, true, false);
 				}
@@ -71,14 +66,13 @@ namespace OwnedBeds
 	}
 
 	bool __fastcall IsAnOwnerHook(void* bedRef, void* edx, void* actor, bool checkFaction) {
-		//if disabled, just call original
 		if (!g_enabled)
-			return IsAnOwner(bedRef, actor, checkFaction);
+			return Engine::TESObjectREFR_IsAnOwner(bedRef, actor, checkFaction);
 
-		bool isOwner = IsAnOwner(bedRef, actor, checkFaction);
+		bool isOwner = Engine::TESObjectREFR_IsAnOwner(bedRef, actor, checkFaction);
 
 		if (!isOwner) {
-			void* owner = OBThisCall<void*>(0x567790, bedRef); //GetOwnerRawForm
+			void* owner = Engine::TESObjectREFR_GetOwnerRawForm(bedRef);
 			if (owner) {
 				SendAssaultAlarmToBedOwner(bedRef, owner);
 			}

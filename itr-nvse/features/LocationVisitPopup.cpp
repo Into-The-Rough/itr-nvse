@@ -3,6 +3,7 @@
 #include "LocationVisitPopup.h"
 #include "internal/CooldownTracker.h"
 #include "internal/SafeWrite.h"
+#include "internal/EngineFunctions.h"
 #include <Windows.h>
 #include <vector>
 #include <cstring>
@@ -28,11 +29,6 @@ namespace LocationVisitPopup
 	static bool s_lockInitialized = false;
 	static std::vector<PendingPopup> s_pendingPopups;
 
-	template <typename T_Ret = void, typename ...Args>
-	__forceinline T_Ret LVPThisCall(UInt32 _addr, void* _this, Args ...args) {
-		return ((T_Ret(__thiscall*)(void*, Args...))_addr)(_this, std::forward<Args>(args)...);
-	}
-
 	static void UpdateCooldowns() {
 		s_tracker.UpdateCooldowns(GetTickCount(), g_leaveThresholdMs);
 	}
@@ -56,27 +52,22 @@ namespace LocationVisitPopup
 		return *(void**)((UInt8*)hudMenu + 0x30);
 	}
 
-	static int TraitNameToID(const char* name) {
-		return ((int(__cdecl*)(const char*))0xA01860)(name);
-	}
-
 	static bool CheckMUXInstalled() {
 		void* tile = GetHUDMainMenuTile();
 		if (!tile) return false;
-		int traitID = TraitNameToID("_UXQV+Location");
-		void* val = LVPThisCall<void*>(0xA01000, tile, traitID);
-		return val != nullptr;
+		int traitID = Engine::Tile_TextToTrait("_UXQV+Location");
+		return Engine::Tile_GetValue(tile, traitID) != nullptr;
 	}
 
 	static void ShowPopupMUX(const char* name) {
 		void* tile = GetHUDMainMenuTile();
 		if (!tile) return;
-		int locTrait = TraitNameToID("_UXQV+Location");
-		int alphaTrait = TraitNameToID("_UXQV+Alpha");
-		if (LVPThisCall<void*>(0xA01000, tile, locTrait))
-			LVPThisCall<void>(0xA01350, tile, locTrait, name, true);
-		if (LVPThisCall<void*>(0xA01000, tile, alphaTrait))
-			LVPThisCall<void>(0xA012D0, tile, alphaTrait, 255.0f, true);
+		int locTrait = Engine::Tile_TextToTrait("_UXQV+Location");
+		int alphaTrait = Engine::Tile_TextToTrait("_UXQV+Alpha");
+		if (Engine::Tile_GetValue(tile, locTrait))
+			Engine::Tile_SetString(tile, locTrait, name, true);
+		if (Engine::Tile_GetValue(tile, alphaTrait))
+			Engine::Tile_SetFloat(tile, alphaTrait, 255.0f, true);
 	}
 
 	static void ShowPopupVanilla(const char* name) {

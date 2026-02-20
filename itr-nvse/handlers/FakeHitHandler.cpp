@@ -99,6 +99,7 @@ struct BGSImpactDataSet {
 	UInt8 pad10[0x1C - 0x10];
 	BGSImpactData* impactDatas[12];
 };
+static_assert(offsetof(BGSImpactDataSet, impactDatas) == 0x1C);
 
 enum MaterialType { kMaterial_Organic = 6 };
 
@@ -129,6 +130,9 @@ struct TESObjectWEAP {
 	UInt8 pad1C5[0x24C - 0x1C5];
 	BGSImpactDataSet* impactDataSet;
 };
+static_assert(offsetof(TESObjectWEAP, attackDmg) == 0x108);
+static_assert(offsetof(TESObjectWEAP, weaponSkill) == 0x1C4);
+static_assert(offsetof(TESObjectWEAP, impactDataSet) == 0x24C);
 
 struct BaseProcess {
 	void* vtbl;
@@ -144,7 +148,6 @@ struct Actor {
 	TESObjectCELL* parentCell;
 	UInt8 pad44[0x68 - 0x44];
 	BaseProcess* baseProcess;
-
 	UInt32 GetRefID() { return *(UInt32*)((UInt8*)this + 0x0C); }
 	NiPoint3* GetPos() { return (NiPoint3*)((UInt8*)this + 0x30); }
 	TESObjectWEAP* GetEquippedWeapon() { return ((TESObjectWEAP* (__thiscall*)(Actor*))0x88D440)(this); }
@@ -160,6 +163,8 @@ struct Actor {
 		return *(NiNode**)((UInt8*)renderData + 0x14);
 	}
 };
+static_assert(offsetof(Actor, parentCell) == 0x40);
+static_assert(offsetof(Actor, baseProcess) == 0x68);
 
 struct BSString { const char* m_data; UInt16 m_dataLen, m_bufLen; };
 struct TESSound { void* vtbl; UInt32 typeID, flags, refID; };

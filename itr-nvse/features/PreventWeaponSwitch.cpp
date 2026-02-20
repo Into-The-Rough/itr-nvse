@@ -6,6 +6,7 @@
 #include <cstring>
 #include "internal/Detours.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/EngineFunctions.h"
 
 #include "internal/globals.h"
 #include "internal/ScopedLock.h"
@@ -72,9 +73,6 @@ static void SetBlocked(UInt32 refID, bool block)
 typedef void (__thiscall *SwitchWeaponUpdate_t)(void* procedure);
 static Detours::JumpDetour s_detour;
 
-//0x97AE90 = CombatController::GetPackageOwner
-typedef Actor* (__thiscall *GetPackageOwner_t)(void* controller);
-static GetPackageOwner_t GetPackageOwner = (GetPackageOwner_t)0x97AE90;
 
 void __fastcall Hook_SwitchWeaponUpdate(void* procedure, void* edx)
 {
@@ -86,7 +84,7 @@ void __fastcall Hook_SwitchWeaponUpdate(void* procedure, void* edx)
 			void* controller = *(void**)((char*)procedure + 0x4);
 			if (controller)
 			{
-				Actor* actor = GetPackageOwner(controller);
+				Actor* actor = (Actor*)Engine::CombatController_GetPackageOwner(controller);
 				if (actor)
 				{
 					UInt32 refID = *(UInt32*)((char*)actor + 0x0C);
