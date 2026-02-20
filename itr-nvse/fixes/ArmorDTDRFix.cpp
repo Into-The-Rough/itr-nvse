@@ -17,6 +17,7 @@ namespace ArmorDTDRFix
 		char pad[0x28];
 		uint32_t processLevel; //0=High, 1=MiddleHigh, 2=MiddleLow, 3=Low
 	};
+	static_assert(offsetof(BaseProcess, processLevel) == 0x28);
 
 	struct Actor {
 		char pad[0x68];

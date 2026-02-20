@@ -2,6 +2,7 @@
 
 #include "PlayerUpdateHook.h"
 #include "internal/SafeWrite.h"
+#include "internal/EngineFunctions.h"
 
 #include "internal/globals.h"
 
@@ -24,15 +25,15 @@ namespace PlayerUpdateHook
 	uint32_t g_originalCallTarget = 0;
 
 	bool GetControlState(void* input, uint32_t controlCode, KeyState state) {
-		return ((bool(__thiscall*)(void*, uint32_t, KeyState))0xA24660)(input, controlCode, state);
+		return Engine::OSInputGlobals_GetControlState(input, controlCode, (UInt8)state);
 	}
 
 	void* GetEquippedWeapon(void* actor) {
-		return ((void*(__thiscall*)(void*))0x8A1710)(actor);
+		return Engine::Actor_GetEquippedWeapon(actor);
 	}
 
 	void TryDropWeapon(void* actor) {
-		((void(__thiscall*)(void*))0x89F580)(actor);
+		Engine::Actor_TryDropWeapon(actor);
 	}
 
 	void RotatePlayer180(void* player) {

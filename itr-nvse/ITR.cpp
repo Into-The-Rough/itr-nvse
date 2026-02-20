@@ -11,6 +11,8 @@
 #include "internal/ScopedLock.h"
 
 #include "internal/settings.h"
+#include "internal/EngineFunctions.h"
+#include "internal/EventDispatch.h"
 
 #include "handlers/DialogueTextFilter.h"
 #include "handlers/OnStealHandler.h"
@@ -260,9 +262,6 @@ namespace NoWeaponSearch
 		return IsDisabled_Unlocked(refID);
 	}
 
-	typedef Actor* (__thiscall *GetPackageOwner_t)(void* controller);
-	GetPackageOwner_t GetPackageOwner = (GetPackageOwner_t)0x97AE90;
-
 	bool __fastcall Hook(void* combatState, void* edx)
 	{
 		if (IsGameLoading())
@@ -272,7 +271,7 @@ namespace NoWeaponSearch
 		void* controller = *(void**)((char*)combatState + 0x1C4);
 		if (!controller)
 			return Original(combatState);
-		Actor* actor = (Actor*)GetPackageOwner(controller);
+		Actor* actor = (Actor*)Engine::CombatController_GetPackageOwner(controller);
 		if (!actor || !*(void**)((char*)actor + 0x68) || !*(void**)((char*)actor + 0x64))
 			return Original(combatState);
 
@@ -447,6 +446,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					NavMeshInfoCrashFix_Init();
 				if (Settings::bInitHavokCrashFix)
 					InitHavokCrashFix_Init();
+				ITR_RegisterEvents();
 				g_hooksInstalled = true;
 			}
 			break;
@@ -821,6 +821,7 @@ namespace ITR
 
 		g_msgInterface->RegisterListener(g_pluginHandle, "NVSE", MessageHandler);
 
+		ITR_InitEventManager((void*)nvse);
 		ImperativeCommands_Init((void*)nvse);
 		StringCommands_Init((void*)nvse);
 		RadioCommands_Init((void*)nvse);

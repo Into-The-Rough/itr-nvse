@@ -4,17 +4,13 @@
 //NOT hot-reloadable - requires game restart
 
 #include "DoorPackageOwnershipFix.h"
+#include "internal/EngineFunctions.h"
 #include <Windows.h>
 #include <cstdint>
 
 namespace DoorPackageOwnershipFix
 {
-	typedef bool (__thiscall* _IsAnOwner)(void* refr, void* actor, bool checkFaction);
-	typedef void* (__thiscall* _GetOwner)(void* refr);
 	typedef bool (__thiscall* _IsInFaction)(void* actor, void* faction);
-
-	static _IsAnOwner OriginalIsAnOwner = (_IsAnOwner)0x5785E0;
-	static _GetOwner GetOwner = (_GetOwner)0x567790;       //GetOwnerRawForm
 	static _IsInFaction IsInFaction = (_IsInFaction)0x89A9A0;
 
 	inline UInt8 GetFormTypeDirect(void* form) {
@@ -90,11 +86,11 @@ namespace DoorPackageOwnershipFix
 	//replacement IsAnOwner that also checks cell ownership for doors
 	bool __fastcall IsAnOwner_Hook(void* refr, void* edx, void* actor, bool checkFaction)
 	{
-		bool originalResult = OriginalIsAnOwner(refr, actor, checkFaction);
+		bool originalResult = Engine::TESObjectREFR_IsAnOwner(refr, actor, checkFaction);
 
 		if (!originalResult) return false;
 
-		void* explicitOwner = GetOwner(refr);
+		void* explicitOwner = Engine::TESObjectREFR_GetOwnerRawForm(refr);
 		if (explicitOwner) return true;
 
 		void* cell = GetParentCellDirect(refr);

@@ -6,6 +6,7 @@
 
 #include "OnStealHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/EventDispatch.h"
 
 static PluginHandle g_oshPluginHandle = kPluginHandle_Invalid;
 static NVSEScriptInterface* g_oshScript = nullptr;
@@ -55,29 +56,35 @@ constexpr UInt32 kAddr_StealAlarmBody = 0x8BFA45;
 
 static void DispatchStealEvent()
 {
+    if (!OnStealHandler::g_callbacks.empty()) {
+        //snapshot for reentrancy safety
+        std::vector<Script*> snapshot;
+        snapshot.reserve(OnStealHandler::g_callbacks.size());
+        for (const auto& entry : OnStealHandler::g_callbacks)
+            if (entry.callback) snapshot.push_back(entry.callback);
 
-    if (OnStealHandler::g_callbacks.empty()) return;
-
-    //snapshot for reentrancy safety
-    std::vector<Script*> snapshot;
-    snapshot.reserve(OnStealHandler::g_callbacks.size());
-    for (const auto& entry : OnStealHandler::g_callbacks)
-        if (entry.callback) snapshot.push_back(entry.callback);
-
-    for (Script* cb : snapshot) {
-        if (g_oshScript) {
-            g_oshScript->CallFunctionAlt(
-                cb,
-                reinterpret_cast<TESObjectREFR*>(OnStealHandler::s_thief),
-                5,
-                OnStealHandler::s_thief,
-                OnStealHandler::s_target,
-                OnStealHandler::s_item,
-                OnStealHandler::s_owner,
-                OnStealHandler::s_quantity
-            );
+        for (Script* cb : snapshot) {
+            if (g_oshScript) {
+                g_oshScript->CallFunctionAlt(
+                    cb,
+                    reinterpret_cast<TESObjectREFR*>(OnStealHandler::s_thief),
+                    5,
+                    OnStealHandler::s_thief,
+                    OnStealHandler::s_target,
+                    OnStealHandler::s_item,
+                    OnStealHandler::s_owner,
+                    OnStealHandler::s_quantity
+                );
+            }
         }
     }
+
+    if (g_eventManagerInterface)
+        g_eventManagerInterface->DispatchEvent("ITR:OnSteal",
+            reinterpret_cast<TESObjectREFR*>(OnStealHandler::s_thief),
+            OnStealHandler::s_thief, OnStealHandler::s_target,
+            OnStealHandler::s_item, OnStealHandler::s_owner,
+            OnStealHandler::s_quantity);
 }
 
 static __declspec(naked) void StealAlarmHook()
@@ -242,6 +249,7 @@ bool OSH_Init(void* nvseInterface)
     nvse->RegisterCommand(&kCommandInfo_SetOnStealEventHandler);
     g_oshOpcode = 0x4001;
 
+    InitHook();
     return true;
 }
 

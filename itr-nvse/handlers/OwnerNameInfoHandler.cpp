@@ -8,14 +8,11 @@
 #include <Windows.h>
 
 #include "OwnerNameInfoHandler.h"
+#include "internal/EngineFunctions.h"
 
 
 constexpr UInt8 kFormType_Faction = 0x08;
 constexpr UInt32 kOffset_TESForm_TypeID = 0x04;
-
-//Tile::SetStringValue at 0xA01350
-typedef void (__thiscall* _TileSetString)(void* tile, UInt32 traitID, const char* str, bool propagate);
-static const _TileSetString TileSetString = (_TileSetString)0xA01350;
 
 //TESObjectREFR::IsCrime at 0x579690 (checks if activating/taking would be a crime)
 typedef bool (__thiscall* _IsCrime)(void* refr);
@@ -294,7 +291,7 @@ void ONI_Update()
 		}
 	}
 
-	TileSetString(tile, 0xFC4, modifiedName, true); //kTileValue_string
+	Engine::Tile_SetString(tile, 0xFC4, modifiedName, true); //kTileValue_string
 }
 
 static char g_iniPath[MAX_PATH] = {0};

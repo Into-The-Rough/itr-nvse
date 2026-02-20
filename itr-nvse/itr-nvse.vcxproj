@@ -188,6 +188,7 @@
     <ClCompile Include="commands\ChallengeCommands.cpp" />
     <ClCompile Include="commands\DialogueCommands.cpp" />
     <ClCompile Include="commands\WeaponEmissiveCommands.cpp" />
+    <ClCompile Include="internal\EventDispatch.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ITR.h" />
@@ -196,6 +197,9 @@
     <ClInclude Include="internal\RefIdSet.h" />
     <ClInclude Include="internal\StringMatch.h" />
     <ClInclude Include="internal\CooldownTracker.h" />
+    <ClInclude Include="internal\EventManagerInterface.h" />
+    <ClInclude Include="internal\EventDispatch.h" />
+    <ClInclude Include="internal\EngineFunctions.h" />
     <ClInclude Include="handlers\DialogueTextFilter.h" />
     <ClInclude Include="handlers\OnStealHandler.h" />
     <ClInclude Include="handlers\OnWeaponDropHandler.h" />

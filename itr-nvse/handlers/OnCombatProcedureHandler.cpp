@@ -7,6 +7,7 @@
 #include "internal/NVSEMinimal.h"
 #include "internal/Detours.h"
 #include "internal/ScopedLock.h"
+#include "internal/EngineFunctions.h"
 
 static PluginHandle g_ocphPluginHandle = kPluginHandle_Invalid;
 static NVSEScriptInterface* g_ocphScript = nullptr;
@@ -57,8 +58,7 @@ static Detours::JumpDetour s_movementDetour;
 static Actor* GetPackageOwner(void* combatController)
 {
     if (!combatController) return nullptr;
-    typedef Actor* (__thiscall *GetPackageOwner_t)(void*);
-    return ((GetPackageOwner_t)0x97AE90)(combatController); //GetPackageOwner
+    return (Actor*)Engine::CombatController_GetPackageOwner(combatController);
 }
 
 static UInt32 ReadRefID(const void* form)
