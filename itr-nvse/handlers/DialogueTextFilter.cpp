@@ -1,7 +1,6 @@
 //dialogue text filter - hooks dialogue responses and dispatches events
 
 #include <vector>
-#include <string>
 #include <cstring>
 #include <cstdio>
 #include <Windows.h>
@@ -48,10 +47,10 @@ struct QueuedDialogueEvent
 };
 
 namespace DialogueTextFilter {
-	std::vector<DTF_NativeCallback> g_nativeCallbacks;
 	std::vector<QueuedDialogueEvent> g_pendingEvents;
 	bool g_hookInstalled = false;
 	DWORD g_mainThreadId = 0;
+	bool g_suppressed = false;
 }
 
 static CRITICAL_SECTION g_dtfStateLock;
@@ -168,7 +167,12 @@ static bool IsValidFormPointer(void* form) {
 	}
 }
 
+void DTF_Suppress(bool suppress) {
+	DialogueTextFilter::g_suppressed = suppress;
+}
+
 static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
+	if (DialogueTextFilter::g_suppressed) return;
 	if (!IsValidFormPointer(topicInfo) || !IsValidFormPointer(speaker))
 		return;
 
@@ -262,17 +266,7 @@ void DTF_Update()
 		TESTopicInfo* topicInfo = reinterpret_cast<TESTopicInfo*>(Engine::LookupFormByID(evt.topicInfoRefID));
 		TESTopic* topic = reinterpret_cast<TESTopic*>(Engine::LookupFormByID(evt.topicRefID));
 
-		std::vector<DTF_NativeCallback> nativeCallbacks;
-		{
-			ScopedLock lock(&g_dtfStateLock);
-			nativeCallbacks = DialogueTextFilter::g_nativeCallbacks;
-		}
-		for (auto callback : nativeCallbacks) {
-			if (callback)
-				callback(speaker, evt.text, evt.duration, topicInfo, topic);
-		}
-
-		if (speaker && topicInfo) {
+		if (speaker && topicInfo && topic) {
 			char voicePath[512] = {0};
 			TESTopicInfoResponse** ppR = ThisCall<TESTopicInfoResponse**>(
 				kAddr_GetResponses, topicInfo, nullptr);
@@ -307,34 +301,3 @@ bool DTF_Init(void* nvseInterface) {
 	return true;
 }
 
-//native callback registration for inter-plugin communication
-extern "C" {
-
-__declspec(dllexport) bool DTF_RegisterNativeCallback(DTF_NativeCallback callback) {
-	if (!callback) return false;
-
-	EnsureStateLockInitialized();
-	ScopedLock lock(&g_dtfStateLock);
-	for (auto cb : DialogueTextFilter::g_nativeCallbacks)
-		if (cb == callback) return true;
-
-	DialogueTextFilter::g_nativeCallbacks.push_back(callback);
-	return true;
-}
-
-__declspec(dllexport) bool DTF_UnregisterNativeCallback(DTF_NativeCallback callback) {
-	if (!callback) return false;
-
-	EnsureStateLockInitialized();
-	ScopedLock lock(&g_dtfStateLock);
-	auto& callbacks = DialogueTextFilter::g_nativeCallbacks;
-	for (auto it = callbacks.begin(); it != callbacks.end(); ++it) {
-		if (*it == callback) {
-			callbacks.erase(it);
-			return true;
-		}
-	}
-	return false;
-}
-
-}

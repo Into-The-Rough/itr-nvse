@@ -32,6 +32,7 @@ static void DispatchWeaponJamEvent()
     if (!g_jamActor) return;
 
     TESObjectWEAP* weapon = GetActorCurrentWeapon(g_jamActor);
+    if (!weapon) return;
 
     if (g_eventManagerInterface)
         g_eventManagerInterface->DispatchEvent("ITR:OnWeaponJam",

@@ -125,7 +125,7 @@ static void DispatchEntryPointEvent()
 
     BGSPerk* perk = it->second;
 
-    if (g_eventManagerInterface)
+    if (g_eventManagerInterface && ctx.actor)
         g_eventManagerInterface->DispatchEvent("ITR:OnEntryPoint",
             reinterpret_cast<TESObjectREFR*>(ctx.actor),
             (TESForm*)perk, (int)ctx.entryPoint, (TESForm*)ctx.actor, ctx.filterForm1);

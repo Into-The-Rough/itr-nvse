@@ -4,7 +4,6 @@
 #define FORMUTILS_USE_NVSE_TYPES
 #include "internal/FormUtils.h"
 #include "internal/EngineFunctions.h"
-#include "internal/EventManagerInterface.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/GameObjects.h"
@@ -26,8 +25,24 @@ using namespace FormUtils;
 
 namespace
 {
-	using EventResultElement = EventManager::ResultElement;
-	using EventManagerInterfaceEx = EventManager::Interface;
+	//kNVSE EventManager - not in older NVSE headers
+	constexpr UInt32 kInterface_EventManager_v2 = 8;
+
+	struct EventManagerInterfaceEx {
+		bool (*RegisterEvent)(const char* name, UInt8 numParams, UInt8* paramTypes, UInt32 flags);
+		bool (*DispatchEvent)(const char* eventName, TESObjectREFR* thisObj, ...);
+
+		enum DispatchReturn : int8_t {
+			kRetn_UnknownEvent = -2,
+			kRetn_GenericError = -1,
+			kRetn_Normal = 0,
+			kRetn_EarlyBreak,
+			kRetn_Deferred,
+		};
+		using DispatchCallback = bool (*)(NVSEArrayVarInterface::Element& result, void* anyData);
+
+		DispatchReturn (*DispatchEventAlt)(const char* eventName, DispatchCallback resultCallback, void* anyData, TESObjectREFR* thisObj, ...);
+	};
 
 	struct Setting
 	{
@@ -236,18 +251,18 @@ namespace
 		return true;
 	}
 
-	static bool EventResultAsBool(const EventResultElement& result)
+	static bool EventResultAsBool(NVSEArrayVarInterface::Element& result)
 	{
-		switch (result.type)
+		switch (result.GetType())
 		{
-		case EventResultElement::kType_Numeric:
-			return result.num != 0.0;
-		case EventResultElement::kType_Form:
-			return result.form != nullptr;
-		case EventResultElement::kType_Array:
-			return result.arr != nullptr;
-		case EventResultElement::kType_String:
-			return result.str && result.str[0] != '\0';
+		case NVSEArrayVarInterface::Element::kType_Numeric:
+			return result.Number() != 0.0;
+		case NVSEArrayVarInterface::Element::kType_Form:
+			return result.Form() != nullptr;
+		case NVSEArrayVarInterface::Element::kType_Array:
+			return result.Array() != nullptr;
+		case NVSEArrayVarInterface::Element::kType_String:
+			return result.String() && result.String()[0] != '\0';
 		default:
 			return false;
 		}
@@ -264,7 +279,7 @@ namespace
 
 		UInt32 shouldActivate = 1;
 
-		auto resultCallback = [](EventResultElement& result, void* shouldActivateAddr) -> bool
+		auto resultCallback = [](NVSEArrayVarInterface::Element& result, void* shouldActivateAddr) -> bool
 		{
 			UInt32& shouldActivateRef = *static_cast<UInt32*>(shouldActivateAddr);
 			if (shouldActivateRef && result.IsValid())
@@ -1303,7 +1318,7 @@ bool ImperativeCommands_Init(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 
-	g_eventInterface = reinterpret_cast<EventManagerInterfaceEx*>(nvse->QueryInterface(EventManager::kInterface_EventManager));
+	g_eventInterface = reinterpret_cast<EventManagerInterfaceEx*>(nvse->QueryInterface(kInterface_EventManager_v2));
 	g_inventoryRefCreateEntry = nullptr;
 
 	NVSEDataInterface* dataInterface = reinterpret_cast<NVSEDataInterface*>(nvse->QueryInterface(kInterface_Data));
