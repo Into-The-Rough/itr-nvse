@@ -197,7 +197,7 @@
     <ClInclude Include="internal\RefIdSet.h" />
     <ClInclude Include="internal\StringMatch.h" />
     <ClInclude Include="internal\CooldownTracker.h" />
-    <ClInclude Include="internal\EventManagerInterface.h" />
+    <ClInclude Include="internal\BSSpinLock.h" />
     <ClInclude Include="internal\EventDispatch.h" />
     <ClInclude Include="internal\EngineFunctions.h" />
     <ClInclude Include="handlers\DialogueTextFilter.h" />

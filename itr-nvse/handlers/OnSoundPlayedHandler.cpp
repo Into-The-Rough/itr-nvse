@@ -178,7 +178,8 @@ void OSPH_Update()
     for (const auto& evt : eventsToProcess)
     {
         const char* filePath = evt.filePath[0] ? evt.filePath : "";
-        TESForm* sourceSound = (TESForm*)Engine::LookupFormByID(evt.soundFormID);
+        TESForm* sourceSound = evt.soundFormID ? (TESForm*)Engine::LookupFormByID(evt.soundFormID) : nullptr;
+        if (!sourceSound) continue;
 
         g_eventManagerInterface->DispatchEvent("ITR:OnSoundPlayed", nullptr,
             filePath, (int)evt.soundFlags, (TESObjectREFR*)sourceSound);
@@ -201,10 +202,11 @@ void OSPH_Update()
             if (!stillPlaying && tracked.hasEverPlayed)
             {
                 completedSounds.push_back(tracked);
-                TESForm* sourceSound = (TESForm*)Engine::LookupFormByID(tracked.soundFormID);
+                TESForm* sourceSound = tracked.soundFormID ? (TESForm*)Engine::LookupFormByID(tracked.soundFormID) : nullptr;
 
-                g_eventManagerInterface->DispatchEvent("ITR:OnSoundCompleted", nullptr,
-                    tracked.filePath, (int)tracked.soundFlags, (TESObjectREFR*)sourceSound);
+                if (sourceSound)
+                    g_eventManagerInterface->DispatchEvent("ITR:OnSoundCompleted", nullptr,
+                        tracked.filePath, (int)tracked.soundFlags, (TESObjectREFR*)sourceSound);
             }
             else
             {

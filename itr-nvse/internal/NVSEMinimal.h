@@ -45,14 +45,117 @@ enum {
     kInterface_ArrayVar,
     kInterface_Script,
     kInterface_Data,
+    kInterface_EventManager,
 };
 
 enum { kRetnType_Default = 0 };
 
 struct NVSEArrayVarInterface {
+    struct Array;
+
     struct Element {
-        UInt8 pad[16];
+        union {
+            char*    str;
+            Array*   arr;
+            TESForm* form;
+            double   num;
+        };
+        UInt8 type;
+
+        enum {
+            kType_Invalid,
+            kType_Numeric,
+            kType_Form,
+            kType_String,
+            kType_Array,
+        };
+
+        Element() : type(kType_Invalid), num(0) {}
+        bool IsValid() const { return type != kType_Invalid; }
+        UInt8 GetType() const { return type; }
     };
+};
+
+struct NVSEEventManagerInterface {
+    typedef void (*NativeEventHandler)(TESObjectREFR* thisObj, void* parameters);
+
+    enum ParamType : UInt8 {
+        eParamType_Float = 0,
+        eParamType_Int,
+        eParamType_String,
+        eParamType_Array,
+        eParamType_RefVar,
+        eParamType_AnyForm = eParamType_RefVar,
+        eParamType_Reference,
+        eParamType_BaseForm,
+        eParamType_Invalid,
+        eParamType_Anything,
+        eParamType_FloatPtr,
+        eParamType_IntPtr,
+        eParamType_StringPtr,
+        eParamType_ArrayPtr,
+        eParamType_RefVarPtr,
+        eParamType_AnyFormPtr = eParamType_RefVarPtr,
+        eParamType_ReferencePtr,
+        eParamType_BaseFormPtr
+    };
+
+    enum EventFlags : UInt32 {
+        kFlags_None = 0,
+        kFlag_FlushOnLoad = 1 << 0,
+        kFlag_HasUnknownArgTypes = 1 << 1,
+        kFlag_AllowScriptDispatch = 1 << 2,
+        kFlag_IsUserDefined = kFlag_HasUnknownArgTypes | kFlag_AllowScriptDispatch,
+        kFlag_ReportErrorIfNoResultGiven = 1 << 3
+    };
+
+    bool (*RegisterEvent)(const char* name, UInt8 numParams, ParamType* paramTypes, EventFlags flags);
+    bool (*DispatchEvent)(const char* eventName, TESObjectREFR* thisObj, ...);
+
+    enum DispatchReturn : signed char {
+        kRetn_UnknownEvent = -2,
+        kRetn_GenericError = -1,
+        kRetn_Normal = 0,
+        kRetn_EarlyBreak,
+        kRetn_Deferred,
+    };
+    typedef bool (*DispatchCallback)(NVSEArrayVarInterface::Element& result, void* anyData);
+
+    DispatchReturn (*DispatchEventAlt)(const char* eventName, DispatchCallback resultCallback, void* anyData, TESObjectREFR* thisObj, ...);
+
+    bool (*SetNativeEventHandler)(const char* eventName, NativeEventHandler func);
+    bool (*RemoveNativeEventHandler)(const char* eventName, NativeEventHandler func);
+    bool (*RegisterEventWithAlias)(const char* name, const char* alias, UInt8 numParams, ParamType* paramTypes, EventFlags flags);
+
+    typedef void (*PostDispatchCallback)(void* anyData, DispatchReturn retn);
+
+    bool (*DispatchEventThreadSafe)(const char* eventName, PostDispatchCallback postCallback, TESObjectREFR* thisObj, ...);
+    DispatchReturn (*DispatchEventAltThreadSafe)(const char* eventName, DispatchCallback resultCallback, void* anyData,
+        PostDispatchCallback postCallback, TESObjectREFR* thisObj, ...);
+
+    void (*SetNativeHandlerFunctionValue)(NVSEArrayVarInterface::Element& value);
+
+    bool (*SetNativeEventHandlerWithPriority)(const char* eventName, NativeEventHandler func,
+        PluginHandle pluginHandle, const char* handlerName, int priority);
+    bool (*RemoveNativeEventHandlerWithPriority)(const char* eventName, NativeEventHandler func, int priority);
+
+    bool (*IsEventHandlerFirst)(const char* eventName, NativeEventHandler func, int startPriority,
+        TESForm** scriptsToIgnore, UInt32 numScriptsToIgnore,
+        const char** pluginsToIgnore, UInt32 numPluginsToIgnore,
+        const char** pluginHandlersToIgnore, UInt32 numPluginHandlersToIgnore);
+    bool (*IsEventHandlerLast)(const char* eventName, NativeEventHandler func, int startPriority,
+        TESForm** scriptsToIgnore, UInt32 numScriptsToIgnore,
+        const char** pluginsToIgnore, UInt32 numPluginsToIgnore,
+        const char** pluginHandlersToIgnore, UInt32 numPluginHandlersToIgnore);
+
+    NVSEArrayVarInterface::Array* (*GetHigherPriorityEventHandlers)(const char* eventName, NativeEventHandler func, int priority,
+        TESForm** scriptsToIgnore, UInt32 numScriptsToIgnore,
+        const char** pluginsToIgnore, UInt32 numPluginsToIgnore,
+        const char** pluginHandlersToIgnore, UInt32 numPluginHandlersToIgnore);
+    NVSEArrayVarInterface::Array* (*GetLowerPriorityEventHandlers)(const char* eventName, NativeEventHandler func, int priority,
+        TESForm** scriptsToIgnore, UInt32 numScriptsToIgnore,
+        const char** pluginsToIgnore, UInt32 numPluginsToIgnore,
+        const char** pluginHandlersToIgnore, UInt32 numPluginHandlersToIgnore);
 };
 
 struct NVSEScriptInterface {
