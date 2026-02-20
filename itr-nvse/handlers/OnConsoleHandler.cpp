@@ -5,6 +5,7 @@
 
 #include "OnConsoleHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/EventDispatch.h"
 
 static PluginHandle g_ochPluginHandle = kPluginHandle_Invalid;
 static NVSEScriptInterface* g_ochScript = nullptr;
@@ -26,6 +27,8 @@ constexpr UInt32 kAddr_ConsoleCloseHook = 0x71D720;
 
 static void DispatchConsoleOpenEvent()
 {
+    if (g_eventManagerInterface)
+        g_eventManagerInterface->DispatchEvent("ITR:OnConsoleOpen", nullptr);
 
     const std::vector<Script*> callbackSnapshot = OnConsoleHandler::g_openCallbacks;
     for (Script* callback : callbackSnapshot) {
@@ -37,6 +40,8 @@ static void DispatchConsoleOpenEvent()
 
 static void DispatchConsoleCloseEvent()
 {
+    if (g_eventManagerInterface)
+        g_eventManagerInterface->DispatchEvent("ITR:OnConsoleClose", nullptr);
 
     const std::vector<Script*> callbackSnapshot = OnConsoleHandler::g_closeCallbacks;
     for (Script* callback : callbackSnapshot) {

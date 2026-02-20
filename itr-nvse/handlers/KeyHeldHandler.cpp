@@ -7,6 +7,7 @@
 #include "KeyHeldHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/EngineFunctions.h"
+#include "internal/EventDispatch.h"
 
 static NVSEScriptInterface* g_khhScript = nullptr;
 static bool (*g_ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, ...) = nullptr;
@@ -59,6 +60,8 @@ static bool IsControlPressed(UInt32 controlCode) {
 }
 
 static void DispatchHeldEvent(Script* callback, UInt32 key, float duration) {
+    if (g_eventManagerInterface)
+        g_eventManagerInterface->DispatchEvent("ITR:OnKeyHeld", nullptr, (int)key, (double)duration);
     if (!g_khhScript || !callback) return;
     //pass float by reinterpreting raw bits as UInt32 to avoid varargs double promotion
     g_khhScript->CallFunctionAlt(callback, nullptr, 2, key, *(UInt32*)&duration);

@@ -10,6 +10,7 @@
 #include "internal/NVSEMinimal.h"
 #include "internal/ScopedLock.h"
 #include "internal/Detours.h"
+#include "internal/EventDispatch.h"
 
 static NVSEScriptInterface* g_cmhScript = nullptr;
 static bool (*g_ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, ...) = nullptr;
@@ -54,17 +55,7 @@ static volatile LONG g_metaLockInit = 0;
 
 static void EnsureMetaLockInitialized()
 {
-    if (g_metaLockInit == 2) return;
-
-    if (InterlockedCompareExchange(&g_metaLockInit, 1, 0) == 0) {
-        InitializeCriticalSection(&g_metaLock);
-        InterlockedExchange(&g_metaLockInit, 2);
-        return;
-    }
-
-    while (g_metaLockInit != 2) {
-        Sleep(0);
-    }
+    InitCriticalSectionOnce(&g_metaLockInit, &g_metaLock);
 }
 
 static int NormalizeMetaType(int metaType)
@@ -133,11 +124,15 @@ static Detours::JumpDetour s_detour;
 static void DispatchCornerMessage(const char* text, UInt32 emotion,
     const char* iconPath, const char* soundPath, float displayTime, int metaType)
 {
-    if (!g_cmhScript) return;
-
     const char* safeText = text ? text : "";
     const char* safeIcon = iconPath ? iconPath : "";
     const char* safeSound = soundPath ? soundPath : "";
+
+    if (g_eventManagerInterface)
+        g_eventManagerInterface->DispatchEvent("ITR:OnCornerMessage", nullptr,
+            safeText, (int)emotion, safeIcon, safeSound, (double)displayTime, metaType);
+
+    if (!g_cmhScript) return;
 
     for (const auto& cb : g_callbacks) {
         if (cb.script) {

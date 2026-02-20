@@ -7,6 +7,8 @@
 #include "OnJumpLandHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/ScopedLock.h"
+#include "internal/EngineFunctions.h"
+#include "internal/EventDispatch.h"
 
 static NVSEScriptInterface* g_ojlhScript = nullptr;
 static _CaptureLambdaVars g_CaptureLambdaVars = nullptr;
@@ -74,17 +76,7 @@ namespace OnJumpLandHandler
 
 static void EnsureStateLockInitialized()
 {
-    if (OnJumpLandHandler::g_stateLockInit == 2) return;
-
-    if (InterlockedCompareExchange(&OnJumpLandHandler::g_stateLockInit, 1, 0) == 0)
-    {
-        InitializeCriticalSection(&OnJumpLandHandler::g_stateLock);
-        InterlockedExchange(&OnJumpLandHandler::g_stateLockInit, 2);
-        return;
-    }
-
-    while (OnJumpLandHandler::g_stateLockInit != 2)
-        Sleep(0);
+    InitCriticalSectionOnce(&OnJumpLandHandler::g_stateLockInit, &OnJumpLandHandler::g_stateLock);
 }
 
 static UInt32 ReadRefID(const void* form)
@@ -107,31 +99,6 @@ static float ReadControllerFallTime(const void* charCtrl)
     return charCtrl ? *(const float*)((const UInt8*)charCtrl + 0x548) : 0.0f;
 }
 
-static TESForm* LookupFormByID_Local(UInt32 refID)
-{
-    if (!refID) return nullptr;
-
-    struct Entry {
-        Entry* next;
-        UInt32 key;
-        TESForm* form;
-    };
-
-    UInt8* map = *(UInt8**)0x11C54C0;
-    if (!map) return nullptr;
-
-    UInt32 numBuckets = *(UInt32*)(map + 4);
-    Entry** buckets = *(Entry***)(map + 8);
-    if (!buckets || !numBuckets) return nullptr;
-
-    for (Entry* e = buckets[refID % numBuckets]; e; e = e->next)
-    {
-        if (e->key == refID)
-            return e->form;
-    }
-
-    return nullptr;
-}
 
 static bool IsReadableAddress(const void* ptr, size_t size = sizeof(void*))
 {
@@ -566,7 +533,7 @@ void OJLH_Update()
 
         bool hasCallbacks = !OnJumpLandHandler::g_jumpCallbacks.empty()
                          || !OnJumpLandHandler::g_landedCallbacks.empty();
-        if (!hasCallbacks)
+        if (!hasCallbacks && !g_eventManagerInterface)
         {
             OnJumpLandHandler::g_pendingEvents.clear();
             OnJumpLandHandler::g_controllerMap.clear();
@@ -582,20 +549,24 @@ void OJLH_Update()
 
     for (const auto& evt : queuedEvents)
     {
-        TESForm* actorForm = LookupFormByID_Local(evt.actorRefID);
-        if (!actorForm)
+        void* actor = Engine::LookupFormByID(evt.actorRefID);
+        if (!actor)
             continue;
-        void* actor = actorForm;
 
         if (evt.eventType == kEvent_Landed)
         {
+            if (g_eventManagerInterface)
+                g_eventManagerInterface->DispatchEvent("ITR:OnActorLanded",
+                    reinterpret_cast<TESObjectREFR*>(actor),
+                    (TESForm*)actor, (double)evt.preClearFallTime);
+
             for (const auto& cb : landedSnapshot)
             {
                 if (!cb.callback || !cb.callbackFormID) continue;
                 if (!PassesActorFilter(actor, cb.actorFilter)) continue;
 
-                TESForm* resolved = LookupFormByID_Local(cb.callbackFormID);
-                if (!resolved || resolved != (TESForm*)cb.callback)
+                void* resolved = Engine::LookupFormByID(cb.callbackFormID);
+                if (!resolved || resolved != (void*)cb.callback)
                 {
                     badLandedCallbacks.push_back(cb.callback);
                     continue;
@@ -613,13 +584,18 @@ void OJLH_Update()
         }
         else if (evt.eventType == kEvent_JumpStart)
         {
+            if (g_eventManagerInterface)
+                g_eventManagerInterface->DispatchEvent("ITR:OnJumpStart",
+                    reinterpret_cast<TESObjectREFR*>(actor),
+                    (TESForm*)actor);
+
             for (const auto& cb : jumpSnapshot)
             {
                 if (!cb.callback || !cb.callbackFormID) continue;
                 if (!PassesActorFilter(actor, cb.actorFilter)) continue;
 
-                TESForm* resolved = LookupFormByID_Local(cb.callbackFormID);
-                if (!resolved || resolved != (TESForm*)cb.callback)
+                void* resolved = Engine::LookupFormByID(cb.callbackFormID);
+                if (!resolved || resolved != (void*)cb.callback)
                 {
                     badJumpCallbacks.push_back(cb.callback);
                     continue;
