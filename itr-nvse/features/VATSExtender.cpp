@@ -7,6 +7,7 @@
 #include "internal/SafeWrite.h"
 
 #include "internal/globals.h"
+#include "internal/EngineFunctions.h"
 
 template <typename T_Ret = uint32_t, typename ...Args>
 __forceinline T_Ret VE_ThisCall(uint32_t _addr, const void* _this, Args ...args) {
@@ -29,9 +30,6 @@ namespace VATSExtender
 	bool g_lastWasInterior = false;
 
 	void** g_interfaceManager = (void**)0x11D8A80;
-
-	typedef TESForm* (*_LookupFormByID)(UInt32 id);
-	static const _LookupFormByID VE_LookupFormByID = (_LookupFormByID)0x004839C0;
 
 	void* GetVATSHighlightData()
 	{
@@ -130,7 +128,7 @@ namespace VATSExtender
 					int rendered = 0;
 					for (UInt32 i = 0; i < g_overflowCount; i++)
 					{
-						TESForm* form = VE_LookupFormByID(g_overflowRefIDs[i]);
+						TESForm* form = (TESForm*)Engine::LookupFormByID(g_overflowRefIDs[i]);
 						if (!form || form->typeID != kFormType_Reference) continue;
 
 						TESObjectREFR* refr = (TESObjectREFR*)form;

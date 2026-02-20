@@ -8,6 +8,7 @@
 #include "internal/Detours.h"
 #include "internal/ScopedLock.h"
 #include "internal/EngineFunctions.h"
+#include "internal/EventDispatch.h"
 
 static PluginHandle g_ocphPluginHandle = kPluginHandle_Invalid;
 static NVSEScriptInterface* g_ocphScript = nullptr;
@@ -39,17 +40,7 @@ namespace OnCombatProcedureHandler {
 
 static void EnsureStateLockInitialized()
 {
-    if (OnCombatProcedureHandler::g_stateLockInit == 2) return;
-
-    if (InterlockedCompareExchange(&OnCombatProcedureHandler::g_stateLockInit, 1, 0) == 0)
-    {
-        InitializeCriticalSection(&OnCombatProcedureHandler::g_stateLock);
-        InterlockedExchange(&OnCombatProcedureHandler::g_stateLockInit, 2);
-        return;
-    }
-
-    while (OnCombatProcedureHandler::g_stateLockInit != 2)
-        Sleep(0);
+    InitCriticalSectionOnce(&OnCombatProcedureHandler::g_stateLockInit, &OnCombatProcedureHandler::g_stateLock);
 }
 
 static Detours::JumpDetour s_actionDetour;
@@ -66,19 +57,6 @@ static UInt32 ReadRefID(const void* form)
     return form ? *(const UInt32*)((const UInt8*)form + 0x0C) : 0;
 }
 
-static TESForm* LookupFormByID(UInt32 refID)
-{
-    if (!refID) return nullptr;
-    struct Entry { Entry* next; UInt32 key; TESForm* form; };
-    UInt8* map = *(UInt8**)0x11C54C0;
-    if (!map) return nullptr;
-    UInt32 numBuckets = *(UInt32*)(map + 4);
-    Entry** buckets = *(Entry***)(map + 8);
-    if (!buckets || !numBuckets) return nullptr;
-    for (Entry* e = buckets[refID % numBuckets]; e; e = e->next)
-        if (e->key == refID) return e->form;
-    return nullptr;
-}
 
 //vtable addresses for each procedure type (0-12)
 static UInt32 s_vtableMap[13] = {0};
@@ -178,12 +156,10 @@ static void __cdecl QueueCombatProcedureEvent(void* combatController, void* proc
     constexpr size_t kMaxQueuedEvents = 256;
     {
         ScopedLock lock(&OnCombatProcedureHandler::g_stateLock);
-        if (OnCombatProcedureHandler::g_callbacks.empty()) {
+        if (OnCombatProcedureHandler::g_callbacks.empty() && !g_eventManagerInterface)
             return;
-        }
-        if (OnCombatProcedureHandler::g_pendingEvents.size() >= kMaxQueuedEvents) {
+        if (OnCombatProcedureHandler::g_pendingEvents.size() >= kMaxQueuedEvents)
             return;
-        }
         OnCombatProcedureHandler::g_pendingEvents.push_back({actorRefID, procType, isActionProcedure != 0});
     }
 }
@@ -191,7 +167,6 @@ static void __cdecl QueueCombatProcedureEvent(void* combatController, void* proc
 void OCPH_Update()
 {
     if (OnCombatProcedureHandler::g_stateLockInit != 2) return;
-    if (!g_ocphScript) return;
 
     DWORD currentThreadId = GetCurrentThreadId();
     if (!OnCombatProcedureHandler::g_mainThreadId)
@@ -207,11 +182,14 @@ void OCPH_Update()
         callbackSnapshot = OnCombatProcedureHandler::g_callbacks;
     }
 
-    if (callbackSnapshot.empty()) return;
-
     for (const QueuedCombatEvent& evt : queuedEvents) {
-        Actor* actor = reinterpret_cast<Actor*>(LookupFormByID(evt.actorRefID));
+        Actor* actor = reinterpret_cast<Actor*>(Engine::LookupFormByID(evt.actorRefID));
         if (!actor) continue;
+
+        if (g_eventManagerInterface)
+            g_eventManagerInterface->DispatchEvent("ITR:OnCombatProcedure",
+                reinterpret_cast<TESObjectREFR*>(actor),
+                actor, (int)evt.procType, evt.isActionProcedure ? 1 : 0);
 
         for (const CallbackEntry& entry : callbackSnapshot) {
             if (!entry.callback) continue;

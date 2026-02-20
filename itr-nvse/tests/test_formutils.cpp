@@ -12,55 +12,55 @@ struct MockRef {
 
 TEST(FormUtils_IsInventoryItem_Weapon)
 {
-	ASSERT(IsInventoryItemType(kFormType_Weapon));
+	ASSERT(IsInventoryItemType(0x28));
 	return true;
 }
 
 TEST(FormUtils_IsInventoryItem_Armor)
 {
-	ASSERT(IsInventoryItemType(kFormType_Armor));
+	ASSERT(IsInventoryItemType(0x18));
 	return true;
 }
 
 TEST(FormUtils_IsInventoryItem_Ammo)
 {
-	ASSERT(IsInventoryItemType(kFormType_Ammo));
+	ASSERT(IsInventoryItemType(0x29));
 	return true;
 }
 
 TEST(FormUtils_IsInventoryItem_Key)
 {
-	ASSERT(IsInventoryItemType(kFormType_Key));
+	ASSERT(IsInventoryItemType(0x2E));
 	return true;
 }
 
 TEST(FormUtils_IsInventoryItem_Book)
 {
-	ASSERT(IsInventoryItemType(kFormType_Book));
+	ASSERT(IsInventoryItemType(0x19));
 	return true;
 }
 
 TEST(FormUtils_IsInventoryItem_AlchemyItem)
 {
-	ASSERT(IsInventoryItemType(kFormType_AlchemyItem));
+	ASSERT(IsInventoryItemType(0x2F));
 	return true;
 }
 
 TEST(FormUtils_IsInventoryItem_Note)
 {
-	ASSERT(IsInventoryItemType(kFormType_Note));
+	ASSERT(IsInventoryItemType(0x31));
 	return true;
 }
 
 TEST(FormUtils_NotInventoryItem_Creature)
 {
-	ASSERT(!IsInventoryItemType(kFormType_Creature));
+	ASSERT(!IsInventoryItemType(0x30));
 	return true;
 }
 
 TEST(FormUtils_NotInventoryItem_NPC)
 {
-	ASSERT(!IsInventoryItemType(kFormType_NPC));
+	ASSERT(!IsInventoryItemType(0x36));
 	return true;
 }
 
