@@ -56,22 +56,27 @@ namespace LocationVisitPopup
 		return *(void**)((UInt8*)hudMenu + 0x30);
 	}
 
+	static int TraitNameToID(const char* name) {
+		return ((int(__cdecl*)(const char*))0xA01860)(name);
+	}
+
 	static bool CheckMUXInstalled() {
 		void* tile = GetHUDMainMenuTile();
 		if (!tile) return false;
-		int traitIndex = LVPThisCall<int>(0xA0B110, tile, "_UXQV+Location");
-		return traitIndex != -1;
+		int traitID = TraitNameToID("_UXQV+Location");
+		void* val = LVPThisCall<void*>(0xA01000, tile, traitID);
+		return val != nullptr;
 	}
 
 	static void ShowPopupMUX(const char* name) {
 		void* tile = GetHUDMainMenuTile();
 		if (!tile) return;
-		int locTrait = LVPThisCall<int>(0xA0B110, tile, "_UXQV+Location");
-		int alphaTrait = LVPThisCall<int>(0xA0B110, tile, "_UXQV+Alpha");
-		if (locTrait != -1)
-			LVPThisCall<void>(0xA0B270, tile, locTrait, name, true);
-		if (alphaTrait != -1)
-			LVPThisCall<void>(0xA0A280, tile, alphaTrait, 255.0f, true);
+		int locTrait = TraitNameToID("_UXQV+Location");
+		int alphaTrait = TraitNameToID("_UXQV+Alpha");
+		if (LVPThisCall<void*>(0xA01000, tile, locTrait))
+			LVPThisCall<void>(0xA01350, tile, locTrait, name, true);
+		if (LVPThisCall<void*>(0xA01000, tile, alphaTrait))
+			LVPThisCall<void>(0xA012D0, tile, alphaTrait, 255.0f, true);
 	}
 
 	static void ShowPopupVanilla(const char* name) {
