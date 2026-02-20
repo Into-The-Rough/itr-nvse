@@ -7,6 +7,7 @@
 #include "internal/Detours.h"
 
 #include "internal/globals.h"
+#include "internal/CallTemplates.h"
 
 namespace ArmorDTDRFix
 {
@@ -23,11 +24,6 @@ namespace ArmorDTDRFix
 		char pad[0x68];
 		BaseProcess* baseProcess;
 	};
-
-	template <typename T_Ret = void, typename... Args>
-	__forceinline T_Ret ThisCall(uint32_t addr, void* _this, Args... args) {
-		return ((T_Ret(__thiscall*)(void*, Args...))addr)(_this, args...);
-	}
 
 	typedef void(__thiscall* ResetArmorRating_t)(void*);
 

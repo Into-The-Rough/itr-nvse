@@ -5,17 +5,13 @@
 #include "internal/EngineFunctions.h"
 
 #include "internal/globals.h"
+#include "internal/CallTemplates.h"
 
 namespace OwnedBeds
 {
 	static bool g_enabled = false;
 
 	static bool g_playerWarnedAboutBed = false;
-
-	template <typename T_Ret = void, typename... Args>
-	__forceinline T_Ret OBThisCall(UInt32 addr, void* thisObj, Args... args) {
-		return reinterpret_cast<T_Ret(__thiscall*)(void*, Args...)>(addr)(thisObj, args...);
-	}
 
 	inline UInt8 GetFormType(void* form) {
 		return *((UInt8*)form + 4);
@@ -35,9 +31,9 @@ namespace OwnedBeds
 		UInt8 formType = GetFormType(owner);
 
 		if (formType == 8) { //kFormType_TESFaction
-			nearbyActor = OBThisCall<void*>(0x970B30, processList, owner, true, true);
+			nearbyActor = ThisCall<void*>(0x970B30, processList, owner, true, true);
 		} else {
-			nearbyActor = OBThisCall<void*>(0x970A20, processList, owner, 0);
+			nearbyActor = ThisCall<void*>(0x970A20, processList, owner, 0);
 		}
 
 		if (!nearbyActor || nearbyActor == player)
@@ -45,7 +41,7 @@ namespace OwnedBeds
 
 		bool hasLOS = false;
 		bool a8 = false;
-		SInt32 detectionLevel = OBThisCall<SInt32>(0x8A0D10,
+		SInt32 detectionLevel = ThisCall<SInt32>(0x8A0D10,
 			nearbyActor, true, player, &hasLOS, false, false, 0, &a8);
 
 		if (detectionLevel <= 0)
@@ -61,7 +57,7 @@ namespace OwnedBeds
 			}
 			g_playerWarnedAboutBed = true;
 		} else {
-			OBThisCall(0x8C0460, nearbyActor, player, false, 1); //AttackAlarm
+			ThisCall(0x8C0460, nearbyActor, player, false, 1); //AttackAlarm
 		}
 	}
 

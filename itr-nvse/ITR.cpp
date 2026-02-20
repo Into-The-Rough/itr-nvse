@@ -77,10 +77,7 @@
 #include <cstdio>
 #include <cstring>
 
-template <typename T_Ret = uint32_t, typename ...Args>
-__forceinline T_Ret ThisCall(uint32_t _addr, const void* _this, Args ...args) {
-	return ((T_Ret(__thiscall*)(const void*, Args...))_addr)(_this, std::forward<Args>(args)...);
-}
+#include "internal/CallTemplates.h"
 
 #define kMessage_MainGameLoop 20
 #define kMessage_ReloadConfig 25  //sent via ReloadPluginConfig console command
@@ -234,15 +231,11 @@ namespace NoWeaponSearch
 	static UInt32 g_disabled[MAX_DISABLED] = {0};
 	static int g_count = 0;
 	static CRITICAL_SECTION g_lock;
-	static bool g_lockInit = false;
+	static volatile LONG g_lockInit = 0;
 
 	static void EnsureLockInit()
 	{
-		if (!g_lockInit)
-		{
-			InitializeCriticalSection(&g_lock);
-			g_lockInit = true;
-		}
+		InitCriticalSectionOnce(&g_lockInit, &g_lock);
 	}
 
 	typedef bool (__thiscall *CombatItemSearch_t)(void* combatState);
@@ -468,25 +461,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					ResetMusicStateForLoad();
 					Log("Music state reset for post-load");
 				}
-				//clear all script callbacks - scripts from previous save are no longer valid
-				OWJH_ClearCallbacks();
-				OSH_ClearCallbacks();
-				OCH_ClearCallbacks();
-				OKSH_ClearCallbacks();
-				KHH_ClearCallbacks();
-				DTH_ClearCallbacks();
-				CMH_ClearCallbacks();
-				OEPH_ClearCallbacks();
-				OCPH_ClearCallbacks();
-				OFH_ClearCallbacks();
-				OWDH_ClearCallbacks();
-				OSPH_ClearCallbacks();
-				OJLH_ClearCallbacks();
-				OMFCH_ClearCallbacks();
-				OMSCH_ClearCallbacks();
-				DTF_ClearCallbacks();
 				WeaponEmissive_ClearState();
-				Log("Script callbacks cleared for new/loaded game");
 
 				OEPH_BuildEntryMap();
 				if (Settings::bAutoGodMode && !g_godModeExecuted)
@@ -550,6 +525,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 
 		case kMessage_MainGameLoop:
+			OCH_Update();
 			CameraOverride_Init();
 			DTF_Update();
 			if (Settings::bLocationVisitPopup)
@@ -659,114 +635,114 @@ static void LogSettings()
 static void RegisterHandlers(NVSEInterface* nvse)
 {
 	if (DTF_Init((void*)nvse))
-		Log("DialogueTextFilter module initialized (opcode 0x%04X)", DTF_GetOpcode());
+		Log("DialogueTextFilter initialized");
 	else
-		Log("DialogueTextFilter module failed to initialize");
+		Log("DialogueTextFilter failed to initialize");
 
 	if (OSH_Init((void*)nvse))
-		Log("OnStealHandler module initialized (opcode 0x%04X)", OSH_GetOpcode());
+		Log("OnStealHandler initialized");
 	else
-		Log("OnStealHandler module failed to initialize");
+		Log("OnStealHandler failed to initialize");
 
 	if (OWDH_Init((void*)nvse))
-		Log("OnWeaponDropHandler module initialized (opcode 0x%04X)", OWDH_GetOpcode());
+		Log("OnWeaponDropHandler initialized");
 	else
-		Log("OnWeaponDropHandler module failed to initialize");
+		Log("OnWeaponDropHandler failed to initialize");
 
 	if (OCH_Init((void*)nvse))
-		Log("OnConsoleHandler module initialized (open=0x%04X, close=0x%04X)", OCH_GetOpenOpcode(), OCH_GetCloseOpcode());
+		Log("OnConsoleHandler initialized");
 	else
-		Log("OnConsoleHandler module failed to initialize");
+		Log("OnConsoleHandler failed to initialize");
 
 	if (OWJH_Init((void*)nvse))
-		Log("OnWeaponJamHandler module initialized (opcode 0x%04X)", OWJH_GetOpcode());
+		Log("OnWeaponJamHandler initialized");
 	else
-		Log("OnWeaponJamHandler module failed to initialize");
+		Log("OnWeaponJamHandler failed to initialize");
 
 	if (OKSH_Init((void*)nvse))
-		Log("OnKeyStateHandler module initialized (disabled=0x%04X, enabled=0x%04X)", OKSH_GetDisabledOpcode(), OKSH_GetEnabledOpcode());
+		Log("OnKeyStateHandler initialized");
 	else
-		Log("OnKeyStateHandler module failed to initialize");
+		Log("OnKeyStateHandler failed to initialize");
 
-	if (KHH_Init((void*)nvse))
-		Log("KeyHeldHandler module initialized");
+	if (KHH_Init())
+		Log("KeyHeldHandler initialized");
 	else
-		Log("KeyHeldHandler module failed to initialize");
+		Log("KeyHeldHandler failed to initialize");
 
-	if (DTH_Init((void*)nvse))
-		Log("DoubleTapHandler module initialized");
+	if (DTH_Init())
+		Log("DoubleTapHandler initialized");
 	else
-		Log("DoubleTapHandler module failed to initialize");
+		Log("DoubleTapHandler failed to initialize");
 
 	if (OFH_Init((void*)nvse))
-		Log("OnFrenzyHandler module initialized (opcode 0x%04X)", OFH_GetOpcode());
+		Log("OnFrenzyHandler initialized");
 	else
-		Log("OnFrenzyHandler module failed to initialize");
+		Log("OnFrenzyHandler failed to initialize");
 
 	if (CMH_Init((void*)nvse))
-		Log("CornerMessageHandler module initialized (opcode 0x%04X)", CMH_GetOpcode());
+		Log("CornerMessageHandler initialized");
 	else
-		Log("CornerMessageHandler module failed to initialize");
+		Log("CornerMessageHandler failed to initialize");
 
 	nvse->SetOpcodeBase(0x401D);
 	CameraOverride_RegisterCommands(nvse);
 	Log("Registered SetCameraAngle at opcode 0x401D");
 
 	if (OEPH_Init((void*)nvse))
-		Log("OnEntryPointHandler module initialized (opcode 0x%04X)", OEPH_GetOpcode());
+		Log("OnEntryPointHandler initialized");
 	else
-		Log("OnEntryPointHandler module failed to initialize");
+		Log("OnEntryPointHandler failed to initialize");
 
 	if (OCPH_Init((void*)nvse))
-		Log("OnCombatProcedureHandler module initialized (opcode 0x%04X)", OCPH_GetOpcode());
+		Log("OnCombatProcedureHandler initialized");
 	else
-		Log("OnCombatProcedureHandler module failed to initialize");
+		Log("OnCombatProcedureHandler failed to initialize");
 
 	if (OSPH_Init((void*)nvse))
-		Log("OnSoundPlayedHandler module initialized (play=0x%04X, completed=0x%04X)", OSPH_GetOpcode(), OSPH_GetCompletionOpcode());
+		Log("OnSoundPlayedHandler initialized");
 	else
-		Log("OnSoundPlayedHandler module failed to initialize");
+		Log("OnSoundPlayedHandler failed to initialize");
 
 	if (OJLH_Init((void*)nvse))
-		Log("OnJumpLandHandler module initialized (landed=0x%04X, jump=0x%04X)", OJLH_GetLandedOpcode(), OJLH_GetJumpOpcode());
+		Log("OnJumpLandHandler initialized");
 	else
-		Log("OnJumpLandHandler module failed to initialize");
+		Log("OnJumpLandHandler failed to initialize");
 
 	if (FDH_Init((void*)nvse))
-		Log("FallDamageHandler module initialized (SetMult=0x%04X, GetMult=0x%04X)", FDH_GetSetMultOpcode(), FDH_GetGetMultOpcode());
+		Log("FallDamageHandler initialized (SetMult=0x%04X, GetMult=0x%04X)", FDH_GetSetMultOpcode(), FDH_GetGetMultOpcode());
 	else
-		Log("FallDamageHandler module failed to initialize");
+		Log("FallDamageHandler failed to initialize");
 
 	if (Settings::bDialogueCamera)
 	{
 		if (DCH_Init((void*)nvse))
-			Log("DialogueCameraHandler module initialized");
+			Log("DialogueCameraHandler initialized");
 		else
-			Log("DialogueCameraHandler module failed to initialize");
+			Log("DialogueCameraHandler failed to initialize");
 	}
 
 	if (FakeHit_Init((void*)nvse))
-		Log("FakeHitHandler module initialized");
+		Log("FakeHitHandler initialized");
 	else
-		Log("FakeHitHandler module failed to initialize");
+		Log("FakeHitHandler failed to initialize");
 
 	if (Settings::bOwnerNameInfo)
 	{
 		if (ONI_Init())
-			Log("OwnerNameInfoHandler module initialized");
+			Log("OwnerNameInfoHandler initialized");
 		else
-			Log("OwnerNameInfoHandler module failed to initialize");
+			Log("OwnerNameInfoHandler failed to initialize");
 	}
 
 	if (OMFCH_Init((void*)nvse))
-		Log("OnMenuFilterChangeHandler module initialized (opcode 0x%04X)", OMFCH_GetOpcode());
+		Log("OnMenuFilterChangeHandler initialized");
 	else
-		Log("OnMenuFilterChangeHandler module failed to initialize");
+		Log("OnMenuFilterChangeHandler failed to initialize");
 
 	if (OMSCH_Init((void*)nvse))
-		Log("OnMenuSideChangeHandler module initialized (opcode 0x%04X)", OMSCH_GetOpcode());
+		Log("OnMenuSideChangeHandler initialized");
 	else
-		Log("OnMenuSideChangeHandler module failed to initialize");
+		Log("OnMenuSideChangeHandler failed to initialize");
 
 	if (Settings::bSaveFileSize)
 		Log("SaveFileSizeHandler will initialize in PostLoad");
