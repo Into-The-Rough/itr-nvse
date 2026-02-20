@@ -3,6 +3,8 @@
 #include "ImperativeCommands.h"
 #define FORMUTILS_USE_NVSE_TYPES
 #include "internal/FormUtils.h"
+#include "internal/EngineFunctions.h"
+#include "internal/EventManagerInterface.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/GameObjects.h"
@@ -24,47 +26,8 @@ using namespace FormUtils;
 
 namespace
 {
-	struct EventResultElement
-	{
-		enum Type : UInt8
-		{
-			kType_Invalid = 0,
-			kType_Numeric = 1,
-			kType_Form = 2,
-			kType_String = 3,
-			kType_Array = 4
-		};
-
-		union
-		{
-			UInt32 raw;
-			char* str;
-			void* arr;
-			TESForm* form;
-			double num;
-		};
-		UInt8 type;
-
-		bool IsValid() const { return type != kType_Invalid; }
-	};
-
-	struct EventManagerInterfaceEx
-	{
-		enum DispatchReturn : SInt32
-		{
-			kRetn_UnknownEvent = -2,
-			kRetn_GenericError = -1,
-			kRetn_Normal = 0,
-			kRetn_EarlyBreak = 1,
-			kRetn_Deferred = 2
-		};
-
-		using DispatchCallback = bool (*)(EventResultElement& result, void* anyData);
-
-		bool (*RegisterEvent)(const char* name, UInt8 numParams, UInt8* paramTypes, UInt32 flags);
-		bool (*DispatchEvent)(const char* eventName, TESObjectREFR* thisObj, ...);
-		DispatchReturn (*DispatchEventAlt)(const char* eventName, DispatchCallback resultCallback, void* anyData, TESObjectREFR* thisObj, ...);
-	};
+	using EventResultElement = EventManager::ResultElement;
+	using EventManagerInterfaceEx = EventManager::Interface;
 
 	struct Setting
 	{
@@ -81,9 +44,6 @@ namespace
 
 	using QueueUIMessage_t = bool (*)(const char* msgText, UInt32 iconType, const char* iconPath, const char* soundPath, float displayTime, UInt8 unk5);
 	using InventoryRefCreateEntry_t = TESObjectREFR* (__stdcall *)(TESObjectREFR* container, TESForm* itemForm, SInt32 countDelta, ExtraDataList* xData);
-	using BaseExtraListGetByType_t = BSExtraData* (__thiscall *)(BaseExtraList* extraList, UInt32 type);
-
-	constexpr UInt32 kInterface_EventManager = 8;
 	constexpr UInt32 kNVSEData_InventoryReferenceCreateEntry = 7;
 	constexpr UInt32 kAVCode_PerceptionCondition = 0x19;
 	constexpr UInt32 kAVCode_RightMobilityCondition = 0x1E;
@@ -91,7 +51,6 @@ namespace
 
 	static EventManagerInterfaceEx* g_eventInterface = nullptr;
 	static InventoryRefCreateEntry_t g_inventoryRefCreateEntry = nullptr;
-	static BaseExtraListGetByType_t s_getExtraDataByType = reinterpret_cast<BaseExtraListGetByType_t>(0x410220); //BaseExtraList::GetByType
 	static QueueUIMessage_t s_queueUIMessage = reinterpret_cast<QueueUIMessage_t>(0x7052F0); //QueueUIMessage
 	static Setting* g_sFullHealth = reinterpret_cast<Setting*>(0x11D2AF0);
 	static BGSDefaultObjectManager** g_defaultObjectManager = reinterpret_cast<BGSDefaultObjectManager**>(0x11CA80C);
@@ -883,10 +842,8 @@ static void* ResolveRadioActivator(TESForm* baseForm)
 
 static void StopRadioSound(RadioSoundKey* key)
 {
-	using SoundStop_t = void(__thiscall*)(RadioSoundKey*);
-	static auto Sound_Stop = reinterpret_cast<SoundStop_t>(0xAD88F0);
 	RadioSoundKey copy = *key;
-	Sound_Stop(&copy);
+	Engine::BSSoundHandle_Stop(&copy);
 	key->soundKey = 0xFFFFFFFF;
 }
 
@@ -920,7 +877,7 @@ static bool AdvanceDynamicRadios(double* result)
 			}
 
 			auto* xRadio = reinterpret_cast<ExtraRadioDataLite*>(
-				s_getExtraDataByType(reinterpret_cast<BaseExtraList*>(&dr->ref->extraDataList), kExtraData_RadioData));
+				Engine::BaseExtraList_GetByType(&dr->ref->extraDataList, kExtraData_RadioData));
 			if (xRadio && xRadio->positionRef)
 			{
 				stationRef = xRadio->positionRef;
@@ -1068,7 +1025,7 @@ bool Cmd_UseAidItem_Execute(COMMAND_ARGS)
 		return true;
 
 	Actor* actor = static_cast<Actor*>(thisObj);
-	BSExtraData* xContainerChanges = s_getExtraDataByType(reinterpret_cast<BaseExtraList*>(&actor->extraDataList), kExtraData_ContainerChanges);
+	BSExtraData* xContainerChanges = (BSExtraData*)Engine::BaseExtraList_GetByType(&actor->extraDataList, kExtraData_ContainerChanges);
 	ExtraContainerChanges* xChanges = static_cast<ExtraContainerChanges*>(xContainerChanges);
 	if (!xChanges || !xChanges->data || !xChanges->data->objList)
 		return true;
@@ -1346,7 +1303,7 @@ bool ImperativeCommands_Init(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 
-	g_eventInterface = reinterpret_cast<EventManagerInterfaceEx*>(nvse->QueryInterface(kInterface_EventManager));
+	g_eventInterface = reinterpret_cast<EventManagerInterfaceEx*>(nvse->QueryInterface(EventManager::kInterface_EventManager));
 	g_inventoryRefCreateEntry = nullptr;
 
 	NVSEDataInterface* dataInterface = reinterpret_cast<NVSEDataInterface*>(nvse->QueryInterface(kInterface_Data));

@@ -29,6 +29,7 @@ struct TESTopicInfoResponse {
     String  voiceFilePath;          //0x20
     TESTopicInfoResponse* next;     //0x28
 };
+static_assert(offsetof(TESTopicInfoResponse, responseText) == 0x18);
 
 struct ModInfo {
     UInt8 pad00[0x20];

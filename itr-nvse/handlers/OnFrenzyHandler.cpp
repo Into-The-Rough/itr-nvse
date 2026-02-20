@@ -6,6 +6,7 @@
 #include "OnFrenzyHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/Detours.h"
+#include "internal/EventDispatch.h"
 
 static NVSEScriptInterface* g_ofhScript = nullptr;
 static bool (*g_ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, ...) = nullptr;
@@ -30,27 +31,24 @@ constexpr UInt32 kAddr_LimbCondition_HandleChange = 0x8B9240;
 static Detours::JumpDetour s_detour;
 
 static void DispatchFrenzyEvent(Actor* actor) {
-    if (!g_ofhScript || !actor) return;
+    if (!actor) return;
 
     TESForm* baseForm = *(TESForm**)((UInt8*)actor + 0x20); //baseForm
 
-    const auto snapshot = g_callbacks;
+    if (g_ofhScript) {
+        const auto snapshot = g_callbacks;
+        for (const auto& cb : snapshot) {
+            bool shouldDispatch = !cb.filter
+                || cb.filter == (TESForm*)actor
+                || cb.filter == baseForm;
 
-    for (const auto& cb : snapshot) {
-        bool shouldDispatch = false;
-
-        if (!cb.filter) {
-            shouldDispatch = true;
-        } else {
-            if (cb.filter == (TESForm*)actor || cb.filter == baseForm) {
-                shouldDispatch = true;
-            }
-        }
-
-        if (shouldDispatch && cb.script) {
-            g_ofhScript->CallFunctionAlt(cb.script, nullptr, 1, (TESForm*)actor);
+            if (shouldDispatch && cb.script)
+                g_ofhScript->CallFunctionAlt(cb.script, nullptr, 1, (TESForm*)actor);
         }
     }
+
+    if (g_eventManagerInterface)
+        g_eventManagerInterface->DispatchEvent("ITR:OnFrenzy", nullptr, (TESForm*)actor);
 }
 
 //void __cdecl AV::LimbCondition::HandleChange(
@@ -77,7 +75,7 @@ static void __cdecl Hook_LimbCondition_HandleChange(
     typedef void(__cdecl* HandleChange_t)(void*, UInt32, float, float, void*);
     s_detour.GetTrampoline<HandleChange_t>()(actorValueOwner, avIndex, oldValue, delta, attackerAVO);
 
-    if (willFrenzy && actor && g_callbacks.size() > 0) {
+    if (willFrenzy && actor) {
         DispatchFrenzyEvent(actor);
     }
 }

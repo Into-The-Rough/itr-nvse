@@ -1,6 +1,7 @@
 #pragma once
 #include <Windows.h>
 #include <cstdint>
+#include "EngineFunctions.h"
 
 namespace CombatItemUse
 {
@@ -77,8 +78,7 @@ namespace CombatItemUse
 		void* controller = *(void**)((char*)combatState + 0x1C4);
 		if (!controller) return nullptr;
 
-		typedef void* (__thiscall* GetPackageOwner_t)(void*);
-		void* actor = ((GetPackageOwner_t)0x97AE90)(controller);
+		void* actor = Engine::CombatController_GetPackageOwner(controller);
 		if (!actor) return nullptr;
 
 		if (!IsCharacter(actor)) return nullptr;
@@ -114,8 +114,7 @@ namespace CombatItemUse
 	{
 		void* extraDataList = (char*)actor + 0x44;
 
-		typedef void* (__thiscall* GetExtra_t)(void*, uint32_t);
-		void* extraCC = ((GetExtra_t)0x410220)(extraDataList, 0x15);
+		void* extraCC = Engine::BaseExtraList_GetByType(extraDataList, 0x15);
 		if (!extraCC) return nullptr;
 
 		void* data = *(void**)((char*)extraCC + 0x0C);
@@ -148,8 +147,7 @@ namespace CombatItemUse
 	inline void UseItem(void* actor, void* item)
 	{
 		//play eating animation (spoof as stimpak)
-		typedef void* (__thiscall* GetProcess_t)(void*);
-		void* process = ((GetProcess_t)0x8D8520)(actor);
+		void* process = Engine::Actor_GetProcess(actor);
 		if (process)
 		{
 			typedef void* (*LookupFormByID_t)(uint32_t);

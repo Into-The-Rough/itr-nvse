@@ -56,9 +56,7 @@ struct TrackedVoiceSound
     UInt32 pollCount;
 };
 
-//BSSoundHandle::IsPlaying - checks if sound is still playing
-typedef bool (__thiscall *IsPlaying_t)(void* thisPtr);
-static const IsPlaying_t BSSoundHandle_IsPlaying = (IsPlaying_t)0xAD8930;
+#include "internal/EngineFunctions.h"
 
 static PluginHandle g_osphPluginHandle = kPluginHandle_Invalid;
 static NVSEScriptInterface* g_osphScript = nullptr;
@@ -299,7 +297,7 @@ void OSPH_Update()
         for (auto& tracked : soundsToCheck)
         {
             ++tracked.pollCount;
-            bool stillPlaying = BSSoundHandle_IsPlaying(&tracked.handleState);
+            bool stillPlaying = Engine::BSSoundHandle_IsPlaying(&tracked.handleState);
             if (stillPlaying)
                 tracked.hasEverPlayed = true;
 

@@ -5,6 +5,7 @@
 
 #include "OnWeaponDropHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/EventDispatch.h"
 
 static PluginHandle g_owdhPluginHandle = kPluginHandle_Invalid;
 static NVSEScriptInterface* g_owdhScript = nullptr;
@@ -68,27 +69,32 @@ static TESObjectWEAP* GetActorCurrentWeapon(Actor* actor)
 static void DispatchWeaponDropEvent()
 {
     OnWeaponDropHandler::s_weapon = GetActorCurrentWeapon(OnWeaponDropHandler::s_actor);
-
-    if (OnWeaponDropHandler::g_callbacks.empty()) return;
     if (!OnWeaponDropHandler::s_weapon) return;
 
-    //snapshot for reentrancy safety
-    std::vector<Script*> snapshot;
-    snapshot.reserve(OnWeaponDropHandler::g_callbacks.size());
-    for (const auto& entry : OnWeaponDropHandler::g_callbacks)
-        if (entry.callback) snapshot.push_back(entry.callback);
+    if (!OnWeaponDropHandler::g_callbacks.empty()) {
+        //snapshot for reentrancy safety
+        std::vector<Script*> snapshot;
+        snapshot.reserve(OnWeaponDropHandler::g_callbacks.size());
+        for (const auto& entry : OnWeaponDropHandler::g_callbacks)
+            if (entry.callback) snapshot.push_back(entry.callback);
 
-    for (Script* cb : snapshot) {
-        if (g_owdhScript) {
-            g_owdhScript->CallFunctionAlt(
-                cb,
-                reinterpret_cast<TESObjectREFR*>(OnWeaponDropHandler::s_actor),
-                2,
-                OnWeaponDropHandler::s_actor,
-                OnWeaponDropHandler::s_weapon
-            );
+        for (Script* cb : snapshot) {
+            if (g_owdhScript) {
+                g_owdhScript->CallFunctionAlt(
+                    cb,
+                    reinterpret_cast<TESObjectREFR*>(OnWeaponDropHandler::s_actor),
+                    2,
+                    OnWeaponDropHandler::s_actor,
+                    OnWeaponDropHandler::s_weapon
+                );
+            }
         }
     }
+
+    if (g_eventManagerInterface)
+        g_eventManagerInterface->DispatchEvent("ITR:OnWeaponDrop",
+            reinterpret_cast<TESObjectREFR*>(OnWeaponDropHandler::s_actor),
+            OnWeaponDropHandler::s_actor, OnWeaponDropHandler::s_weapon);
 }
 
 static __declspec(naked) void TryDropWeaponHook()
@@ -229,6 +235,7 @@ bool OWDH_Init(void* nvseInterface)
     nvse->RegisterCommand(&kCommandInfo_SetOnWeaponDropEventHandler);
     g_owdhOpcode = 0x4002;
 
+    InitHook();
     return true;
 }
 

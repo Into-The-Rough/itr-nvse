@@ -4,6 +4,7 @@
 #include "nvse/GameUI.h"
 #include "QuickReadNote.h"
 #include "internal/SafeWrite.h"
+#include "internal/EngineFunctions.h"
 
 #include "internal/globals.h"
 
@@ -46,28 +47,31 @@ namespace QuickReadNote
 	}
 
 	struct BSSoundHandle {
-		UInt32 uiSoundID;
-		bool bAssumeSuccess;
-		UInt32 uiState;
+		UInt32 uiSoundID;  //0x00
+		bool bAssumeSuccess; //0x04
+		UInt32 uiState;    //0x08
 		BSSoundHandle() : uiSoundID(0xFFFFFFFF), bAssumeSuccess(false), uiState(0) {}
 		bool IsValid() const { return uiSoundID != 0xFFFFFFFF; }
 		bool IsPlaying() const {
 			if (!IsValid()) return false;
-			return QRNThisCall<bool>(0xAD8930, const_cast<BSSoundHandle*>(this));
+			return Engine::BSSoundHandle_IsPlaying(const_cast<BSSoundHandle*>(this));
 		}
 		bool Play(bool abUnk) {
 			if (!IsValid()) return false;
-			return QRNThisCall<bool>(0xAD8830, this, abUnk);
+			return Engine::BSSoundHandle_Play(this, abUnk);
 		}
 		void Stop() {
 			if (!IsValid()) return;
-			QRNThisCall<void>(0xAD88F0, this);
+			Engine::BSSoundHandle_Stop(this);
 		}
 		void SetVolume(float volume) {
 			if (!IsValid()) return;
-			QRNThisCall<void>(0xAD89E0, this, volume);
+			Engine::BSSoundHandle_SetVolume(this, volume);
 		}
 	};
+	static_assert(offsetof(BSSoundHandle, uiSoundID) == 0x00);
+	static_assert(offsetof(BSSoundHandle, bAssumeSuccess) == 0x04);
+	static_assert(offsetof(BSSoundHandle, uiState) == 0x08);
 
 	struct SoundList {
 		BSSoundHandle data;
@@ -117,10 +121,10 @@ namespace QuickReadNote
 	};
 
 	struct DialogueResponse {
-		BSString strResponseText;
-		UInt32 uiEmotionType;
-		UInt32 uiEmotionValue;
-		BSString strVoiceFilePath;
+		BSString strResponseText;   //0x00
+		UInt32 uiEmotionType;       //0x08
+		UInt32 uiEmotionValue;      //0x0C
+		BSString strVoiceFilePath;  //0x10
 		void* pSpeakerAnimation;
 		void* pListenerAnimation;
 		void* pSound;
@@ -128,6 +132,8 @@ namespace QuickReadNote
 		UInt8 pad25[3];
 		UInt32 uiResponseNumber;
 	};
+	static_assert(offsetof(DialogueResponse, strResponseText) == 0x00);
+	static_assert(offsetof(DialogueResponse, strVoiceFilePath) == 0x10);
 
 	template <class T> struct BSSimpleList {
 		T item;
@@ -366,9 +372,7 @@ namespace QuickReadNote
 	static void SelectNoteInList(void* mapMenu, BGSNote* note) {
 		if (!mapMenu || !note) return;
 
-		//get _selected trait ID
-		typedef UInt32(__cdecl* _Tile_TextToTrait)(const char*);
-		UInt32 selectedTrait = ((_Tile_TextToTrait)0xA01860)("_selected");
+		UInt32 selectedTrait = Engine::Tile_TextToTrait("_selected");
 
 		//noteList at 0x160 is ListBox which has vtable at +0, list at +4, selected at +10
 		ListBoxItem* firstData = *(ListBoxItem**)((UInt8*)mapMenu + kMapMenu_noteList_head);
@@ -397,20 +401,15 @@ namespace QuickReadNote
 
 		if (!foundTile) return;
 
-		//unselect old tile if any - Tile::SetFloat(trait, value, propagate)
-		if (*selectedPtr) {
-			QRNThisCall<void>(0xA012D0, *selectedPtr, selectedTrait, 0.0f, 1);
-		}
+		if (*selectedPtr)
+			Engine::Tile_SetFloat(*selectedPtr, selectedTrait, 0.0f, true);
 
-		//select new tile
 		*selectedPtr = foundTile;
 		*currentNotePtr = note;
-		QRNThisCall<void>(0xA012D0, foundTile, selectedTrait, 1.0f, 1);
+		Engine::Tile_SetFloat(foundTile, selectedTrait, 1.0f, true);
 
-		//show data panel
-		if (dataPanelTile) {
-			QRNThisCall<void>(0xA012D0, dataPanelTile, 0xFA5, 1.0f, 1);
-		}
+		if (dataPanelTile)
+			Engine::Tile_SetFloat(dataPanelTile, 0xFA5, 1.0f, true);
 
 		//display note content
 		QRNThisCall<void>(0x7993D0, mapMenu, note);
@@ -422,10 +421,8 @@ namespace QuickReadNote
 		void* tiles17 = *(void**)((UInt8*)mapMenu + 0x6C); //tiles[17]
 		if (!tiles17) return;
 		UInt32 traitID = *(UInt32*)0x11DA360;
-		if (traitID == 0 || traitID == 0xFFFFFFFF) {
-			typedef UInt32(__cdecl* _Tile_TextToTrait)(const char*);
-			traitID = ((_Tile_TextToTrait)0xA01860)("_CurrentTab");
-		}
+		if (traitID == 0 || traitID == 0xFFFFFFFF)
+			traitID = Engine::Tile_TextToTrait("_CurrentTab");
 		QRNThisCall<void>(0x700320, tiles17, traitID, 3);
 		*(UInt8*)((UInt8*)mapMenu + 0x80) = 0x23; //currentTab = misc
 		((void(__cdecl*)())0x79ABA0)();
@@ -549,7 +546,7 @@ namespace QuickReadNote
 	class OSInputGlobals {
 	public:
 		bool GetControlState(UInt32 controlCode, UInt8 state) {
-			return ((bool(__thiscall*)(OSInputGlobals*, UInt32, UInt8))(0xA24660))(this, controlCode, state);
+			return Engine::OSInputGlobals_GetControlState(this, controlCode, state);
 		}
 		static OSInputGlobals* GetSingleton() { return *(OSInputGlobals**)0x11F35CC; }
 	};

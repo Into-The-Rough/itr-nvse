@@ -5,6 +5,7 @@
 
 #include "OnWeaponJamHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/EventDispatch.h"
 
 static PluginHandle g_owjhPluginHandle = kPluginHandle_Invalid;
 static NVSEScriptInterface* g_owjhScript = nullptr;
@@ -67,10 +68,6 @@ static void DispatchWeaponJamEvent()
 
     TESObjectWEAP* weapon = GetActorCurrentWeapon(g_jamActor);
 
-    if (OnWeaponJamHandler::g_callbacks.empty()) {
-        return;
-    }
-
     for (Script* callback : OnWeaponJamHandler::g_callbacks) {
         if (g_owjhScript && callback) {
             g_owjhScript->CallFunctionAlt(
@@ -83,6 +80,10 @@ static void DispatchWeaponJamEvent()
         }
     }
 
+    if (g_eventManagerInterface)
+        g_eventManagerInterface->DispatchEvent("ITR:OnWeaponJam",
+            reinterpret_cast<TESObjectREFR*>(g_jamActor),
+            g_jamActor, weapon);
 }
 
 static UInt32 s_SetAnimActionAddr = 0x8A73E0;
@@ -219,6 +220,7 @@ bool OWJH_Init(void* nvseInterface)
     nvse->RegisterCommand(&kCommandInfo_SetOnWeaponJamEventHandler);
     g_owjhOpcode = 0x4005;
 
+    InitHook();
     return true;
 }
 
