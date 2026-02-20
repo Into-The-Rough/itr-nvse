@@ -61,7 +61,7 @@ namespace QuickReadNote
 		}
 		void Stop() {
 			if (!IsValid()) return;
-			QRNThisCall<void>(0xAD8870, this);
+			QRNThisCall<void>(0xAD88F0, this);
 		}
 		void SetVolume(float volume) {
 			if (!IsValid()) return;
@@ -397,19 +397,19 @@ namespace QuickReadNote
 
 		if (!foundTile) return;
 
-		//unselect old tile if any - Tile::Set_Float(trait, value, propagate)
+		//unselect old tile if any - Tile::SetFloat(trait, value, propagate)
 		if (*selectedPtr) {
-			QRNThisCall<void>(0x700320, *selectedPtr, selectedTrait, 0.0f, 1);
+			QRNThisCall<void>(0xA012D0, *selectedPtr, selectedTrait, 0.0f, 1);
 		}
 
 		//select new tile
 		*selectedPtr = foundTile;
 		*currentNotePtr = note;
-		QRNThisCall<void>(0x700320, foundTile, selectedTrait, 1.0f, 1);
+		QRNThisCall<void>(0xA012D0, foundTile, selectedTrait, 1.0f, 1);
 
 		//show data panel
 		if (dataPanelTile) {
-			QRNThisCall<void>(0x700320, dataPanelTile, 0xFA5, 1.0f, 1);
+			QRNThisCall<void>(0xA012D0, dataPanelTile, 0xFA5, 1.0f, 1);
 		}
 
 		//display note content
