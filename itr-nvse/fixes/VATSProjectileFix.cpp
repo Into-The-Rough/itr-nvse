@@ -5,6 +5,7 @@
 #include "internal/NVSEMinimal.h"
 
 #include "internal/globals.h"
+#include "internal/CallTemplates.h"
 
 namespace VATSProjectileFix
 {
@@ -45,21 +46,16 @@ namespace VATSProjectileFix
 
 	static UInt32 s_originalVATSMenuUpdate = 0;
 
-	template <typename T_Ret = UInt32, typename ...Args>
-	__forceinline T_Ret VATSThisCall(UInt32 _addr, const void* _this, Args ...args) {
-		return ((T_Ret(__thiscall*)(const void*, Args...))_addr)(_this, std::forward<Args>(args)...);
-	}
-
 	static bool __fastcall VATSMenuUpdate_Hook(void* pThis)
 	{
-		bool result = VATSThisCall<bool>(s_originalVATSMenuUpdate, pThis);
+		bool result = ThisCall<bool>(s_originalVATSMenuUpdate, pThis);
 		if (!result) return result;
 
 		void** ppTargetRef = (void**)0x11F21CC;
 		void* pTargetRef = *ppTargetRef;
 		if (!pTargetRef) return result;
 
-		SimpleListNode* pTargetEntry = VATSThisCall<SimpleListNode*>(0x7F3C90, pThis, pTargetRef);
+		SimpleListNode* pTargetEntry = ThisCall<SimpleListNode*>(0x7F3C90, pThis, pTargetRef);
 		if (!pTargetEntry || pTargetEntry->IsEmpty()) return result;
 
 		VATSTarget* pTarget = (VATSTarget*)pTargetEntry->item;
@@ -74,7 +70,7 @@ namespace VATSProjectileFix
 			if (pPart) {
 				pPart->fPercentVisible = 1.0f;
 				pPart->bChanceCalculated = true;
-				VATSThisCall<double>(0x7F1290, pThis, pIter);
+				ThisCall<double>(0x7F1290, pThis, pIter);
 			}
 			pIter = pIter->GetNext();
 		}

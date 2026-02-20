@@ -1,5 +1,4 @@
 #pragma once
 
-bool DTH_Init(void* nvseInterface);
+bool DTH_Init();
 void DTH_Update();
-void DTH_ClearCallbacks();

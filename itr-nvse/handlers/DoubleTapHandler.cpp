@@ -1,253 +1,44 @@
-//double tap event system - fires when key pressed twice within threshold
+//double tap detection - fires ITR:OnDoubleTap when any key pressed twice within threshold
 
-#include <vector>
-#include <unordered_map>
+#include <cstring>
 #include <Windows.h>
 
 #include "DoubleTapHandler.h"
-#include "internal/NVSEMinimal.h"
-#include "internal/EngineFunctions.h"
 #include "internal/EventDispatch.h"
 
-static NVSEScriptInterface* g_dthScript = nullptr;
-static bool (*g_ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, ...) = nullptr;
-static UInt32 g_nextHandlerId = 1;
-static DWORD g_lastTickCount = 0;
-static float g_currentTime = 0.0f;
+static int g_thresholdMs = 300;
+static bool g_wasDown[256];
+static DWORD g_lastPressTime[256];
 
-struct DoubleTapHandler {
-    UInt32 id;
-    UInt32 key;
-    float maxInterval;
-    bool useControlCode;
-    Script* callback;
-    //per-handler state (not shared by key)
-    bool isDown;
-    bool wasReleased;
-    float lastPressTime;
-};
-
-static std::vector<DoubleTapHandler> g_handlers;
-
-static int MapDIKToVK(UInt32 dik) {
-    static const int dikToVk[256] = {
-        0, VK_ESCAPE, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', VK_OEM_MINUS, VK_OEM_PLUS, VK_BACK, VK_TAB,
-        'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', VK_OEM_4, VK_OEM_6, VK_RETURN, VK_LCONTROL,
-        'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', VK_OEM_1, VK_OEM_7, VK_OEM_3, VK_LSHIFT, VK_OEM_5,
-        'Z', 'X', 'C', 'V', 'B', 'N', 'M', VK_OEM_COMMA, VK_OEM_PERIOD, VK_OEM_2, VK_RSHIFT, VK_MULTIPLY,
-        VK_LMENU, VK_SPACE, VK_CAPITAL, VK_F1, VK_F2, VK_F3, VK_F4, VK_F5, VK_F6, VK_F7, VK_F8, VK_F9, VK_F10,
-        VK_NUMLOCK, VK_SCROLL, VK_NUMPAD7, VK_NUMPAD8, VK_NUMPAD9, VK_SUBTRACT, VK_NUMPAD4, VK_NUMPAD5, VK_NUMPAD6,
-        VK_ADD, VK_NUMPAD1, VK_NUMPAD2, VK_NUMPAD3, VK_NUMPAD0, VK_DECIMAL, 0, 0, VK_OEM_102, VK_F11, VK_F12
-    };
-    return (dik < 256) ? dikToVk[dik] : 0;
-}
-
-static bool IsRawKeyPressed(UInt32 keycode) {
-    int vk = MapDIKToVK(keycode);
-    if (vk == 0) return false;
-    return (GetAsyncKeyState(vk) & 0x8000) != 0;
-}
-
-static void* g_OSInputGlobals = nullptr;
-
-static bool IsControlPressed(UInt32 controlCode) {
-    if (!g_OSInputGlobals) return false;
-    return Engine::OSInputGlobals_GetControlState(g_OSInputGlobals, controlCode, 0);
-}
-
-static void DispatchDoubleTapEvent(Script* callback, UInt32 key) {
-    if (g_eventManagerInterface)
-        g_eventManagerInterface->DispatchEvent("ITR:OnDoubleTap", nullptr, (int)key);
-    if (!g_dthScript || !callback) return;
-    g_dthScript->CallFunctionAlt(callback, nullptr, 1, key);
-}
-
-void DTH_Update() {
-    DWORD currentTick = GetTickCount();
-    if (g_lastTickCount == 0) g_lastTickCount = currentTick;
-    float deltaTime = (currentTick - g_lastTickCount) / 1000.0f;
-    g_lastTickCount = currentTick;
-    g_currentTime += deltaTime;
-
-    if (!g_OSInputGlobals)
-        g_OSInputGlobals = *(void**)0x11F35CC;
-
-    for (auto& handler : g_handlers) {
-        bool keyDown = handler.useControlCode
-            ? IsControlPressed(handler.key)
-            : IsRawKeyPressed(handler.key);
-
-        if (keyDown && !handler.isDown) {
-            float timeSinceLastPress = g_currentTime - handler.lastPressTime;
-
-            if (handler.wasReleased && timeSinceLastPress <= handler.maxInterval) {
-                DispatchDoubleTapEvent(handler.callback, handler.key);
-                handler.wasReleased = false;
-            }
-
-            handler.isDown = true;
-            handler.lastPressTime = g_currentTime;
-        }
-        else if (!keyDown && handler.isDown) {
-            handler.isDown = false;
-            handler.wasReleased = true;
-        }
-    }
-}
-
-static ParamInfo kParams_RegisterDoubleTap[3] = {
-    {"keycode",     kParamType_Integer, 0},
-    {"maxInterval", kParamType_Float,   0},
-    {"callback",    kParamType_AnyForm, 0},
-};
-
-DEFINE_COMMAND_PLUGIN(RegisterKeyDoubleTap,
-    "Registers callback for key double-tap events. Returns handler ID.",
-    0, 3, kParams_RegisterDoubleTap);
-
-bool Cmd_RegisterKeyDoubleTap_Execute(COMMAND_ARGS) {
-    *result = 0;
-
-    UInt32 keycode = 0;
-    float maxInterval = 0;
-    TESForm* callbackForm = nullptr;
-
-    if (!g_ExtractArgsEx((ParamInfo*)paramInfo, scriptData, opcodeOffsetPtr,
-            scriptObj, eventList, &keycode, &maxInterval, &callbackForm)) {
-        return true;
-    }
-
-    if (!callbackForm || *((UInt8*)callbackForm + 4) != kFormType_Script) {
-        return true;
-    }
-
-    DoubleTapHandler handler;
-    handler.id = g_nextHandlerId++;
-    handler.key = keycode;
-    handler.maxInterval = maxInterval;
-    handler.useControlCode = false;
-    handler.callback = (Script*)callbackForm;
-    handler.isDown = false;
-    handler.wasReleased = false;
-    handler.lastPressTime = 0.0f;
-
-    g_handlers.push_back(handler);
-    *result = handler.id;
-
-    return true;
-}
-
-DEFINE_COMMAND_PLUGIN(RegisterControlDoubleTap,
-    "Registers callback for control double-tap events. Returns handler ID.",
-    0, 3, kParams_RegisterDoubleTap);
-
-bool Cmd_RegisterControlDoubleTap_Execute(COMMAND_ARGS) {
-    *result = 0;
-
-    UInt32 controlCode = 0;
-    float maxInterval = 0;
-    TESForm* callbackForm = nullptr;
-
-    if (!g_ExtractArgsEx((ParamInfo*)paramInfo, scriptData, opcodeOffsetPtr,
-            scriptObj, eventList, &controlCode, &maxInterval, &callbackForm)) {
-        return true;
-    }
-
-    if (!callbackForm || *((UInt8*)callbackForm + 4) != kFormType_Script) {
-        return true;
-    }
-
-    DoubleTapHandler handler;
-    handler.id = g_nextHandlerId++;
-    handler.key = controlCode;
-    handler.maxInterval = maxInterval;
-    handler.useControlCode = true;
-    handler.callback = (Script*)callbackForm;
-    handler.isDown = false;
-    handler.wasReleased = false;
-    handler.lastPressTime = 0.0f;
-
-    g_handlers.push_back(handler);
-    *result = handler.id;
-
-    return true;
-}
-
-static ParamInfo kParams_UnregisterDoubleTap[1] = {
-    {"handlerID", kParamType_Integer, 0},
-};
-
-DEFINE_COMMAND_PLUGIN(UnregisterKeyDoubleTap,
-    "Unregisters a key double-tap handler by ID.",
-    0, 1, kParams_UnregisterDoubleTap);
-
-bool Cmd_UnregisterKeyDoubleTap_Execute(COMMAND_ARGS) {
-    *result = 0;
-
-    UInt32 handlerId = 0;
-    if (!g_ExtractArgsEx((ParamInfo*)paramInfo, scriptData, opcodeOffsetPtr,
-            scriptObj, eventList, &handlerId)) {
-        return true;
-    }
-
-    for (auto it = g_handlers.begin(); it != g_handlers.end(); ++it) {
-        if (it->id == handlerId && !it->useControlCode) {
-            g_handlers.erase(it);
-            *result = 1;
-            return true;
-        }
-    }
-
-    return true;
-}
-
-DEFINE_COMMAND_PLUGIN(UnregisterControlDoubleTap,
-    "Unregisters a control double-tap handler by ID.",
-    0, 1, kParams_UnregisterDoubleTap);
-
-bool Cmd_UnregisterControlDoubleTap_Execute(COMMAND_ARGS) {
-    *result = 0;
-
-    UInt32 handlerId = 0;
-    if (!g_ExtractArgsEx((ParamInfo*)paramInfo, scriptData, opcodeOffsetPtr,
-            scriptObj, eventList, &handlerId)) {
-        return true;
-    }
-
-    for (auto it = g_handlers.begin(); it != g_handlers.end(); ++it) {
-        if (it->id == handlerId && it->useControlCode) {
-            g_handlers.erase(it);
-            *result = 1;
-            return true;
-        }
-    }
-
-    return true;
-}
-
-bool DTH_Init(void* nvseInterface) {
-    NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
-    if (nvse->isEditor) return false;
-
-    g_dthScript = (NVSEScriptInterface*)nvse->QueryInterface(kInterface_Script);
-    if (!g_dthScript) {
-        return false;
-    }
-    g_ExtractArgsEx = g_dthScript->ExtractArgsEx;
-
-    nvse->SetOpcodeBase(0x400E);
-    nvse->RegisterCommand(&kCommandInfo_RegisterKeyDoubleTap);
-    nvse->SetOpcodeBase(0x400F);
-    nvse->RegisterCommand(&kCommandInfo_RegisterControlDoubleTap);
-    nvse->SetOpcodeBase(0x4010);
-    nvse->RegisterCommand(&kCommandInfo_UnregisterKeyDoubleTap);
-    nvse->SetOpcodeBase(0x4011);
-    nvse->RegisterCommand(&kCommandInfo_UnregisterControlDoubleTap);
-
-    return true;
-}
-
-void DTH_ClearCallbacks()
+void DTH_Update()
 {
-    g_handlers.clear();
+	if (!g_eventManagerInterface) return;
+
+	void* input = *(void**)0x11F35CC;
+	if (!input) return;
+	UInt8* keys = (UInt8*)((UInt8*)input + 0x18F8);
+	DWORD now = GetTickCount();
+
+	for (int i = 1; i < 256; i++) {
+		bool down = keys[i] != 0;
+		if (down && !g_wasDown[i]) {
+			if (g_lastPressTime[i] && (now - g_lastPressTime[i]) <= (DWORD)g_thresholdMs)
+				g_eventManagerInterface->DispatchEvent("ITR:OnDoubleTap", nullptr, i);
+			g_lastPressTime[i] = now;
+		}
+		g_wasDown[i] = down;
+	}
+}
+
+bool DTH_Init()
+{
+	char path[MAX_PATH];
+	GetModuleFileNameA(nullptr, path, MAX_PATH);
+	char* s = strrchr(path, '\\');
+	if (s) strcpy_s(s + 1, MAX_PATH - (s + 1 - path), "Data\\config\\itr-nvse.ini");
+
+	g_thresholdMs = GetPrivateProfileIntA("Events", "iDoubleTapThresholdMs", 300, path);
+	memset(g_wasDown, 0, sizeof(g_wasDown));
+	memset(g_lastPressTime, 0, sizeof(g_lastPressTime));
+	return true;
 }

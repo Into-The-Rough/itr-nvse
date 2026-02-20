@@ -8,16 +8,7 @@
 
 #include "internal/globals.h"
 #include "internal/EngineFunctions.h"
-
-template <typename T_Ret = uint32_t, typename ...Args>
-__forceinline T_Ret VE_ThisCall(uint32_t _addr, const void* _this, Args ...args) {
-	return ((T_Ret(__thiscall*)(const void*, Args...))_addr)(_this, std::forward<Args>(args)...);
-}
-
-template <typename T_Ret = void, typename ...Args>
-__forceinline T_Ret VE_CdeclCall(uint32_t _addr, Args ...args) {
-	return ((T_Ret(__cdecl*)(Args...))_addr)(std::forward<Args>(args)...);
-}
+#include "internal/CallTemplates.h"
 
 namespace VATSExtender
 {
@@ -119,10 +110,10 @@ namespace VATSExtender
 
 		if (g_overflowCount > 0)
 		{
-			void* worldRoot = VE_CdeclCall<void*>(0x45C670);
+			void* worldRoot = CdeclCall<void*>(0x45C670);
 			if (worldRoot)
 			{
-				void* cullingProcess = VE_ThisCall<void*>(0x8D80E0, worldRoot);
+				void* cullingProcess = ThisCall<void*>(0x8D80E0, worldRoot);
 				if (cullingProcess)
 				{
 					int rendered = 0;
@@ -135,7 +126,7 @@ namespace VATSExtender
 						NiNode* node = refr->GetNiNode();
 						if (!node) continue;
 
-						VE_CdeclCall(0xB6BEE0, camera, node, cullingProcess);
+						CdeclCall(0xB6BEE0, camera, node, cullingProcess);
 						rendered++;
 					}
 
@@ -144,7 +135,7 @@ namespace VATSExtender
 			}
 		}
 
-		VE_CdeclCall(0xB6C0D0, camera, accumulator);
+		CdeclCall(0xB6C0D0, camera, accumulator);
 	}
 
 	void Init()

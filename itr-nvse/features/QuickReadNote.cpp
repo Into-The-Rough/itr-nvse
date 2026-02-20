@@ -7,6 +7,7 @@
 #include "internal/EngineFunctions.h"
 
 #include "internal/globals.h"
+#include "internal/CallTemplates.h"
 
 static void QRN_SafeWrite32(UInt32 addr, UInt32 data) {
 	DWORD oldProtect;
@@ -41,11 +42,6 @@ namespace QuickReadNote
 	#define g_mapMenuPtr (*(void**)0x11DA368)
 	#define GAME_SCREEN_HEIGHT (*(UInt32*)0x11F9434)
 
-	template <typename T_Ret = void, typename ...Args>
-	__forceinline T_Ret QRNThisCall(UInt32 _addr, void* _this, Args ...args) {
-		return ((T_Ret(__thiscall*)(void*, Args...))_addr)(_this, std::forward<Args>(args)...);
-	}
-
 	struct BSSoundHandle {
 		UInt32 uiSoundID;  //0x00
 		bool bAssumeSuccess; //0x04
@@ -76,8 +72,8 @@ namespace QuickReadNote
 	struct SoundList {
 		BSSoundHandle data;
 		SoundList* next;
-		void Append(BSSoundHandle* sound) { QRNThisCall<void>(0x7A19A0, this, sound); }
-		void FreeAll() { QRNThisCall<void>(0x76B7A0, this); }
+		void Append(BSSoundHandle* sound) { ThisCall<void>(0x7A19A0, this, sound); }
+		void FreeAll() { ThisCall<void>(0x76B7A0, this); }
 	};
 
 	struct BSSimpleArrayChar {
@@ -96,21 +92,21 @@ namespace QuickReadNote
 		};
 		BSSoundHandle GetSoundHandleByFormID(UInt32 formID, UInt32 flags) {
 			BSSoundHandle handle;
-			QRNThisCall<void>(0xAD73B0, this, &handle, formID, flags);
+			ThisCall<void>(0xAD73B0, this, &handle, formID, flags);
 			return handle;
 		}
 		BSSoundHandle GetSoundHandleByFilePath(const char* filePath, UInt32 flags, void* sound) {
 			BSSoundHandle handle;
-			QRNThisCall<void>(0xAD7480, this, &handle, filePath, flags, sound);
+			ThisCall<void>(0xAD7480, this, &handle, filePath, flags, sound);
 			return handle;
 		}
 		BSSoundHandle GetSoundHandleByEditorName(const char* editorName, UInt32 flags) {
 			BSSoundHandle handle;
-			QRNThisCall<void>(0xAD7550, this, &handle, editorName, flags);
+			ThisCall<void>(0xAD7550, this, &handle, editorName, flags);
 			return handle;
 		}
-		void FadeInDialogueSound() { QRNThisCall<void>(0xAD85A0, this); }
-		void FadeOutDialogueSound() { QRNThisCall<void>(0xAD8650, this); }
+		void FadeInDialogueSound() { ThisCall<void>(0xAD85A0, this); }
+		void FadeOutDialogueSound() { ThisCall<void>(0xAD8650, this); }
 	};
 
 	struct BSString {
@@ -202,7 +198,7 @@ namespace QuickReadNote
 	static void ClearHUDSubtitles() {
 		void** g_hudMainMenu = (void**)0x11D96C0;
 		if (*g_hudMainMenu)
-			QRNThisCall<void>(0x775670, *g_hudMainMenu);
+			ThisCall<void>(0x775670, *g_hudMainMenu);
 	}
 
 	static void StopHolotape(void* map) {
@@ -212,7 +208,7 @@ namespace QuickReadNote
 		SoundList* dialogues = (SoundList*)((UInt8*)map + kMapMenu_holotapeDialogues);
 		dialogues->FreeAll();
 		BSSimpleArrayChar* subtitles = (BSSimpleArrayChar*)((UInt8*)map + kMapMenu_holotapeSubtitles);
-		QRNThisCall<void>(0x7A1C30, subtitles, 1);
+		ThisCall<void>(0x7A1C30, subtitles, 1);
 		*currentSound = nullptr;
 		*(float*)((UInt8*)map + 0xC0) = 0.0f; //holotapeTotalTime
 		*(UInt32*)((UInt8*)map + 0xC4) = 0; //holotapePlayStartTime
@@ -252,15 +248,15 @@ namespace QuickReadNote
 			}
 		} else if (noteType == 3) { //kVoice
 			Character* character = (Character*)GameHeapAlloc(sizeof(Character));
-			QRNThisCall<void>(0x8D1F40, character, false);
+			ThisCall<void>(0x8D1F40, character, false);
 			character->flags |= 0x00004000;
 			void* speaker = *(void**)((UInt8*)note + 0x70);
-			QRNThisCall<void>(0x575690, character, speaker);
+			ThisCall<void>(0x575690, character, speaker);
 
 			void* voice = *(void**)((UInt8*)note + 0x6C);
 			Conversation* pConversation = (Conversation*)GameHeapAlloc(sizeof(Conversation));
 			void** g_thePlayer = (void**)0x11DEA3C;
-			QRNThisCall<void>(0x83B850, pConversation, character, *g_thePlayer, voice);
+			ThisCall<void>(0x83B850, pConversation, character, *g_thePlayer, voice);
 
 			UInt32 audioFlags = *(UInt32*)0x7974CA;
 			pConversation->FirstItem();
@@ -272,14 +268,14 @@ namespace QuickReadNote
 						DialogueResponse* currentResponse = currentItem->GetCurrentItem();
 						if (!currentResponse) break;
 						BSString* voiceLineStr = &currentResponse->strResponseText;
-						QRNThisCall<void>(0x7A1AC0, subtitles, voiceLineStr);
+						ThisCall<void>(0x7A1AC0, subtitles, voiceLineStr);
 						void* topicInfo = currentItem->pTopicInfo;
-						QRNThisCall<void>(0x61F170, topicInfo, 0, character);
+						ThisCall<void>(0x61F170, topicInfo, 0, character);
 						BSSoundHandle toPlay = BSWin32Audio::GetSingleton()->GetSoundHandleByFilePath(
 							currentResponse->strVoiceFilePath.c_str(), audioFlags, nullptr);
 						toPlay.SetVolume(0.9f);
 						dialogues->Append(&toPlay);
-						QRNThisCall<void>(0x61F170, topicInfo, 1, character);
+						ThisCall<void>(0x61F170, topicInfo, 1, character);
 					} while (currentItem->NextResponse());
 				}
 			}
@@ -412,7 +408,7 @@ namespace QuickReadNote
 			Engine::Tile_SetFloat(dataPanelTile, 0xFA5, 1.0f, true);
 
 		//display note content
-		QRNThisCall<void>(0x7993D0, mapMenu, note);
+		ThisCall<void>(0x7993D0, mapMenu, note);
 	}
 
 	static void SwitchToMiscTab() {
@@ -423,7 +419,7 @@ namespace QuickReadNote
 		UInt32 traitID = *(UInt32*)0x11DA360;
 		if (traitID == 0 || traitID == 0xFFFFFFFF)
 			traitID = Engine::Tile_TextToTrait("_CurrentTab");
-		QRNThisCall<void>(0x700320, tiles17, traitID, 3);
+		ThisCall<void>(0x700320, tiles17, traitID, 3);
 		*(UInt8*)((UInt8*)mapMenu + 0x80) = 0x23; //currentTab = misc
 		((void(__cdecl*)())0x79ABA0)();
 
@@ -436,7 +432,7 @@ namespace QuickReadNote
 	static void OpenPipBoyToNotes() {
 		void* im = InterfaceManager_Singleton;
 		if (im) {
-			QRNThisCall<void>(0x70F4E0, im, nullptr, 0x3FF);
+			ThisCall<void>(0x70F4E0, im, nullptr, 0x3FF);
 			g_switchToMiscPending = true;
 		}
 	}
