@@ -188,6 +188,7 @@
     <ClCompile Include="commands\ChallengeCommands.cpp" />
     <ClCompile Include="commands\DialogueCommands.cpp" />
     <ClCompile Include="commands\WeaponEmissiveCommands.cpp" />
+    <ClCompile Include="commands\UICommands.cpp" />
     <ClCompile Include="internal\EventDispatch.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -257,6 +258,7 @@
     <ClInclude Include="commands\ChallengeCommands.h" />
     <ClInclude Include="commands\DialogueCommands.h" />
     <ClInclude Include="commands\WeaponEmissiveCommands.h" />
+    <ClInclude Include="commands\UICommands.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />
