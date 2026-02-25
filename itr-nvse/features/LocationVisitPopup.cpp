@@ -45,11 +45,9 @@ namespace LocationVisitPopup
 	static SetCustomQuestText_t SetCustomQuestText = (SetCustomQuestText_t)0x76B960;
 
 	static void* GetHUDMainMenuTile() {
-		void** g_interfaceManager = (void**)0x11D8A80;
-		if (!*g_interfaceManager) return nullptr;
-		void* hudMenu = *(void**)((UInt8*)*g_interfaceManager + 0x64);
-		if (!hudMenu) return nullptr;
-		return *(void**)((UInt8*)hudMenu + 0x30);
+		void* hud = *(void**)0x11D96C0; //HUDMainMenu
+		if (!hud) return nullptr;
+		return *(void**)((UInt8*)hud + 0x04); //Menu::tile
 	}
 
 	static bool CheckMUXInstalled() {
