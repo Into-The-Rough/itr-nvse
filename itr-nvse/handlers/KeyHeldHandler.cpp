@@ -30,7 +30,8 @@ void KHH_Update()
 			DWORD held = now - g_downSince[i];
 			if (held >= (DWORD)g_thresholdMs) {
 				if (!g_lastDispatch[i] || (now - g_lastDispatch[i]) >= (DWORD)g_repeatMs) {
-					g_eventManagerInterface->DispatchEvent("ITR:OnKeyHeld", nullptr, i, (double)(held / 1000.0));
+					float sec = held / 1000.0f;
+					g_eventManagerInterface->DispatchEvent("ITR:OnKeyHeld", nullptr, i, *(void**)&sec);
 					g_lastDispatch[i] = now;
 				}
 			}
