@@ -294,10 +294,9 @@ void OJLH_Update()
         if (!actor) continue;
 
         if (evt.eventType == kEvent_Landed) {
-            float ft = evt.preClearFallTime;
             g_eventManagerInterface->DispatchEvent("ITR:OnActorLanded",
                 reinterpret_cast<TESObjectREFR*>(actor),
-                (TESForm*)actor, *(void**)&ft);
+                (TESForm*)actor, PackEventFloatArg(evt.preClearFallTime));
         }
         else if (evt.eventType == kEvent_JumpStart) {
             g_eventManagerInterface->DispatchEvent("ITR:OnJumpStart",

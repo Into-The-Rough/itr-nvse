@@ -99,11 +99,9 @@ static void DispatchCornerMessage(const char* text, UInt32 emotion,
     const char* safeIcon = iconPath ? iconPath : "";
     const char* safeSound = soundPath ? soundPath : "";
 
-    if (g_eventManagerInterface) {
-        float ft = displayTime;
+    if (g_eventManagerInterface)
         g_eventManagerInterface->DispatchEvent("ITR:OnCornerMessage", nullptr,
-            safeText, (int)emotion, safeIcon, safeSound, *(void**)&ft, metaType);
-    }
+            safeText, (int)emotion, safeIcon, safeSound, PackEventFloatArg(displayTime), metaType);
 }
 
 static bool __fastcall Hook_HUDMainMenu_ShowNotify(
