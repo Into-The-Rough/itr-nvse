@@ -73,6 +73,7 @@
 #include "commands/ChallengeCommands.h"
 #include "commands/DialogueCommands.h"
 #include "commands/WeaponEmissiveCommands.h"
+#include "commands/UICommands.h"
 
 #include <cstdio>
 #include <cstring>
@@ -804,6 +805,7 @@ namespace ITR
 		ChallengeCommands_Init((void*)nvse);
 		DialogueCommands_Init((void*)nvse);
 		WeaponEmissiveCommands_Init((void*)nvse);
+		UICommands_Init((void*)nvse);
 		RegisterHandlers(nvse);
 
 		Log("itr-nvse loaded successfully");
