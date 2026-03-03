@@ -67,6 +67,7 @@ namespace Settings
 	inline int bNavMeshInfoCrashFix = 1;
 	inline int bInitHavokCrashFix = 1;
 	inline int bMusicResetOnLoad = 1;
+	inline int bDetectionFollowerCrashFix = 1;
 
 	inline char iniPath[MAX_PATH];
 
@@ -142,6 +143,7 @@ namespace Settings
 		bInitHavokCrashFix = GetINIInt("Tweaks", "bInitHavokCrashFix", 1);
 
 		bMusicResetOnLoad = GetINIInt("Tweaks", "bMusicResetOnLoad", 1);
+		bDetectionFollowerCrashFix = GetINIInt("Tweaks", "bDetectionFollowerCrashFix", 1);
 
 	}
 }

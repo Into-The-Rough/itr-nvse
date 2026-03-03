@@ -158,6 +158,7 @@
     <ClCompile Include="fixes\PathingNullActorFix.cpp" />
     <ClCompile Include="fixes\NavMeshInfoCrashFix.cpp" />
     <ClCompile Include="fixes\InitHavokCrashFix.cpp" />
+    <ClCompile Include="fixes\DetectionFollowerCrashFix.cpp" />
     <ClCompile Include="features\MessageBoxQuickClose.cpp">
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">internal/prefix.h</ForcedIncludeFiles>
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">internal/prefix.h</ForcedIncludeFiles>
@@ -242,6 +243,7 @@
     <ClInclude Include="fixes\PathingNullActorFix.h" />
     <ClInclude Include="fixes\NavMeshInfoCrashFix.h" />
     <ClInclude Include="fixes\InitHavokCrashFix.h" />
+    <ClInclude Include="fixes\DetectionFollowerCrashFix.h" />
     <ClInclude Include="features\MessageBoxQuickClose.h" />
     <ClInclude Include="features\PreventWeaponSwitch.h" />
     <ClInclude Include="features\ELMO.h" />
