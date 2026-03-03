@@ -50,8 +50,16 @@ struct QueuedDialogueEvent
 	char text[512];
 };
 
+struct ConfirmedSpeak
+{
+	UInt32 speakerRefID;
+	UInt32 baseFormID;
+	UInt8 responseNum;
+};
+
 namespace DialogueTextFilter {
 	std::vector<QueuedDialogueEvent> g_pendingEvents;
+	std::vector<ConfirmedSpeak> g_confirmedSpeaks;
 	bool g_hookInstalled = false;
 	DWORD g_mainThreadId = 0;
 	bool g_suppressed = false;
@@ -150,6 +158,41 @@ static bool BuildVoicePath(char* outPath, size_t outSize,
 	          modName, voiceTypeID, questID, topicID, baseFormID, responseNum);
 
 	return true;
+}
+
+//extract base formID and response number from engine voice path
+//format: ...\QuestID_TopicID_FORMID_N.ogg
+static bool ParseVoicePathIDs(const char* path, UInt32& outFormID, UInt8& outRespNum) {
+	if (!path || !*path) return false;
+
+	const char* p = strrchr(path, '\\');
+	const char* filename = p ? p + 1 : path;
+	const char* dot = strrchr(filename, '.');
+	if (!dot) return false;
+
+	const char* us2 = nullptr;
+	const char* us1 = nullptr;
+	for (const char* c = dot - 1; c >= filename; c--) {
+		if (*c == '_') {
+			if (!us2) us2 = c;
+			else if (!us1) { us1 = c; break; }
+		}
+	}
+	if (!us1 || !us2) return false;
+
+	size_t hexLen = us2 - (us1 + 1);
+	if (hexLen == 0 || hexLen > 8) return false;
+	char hexBuf[12] = {};
+	memcpy(hexBuf, us1 + 1, hexLen);
+	outFormID = (UInt32)strtoul(hexBuf, nullptr, 16);
+
+	size_t numLen = dot - (us2 + 1);
+	if (numLen == 0 || numLen > 3) return false;
+	char numBuf[8] = {};
+	memcpy(numBuf, us2 + 1, numLen);
+	outRespNum = (UInt8)atoi(numBuf);
+
+	return outFormID != 0;
 }
 
 static bool IsValidFormPointer(void* form) {
@@ -302,6 +345,68 @@ static __declspec(naked) void DialogueTextHook() {
 	}
 }
 
+//SpeakSoundFunction hook - commit-level confirmation that a line is actually playing
+//0x8A20D0: push ebp(1) + mov ebp,esp(2) + push -1(2) = 5 bytes
+constexpr UInt32 kAddr_SpeakSound = 0x8A20D0;
+constexpr UInt32 kAddr_SpeakSoundBody = 0x8A20D5;
+static UInt32 g_speakChainAddr = 0;
+
+static void __cdecl OnSpeakConfirm(Actor* speaker, const char* voicePath) {
+	if (!speaker || !voicePath || !*voicePath) return;
+
+	UInt32 speakerRefID = ReadRefID(speaker);
+	if (!speakerRefID) return;
+
+	UInt32 baseFormID = 0;
+	UInt8 respNum = 0;
+	if (!ParseVoicePathIDs(voicePath, baseFormID, respNum)) return;
+
+	EnsureStateLockInitialized();
+	ScopedLock lock(&g_dtfStateLock);
+
+	if (DialogueTextFilter::g_confirmedSpeaks.size() >= 128) return;
+
+	ConfirmedSpeak cs;
+	cs.speakerRefID = speakerRefID;
+	cs.baseFormID = baseFormID;
+	cs.responseNum = respNum;
+	DialogueTextFilter::g_confirmedSpeaks.push_back(cs);
+
+	Log("DTF: SPEAK confirmed speaker=0x%08X formID=0x%06X resp#%u path=\"%.80s\"",
+		speakerRefID, baseFormID, respNum, voicePath);
+}
+
+static auto g_speakCallback = &OnSpeakConfirm;
+
+static __declspec(naked) void SpeakSoundHook() {
+	__asm {
+		pushad
+		pushfd
+
+		//voicePath at [esp+4] before pushad(0x20)+pushfd(0x04) = [esp+0x28]
+		push    dword ptr [esp+0x28]
+		push    ecx
+		call    [g_speakCallback]
+		add     esp, 8
+
+		popfd
+		popad
+
+		mov     eax, [g_speakChainAddr]
+		test    eax, eax
+		jnz     chain_speak
+
+		push    ebp
+		mov     ebp, esp
+		push    0FFFFFFFFh
+		mov     eax, kAddr_SpeakSoundBody
+		jmp     eax
+
+	chain_speak:
+		jmp     eax
+	}
+}
+
 void DTF_Update()
 {
 	EnsureStateLockInitialized();
@@ -315,9 +420,11 @@ void DTF_Update()
 		return;
 
 	std::vector<QueuedDialogueEvent> pendingEvents;
+	std::vector<ConfirmedSpeak> confirmedSpeaks;
 	{
 		ScopedLock lock(&g_dtfStateLock);
 		pendingEvents.swap(DialogueTextFilter::g_pendingEvents);
+		confirmedSpeaks.swap(DialogueTextFilter::g_confirmedSpeaks);
 	}
 
 	DWORD nowTick = GetTickCount();
@@ -334,18 +441,49 @@ void DTF_Update()
 		TESTopicInfo* topicInfo = reinterpret_cast<TESTopicInfo*>(Engine::LookupFormByID(evt.topicInfoRefID));
 		TESTopic* topic = reinterpret_cast<TESTopic*>(Engine::LookupFormByID(evt.topicRefID));
 
-		if (speaker && topicInfo && topic) {
-			char voicePath[512] = {0};
-			if (!BuildVoicePath(voicePath, sizeof(voicePath), topicInfo, speaker, evt.responseNum))
-				voicePath[0] = '\0';
+		if (!speaker || !topicInfo || !topic) {
+			Log("DTF: DROP resp#%u topicInfo=0x%08X speaker=0x%08X (form lookup failed)",
+				evt.responseNum, evt.topicInfoRefID, evt.speakerRefID);
+			continue;
+		}
+
+		char voicePath[512] = {0};
+		bool hasVoice = BuildVoicePath(voicePath, sizeof(voicePath), topicInfo, speaker, evt.responseNum);
+
+		if (!hasVoice) {
+			//narrator or unvoiced line - dispatch without confirmation
+			Log("DTF: DISPATCH (narrator) resp#%u topicInfo=0x%08X speaker=0x%08X text=\"%.80s\"",
+				evt.responseNum, evt.topicInfoRefID, evt.speakerRefID, evt.text);
+			g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
+				reinterpret_cast<TESObjectREFR*>(speaker),
+				speaker, topic, topicInfo, evt.text, "");
+			continue;
+		}
+
+		//voiced line - require SpeakSoundFunction confirmation
+		UInt32 baseFormID = evt.topicInfoRefID & 0x00FFFFFF;
+		bool confirmed = false;
+		for (auto cit = confirmedSpeaks.begin(); cit != confirmedSpeaks.end(); ++cit) {
+			if (cit->speakerRefID == evt.speakerRefID &&
+				cit->baseFormID == baseFormID &&
+				cit->responseNum == evt.responseNum) {
+				confirmed = true;
+				confirmedSpeaks.erase(cit);
+				break;
+			}
+		}
+
+		if (confirmed) {
 			Log("DTF: DISPATCH resp#%u topicInfo=0x%08X speaker=0x%08X voice=\"%s\" text=\"%.80s\"",
 				evt.responseNum, evt.topicInfoRefID, evt.speakerRefID, voicePath, evt.text);
 			g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
 				reinterpret_cast<TESObjectREFR*>(speaker),
 				speaker, topic, topicInfo, evt.text, voicePath);
+		} else if (nowTick - evt.dispatchAfterTick > 30000) {
+			Log("DTF: TIMEOUT resp#%u topicInfo=0x%08X speaker=0x%08X (no confirmation after 30s)",
+				evt.responseNum, evt.topicInfoRefID, evt.speakerRefID);
 		} else {
-			Log("DTF: DROP resp#%u topicInfo=0x%08X speaker=0x%08X (form lookup failed: speaker=%p info=%p topic=%p)",
-				evt.responseNum, evt.topicInfoRefID, evt.speakerRefID, speaker, topicInfo, topic);
+			deferredEvents.push_back(evt);
 		}
 	}
 
@@ -368,7 +506,7 @@ bool DTF_Init(void* nvseInterface) {
 	EnsureStateLockInitialized();
 	DialogueTextFilter::g_mainThreadId = 0;
 
-	//install hook unconditionally for EventManager dispatch
+	//RunResult hook - queues candidate events
 	UInt8 firstByte = *(UInt8*)kAddr_RunResult;
 	if (firstByte == 0xE9)
 		g_chainAddr = SafeWrite::GetRelJumpTarget(kAddr_RunResult);
@@ -377,6 +515,15 @@ bool DTF_Init(void* nvseInterface) {
 
 	SafeWrite::WriteRelJump(kAddr_RunResult, (UInt32)DialogueTextHook);
 	SafeWrite::Write8(kAddr_RunResult + 5, 0x90);
+
+	//SpeakSoundFunction hook - confirms which line actually plays
+	UInt8 speakFirstByte = *(UInt8*)kAddr_SpeakSound;
+	if (speakFirstByte == 0xE9)
+		g_speakChainAddr = SafeWrite::GetRelJumpTarget(kAddr_SpeakSound);
+	else
+		g_speakChainAddr = 0;
+
+	SafeWrite::WriteRelJump(kAddr_SpeakSound, (UInt32)SpeakSoundHook);
 	DialogueTextFilter::g_hookInstalled = true;
 
 	return true;
