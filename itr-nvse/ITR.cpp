@@ -56,6 +56,7 @@
 #include "fixes/PathingNullActorFix.h"
 #include "fixes/NavMeshInfoCrashFix.h"
 #include "fixes/InitHavokCrashFix.h"
+#include "fixes/DetectionFollowerCrashFix.h"
 #include "features/MessageBoxQuickClose.h"
 #include "features/PreventWeaponSwitch.h"
 #include "features/ELMO.h"
@@ -440,6 +441,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					NavMeshInfoCrashFix_Init();
 				if (Settings::bInitHavokCrashFix)
 					InitHavokCrashFix_Init();
+				if (Settings::bDetectionFollowerCrashFix)
+					DetectionFollowerCrashFix_Init();
 				ITR_RegisterEvents();
 				g_hooksInstalled = true;
 			}

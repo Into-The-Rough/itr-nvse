@@ -13,13 +13,12 @@ namespace
 	static const _GetObjectByName GetObjectByName = (_GetObjectByName)0x4AAE30;
 
 	struct EmissiveOriginal {
-		UInt8* geom;
 		float r, g, b, mult;
 	};
 
 	static EmissiveOriginal s_originals[64];
 	static UInt32 s_count = 0;
-	static void* s_weaponNode = nullptr;
+	static bool s_active = false;
 
 	static void* GetPlayer1stPersonNode()
 	{
@@ -38,7 +37,6 @@ namespace
 			|| vtbl == 0x109E704; //BSResizableTriShape
 	}
 
-	//NiGeometry::materialProp at offset 0xA4
 	static void* GetMaterialProp(UInt8* geom)
 	{
 		return *(void**)(geom + 0xA4);
@@ -50,46 +48,55 @@ namespace
 		*(float*)(matProp + 0x2C) = g;
 		*(float*)(matProp + 0x30) = b;
 		*(float*)(matProp + 0x40) = mult;
-		//bump revID to notify renderer
 		(*(UInt32*)(matProp + 0x44))++;
 	}
 
-	static void CacheAndSet(UInt8* geom, float r, float g, float b, float emitMult)
+	//traverse and save original values, returns count of geometry nodes found
+	static UInt32 TraverseCacheOriginals(void* node)
 	{
-		UInt8* matProp = (UInt8*)GetMaterialProp(geom);
-		if (!matProp) return;
+		if (!node) return 0;
 
-		if (s_count < 64)
+		if (IsGeometry(node))
 		{
-			EmissiveOriginal& orig = s_originals[s_count++];
-			orig.geom = geom;
-			orig.r = *(float*)(matProp + 0x28);
-			orig.g = *(float*)(matProp + 0x2C);
-			orig.b = *(float*)(matProp + 0x30);
-			orig.mult = *(float*)(matProp + 0x40);
+			UInt8* matProp = (UInt8*)GetMaterialProp((UInt8*)node);
+			if (!matProp) return 0;
+			if (s_count < 64)
+			{
+				auto& orig = s_originals[s_count++];
+				orig.r = *(float*)(matProp + 0x28);
+				orig.g = *(float*)(matProp + 0x2C);
+				orig.b = *(float*)(matProp + 0x30);
+				orig.mult = *(float*)(matProp + 0x40);
+			}
+			return 1;
 		}
 
-		SetEmissive(matProp, r, g, b, emitMult);
+		UInt8* n = (UInt8*)node;
+		void** childData = *(void***)(n + 0xA0);
+		UInt16 childCount = *(UInt16*)(n + 0xA6);
+		if (!childData) return 0;
+		UInt32 found = 0;
+		for (UInt16 i = 0; i < childCount; i++)
+		{
+			if (childData[i])
+				found += TraverseCacheOriginals(childData[i]);
+		}
+		return found;
 	}
 
-	static void TraverseSetEmissive(void* node, float r, float g, float b, float emitMult, bool cacheOriginals)
+	//traverse and set emissive on all geometry
+	static void TraverseSetEmissive(void* node, float r, float g, float b, float emitMult)
 	{
 		if (!node) return;
 
 		if (IsGeometry(node))
 		{
-			UInt8* geom = (UInt8*)node;
-			UInt8* matProp = (UInt8*)GetMaterialProp(geom);
-			if (!matProp) return;
-
-			if (cacheOriginals)
-				CacheAndSet(geom, r, g, b, emitMult);
-			else
+			UInt8* matProp = (UInt8*)GetMaterialProp((UInt8*)node);
+			if (matProp)
 				SetEmissive(matProp, r, g, b, emitMult);
 			return;
 		}
 
-		//assume NiNode-derived, recurse children
 		UInt8* n = (UInt8*)node;
 		void** childData = *(void***)(n + 0xA0);
 		UInt16 childCount = *(UInt16*)(n + 0xA6);
@@ -97,21 +104,36 @@ namespace
 		for (UInt16 i = 0; i < childCount; i++)
 		{
 			if (childData[i])
-				TraverseSetEmissive(childData[i], r, g, b, emitMult, cacheOriginals);
+				TraverseSetEmissive(childData[i], r, g, b, emitMult);
 		}
 	}
 
-	static void RestoreOriginals()
+	//traverse and restore originals by index (matching traversal order)
+	static void TraverseRestore(void* node, UInt32& idx)
 	{
-		for (UInt32 i = 0; i < s_count; i++)
+		if (!node || idx >= s_count) return;
+
+		if (IsGeometry(node))
 		{
-			EmissiveOriginal& orig = s_originals[i];
-			UInt8* matProp = (UInt8*)GetMaterialProp(orig.geom);
-			if (matProp)
+			UInt8* matProp = (UInt8*)GetMaterialProp((UInt8*)node);
+			if (matProp && idx < s_count)
+			{
+				auto& orig = s_originals[idx];
 				SetEmissive(matProp, orig.r, orig.g, orig.b, orig.mult);
+			}
+			idx++;
+			return;
 		}
-		s_count = 0;
-		s_weaponNode = nullptr;
+
+		UInt8* n = (UInt8*)node;
+		void** childData = *(void***)(n + 0xA0);
+		UInt16 childCount = *(UInt16*)(n + 0xA6);
+		if (!childData) return;
+		for (UInt16 i = 0; i < childCount; i++)
+		{
+			if (childData[i])
+				TraverseRestore(childData[i], idx);
+		}
 	}
 
 	static ParamInfo kParams_SetWeaponEmissiveColor[4] = {
@@ -133,43 +155,21 @@ namespace
 			return true;
 
 		void* root1st = GetPlayer1stPersonNode();
-		if (!root1st)
-		{
-			Log("SetWeaponEmissiveColor: no 1st person root node");
-			return true;
-		}
+		if (!root1st) return true;
 
 		void* weaponNode = GetObjectByName(root1st, "Weapon");
-		if (!weaponNode)
+		if (!weaponNode) return true;
+
+		//first call: cache originals from live nodes
+		if (!s_active)
 		{
-			Log("SetWeaponEmissiveColor: no Weapon node in 1st person skeleton");
-			return true;
+			s_count = 0;
+			TraverseCacheOriginals(weaponNode);
+			s_active = true;
 		}
 
-		//weapon changed - restore old state first
-		if (s_count > 0 && weaponNode != s_weaponNode)
-		{
-			RestoreOriginals();
-			Log("SetWeaponEmissiveColor: weapon node changed, restored originals");
-		}
-
-		bool needCache = (s_count == 0);
-		if (needCache)
-			s_weaponNode = weaponNode;
-
-		TraverseSetEmissive(weaponNode, r, g, b, emitMult, needCache);
-
-		if (!needCache)
-		{
-			//already cached, just update values on existing geometry
-			for (UInt32 i = 0; i < s_count; i++)
-			{
-				UInt8* matProp = (UInt8*)GetMaterialProp(s_originals[i].geom);
-				if (matProp)
-					SetEmissive(matProp, r, g, b, emitMult);
-			}
-		}
-
+		//always traverse fresh - never use cached pointers
+		TraverseSetEmissive(weaponNode, r, g, b, emitMult);
 		*result = 1;
 
 		if (IsConsoleMode())
@@ -182,10 +182,32 @@ namespace
 	{
 		*result = 0;
 
-		if (s_count == 0)
+		if (!s_active)
 			return true;
 
-		RestoreOriginals();
+		void* root1st = GetPlayer1stPersonNode();
+		if (!root1st)
+		{
+			//model gone, nothing to restore
+			s_active = false;
+			s_count = 0;
+			return true;
+		}
+
+		void* weaponNode = GetObjectByName(root1st, "Weapon");
+		if (!weaponNode)
+		{
+			s_active = false;
+			s_count = 0;
+			return true;
+		}
+
+		//traverse live nodes, apply cached original values by index
+		UInt32 idx = 0;
+		TraverseRestore(weaponNode, idx);
+
+		s_active = false;
+		s_count = 0;
 		*result = 1;
 
 		if (IsConsoleMode())
@@ -210,5 +232,5 @@ bool WeaponEmissiveCommands_Init(void* nvsePtr)
 void WeaponEmissive_ClearState()
 {
 	s_count = 0;
-	s_weaponNode = nullptr;
+	s_active = false;
 }

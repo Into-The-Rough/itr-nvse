@@ -11,6 +11,7 @@
 #include "internal/ScopedLock.h"
 #include "internal/EngineFunctions.h"
 #include "internal/EventDispatch.h"
+#include "internal/globals.h"
 
 class TESTopicInfo;
 class TESTopic;
@@ -27,7 +28,8 @@ struct String {
 struct TESTopicInfoResponse {
 	UInt8   pad00[0x18];
 	String  responseText;           //0x18
-	String  voiceFilePath;          //0x20
+	void*   speakerAnimation;       //0x20 (SNAM)
+	void*   listenerAnimation;      //0x24 (LNAM)
 	TESTopicInfoResponse* next;     //0x28
 };
 static_assert(offsetof(TESTopicInfoResponse, responseText) == 0x18);
@@ -42,6 +44,8 @@ struct QueuedDialogueEvent
 	UInt32 speakerRefID;
 	UInt32 topicInfoRefID;
 	UInt32 topicRefID;
+	DWORD dispatchAfterTick;
+	UInt8 responseNum;
 	float duration;
 	char text[512];
 };
@@ -115,7 +119,7 @@ static const char* GetVoiceTypeEditorID(void* voiceType) {
 
 static bool BuildVoicePath(char* outPath, size_t outSize,
                           TESTopicInfo* topicInfo, Actor* speaker,
-                          TESTopicInfoResponse* response)
+                          UInt8 responseNum)
 {
 	if (!outPath || !topicInfo || !speaker) return false;
 	outPath[0] = '\0';
@@ -139,11 +143,7 @@ static bool BuildVoicePath(char* outPath, size_t outSize,
 	const char* topicID = GetFormEditorID(topic);
 	if (!topicID) topicID = "";
 
-	UInt8 responseNum = 1;
-	if (response) {
-		responseNum = *(UInt8*)((UInt8*)response + 0x0C);
-		if (responseNum == 0) responseNum = 1;
-	}
+	if (responseNum == 0) responseNum = 1;
 
 	sprintf_s(outPath, outSize,
 	          "Data\\Sound\\Voice\\%s\\%s\\%s_%s_%08X_%u.ogg",
@@ -181,30 +181,50 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 	if (!ppResponse || !*ppResponse)
 		return;
 
-	TESTopicInfoResponse* response = *ppResponse;
-	const char* text = response ? response->responseText.CStr() : nullptr;
-	if (!text || !*text)
-		return;
-
 	//strlen * fNoticeTextTimePerCharacter (setting at 0x11D2178, float at +0x04)
 	float timePerChar = *(float*)(0x11D2178 + 0x04);
 	if (timePerChar <= 0.0f) timePerChar = 0.08f;
-	float duration = (float)strlen(text) * timePerChar;
-	if (duration < 2.0f) duration = 2.0f;
-
-	QueuedDialogueEvent evt{};
-	evt.speakerRefID = ReadRefID(speaker);
-	evt.topicInfoRefID = ReadRefID(topicInfo);
-	evt.topicRefID = ReadRefID(*(void**)((UInt8*)topicInfo + 0x50));
-	evt.duration = duration;
-	strncpy_s(evt.text, sizeof(evt.text), text, _TRUNCATE);
+	UInt32 speakerRefID = ReadRefID(speaker);
+	UInt32 topicInfoRefID = ReadRefID(topicInfo);
+	UInt32 topicRefID = ReadRefID(*(void**)((UInt8*)topicInfo + 0x50));
+	DWORD queueStartTick = GetTickCount();
+	UInt8 fallbackResponseNum = 1;
+	UInt32 queuedCount = 0;
 
 	EnsureStateLockInitialized();
 	ScopedLock lock(&g_dtfStateLock);
 	constexpr size_t kMaxQueuedDialogueEvents = 256;
-	if (DialogueTextFilter::g_pendingEvents.size() >= kMaxQueuedDialogueEvents)
-		return;
-	DialogueTextFilter::g_pendingEvents.push_back(evt);
+
+	for (TESTopicInfoResponse* response = *ppResponse; response; response = response->next, ++fallbackResponseNum) {
+		const char* text = response->responseText.CStr();
+		size_t textLen = text ? strlen(text) : 0;
+		float duration = (float)textLen * timePerChar;
+		if (duration < 2.0f) duration = 2.0f;
+
+		if (text && *text) {
+			if (DialogueTextFilter::g_pendingEvents.size() >= kMaxQueuedDialogueEvents)
+				break;
+
+			UInt8 responseNum = *(UInt8*)((UInt8*)response + 0x0C);
+			if (responseNum == 0) responseNum = fallbackResponseNum;
+
+			QueuedDialogueEvent evt{};
+			evt.speakerRefID = speakerRefID;
+			evt.topicInfoRefID = topicInfoRefID;
+			evt.topicRefID = topicRefID;
+			evt.dispatchAfterTick = queueStartTick;
+			evt.responseNum = responseNum;
+			evt.duration = duration;
+			strncpy_s(evt.text, sizeof(evt.text), text, _TRUNCATE);
+			DialogueTextFilter::g_pendingEvents.push_back(evt);
+			++queuedCount;
+		}
+
+	}
+
+	if (queuedCount > 1) {
+		Log("DTF: queued %u lines for topicInfo=0x%08X speaker=0x%08X", queuedCount, topicInfoRefID, speakerRefID);
+	}
 }
 
 static auto g_hookCallback = &HookCallback;
@@ -261,22 +281,42 @@ void DTF_Update()
 		pendingEvents.swap(DialogueTextFilter::g_pendingEvents);
 	}
 
+	DWORD nowTick = GetTickCount();
+	std::vector<QueuedDialogueEvent> deferredEvents;
+	deferredEvents.reserve(pendingEvents.size());
+
 	for (const auto& evt : pendingEvents) {
+		if ((LONG)(nowTick - evt.dispatchAfterTick) < 0) {
+			deferredEvents.push_back(evt);
+			continue;
+		}
+
 		Actor* speaker = reinterpret_cast<Actor*>(Engine::LookupFormByID(evt.speakerRefID));
 		TESTopicInfo* topicInfo = reinterpret_cast<TESTopicInfo*>(Engine::LookupFormByID(evt.topicInfoRefID));
 		TESTopic* topic = reinterpret_cast<TESTopic*>(Engine::LookupFormByID(evt.topicRefID));
 
 		if (speaker && topicInfo && topic) {
 			char voicePath[512] = {0};
-			TESTopicInfoResponse** ppR = ThisCall<TESTopicInfoResponse**>(
-				kAddr_GetResponses, topicInfo, nullptr);
-			TESTopicInfoResponse* r = (ppR && *ppR) ? *ppR : nullptr;
-			if (!BuildVoicePath(voicePath, sizeof(voicePath), topicInfo, speaker, r))
+			if (!BuildVoicePath(voicePath, sizeof(voicePath), topicInfo, speaker, evt.responseNum))
 				voicePath[0] = '\0';
+			if (evt.responseNum > 1) {
+				Log("DTF: dispatch response %u for topicInfo=0x%08X text=\"%.64s\"", evt.responseNum, evt.topicInfoRefID, evt.text);
+			}
 			g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
 				reinterpret_cast<TESObjectREFR*>(speaker),
 				speaker, topic, topicInfo, evt.text, voicePath);
 		}
+	}
+
+	if (!deferredEvents.empty()) {
+		ScopedLock lock(&g_dtfStateLock);
+		DialogueTextFilter::g_pendingEvents.insert(
+			DialogueTextFilter::g_pendingEvents.begin(),
+			deferredEvents.begin(), deferredEvents.end());
+
+		constexpr size_t kMaxQueuedDialogueEvents = 256;
+		if (DialogueTextFilter::g_pendingEvents.size() > kMaxQueuedDialogueEvents)
+			DialogueTextFilter::g_pendingEvents.resize(kMaxQueuedDialogueEvents);
 	}
 }
 
@@ -300,4 +340,3 @@ bool DTF_Init(void* nvseInterface) {
 
 	return true;
 }
-
