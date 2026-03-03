@@ -290,6 +290,17 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 			UInt8 responseNum = *(UInt8*)((UInt8*)response + 0x0C);
 			if (responseNum == 0) responseNum = fallbackResponseNum;
 
+			bool isDuplicate = false;
+			for (const auto& existing : DialogueTextFilter::g_pendingEvents) {
+				if (existing.speakerRefID == speakerRefID &&
+					existing.topicInfoRefID == topicInfoRefID &&
+					existing.responseNum == responseNum) {
+					isDuplicate = true;
+					break;
+				}
+			}
+			if (isDuplicate) continue;
+
 			QueuedDialogueEvent evt{};
 			evt.speakerRefID = speakerRefID;
 			evt.topicInfoRefID = topicInfoRefID;
