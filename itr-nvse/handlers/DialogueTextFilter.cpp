@@ -171,21 +171,60 @@ void DTF_Suppress(bool suppress) {
 	DialogueTextFilter::g_suppressed = suppress;
 }
 
+//check if this RunResult call is a false positive from a script chain during greeting evaluation.
+//when ProcessGreet is active, HighProcess+0x3E4 (pQueuedGreetTopic) holds the REAL DialogueItem.
+//any RunResult for a DIFFERENT topicInfo is a side effect — skip it.
+static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt32 speakerRefID) {
+	void* baseProcess = *(void**)((UInt8*)speaker + 0x68); //MobileObject+0x68
+	if (!baseProcess) return false;
+
+	int processLevel = *(int*)((UInt8*)baseProcess + 0x28); //BaseProcess+0x28
+	if (processLevel != 0) return false; //not HighProcess
+
+	void* queuedGreet = *(void**)((UInt8*)baseProcess + 0x3E4); //HighProcess+0x3E4 = pQueuedGreetTopic (DialogueItem*)
+	if (!queuedGreet) {
+		Log("DTF: speaker=0x%08X no pQueuedGreetTopic (non-greeting path), topicInfo=0x%08X -> ALLOW",
+			speakerRefID, topicInfoRefID);
+		return false;
+	}
+
+	void* activeTopicInfo = *(void**)((UInt8*)queuedGreet + 0x0C); //DialogueItem+0x0C = pTopicInfo
+	UInt32 activeInfoRefID = activeTopicInfo ? ReadRefID(activeTopicInfo) : 0;
+
+	if (activeInfoRefID && activeInfoRefID != topicInfoRefID) {
+		Log("DTF: SKIP false positive topicInfo=0x%08X (active greet=0x%08X) speaker=0x%08X",
+			topicInfoRefID, activeInfoRefID, speakerRefID);
+		return true;
+	}
+
+	Log("DTF: greet validation PASS topicInfo=0x%08X == active=0x%08X speaker=0x%08X",
+		topicInfoRefID, activeInfoRefID, speakerRefID);
+	return false;
+}
+
 static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 	if (DialogueTextFilter::g_suppressed) return;
 	if (!IsValidFormPointer(topicInfo) || !IsValidFormPointer(speaker))
 		return;
 
+	UInt32 speakerRefID = ReadRefID(speaker);
+	UInt32 topicInfoRefID = ReadRefID(topicInfo);
+
+	Log("DTF: RunResult fired for topicInfo=0x%08X speaker=0x%08X", topicInfoRefID, speakerRefID);
+
+	if (IsGreetingFalsePositive(speaker, topicInfoRefID, speakerRefID))
+		return;
+
 	TESTopicInfoResponse** ppResponse = ThisCall<TESTopicInfoResponse**>(
 		kAddr_GetResponses, topicInfo, nullptr);
-	if (!ppResponse || !*ppResponse)
+	if (!ppResponse || !*ppResponse) {
+		Log("DTF: no responses for topicInfo=0x%08X, skipping", topicInfoRefID);
 		return;
+	}
 
 	//strlen * fNoticeTextTimePerCharacter (setting at 0x11D2178, float at +0x04)
 	float timePerChar = *(float*)(0x11D2178 + 0x04);
 	if (timePerChar <= 0.0f) timePerChar = 0.08f;
-	UInt32 speakerRefID = ReadRefID(speaker);
-	UInt32 topicInfoRefID = ReadRefID(topicInfo);
 	UInt32 topicRefID = ReadRefID(*(void**)((UInt8*)topicInfo + 0x50));
 	DWORD queueStartTick = GetTickCount();
 	UInt8 fallbackResponseNum = 1;
@@ -218,13 +257,13 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 			strncpy_s(evt.text, sizeof(evt.text), text, _TRUNCATE);
 			DialogueTextFilter::g_pendingEvents.push_back(evt);
 			++queuedCount;
+
+			Log("DTF: queued resp#%u text=\"%.60s\" dur=%.1f topicInfo=0x%08X speaker=0x%08X",
+				responseNum, text, duration, topicInfoRefID, speakerRefID);
 		}
-
 	}
 
-	if (queuedCount > 1) {
-		Log("DTF: queued %u lines for topicInfo=0x%08X speaker=0x%08X", queuedCount, topicInfoRefID, speakerRefID);
-	}
+	Log("DTF: queued %u total lines for topicInfo=0x%08X speaker=0x%08X", queuedCount, topicInfoRefID, speakerRefID);
 }
 
 static auto g_hookCallback = &HookCallback;
@@ -299,12 +338,14 @@ void DTF_Update()
 			char voicePath[512] = {0};
 			if (!BuildVoicePath(voicePath, sizeof(voicePath), topicInfo, speaker, evt.responseNum))
 				voicePath[0] = '\0';
-			if (evt.responseNum > 1) {
-				Log("DTF: dispatch response %u for topicInfo=0x%08X text=\"%.64s\"", evt.responseNum, evt.topicInfoRefID, evt.text);
-			}
+			Log("DTF: DISPATCH resp#%u topicInfo=0x%08X speaker=0x%08X voice=\"%s\" text=\"%.80s\"",
+				evt.responseNum, evt.topicInfoRefID, evt.speakerRefID, voicePath, evt.text);
 			g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
 				reinterpret_cast<TESObjectREFR*>(speaker),
 				speaker, topic, topicInfo, evt.text, voicePath);
+		} else {
+			Log("DTF: DROP resp#%u topicInfo=0x%08X speaker=0x%08X (form lookup failed: speaker=%p info=%p topic=%p)",
+				evt.responseNum, evt.topicInfoRefID, evt.speakerRefID, speaker, topicInfo, topic);
 		}
 	}
 
