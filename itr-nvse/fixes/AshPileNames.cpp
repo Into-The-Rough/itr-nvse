@@ -1,22 +1,22 @@
-//shows original NPC name for ash piles
-//hook is installed once; behavior is gated at runtime via Settings::bAshPileNames
+//ash pile names + null-safe GetBaseFullName wrapper
+//hooks call-site to avoid JIP prologue conflict
 
 #include "AshPileNames.h"
 #include "nvse/GameObjects.h"
 #include "nvse/GameForms.h"
-#include "internal/Detours.h"
 #include <Windows.h>
 #include <cstdint>
-#include <cstring>
 
 #include "internal/globals.h"
+#include "internal/SafeWrite.h"
 namespace Settings { extern int bAshPileNames; }
 
 namespace AshPileNames
 {
-	typedef const char* (__thiscall* GetBaseFullName_t)(TESObjectREFR* thisRef);
-	static Detours::JumpDetour s_detour;
 	static bool s_hookInstalled = false;
+	static UInt32 s_originalCallTarget = 0;
+
+	static const UInt32 kAddr_HookSite = 0x776F66; //call GetBaseFullName in SetHUDCrosshairStrings
 
 	static BSExtraData* GetExtraDataByType(BaseExtraList* list, UInt32 type)
 	{
@@ -63,39 +63,62 @@ namespace AshPileNames
 		return *(bool*)((char*)mgr + 0x26);
 	}
 
+	static UInt32 ReadCallTarget(UInt32 addr)
+	{
+		UInt8* p = (UInt8*)addr;
+		if (p[0] != 0xE8) return 0;
+		return addr + 5 + *(SInt32*)(addr + 1);
+	}
+
+	typedef const char* (__thiscall* GetBaseFullName_t)(TESObjectREFR* apRef);
+
 	static const char* __fastcall Hook_GetBaseFullName(TESObjectREFR* thisRef, void* edx)
 	{
 		if (!thisRef || !thisRef->baseForm)
 			return "";
 
-		if (!Settings::bAshPileNames || IsGameLoading())
-			return s_detour.GetTrampoline<GetBaseFullName_t>()(thisRef);
+		if (Settings::bAshPileNames && !IsGameLoading())
+		{
+			const char* actorName = GetActorNameFromAshPile(thisRef);
+			if (actorName)
+				return actorName;
+		}
 
-		const char* actorName = GetActorNameFromAshPile(thisRef);
-		if (actorName)
-			return actorName;
-		return s_detour.GetTrampoline<GetBaseFullName_t>()(thisRef);
+		if (!s_originalCallTarget)
+			return "";
+		return ((GetBaseFullName_t)s_originalCallTarget)(thisRef);
 	}
 
-	//prologue: push ebp (1) + mov ebp,esp (2) + push ecx (1) + mov [ebp-4],ecx (3) = 7 bytes
 	void Init()
 	{
-		if (s_hookInstalled)
+		if (s_hookInstalled || !Settings::bAshPileNames)
 			return;
 
-		if (s_detour.WriteRelJump(0x55D520, Hook_GetBaseFullName, 7)) //TESObjectREFR::GetBaseFullName
+		s_originalCallTarget = ReadCallTarget(kAddr_HookSite);
+		if (!s_originalCallTarget)
 		{
-			s_hookInstalled = true;
-			Log("AshPileNames installed");
+			Log("AshPileNames failed: expected call opcode at 0x%08X", kAddr_HookSite);
+			return;
 		}
-		else
-		{
-			Log("AshPileNames failed to install");
-		}
+
+		SafeWrite::WriteRelCall(kAddr_HookSite, (UInt32)Hook_GetBaseFullName);
+		s_hookInstalled = true;
+		Log("AshPileNames installed at call-site 0x%08X (original=0x%08X)", kAddr_HookSite, s_originalCallTarget);
+	}
+
+	void Update()
+	{
+		if (!s_hookInstalled && Settings::bAshPileNames)
+			Init();
 	}
 }
 
 void AshPileNames_Init()
 {
 	AshPileNames::Init();
+}
+
+void AshPileNames_Update()
+{
+	AshPileNames::Update();
 }
