@@ -65,6 +65,9 @@ namespace AshPileNames
 
 	static const char* __fastcall Hook_GetBaseFullName(TESObjectREFR* thisRef, void* edx)
 	{
+		if (!thisRef || !thisRef->baseForm)
+			return "";
+
 		if (!Settings::bAshPileNames || IsGameLoading())
 			return s_detour.GetTrampoline<GetBaseFullName_t>()(thisRef);
 
