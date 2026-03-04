@@ -1,6 +1,7 @@
 //dialogue text filter - hooks dialogue responses and dispatches events
 
 #include <vector>
+#include <unordered_map>
 #include <cstring>
 #include <cstdio>
 #include <Windows.h>
@@ -55,11 +56,25 @@ struct ConfirmedSpeak
 	UInt32 speakerRefID;
 	UInt32 baseFormID;
 	UInt8 responseNum;
+	DWORD timestamp;
+	char modName[64];
+	char voicePath[260];
+};
+
+struct RecentSpeak
+{
+	UInt32 speakerRefID;
+	UInt32 baseFormID;
+	UInt8 responseNum;
+	DWORD timestamp;
 };
 
 namespace DialogueTextFilter {
 	std::vector<QueuedDialogueEvent> g_pendingEvents;
 	std::vector<ConfirmedSpeak> g_confirmedSpeaks;
+	std::vector<RecentSpeak> g_recentSpeaks; //dedup buffer for double SPEAK from engine
+	std::vector<RecentSpeak> g_recentFallbacks; //tracks fallback dispatches to prevent normal re-dispatch
+	std::unordered_map<UInt32, UInt32> g_spokenGreets; //speakerRefID -> baseFormID of last spoken line
 	bool g_hookInstalled = false;
 	DWORD g_mainThreadId = 0;
 	bool g_suppressed = false;
@@ -82,12 +97,36 @@ static UInt32 ReadRefID(const void* form)
 	return form ? *(const UInt32*)((const UInt8*)form + 0x0C) : 0;
 }
 
+static bool ParseModNameFromVoicePath(const char* path, char* outName, size_t outSize) {
+	const char* p = strstr(path, "Voice\\");
+	if (!p) return false;
+	p += 6;
+	const char* end = strchr(p, '\\');
+	if (!end) return false;
+	size_t len = end - p;
+	if (len >= outSize) len = outSize - 1;
+	memcpy(outName, p, len);
+	outName[len] = '\0';
+	return len > 0;
+}
+
 static const char* GetModName(UInt8 modIndex) {
 	void* dh = *(void**)0x11C3F2C;
 	if (!dh || modIndex >= 0xFF) return nullptr;
 	ModInfo* modInfo = *(ModInfo**)((UInt8*)dh + 0x21C + (modIndex * 4));
 	if (!modInfo) return nullptr;
 	return (const char*)((UInt8*)modInfo + 0x20);
+}
+
+static UInt8 FindModIndex(const char* modName) {
+	if (!modName || !*modName) return 0xFF;
+	for (UInt16 i = 0; i < 0xFF; i++) {
+		const char* name = GetModName((UInt8)i);
+		if (!name) continue;
+		if (_stricmp(name, modName) == 0)
+			return (UInt8)i;
+	}
+	return 0xFF;
 }
 
 static const char* GetFormEditorID(void* form) {
@@ -217,6 +256,7 @@ void DTF_Suppress(bool suppress) {
 //check if this RunResult call is a false positive from a script chain during greeting evaluation.
 //when ProcessGreet is active, HighProcess+0x3E4 (pQueuedGreetTopic) holds the REAL DialogueItem.
 //any RunResult for a DIFFERENT topicInfo is a side effect — skip it.
+//however, if SpeakSound has already confirmed this line is playing, it's real regardless.
 static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt32 speakerRefID) {
 	void* baseProcess = *(void**)((UInt8*)speaker + 0x68); //MobileObject+0x68
 	if (!baseProcess) return false;
@@ -235,6 +275,17 @@ static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt3
 	UInt32 activeInfoRefID = activeTopicInfo ? ReadRefID(activeTopicInfo) : 0;
 
 	if (activeInfoRefID && activeInfoRefID != topicInfoRefID) {
+		//before rejecting, check if the active greet has already been spoken.
+		//if so, pQueuedGreetTopic is stale and this is a new legitimate line.
+		UInt32 activeBaseFormID = activeInfoRefID & 0x00FFFFFF;
+		EnsureStateLockInitialized();
+		ScopedLock lock(&g_dtfStateLock);
+		auto it = DialogueTextFilter::g_spokenGreets.find(speakerRefID);
+		if (it != DialogueTextFilter::g_spokenGreets.end() && it->second == activeBaseFormID) {
+			Log("DTF: greet STALE topicInfo=0x%08X (active greet=0x%08X already spoken) speaker=0x%08X",
+				topicInfoRefID, activeInfoRefID, speakerRefID);
+			return false;
+		}
 		Log("DTF: SKIP false positive topicInfo=0x%08X (active greet=0x%08X) speaker=0x%08X",
 			topicInfoRefID, activeInfoRefID, speakerRefID);
 		return true;
@@ -377,11 +428,31 @@ static void __cdecl OnSpeakConfirm(Actor* speaker, const char* voicePath) {
 
 	if (DialogueTextFilter::g_confirmedSpeaks.size() >= 128) return;
 
-	ConfirmedSpeak cs;
+	//dedup: engine fires SPEAK twice per line
+	DWORD now = GetTickCount();
+	for (const auto& rs : DialogueTextFilter::g_recentSpeaks) {
+		if (rs.speakerRefID == speakerRefID &&
+			rs.baseFormID == baseFormID &&
+			rs.responseNum == respNum &&
+			(now - rs.timestamp) < 2000) {
+			Log("DTF: SPEAK dedup speaker=0x%08X formID=0x%06X resp#%u",
+				speakerRefID, baseFormID, respNum);
+			return;
+		}
+	}
+	DialogueTextFilter::g_recentSpeaks.push_back({speakerRefID, baseFormID, respNum, now});
+	if (DialogueTextFilter::g_recentSpeaks.size() > 64)
+		DialogueTextFilter::g_recentSpeaks.erase(DialogueTextFilter::g_recentSpeaks.begin());
+
+	ConfirmedSpeak cs = {};
 	cs.speakerRefID = speakerRefID;
 	cs.baseFormID = baseFormID;
 	cs.responseNum = respNum;
+	cs.timestamp = GetTickCount();
+	ParseModNameFromVoicePath(voicePath, cs.modName, sizeof(cs.modName));
+	strncpy_s(cs.voicePath, sizeof(cs.voicePath), voicePath, _TRUNCATE);
 	DialogueTextFilter::g_confirmedSpeaks.push_back(cs);
+	DialogueTextFilter::g_spokenGreets[speakerRefID] = baseFormID;
 
 	Log("DTF: SPEAK confirmed speaker=0x%08X formID=0x%06X resp#%u path=\"%.80s\"",
 		speakerRefID, baseFormID, respNum, voicePath);
@@ -429,6 +500,26 @@ void DTF_Update()
 		DialogueTextFilter::g_mainThreadId = currentThreadId;
 	if (currentThreadId != DialogueTextFilter::g_mainThreadId)
 		return;
+
+	//prune old dedup entries (>30s)
+	{
+		ScopedLock lock(&g_dtfStateLock);
+		DWORD now = GetTickCount();
+		for (auto it = DialogueTextFilter::g_recentSpeaks.begin();
+			 it != DialogueTextFilter::g_recentSpeaks.end(); ) {
+			if (now - it->timestamp > 10000)
+				it = DialogueTextFilter::g_recentSpeaks.erase(it);
+			else
+				++it;
+		}
+		for (auto it = DialogueTextFilter::g_recentFallbacks.begin();
+			 it != DialogueTextFilter::g_recentFallbacks.end(); ) {
+			if (now - it->timestamp > 30000)
+				it = DialogueTextFilter::g_recentFallbacks.erase(it);
+			else
+				++it;
+		}
+	}
 
 	std::vector<QueuedDialogueEvent> pendingEvents;
 	std::vector<ConfirmedSpeak> confirmedSpeaks;
@@ -485,6 +576,23 @@ void DTF_Update()
 		}
 
 		if (confirmed) {
+			//skip if already fallback-dispatched (post-reload re-evaluation)
+			bool alreadyFallback = false;
+			for (auto it = DialogueTextFilter::g_recentFallbacks.begin();
+				 it != DialogueTextFilter::g_recentFallbacks.end(); ++it) {
+				if (it->speakerRefID == evt.speakerRefID &&
+					it->baseFormID == baseFormID &&
+					it->responseNum == evt.responseNum) {
+					alreadyFallback = true;
+					DialogueTextFilter::g_recentFallbacks.erase(it);
+					break;
+				}
+			}
+			if (alreadyFallback) {
+				Log("DTF: SKIP (already fallback-dispatched) resp#%u topicInfo=0x%08X speaker=0x%08X",
+					evt.responseNum, evt.topicInfoRefID, evt.speakerRefID);
+				continue;
+			}
 			Log("DTF: DISPATCH resp#%u topicInfo=0x%08X speaker=0x%08X voice=\"%s\" text=\"%.80s\"",
 				evt.responseNum, evt.topicInfoRefID, evt.speakerRefID, voicePath, evt.text);
 			g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
@@ -498,15 +606,80 @@ void DTF_Update()
 		}
 	}
 
-	if (!deferredEvents.empty()) {
-		ScopedLock lock(&g_dtfStateLock);
-		DialogueTextFilter::g_pendingEvents.insert(
-			DialogueTextFilter::g_pendingEvents.begin(),
-			deferredEvents.begin(), deferredEvents.end());
+	//fallback: SPEAK with no RunResult (fire-and-forget barks after reload etc)
+	for (auto cit = confirmedSpeaks.begin(); cit != confirmedSpeaks.end(); ) {
+		if (nowTick - cit->timestamp < 500) { ++cit; continue; }
 
-		constexpr size_t kMaxQueuedDialogueEvents = 256;
-		if (DialogueTextFilter::g_pendingEvents.size() > kMaxQueuedDialogueEvents)
-			DialogueTextFilter::g_pendingEvents.resize(kMaxQueuedDialogueEvents);
+		UInt8 modIndex = FindModIndex(cit->modName);
+		if (modIndex == 0xFF) {
+			Log("DTF: FALLBACK DROP speaker=0x%08X formID=0x%06X (mod '%s' not found)",
+				cit->speakerRefID, cit->baseFormID, cit->modName);
+			cit = confirmedSpeaks.erase(cit);
+			continue;
+		}
+
+		UInt32 fullFormID = ((UInt32)modIndex << 24) | cit->baseFormID;
+		TESTopicInfo* info = reinterpret_cast<TESTopicInfo*>(Engine::LookupFormByID(fullFormID));
+		Actor* speaker = reinterpret_cast<Actor*>(Engine::LookupFormByID(cit->speakerRefID));
+		if (!info || !speaker) {
+			Log("DTF: FALLBACK DROP speaker=0x%08X formID=0x%08X (lookup failed)",
+				cit->speakerRefID, fullFormID);
+			cit = confirmedSpeaks.erase(cit);
+			continue;
+		}
+
+		TESTopicInfoResponse** ppResp = ThisCall<TESTopicInfoResponse**>(
+			kAddr_GetResponses, info, nullptr);
+		const char* text = nullptr;
+		if (ppResp && *ppResp) {
+			UInt8 rn = 1;
+			for (auto* r = *ppResp; r; r = r->next, rn++) {
+				if (rn == cit->responseNum) { text = r->responseText.CStr(); break; }
+			}
+		}
+
+		if (!text || !*text) {
+			Log("DTF: FALLBACK DROP speaker=0x%08X formID=0x%08X resp#%u (no text)",
+				cit->speakerRefID, fullFormID, cit->responseNum);
+			cit = confirmedSpeaks.erase(cit);
+			continue;
+		}
+
+		TESTopic* topic = *reinterpret_cast<TESTopic**>((UInt8*)info + 0x50);
+
+		Log("DTF: FALLBACK DISPATCH speaker=0x%08X formID=0x%08X resp#%u text=\"%.80s\"",
+			cit->speakerRefID, fullFormID, cit->responseNum, text);
+		g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
+			reinterpret_cast<TESObjectREFR*>(speaker),
+			speaker, topic, info, text, cit->voicePath);
+		DialogueTextFilter::g_recentFallbacks.push_back(
+			{cit->speakerRefID, cit->baseFormID, cit->responseNum, nowTick});
+
+		cit = confirmedSpeaks.erase(cit);
+	}
+
+	{
+		ScopedLock lock(&g_dtfStateLock);
+		if (!deferredEvents.empty()) {
+			DialogueTextFilter::g_pendingEvents.insert(
+				DialogueTextFilter::g_pendingEvents.begin(),
+				deferredEvents.begin(), deferredEvents.end());
+
+			constexpr size_t kMaxQueuedDialogueEvents = 256;
+			if (DialogueTextFilter::g_pendingEvents.size() > kMaxQueuedDialogueEvents)
+				DialogueTextFilter::g_pendingEvents.resize(kMaxQueuedDialogueEvents);
+		}
+		//preserve unconsumed confirmations for next frame
+		if (!confirmedSpeaks.empty()) {
+			DialogueTextFilter::g_confirmedSpeaks.insert(
+				DialogueTextFilter::g_confirmedSpeaks.end(),
+				confirmedSpeaks.begin(), confirmedSpeaks.end());
+			if (DialogueTextFilter::g_confirmedSpeaks.size() > 128)
+				DialogueTextFilter::g_confirmedSpeaks.erase(
+					DialogueTextFilter::g_confirmedSpeaks.begin(),
+					DialogueTextFilter::g_confirmedSpeaks.begin() +
+						(DialogueTextFilter::g_confirmedSpeaks.size() - 128));
+		}
 	}
 }
 
