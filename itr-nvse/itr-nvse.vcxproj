@@ -77,8 +77,9 @@
       <TargetMachine>MachineX86</TargetMachine>
     </Link>
     <PostBuildEvent>
-      <Message>Copying DLL to mod folder...</Message>
-      <Command>copy "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"</Command>
+      <Message>Copying DLL and PDB to mod folder...</Message>
+      <Command>copy "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
+if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -91,14 +92,14 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <DebugInformationFormat>None</DebugInformationFormat>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <ForcedIncludeFiles>nvse/prefix.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
     </ClCompile>
     <Link>
       <ModuleDefinitionFile>exports.def</ModuleDefinitionFile>
-      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <RandomizedBaseAddress>false</RandomizedBaseAddress>
@@ -106,8 +107,9 @@
       <TargetMachine>MachineX86</TargetMachine>
     </Link>
     <PostBuildEvent>
-      <Message>Copying DLL to mod folder...</Message>
-      <Command>copy "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"</Command>
+      <Message>Copying DLL and PDB to mod folder...</Message>
+      <Command>copy "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
+if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
