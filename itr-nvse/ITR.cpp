@@ -226,6 +226,8 @@ static void OnFocusGained()
 }
 
 static FILE* g_logFile = nullptr;
+static bool g_vatsSpeechFixInitialized = false;
+static bool g_vatsSpeechFixDisabledByStewie = false;
 
 void Log(const char* fmt, ...)
 {
@@ -236,6 +238,57 @@ void Log(const char* fmt, ...)
 	fprintf(g_logFile, "\n");
 	fflush(g_logFile);
 	va_end(args);
+}
+
+static bool IsStewieAudioInlineActive()
+{
+	if (!GetModuleHandleA("nvse_stewie_tweaks.dll"))
+		return false;
+
+	static const UInt8 kStewieTimescalePatch[] = {
+		0xD9, 0xE1, 0x66, 0x66, 0x66, 0x66, 0x0F,
+		0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00
+	};
+
+	if (memcmp((void*)0xAEDFBD, kStewieTimescalePatch, sizeof(kStewieTimescalePatch)) == 0)
+		return true;
+
+	char gameDir[MAX_PATH];
+	GetModuleFileNameA(nullptr, gameDir, MAX_PATH);
+	char* lastSlash = strrchr(gameDir, '\\');
+	if (!lastSlash)
+		return true;
+	*lastSlash = '\0';
+
+	char stewieIniPath[MAX_PATH];
+	sprintf_s(stewieIniPath, "%s\\Data\\NVSE\\Plugins\\nvse_stewie_tweaks.ini", gameDir);
+	return GetPrivateProfileIntA("Inlines", "bAudio", 1, stewieIniPath) != 0;
+}
+
+static void InitVATSSpeechFixWithCompatibility()
+{
+	g_vatsSpeechFixDisabledByStewie = IsStewieAudioInlineActive();
+	if (g_vatsSpeechFixDisabledByStewie)
+	{
+		Log("VATSSpeechFix disabled: Stewie Tweaks Inlines.bAudio owns audio hooks");
+		return;
+	}
+
+	VATSSpeechFix_Init(Settings::bVATSSpeechFix != 0);
+	g_vatsSpeechFixInitialized = true;
+}
+
+static void ApplyVATSSpeechFixSetting()
+{
+	if (g_vatsSpeechFixDisabledByStewie)
+	{
+		if (Settings::bVATSSpeechFix)
+			Log("VATSSpeechFix remains disabled: Stewie Tweaks Inlines.bAudio owns audio hooks");
+		return;
+	}
+
+	if (g_vatsSpeechFixInitialized)
+		VATSSpeechFix_SetEnabled(Settings::bVATSSpeechFix != 0);
 }
 
 static bool IsGameLoading()
@@ -445,7 +498,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bDoorPackageOwnershipFix)
 					DoorPackageOwnershipFix_Init();
 				NPCDoorUnlockBlock_Init(Settings::iNPCDoorUnlockBlock);
-				VATSSpeechFix_Init(Settings::bVATSSpeechFix != 0);
 				if (Settings::bCombatItemTimerFix)
 					CombatItemTimerFix_Init();
 				if (Settings::bNPCAntidoteUse)
@@ -470,6 +522,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			case NVSEMessagingInterface::kMessage_PostPostLoad:
 				if (Settings::bDialogueCamera)
 					DCH_InstallCameraHooks();
+				InitVATSSpeechFixWithCompatibility();
 				AshPileNames_Init();
 				if (Settings::bVATSExtender)
 					VATSExtender_Init();
@@ -522,7 +575,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					OwnedBeds_SetEnabled(Settings::bOwnedBeds != 0);
 					KillActorXPFix_SetEnabled(Settings::bKillActorXPFix != 0);
 					NoDoorFade_SetEnabled(Settings::bNoDoorFade != 0);
-					VATSSpeechFix_SetEnabled(Settings::bVATSSpeechFix != 0);
+					ApplyVATSSpeechFixSetting();
 					ReversePickpocketNoKarmaFix_SetEnabled(Settings::bReversePickpocketNoKarma != 0);
 					CompanionNoInfamy_SetEnabled(Settings::bCompanionNoInfamy != 0);
 					CompanionWeightlessOverencumberedFix_SetEnabled(Settings::bCompanionWeightlessOverencumberedFix != 0);
