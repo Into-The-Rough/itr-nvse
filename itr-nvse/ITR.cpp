@@ -56,6 +56,7 @@
 #include "fixes/PathingNullActorFix.h"
 #include "fixes/NavMeshInfoCrashFix.h"
 #include "fixes/InitHavokCrashFix.h"
+#include "fixes/OwnedCorpses.h"
 #include "fixes/DetectionFollowerCrashFix.h"
 #include "features/MessageBoxQuickClose.h"
 #include "features/PreventWeaponSwitch.h"
@@ -487,6 +488,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bVATSLimbFix)
 					VATSLimbFix_Init();
 				OwnedBeds_Init(Settings::bOwnedBeds != 0);
+				OwnedCorpses_Init(Settings::bOwnedCorpses != 0);
 				if (Settings::bLocationVisitPopup)
 					LocationVisitPopup_Init(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
 				FriendlyFire_Init(Settings::bFriendlyFire != 0);
@@ -573,6 +575,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 					FriendlyFire_SetEnabled(Settings::bFriendlyFire != 0);
 					OwnedBeds_SetEnabled(Settings::bOwnedBeds != 0);
+					OwnedCorpses_SetEnabled(Settings::bOwnedCorpses != 0);
 					KillActorXPFix_SetEnabled(Settings::bKillActorXPFix != 0);
 					NoDoorFade_SetEnabled(Settings::bNoDoorFade != 0);
 					ApplyVATSSpeechFixSetting();
@@ -595,7 +598,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 					Log("Config reloaded via ReloadPluginConfig");
 					Console_Print("itr-nvse: Config reloaded");
-					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180, OwnerNameInfo, QuickReadNote, FriendlyFire, OwnedBeds, KillActorXPFix, NoDoorFade, VATSSpeechFix, ReversePickpocket, CompanionNoInfamy, CompanionWeightlessOverencumberedFix, NPCDoorUnlockBlock");
+					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180, OwnerNameInfo, QuickReadNote, FriendlyFire, OwnedBeds, OwnedCorpses, KillActorXPFix, NoDoorFade, VATSSpeechFix, ReversePickpocket, CompanionNoInfamy, CompanionWeightlessOverencumberedFix, NPCDoorUnlockBlock");
 				}
 			}
 			break;
@@ -692,6 +695,7 @@ static void LogSettings()
 	Log("  bNPCAntidoteUse: %d", Settings::bNPCAntidoteUse);
 	Log("  bNPCDoctorsBagUse: %d", Settings::bNPCDoctorsBagUse);
 	Log("  bCompanionNoInfamy: %d", Settings::bCompanionNoInfamy);
+	Log("  bOwnedCorpses: %d", Settings::bOwnedCorpses);
 	Log("  bCompanionWeightlessOverencumberedFix: %d", Settings::bCompanionWeightlessOverencumberedFix);
 	if (Settings::bQuickDrop) Log("QuickDrop enabled (modifier=%d, control=%d)", Settings::iQuickDropModifierKey, Settings::iQuickDropControlID);
 	if (Settings::bQuick180) Log("Quick180 enabled (modifier=%d, control=%d)", Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);

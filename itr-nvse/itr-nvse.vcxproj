@@ -146,6 +146,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="fixes\KillActorXPFix.cpp" />
     <ClCompile Include="fixes\ExplodingPantsFix.cpp" />
     <ClCompile Include="fixes\OwnedBeds.cpp" />
+    <ClCompile Include="fixes\OwnedCorpses.cpp" />
     <ClCompile Include="fixes\AshPileNames.cpp" />
     <ClCompile Include="fixes\ReversePickpocketNoKarmaFix.cpp" />
     <ClCompile Include="fixes\FriendlyFire.cpp" />
@@ -231,6 +232,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="fixes\KillActorXPFix.h" />
     <ClInclude Include="fixes\ExplodingPantsFix.h" />
     <ClInclude Include="fixes\OwnedBeds.h" />
+    <ClInclude Include="fixes\OwnedCorpses.h" />
     <ClInclude Include="fixes\AshPileNames.h" />
     <ClInclude Include="fixes\ReversePickpocketNoKarmaFix.h" />
     <ClInclude Include="fixes\FriendlyFire.h" />
