@@ -2,6 +2,7 @@
 #include "nvse/PluginAPI.h"
 #include "nvse/GameObjects.h"
 #include "internal/SafeWrite.h"
+#include "internal/globals.h"
 #include "PerlinNoise.hpp"
 #include <cmath>
 
@@ -53,6 +54,7 @@ namespace CameraHooks {
 	static SetLocalTranslate_t g_origTranslate2 = nullptr;
 	static SetLocalRotate_t g_origRotate1 = nullptr;
 	static SetLocalRotate_t g_origRotate2 = nullptr;
+	static bool g_hooksInstalled = false;
 
 	void __fastcall TranslateHook1(void* node, void* edx, NiVector3* pos) {
 		if (g_overrideActive) pos = &g_cameraPos;
@@ -95,30 +97,56 @@ namespace CameraHooks {
 		g_overrideActive = false;
 	}
 
-	//helper to write call and get original
+	static bool IsRel32Patched(UInt32 src, UInt8 opcode, UInt32 dst) {
+		return *(UInt8*)src == opcode && (*(UInt32*)(src + 1) + src + 5) == dst;
+	}
+
 	template<typename T>
-	static T WriteRelCallEx(UInt32 src, UInt32 dst) {
-		T orig = (T)(*(UInt32*)(src + 1) + src + 5);
+	static bool PatchRelCall(UInt32 src, UInt32 dst, T& orig, const char* name) {
+		if (*(UInt8*)src != 0xE8) {
+			Log("DialogueCameraHandler: %s patch site 0x%08X expected CALL, found 0x%02X", name, src, *(UInt8*)src);
+			return false;
+		}
+
+		orig = (T)(*(UInt32*)(src + 1) + src + 5);
 		DWORD oldProtect;
-		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
+		if (!VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect)) {
+			Log("DialogueCameraHandler: VirtualProtect failed for %s at 0x%08X", name, src);
+			return false;
+		}
+
 		*(UInt8*)src = 0xE8;
 		*(UInt32*)(src + 1) = dst - src - 5;
 		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
-		return orig;
+		FlushInstructionCache(GetCurrentProcess(), (void*)src, 5);
+		return true;
 	}
 
-	void InstallHooks() {
+	bool InstallHooks() {
+		if (g_hooksInstalled)
+			return true;
+
 		//hook addresses (verified in IDA):
 		//0x94AD8A - SetLocalTranslate in PlayerCharacter::HandleFlycamMovement
 		//0x94AD9D - SetLocalRotate in PlayerCharacter::HandleFlycamMovement
 		//0x94BDC2 - SetLocalTranslate in PlayerCharacter::UpdateCamera
 		//0x94BDD5 - SetLocalRotate in PlayerCharacter::UpdateCamera
-		g_origTranslate1 = WriteRelCallEx<SetLocalTranslate_t>(0x94AD8A, (UInt32)TranslateHook1);
-		g_origRotate1 = WriteRelCallEx<SetLocalRotate_t>(0x94AD9D, (UInt32)RotateHook1);
-		g_origTranslate2 = WriteRelCallEx<SetLocalTranslate_t>(0x94BDC2, (UInt32)TranslateHook2);
-		g_origRotate2 = WriteRelCallEx<SetLocalRotate_t>(0x94BDD5, (UInt32)RotateHook2);
+		if (!PatchRelCall(0x94AD8A, (UInt32)TranslateHook1, g_origTranslate1, "HandleFlycamMovement::SetLocalTranslate"))
+			return false;
+		if (!PatchRelCall(0x94AD9D, (UInt32)RotateHook1, g_origRotate1, "HandleFlycamMovement::SetLocalRotate"))
+			return false;
+		if (!PatchRelCall(0x94BDC2, (UInt32)TranslateHook2, g_origTranslate2, "UpdateCamera::SetLocalTranslate"))
+			return false;
+		if (!PatchRelCall(0x94BDD5, (UInt32)RotateHook2, g_origRotate2, "UpdateCamera::SetLocalRotate"))
+			return false;
 
 		g_cameraRot.MakeIdentity();
+		g_hooksInstalled = true;
+		return true;
+	}
+
+	bool AreHooksInstalled() {
+		return g_hooksInstalled;
 	}
 }
 
@@ -340,9 +368,78 @@ static UInt32 g_lastTopicInfoID = 0;
 static float g_baseCamX = 0, g_baseCamY = 0, g_baseCamZ = 0;
 static float g_baseLookX = 0, g_baseLookY = 0, g_baseLookZ = 0;
 static double g_noiseTime = 0;
+static bool g_patchesInstalled = false;
 
 static const siv::PerlinNoise g_perlinPitch{ 4 };
 static const siv::PerlinNoise g_perlinYaw{ 5 };
+
+static bool IsNopRange(UInt32 addr, UInt32 size) {
+	for (UInt32 i = 0; i < size; i++) {
+		if (*(UInt8*)(addr + i) != 0x90)
+			return false;
+	}
+	return true;
+}
+
+static bool ValidateNopSite(UInt32 addr, UInt32 size, UInt8 expectedOpcode, const char* name) {
+	if (IsNopRange(addr, size))
+		return true;
+	if (*(UInt8*)addr != expectedOpcode) {
+		Log("DialogueCameraHandler: %s patch site 0x%08X expected opcode 0x%02X or NOPs, found 0x%02X", name, addr, expectedOpcode, *(UInt8*)addr);
+		return false;
+	}
+	return true;
+}
+
+static bool ValidateRelJumpSite(UInt32 addr, UInt32 dst, const char* name) {
+	UInt8 opcode = *(UInt8*)addr;
+	if (CameraHooks::IsRel32Patched(addr, 0xE9, dst))
+		return true;
+	if (opcode == 0xE9) {
+		Log("DialogueCameraHandler: %s patch site 0x%08X already jumps to 0x%08X", name, addr, *(UInt32*)(addr + 1) + addr + 5);
+		return false;
+	}
+	return true;
+}
+
+static bool ValidateBytePatchSite(UInt32 addr, UInt8 patchedValue, UInt8 allowedOriginalA, UInt8 allowedOriginalB, const char* name) {
+	UInt8 current = *(UInt8*)addr;
+	if (current == patchedValue)
+		return true;
+	if (current != allowedOriginalA && current != allowedOriginalB) {
+		Log("DialogueCameraHandler: %s patch site 0x%08X expected 0x%02X/0x%02X or patched 0x%02X, found 0x%02X", name, addr, allowedOriginalA, allowedOriginalB, patchedValue, current);
+		return false;
+	}
+	return true;
+}
+
+static bool InstallDialoguePatches() {
+	if (g_patchesInstalled)
+		return true;
+
+	if (!ValidateNopSite(0x953124, 5, 0xE8, "ForceThirdPerson start"))
+		return false;
+	if (!ValidateNopSite(0x761DEF, 5, 0xE8, "ForceThirdPerson end"))
+		return false;
+	if (!ValidateRelJumpSite(0x953ABF, 0x953AF5, "ForceThirdPerson branch 1"))
+		return false;
+	if (!ValidateRelJumpSite(0x762E55, 0x762E72, "ForceThirdPerson branch 2"))
+		return false;
+	if (!ValidateRelJumpSite(0x9533BE, 0x953562, "DisableDialogueZoom branch"))
+		return false;
+	if (!ValidateBytePatchSite(0x953BBA, 0xEB, 0x74, 0x75, "DisableDialogueZoom conditional"))
+		return false;
+
+	SafeWrite::WriteNop(0x953124, 5);
+	SafeWrite::WriteNop(0x761DEF, 5);
+	SafeWrite::WriteRelJump(0x953ABF, 0x953AF5);
+	SafeWrite::WriteRelJump(0x762E55, 0x762E72);
+	SafeWrite::WriteRelJump(0x9533BE, 0x953562);
+	SafeWrite::Write8(0x953BBA, 0xEB);
+
+	g_patchesInstalled = true;
+	return true;
+}
 
 static void DisableCamera() {
 	CameraHooks::Disable();
@@ -549,6 +646,9 @@ static void OnDialogueEnd() {
 }
 
 void Update() {
+	if (!g_patchesInstalled || !CameraHooks::AreHooksInstalled())
+		return;
+
 	bool dialogueMenuVisible = g_MenuVisibilityArray[kMenuType_Dialogue] != 0;
 
 	if (dialogueMenuVisible && !g_inDialogue) {
@@ -582,21 +682,13 @@ void Update() {
 
 bool Init(NVSEConsoleInterface* console) {
 	g_console = console;
-
-	//force 3rd person in dialogue (ported from RealTimeMenus)
-	SafeWrite::WriteNop(0x953124, 5);
-	SafeWrite::WriteNop(0x761DEF, 5);
-	SafeWrite::WriteRelJump(0x953ABF, 0x953AF5);
-	SafeWrite::WriteRelJump(0x762E55, 0x762E72);
-
-	SafeWrite::WriteRelJump(0x9533BE, 0x953562); //disable dialogue zoom
-	SafeWrite::Write8(0x953BBA, 0xEB);
-
 	return true;
 }
 
-void InstallCameraHooks() {
-	CameraHooks::InstallHooks();
+bool InstallCameraHooks() {
+	if (!InstallDialoguePatches())
+		return false;
+	return CameraHooks::InstallHooks();
 }
 
 }
@@ -611,6 +703,6 @@ void DCH_Update() {
 	DialogueCameraHandler::Update();
 }
 
-void DCH_InstallCameraHooks() {
-	DialogueCameraHandler::InstallCameraHooks();
+bool DCH_InstallCameraHooks() {
+	return DialogueCameraHandler::InstallCameraHooks();
 }
