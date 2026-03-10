@@ -136,17 +136,36 @@ PluginHandle g_pluginHandle = kPluginHandle_Invalid;
 NVSEMessagingInterface* g_msgInterface = nullptr;
 NVSEConsoleInterface* g_consoleInterface = nullptr;
 NVSEArrayVarInterface* g_arrInterface = nullptr;
-
+NVSECommandTableInterface* g_cmdTableInterface = nullptr;
 static PlayerCharacter** g_thePlayer = (PlayerCharacter**)0x011DEA3C;
 static UInt8* g_MenuVisibilityArray = (UInt8*)0x011F308F;
-static SaveGameManager** g_saveGameManager = (SaveGameManager**)0x011DE134;
 
 static bool g_godModeExecuted = false;
-static bool g_quickLoadExecuted = false;
-static int g_framesOnMenu = 0;
+static bool g_quickLoadDone = false;
+static DWORD g_quickLoadStartTime = 0;
 
-typedef bool (__thiscall *_LoadQuicksave)(SaveGameManager* mgr);
-static const _LoadQuicksave LoadQuicksave = (_LoadQuicksave)0x8509F0;
+void Log(const char* fmt, ...); //forward decl
+
+typedef void (__thiscall *_PollControls)(void*);
+static const _PollControls PollControls = (_PollControls)0x86F390;
+
+//hooked at 0x86E88C - injects F9 keypress AFTER PollControls reads hardware
+//so the game sees it as a real keypress when it checks GetUserAction(QuickLoad)
+void __fastcall PollControlsHook(void* tesMain, void* edx)
+{
+	PollControls(tesMain);
+	if (g_quickLoadDone == false && g_quickLoadStartTime)
+	{
+		if ((GetTickCount() - g_quickLoadStartTime) >= (DWORD)Settings::iAutoQuickLoadDelayMs)
+		{
+			//DIK_F9=0x43, currKeyStates at +0x18F8
+			auto input = *(UInt8**)0x11F35CC;
+			if (input) input[0x18F8 + 0x43] = 0x80;
+			g_quickLoadDone = true;
+			Log("AutoQuickLoad: injected F9 (after %dms)", GetTickCount() - g_quickLoadStartTime);
+		}
+	}
+}
 
 typedef void (__cdecl *_StopPlayingMusic)();
 static const _StopPlayingMusic StopPlayingMusic = (_StopPlayingMusic)0x8304A0;
@@ -547,20 +566,12 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				QuickReadNote_Update();
 			if (Settings::bDialogueCamera)
 				DCH_Update();
-			if (Settings::bAutoQuickLoad && !g_quickLoadExecuted)
+			if (Settings::bAutoQuickLoad && !g_quickLoadDone && !g_quickLoadStartTime)
 			{
 				if (g_MenuVisibilityArray[kMenuType_Start])
 				{
-					g_framesOnMenu++;
-					if (g_framesOnMenu > Settings::iAutoQuickLoadFrameDelay)
-					{
-						if (SaveGameManager* sgm = *g_saveGameManager)
-						{
-							LoadQuicksave(sgm);
-							g_quickLoadExecuted = true;
-							Log("AutoQuickLoad: Loaded quicksave");
-						}
-					}
+					g_quickLoadStartTime = GetTickCount();
+					Log("AutoQuickLoad: start menu detected, loading in %dms", Settings::iAutoQuickLoadDelayMs);
 				}
 			}
 			if (Settings::bAltTabMute)
@@ -629,8 +640,6 @@ static void LogSettings()
 	Log("  bNPCDoctorsBagUse: %d", Settings::bNPCDoctorsBagUse);
 	Log("  bCompanionNoInfamy: %d", Settings::bCompanionNoInfamy);
 	Log("  bCompanionWeightlessOverencumberedFix: %d", Settings::bCompanionWeightlessOverencumberedFix);
-	Log("  iAutoQuickLoadFrameDelay: %d", Settings::iAutoQuickLoadFrameDelay);
-
 	if (Settings::bQuickDrop) Log("QuickDrop enabled (modifier=%d, control=%d)", Settings::iQuickDropModifierKey, Settings::iQuickDropControlID);
 	if (Settings::bQuick180) Log("Quick180 enabled (modifier=%d, control=%d)", Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
 	if (Settings::bNPCAntidoteUse) Log("NPCAntidoteUse enabled (timer=%.1f, healthThreshold=%.1f)", Settings::fCombatItemCureTimer, Settings::fCureHealthThreshold);
@@ -778,6 +787,7 @@ namespace ITR
 		g_msgInterface = (NVSEMessagingInterface*)nvse->QueryInterface(kInterface_Messaging);
 		g_consoleInterface = (NVSEConsoleInterface*)nvse->QueryInterface(kInterface_Console);
 		g_arrInterface = (NVSEArrayVarInterface*)nvse->QueryInterface(kInterface_ArrayVar);
+		g_cmdTableInterface = (NVSECommandTableInterface*)nvse->QueryInterface(kInterface_CommandTable);
 
 		if (!g_msgInterface || !g_arrInterface)
 		{
@@ -787,6 +797,12 @@ namespace ITR
 
 		Settings::Load();
 		LogSettings();
+
+		if (Settings::bAutoQuickLoad)
+		{
+			SafeWrite::WriteRelCall(0x86E88C, (UInt32)PollControlsHook);
+			Log("AutoQuickLoad: hooked PollControls, delay=%dms", Settings::iAutoQuickLoadDelayMs);
+		}
 
 		if (Settings::bConsoleLogCleaner)
 		{

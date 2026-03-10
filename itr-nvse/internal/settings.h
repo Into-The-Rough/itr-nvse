@@ -5,13 +5,12 @@ namespace Settings
 {
 	inline int bAutoGodMode = 0;
 	inline int bAutoQuickLoad = 0;
+	inline int iAutoQuickLoadDelayMs = 0;
 	inline int bMessageBoxQuickClose = 1;
 	inline int bConsoleLogCleaner = 1;
 	inline int bAltTabMute = 1;
 	inline int bQuickDrop = 0;
 	inline int bQuick180 = 0;
-
-	inline int iAutoQuickLoadFrameDelay = 5;
 
 	inline int iQuickDropModifierKey = VK_SHIFT;
 	inline int iQuickDropControlID = 7; //ready weapon
@@ -90,8 +89,7 @@ namespace Settings
 		bAltTabMute = GetINIInt("Tweaks", "bAltTabMute", 1);
 		bQuickDrop = GetINIInt("Tweaks", "bQuickDrop", 0);
 		bQuick180 = GetINIInt("Tweaks", "bQuick180", 0);
-
-		iAutoQuickLoadFrameDelay = GetINIInt("AutoQuickLoad", "iFrameDelay", 5);
+		iAutoQuickLoadDelayMs = GetINIInt("AutoQuickLoad", "iDelayMs", 1500);
 
 		iQuickDropModifierKey = GetINIInt("QuickDrop", "iModifierKey", VK_SHIFT);
 		iQuickDropControlID = GetINIInt("QuickDrop", "iControlID", 7);
