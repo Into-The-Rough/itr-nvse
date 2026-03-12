@@ -75,33 +75,39 @@ namespace VATSLimbFix
 		return xDismember ? xDismember->dismemberedMask : 0;
 	}
 
-	bool IsLimbDismemberedOnAnyVATSTarget(uint16_t limbID) {
-		LimbFixREFR** pTargetRef = (LimbFixREFR**)0x11F21CC;
-		if (pTargetRef && *pTargetRef) {
-			uint16_t mask = GetDismemberMask(*pTargetRef);
-			if (mask & (1 << limbID))
-				return true;
-		}
+	//NiSkinInstance+0x10 = actorRoot (NiNode*)
+	//TESObjectREFR+0x64 = RenderState*, RenderState+0x14 = rootNode (NiNode*)
+	void* GetRefRootNode(LimbFixREFR* ref) {
+		if (!ref) return nullptr;
+		void* renderState = *(void**)((uint8_t*)ref + 0x64);
+		if (!renderState) return nullptr;
+		return *(void**)((uint8_t*)renderState + 0x14);
+	}
+
+	LimbFixREFR* FindOwnerRef(void* skinActorRoot) {
+		if (!skinActorRoot) return nullptr;
+
+		LimbFixREFR* targetRef = *(LimbFixREFR**)0x11F21CC;
+		if (targetRef && GetRefRootNode(targetRef) == skinActorRoot)
+			return targetRef;
 
 		VATSTargetList* targetList = (VATSTargetList*)0x11DB150;
 		if (targetList) {
 			VATSTargetNode* node = &targetList->head;
 			while (node && node->data) {
-				VATSTargetLimb* target = node->data;
-				if (target && target->pReference) {
-					uint16_t mask = GetDismemberMask(target->pReference);
-					if (mask & (1 << limbID))
-						return true;
-				}
+				if (node->data->pReference && GetRefRootNode(node->data->pReference) == skinActorRoot)
+					return node->data->pReference;
 				node = node->next;
 			}
 		}
-		return false;
+		return nullptr;
 	}
 
 	void __fastcall SetPartitionVisible_Hook(void* skinInstance, void* edx, uint16_t limbID, char visible) {
 		if (visible) {
-			if (IsLimbDismemberedOnAnyVATSTarget(limbID))
+			void* actorRoot = *(void**)((uint8_t*)skinInstance + 0x10);
+			LimbFixREFR* owner = FindOwnerRef(actorRoot);
+			if (owner && (GetDismemberMask(owner) & (1 << limbID)))
 				return;
 		}
 		typedef void (__thiscall *SetPartitionVisible_t)(void*, uint16_t, char);
