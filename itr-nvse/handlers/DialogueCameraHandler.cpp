@@ -3,52 +3,24 @@
 #include "nvse/GameObjects.h"
 #include "internal/SafeWrite.h"
 #include "internal/globals.h"
+#include "internal/Mat3.h"
 #include "PerlinNoise.hpp"
 #include <cmath>
 
 //camera hooks - intercept game's own camera update calls
 namespace CameraHooks {
 	struct NiVector3 { float x, y, z; };
-	struct NiMatrix3 {
-		float m[3][3];
-
-		void MakeIdentity() {
-			m[0][0] = 1; m[0][1] = 0; m[0][2] = 0;
-			m[1][0] = 0; m[1][1] = 1; m[1][2] = 0;
-			m[2][0] = 0; m[2][1] = 0; m[2][2] = 1;
-		}
-
-		void MakeXRotation(float rad) {
-			float c = cosf(rad), s = sinf(rad);
-			m[0][0] = 1; m[0][1] = 0;  m[0][2] = 0;
-			m[1][0] = 0; m[1][1] = c;  m[1][2] = s;
-			m[2][0] = 0; m[2][1] = -s; m[2][2] = c;
-		}
-
-		void MakeZRotation(float rad) {
-			float c = cosf(rad), s = sinf(rad);
-			m[0][0] = c;  m[0][1] = s; m[0][2] = 0;
-			m[1][0] = -s; m[1][1] = c; m[1][2] = 0;
-			m[2][0] = 0;  m[2][1] = 0; m[2][2] = 1;
-		}
-
-		NiMatrix3 operator*(const NiMatrix3& b) const {
-			NiMatrix3 r;
-			for (int i = 0; i < 3; i++) {
-				for (int j = 0; j < 3; j++) {
-					r.m[i][j] = m[i][0]*b.m[0][j] + m[i][1]*b.m[1][j] + m[i][2]*b.m[2][j];
-				}
-			}
-			return r;
-		}
-	};
 
 	static NiVector3 g_cameraPos = {0, 0, 0};
-	static NiMatrix3 g_cameraRot;
+	static Mat3 g_cameraRot;
 	static bool g_overrideActive = false;
 
+	//rotation-only override for CameraOverride (no position change)
+	static Mat3 g_extRotation;
+	static bool g_extRotActive = false;
+
 	typedef void (__fastcall *SetLocalTranslate_t)(void*, void*, NiVector3*);
-	typedef void (__fastcall *SetLocalRotate_t)(void*, void*, NiMatrix3*);
+	typedef void (__fastcall *SetLocalRotate_t)(void*, void*, Mat3*);
 
 	static SetLocalTranslate_t g_origTranslate1 = nullptr;
 	static SetLocalTranslate_t g_origTranslate2 = nullptr;
@@ -66,13 +38,15 @@ namespace CameraHooks {
 		g_origTranslate2(node, edx, pos);
 	}
 
-	void __fastcall RotateHook1(void* node, void* edx, NiMatrix3* rot) {
+	void __fastcall RotateHook1(void* node, void* edx, Mat3* rot) {
 		if (g_overrideActive) rot = &g_cameraRot;
+		else if (g_extRotActive) rot = &g_extRotation;
 		g_origRotate1(node, edx, rot);
 	}
 
-	void __fastcall RotateHook2(void* node, void* edx, NiMatrix3* rot) {
+	void __fastcall RotateHook2(void* node, void* edx, Mat3* rot) {
 		if (g_overrideActive) rot = &g_cameraRot;
+		else if (g_extRotActive) rot = &g_extRotation;
 		g_origRotate2(node, edx, rot);
 	}
 
@@ -85,9 +59,9 @@ namespace CameraHooks {
 		float pitchRad = pitchDeg * (3.14159265f / 180.0f);
 		float yawRad = yawDeg * (3.14159265f / 180.0f);
 
-		NiMatrix3 rotX, rotZ;
-		rotX.MakeXRotation(pitchRad);
-		rotZ.MakeZRotation(yawRad);
+		Mat3 rotX, rotZ;
+		rotX.RotateX(pitchRad);
+		rotZ.RotateZ(yawRad);
 		g_cameraRot = rotZ * rotX; //yaw then pitch
 
 		g_overrideActive = true;
@@ -140,13 +114,22 @@ namespace CameraHooks {
 		if (!PatchRelCall(0x94BDD5, (UInt32)RotateHook2, g_origRotate2, "UpdateCamera::SetLocalRotate"))
 			return false;
 
-		g_cameraRot.MakeIdentity();
+		g_cameraRot.Identity();
 		g_hooksInstalled = true;
 		return true;
 	}
 
 	bool AreHooksInstalled() {
 		return g_hooksInstalled;
+	}
+
+	void SetExternalRotation(const Mat3& rot) {
+		g_extRotation = rot;
+		g_extRotActive = true;
+	}
+
+	void ClearExternalRotation() {
+		g_extRotActive = false;
 	}
 }
 
@@ -705,4 +688,12 @@ void DCH_Update() {
 
 bool DCH_InstallCameraHooks() {
 	return DialogueCameraHandler::InstallCameraHooks();
+}
+
+void DCH_SetExternalRotation(const Mat3& rot) {
+	CameraHooks::SetExternalRotation(rot);
+}
+
+void DCH_ClearExternalRotation() {
+	CameraHooks::ClearExternalRotation();
 }
