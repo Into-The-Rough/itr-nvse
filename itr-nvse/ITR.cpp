@@ -76,6 +76,7 @@
 #include "commands/DialogueCommands.h"
 #include "commands/WeaponEmissiveCommands.h"
 #include "commands/UICommands.h"
+#include "commands/ActorValueCommands.h"
 
 #include <cstdio>
 #include <cstring>
@@ -522,8 +523,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 
 			case NVSEMessagingInterface::kMessage_PostPostLoad:
-				if (Settings::bDialogueCamera)
-					DCH_InstallCameraHooks();
+				DCH_InstallCameraHooks(); //always install - used by CameraOverride and DialogueCamera
 				InitVATSSpeechFixWithCompatibility();
 				AshPileNames_Init();
 				if (Settings::bVATSExtender)
@@ -551,7 +551,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				break;
 
 		case kMessage_ReloadConfig:
-			//dataLen = length of plugin name, data = const char* pluginName
 			if (msg->data && msg->dataLen > 0)
 			{
 				const char* pluginName = (const char*)msg->data;
@@ -560,12 +559,15 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					bool oldGodMode = Settings::bAutoGodMode;
 					Settings::Load();
 
-					//update runtime settings
 					LocationVisitPopup_UpdateSettings(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
 
 					if (Settings::bQuickDrop || Settings::bQuick180)
-						PlayerUpdateHook_UpdateSettings(Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
-						                                Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
+						PlayerUpdateHook_UpdateSettings(
+						    Settings::iQuickDropModifierKey,
+                            Settings::iQuickDropControlID,
+						    Settings::iQuick180ModifierKey,
+						    Settings::iQuick180ControlID
+                        );
 
 					if (Settings::bOwnerNameInfo)
 						ONI_UpdateSettings();
@@ -598,15 +600,13 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 					Log("Config reloaded via ReloadPluginConfig");
 					Console_Print("itr-nvse: Config reloaded");
-					Console_Print("  Hot-reloaded: LocationVisit, QuickDrop/180, OwnerNameInfo, QuickReadNote, FriendlyFire, OwnedBeds, OwnedCorpses, KillActorXPFix, NoDoorFade, VATSSpeechFix, ReversePickpocket, CompanionNoInfamy, CompanionWeightlessOverencumberedFix, NPCDoorUnlockBlock");
 				}
 			}
 			break;
 
-			case kMessage_MainGameLoop:
-				AshPileNames_Update();
-				OCH_Update();
-			CameraOverride_Init();
+        case kMessage_MainGameLoop:
+            AshPileNames_Update();
+            OCH_Update();
 			DTF_Update();
 			if (Settings::bLocationVisitPopup)
 				LocationVisitPopup_Update();
@@ -883,6 +883,7 @@ namespace ITR
 		DialogueCommands_Init((void*)nvse);
 		WeaponEmissiveCommands_Init((void*)nvse);
 		UICommands_Init((void*)nvse);
+		ActorValueCommands_Init((void*)nvse);
 		RegisterHandlers(nvse);
 
 		Log("itr-nvse loaded successfully");

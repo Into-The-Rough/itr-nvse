@@ -20,15 +20,11 @@ static const int MAX_BLOCKED = 64;
 static UInt32 g_blocked[MAX_BLOCKED] = {0};
 static int g_count = 0;
 static CRITICAL_SECTION g_lock;
-static bool g_lockInit = false;
+static volatile LONG g_lockInit = 0;
 
 static void EnsureLockInit()
 {
-	if (!g_lockInit)
-	{
-		InitializeCriticalSection(&g_lock);
-		g_lockInit = true;
-	}
+	InitCriticalSectionOnce(&g_lockInit, &g_lock);
 }
 
 static bool IsBlocked_Unlocked(UInt32 refID)
