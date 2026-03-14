@@ -182,7 +182,10 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
       <LanguageStandard Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">stdcpp23</LanguageStandard>
     </ClCompile>
     <ClCompile Include="features\VATSExtender.cpp" />
+    <ClCompile Include="features\AltTabMute.cpp" />
+    <ClCompile Include="features\AutoQuickLoad.cpp" />
     <ClCompile Include="features\CameraOverride.cpp" />
+    <ClCompile Include="features\NoWeaponSearch.cpp" />
     <ClCompile Include="features\PlayerUpdateHook.cpp" />
     <ClCompile Include="features\NPCAntidoteUse.cpp" />
     <ClCompile Include="features\NPCDoctorsBagUse.cpp" />

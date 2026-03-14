@@ -68,6 +68,9 @@
 #include "features/PlayerUpdateHook.h"
 #include "features/NPCAntidoteUse.h"
 #include "features/NPCDoctorsBagUse.h"
+#include "features/NoWeaponSearch.h"
+#include "features/AutoQuickLoad.h"
+#include "features/AltTabMute.h"
 
 #include "commands/ImperativeCommands.h"
 #include "commands/StringCommands.h"
@@ -86,9 +89,6 @@
 #define kMessage_MainGameLoop 20
 #define kMessage_ReloadConfig 25  //sent via ReloadPluginConfig console command
 
-#ifndef kMenuType_Start
-#define kMenuType_Start 0x3F5
-#endif
 
 const _ExtractArgs ExtractArgs = (_ExtractArgs)0x005ACCB0;
 const _FormHeap_Free FormHeap_Free = (_FormHeap_Free)0x00401030;
@@ -140,34 +140,10 @@ NVSEConsoleInterface* g_consoleInterface = nullptr;
 NVSEArrayVarInterface* g_arrInterface = nullptr;
 NVSECommandTableInterface* g_cmdTableInterface = nullptr;
 static PlayerCharacter** g_thePlayer = (PlayerCharacter**)0x011DEA3C;
-static UInt8* g_MenuVisibilityArray = (UInt8*)0x011F308F;
 
 static bool g_godModeExecuted = false;
-static bool g_quickLoadDone = false;
-static DWORD g_quickLoadStartTime = 0;
 
 void Log(const char* fmt, ...); //forward decl
-
-typedef void (__thiscall *_PollControls)(void*);
-static const _PollControls PollControls = (_PollControls)0x86F390;
-
-//hooked at 0x86E88C - injects F9 keypress AFTER PollControls reads hardware
-//so the game sees it as a real keypress when it checks GetUserAction(QuickLoad)
-void __fastcall PollControlsHook(void* tesMain, void* edx)
-{
-	PollControls(tesMain);
-	if (g_quickLoadDone == false && g_quickLoadStartTime)
-	{
-		if ((GetTickCount() - g_quickLoadStartTime) >= (DWORD)Settings::iAutoQuickLoadDelayMs)
-		{
-			//DIK_F9=0x43, currKeyStates at +0x18F8
-			auto input = *(UInt8**)0x11F35CC;
-			if (input) input[0x18F8 + 0x43] = 0x80;
-			g_quickLoadDone = true;
-			Log("AutoQuickLoad: injected F9 (after %dms)", GetTickCount() - g_quickLoadStartTime);
-		}
-	}
-}
 
 typedef void (__cdecl *_StopPlayingMusic)();
 static const _StopPlayingMusic StopPlayingMusic = (_StopPlayingMusic)0x8304A0;
@@ -176,55 +152,11 @@ static const _MusicClearStopFlags MusicClearStopFlags = (_MusicClearStopFlags)0x
 typedef void (__cdecl *_PlayingMusicClearPauseAll)();
 static const _PlayingMusicClearPauseAll PlayingMusicClearPauseAll = (_PlayingMusicClearPauseAll)0x830660;
 
-constexpr UInt32 kNumVolumeChannels = 12;
-#define INI_MUSIC_VOLUME_ADDR 0x11F6E44
-
-struct BSAudioManager
-{
-	void* vtable;
-	UInt8 pad004[0x13C];
-	float volumes[kNumVolumeChannels];
-
-	static BSAudioManager* Get() { return (BSAudioManager*)0x11F6EF0; }
-};
-
-static HWND g_gameWindow = nullptr;
-static bool g_wasInFocus = true;
-static float g_savedVolumes[kNumVolumeChannels] = {0};
-static float g_savedIniMusicVolume = 0.0f;
-static bool g_volumesSaved = false;
-
 static void ResetMusicStateForLoad()
 {
 	StopPlayingMusic();
 	MusicClearStopFlags();
 	PlayingMusicClearPauseAll();
-}
-
-static void OnFocusLost()
-{
-	BSAudioManager* audioMgr = BSAudioManager::Get();
-	for (UInt32 i = 0; i < kNumVolumeChannels; i++)
-	{
-		g_savedVolumes[i] = audioMgr->volumes[i];
-		audioMgr->volumes[i] = 0.0f;
-	}
-	float* iniMusicVolume = (float*)INI_MUSIC_VOLUME_ADDR;
-	g_savedIniMusicVolume = *iniMusicVolume;
-	*iniMusicVolume = 0.0f;
-	g_volumesSaved = true;
-}
-
-static void OnFocusGained()
-{
-	if (!g_volumesSaved) return;
-	BSAudioManager* audioMgr = BSAudioManager::Get();
-	for (UInt32 i = 0; i < kNumVolumeChannels; i++)
-	{
-		audioMgr->volumes[i] = g_savedVolumes[i];
-	}
-	float* iniMusicVolume = (float*)INI_MUSIC_VOLUME_ADDR;
-	*iniMusicVolume = g_savedIniMusicVolume;
 }
 
 static FILE* g_logFile = nullptr;
@@ -292,158 +224,6 @@ static void ApplyVATSSpeechFixSetting()
 	if (g_vatsSpeechFixInitialized)
 		VATSSpeechFix_SetEnabled(Settings::bVATSSpeechFix != 0);
 }
-
-static bool IsGameLoading()
-{
-	//BGSSaveLoadManager singleton at 0x11DE134, bIsLoadingGame at offset 0x26
-	void* mgr = *(void**)0x11DE134;
-	if (!mgr) return false;
-	return *(bool*)((char*)mgr + 0x26);
-}
-
-namespace NoWeaponSearch
-{
-	static const int MAX_DISABLED = 64;
-	static UInt32 g_disabled[MAX_DISABLED] = {0};
-	static int g_count = 0;
-	static CRITICAL_SECTION g_lock;
-	static volatile LONG g_lockInit = 0;
-
-	static void EnsureLockInit()
-	{
-		InitCriticalSectionOnce(&g_lockInit, &g_lock);
-	}
-
-	typedef bool (__thiscall *CombatItemSearch_t)(void* combatState);
-	CombatItemSearch_t Original = (CombatItemSearch_t)0x99F6D0;
-
-	static bool IsDisabled_Unlocked(UInt32 refID)
-	{
-		for (int i = 0; i < g_count; i++)
-			if (g_disabled[i] == refID)
-				return true;
-		return false;
-	}
-
-	bool IsDisabled(UInt32 refID)
-	{
-		ScopedLock lock(&g_lock);
-		return IsDisabled_Unlocked(refID);
-	}
-
-	bool __fastcall Hook(void* combatState, void* edx)
-	{
-		if (IsGameLoading())
-			return Original(combatState);
-
-		//bail if actor isn't fully loaded (cell transition)
-		void* controller = *(void**)((char*)combatState + 0x1C4);
-		if (!controller)
-			return Original(combatState);
-		Actor* actor = (Actor*)Engine::CombatController_GetPackageOwner(controller);
-		if (!actor || !*(void**)((char*)actor + 0x68) || !*(void**)((char*)actor + 0x64))
-			return Original(combatState);
-
-		if (Settings::bNPCAntidoteUse)
-			NPCAntidoteUse_Check(combatState);
-		if (Settings::bNPCDoctorsBagUse)
-			NPCDoctorsBagUse_Check(combatState);
-
-		bool isDisabled = false;
-		{
-			ScopedLock lock(&g_lock);
-			if (g_count > 0 && IsDisabled_Unlocked(actor->refID))
-				isDisabled = true;
-		}
-
-		if (isDisabled)
-			return false;
-
-		return Original(combatState);
-	}
-
-	void Set(Actor* actor, bool disable)
-	{
-		if (!actor) return;
-		UInt32 refID = actor->refID;
-
-		ScopedLock lock(&g_lock);
-		if (disable)
-		{
-			if (IsDisabled_Unlocked(refID)) return;
-			if (g_count < MAX_DISABLED)
-				g_disabled[g_count++] = refID;
-		}
-		else
-		{
-			for (int i = 0; i < g_count; i++)
-			{
-				if (g_disabled[i] == refID)
-				{
-					g_disabled[i] = g_disabled[--g_count];
-					g_disabled[g_count] = 0;
-					break;
-				}
-			}
-		}
-	}
-
-	bool Get(Actor* actor)
-	{
-		if (!actor) return false;
-		ScopedLock lock(&g_lock);
-		return IsDisabled_Unlocked(actor->refID);
-	}
-
-	void Init()
-	{
-		EnsureLockInit();
-		SafeWrite::WriteRelCall(0x998D50, (UInt32)Hook);
-		Log("NoWeaponSearch: Hook installed at 0x998D50");
-	}
-}
-
-static ParamInfo kParams_SetNoWeaponSearch[1] = {
-	{"disable", kParamType_Integer, 0}
-};
-
-inline bool IsActorRef(TESObjectREFR* ref) {
-	if (!ref) return false;
-	return ThisCall<bool>(*(UInt32*)(*(UInt32*)ref + 0x100), ref);
-}
-
-bool Cmd_SetNoWeaponSearch_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-	UInt32 disable = 0;
-	if (!ExtractArgs(EXTRACT_ARGS, &disable))
-		return true;
-
-	if (IsActorRef(thisObj))
-	{
-		NoWeaponSearch::Set((Actor*)thisObj, disable != 0);
-		*result = 1;
-	}
-	return true;
-}
-
-bool Cmd_GetNoWeaponSearch_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-	if (IsActorRef(thisObj))
-		*result = NoWeaponSearch::Get((Actor*)thisObj) ? 1 : 0;
-	return true;
-}
-
-static CommandInfo kCommandInfo_SetNoWeaponSearch = {
-	"SetNoWeaponSearch", "", 0, "Disable weapon searching for actor",
-	1, 1, kParams_SetNoWeaponSearch, Cmd_SetNoWeaponSearch_Execute, nullptr, nullptr, 0
-};
-
-static CommandInfo kCommandInfo_GetNoWeaponSearch = {
-	"GetNoWeaponSearch", "", 0, "Check if weapon searching is disabled",
-	1, 0, nullptr, Cmd_GetNoWeaponSearch_Execute, nullptr, nullptr, 0
-};
 
 static void DeleteConsoleLog()
 {
@@ -622,33 +402,9 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				QuickReadNote_Update();
 			if (Settings::bDialogueCamera)
 				DCH_Update();
-			if (Settings::bAutoQuickLoad && !g_quickLoadDone && !g_quickLoadStartTime)
-			{
-				if (g_MenuVisibilityArray[kMenuType_Start])
-				{
-					g_quickLoadStartTime = GetTickCount();
-					Log("AutoQuickLoad: start menu detected, loading in %dms", Settings::iAutoQuickLoadDelayMs);
-				}
-			}
+			AutoQuickLoad_Update();
 			if (Settings::bAltTabMute)
-			{
-				if (!g_gameWindow)
-				{
-					g_gameWindow = FindWindowA(nullptr, "Fallout: New Vegas");
-				}
-				if (g_gameWindow)
-				{
-					bool currentlyInFocus = (GetForegroundWindow() == g_gameWindow);
-					if (currentlyInFocus != g_wasInFocus)
-					{
-						if (!currentlyInFocus)
-							OnFocusLost();
-						else
-							OnFocusGained();
-						g_wasInFocus = currentlyInFocus;
-					}
-				}
-			}
+				AltTabMute_Update();
 			break;
 	}
 }
@@ -818,7 +574,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	if (Settings::bSaveFileSize)
 		Log("SaveFileSizeHandler will initialize in PostLoad");
 
-	NoWeaponSearch::Init();
+	NoWeaponSearch_Init();
 	nvse->SetOpcodeBase(0x402A);
 	nvse->RegisterCommand(&kCommandInfo_SetNoWeaponSearch);
 	nvse->RegisterCommand(&kCommandInfo_GetNoWeaponSearch);
@@ -856,10 +612,7 @@ namespace ITR
 		LogSettings();
 
 		if (Settings::bAutoQuickLoad)
-		{
-			SafeWrite::WriteRelCall(0x86E88C, (UInt32)PollControlsHook);
-			Log("AutoQuickLoad: hooked PollControls, delay=%dms", Settings::iAutoQuickLoadDelayMs);
-		}
+			AutoQuickLoad_InstallHook();
 
 		if (Settings::bConsoleLogCleaner)
 		{
