@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "internal/globals.h"
+#include "internal/SafeWrite.h"
 
 namespace FriendlyFire
 {
@@ -16,36 +17,28 @@ namespace FriendlyFire
 	//original byte at 0x899D5A (1 byte)
 	static uint8_t g_origByte2 = 0;
 
-	void SafeWrite8(uint32_t addr, uint8_t val)
-	{
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, 1, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint8_t*)addr = val;
-		VirtualProtect((void*)addr, 1, oldProtect, &oldProtect);
-	}
-
 	void ApplyPatch()
 	{
 		//bypass IsInCombatWithActor in Projectile::9C30D0
 		//mov al, 1; nop x3
-		SafeWrite8(0x9C314E, 0xB0);
-		SafeWrite8(0x9C314F, 0x01);
-		SafeWrite8(0x9C3150, 0x90);
-		SafeWrite8(0x9C3151, 0x90);
-		SafeWrite8(0x9C3152, 0x90);
+		SafeWrite::Write8(0x9C314E, 0xB0);
+		SafeWrite::Write8(0x9C314F, 0x01);
+		SafeWrite::Write8(0x9C3150, 0x90);
+		SafeWrite::Write8(0x9C3151, 0x90);
+		SafeWrite::Write8(0x9C3152, 0x90);
 
 		//bypass IsActoraCombatTarget in Actor::899CB0
-		SafeWrite8(0x899D5A, 0xEB);
+		SafeWrite::Write8(0x899D5A, 0xEB);
 	}
 
 	void RemovePatch()
 	{
 		//restore original bytes at 0x9C314E
 		for (int i = 0; i < 5; i++)
-			SafeWrite8(0x9C314E + i, g_origBytes1[i]);
+			SafeWrite::Write8(0x9C314E + i, g_origBytes1[i]);
 
 		//restore original byte at 0x899D5A
-		SafeWrite8(0x899D5A, g_origByte2);
+		SafeWrite::Write8(0x899D5A, g_origByte2);
 	}
 
 	void SetEnabled(bool enabled)

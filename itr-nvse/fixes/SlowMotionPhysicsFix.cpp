@@ -9,7 +9,7 @@
 namespace SlowMotionPhysicsFix
 {
 	constexpr UInt32 kAddr_StepDeltaTimeCall = 0xC6AFF9;
-	constexpr UInt32 kAddr_SetFrameTimeMarkerCall = 0xC6AF85;
+	constexpr UInt32 kAddr_SetFrameTimeMarkerCall = 0xC6AFC5;
 	constexpr float kMinStepTime = 0.001f;
 
 	static UInt32* g_VATSMode = (UInt32*)0x11F2258;
