@@ -14,6 +14,7 @@
 #include "commands/ChallengeCommands.h"
 #include "commands/DialogueCommands.h"
 #include "commands/ForceSayCommand.h"
+#include "commands/IsSayingCommand.h"
 #include "commands/WeaponEmissiveCommands.h"
 #include "commands/UICommands.h"
 #include "commands/ActorValueCommands.h"
@@ -87,5 +88,8 @@ void RegisterAllCommands(void* nvsePtr)
 	/*4053*/ nvse->SetOpcodeBase(0x4053);
 	ActorValueCommands_RegisterCommands(nvse);     //DamageActorValueAlt
 
-	Log("All commands registered (0x4008-0x4053)");
+	/*4054*/ nvse->SetOpcodeBase(0x4054);
+	IsSayingCommand_RegisterCommands(nvse);        //IsSaying
+
+	Log("All commands registered (0x4008-0x4054)");
 }
