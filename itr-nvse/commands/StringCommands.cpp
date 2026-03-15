@@ -127,10 +127,13 @@ bool StringCommands_Init(void* nvsePtr)
 
 	ExtractArgsEx = scriptInterface->ExtractArgsEx;
 
-	nvse->SetOpcodeBase(0x401E);
+	return true;
+}
+
+void StringCommands_RegisterCommands(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterTypedCommand(&kCommandInfo_Sv_TrimStr, kRetnType_String);
 	nvse->RegisterTypedCommand(&kCommandInfo_Sv_Join, kRetnType_String);
 	nvse->RegisterTypedCommand(&kCommandInfo_Sv_Reverse, kRetnType_String);
-
-	return true;
 }

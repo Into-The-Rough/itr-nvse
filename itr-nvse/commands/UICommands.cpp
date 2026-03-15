@@ -136,13 +136,10 @@ namespace
 	}
 }
 
-bool UICommands_Init(void* nvsePtr)
+bool UICommands_Init(void* nvsePtr) { return true; }
+
+void UICommands_RegisterCommands(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-
-	nvse->SetOpcodeBase(0x4052);
-	/*4052*/ nvse->RegisterCommand(&kCommandInfo_SetUIAlphaMap);
-
-	Log("Registered SetUIAlphaMap at 0x4052");
-	return true;
+	nvse->RegisterCommand(&kCommandInfo_SetUIAlphaMap);
 }

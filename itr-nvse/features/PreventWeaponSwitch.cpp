@@ -157,7 +157,7 @@ static CommandInfo kCommandInfo_GetPreventWeaponSwitch = {
 	1, 0, nullptr, Cmd_GetPreventWeaponSwitch_Execute, nullptr, nullptr, 0
 };
 
-void PreventWeaponSwitch_RegisterCommands(const void* nvse)
+void PreventWeaponSwitch_RegisterCommands(void* nvse)
 {
 	NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
 	nvseIntf->RegisterCommand(&kCommandInfo_SetPreventWeaponSwitch);

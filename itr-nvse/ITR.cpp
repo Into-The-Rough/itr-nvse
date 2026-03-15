@@ -1,4 +1,5 @@
 #include "ITR.h"
+#include "commands/CommandTable.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/GameObjects.h"
@@ -511,10 +512,6 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	else
 		Log("CornerMessageHandler failed to initialize");
 
-	nvse->SetOpcodeBase(0x401D);
-	CameraOverride_RegisterCommands(nvse);
-	Log("Registered SetCameraAngle at opcode 0x401D");
-
 	if (OEPH_Init((void*)nvse))
 		Log("OnEntryPointHandler initialized");
 	else
@@ -575,15 +572,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 		Log("SaveFileSizeHandler will initialize in PostLoad");
 
 	NoWeaponSearch_Init();
-	nvse->SetOpcodeBase(0x402A);
-	nvse->RegisterCommand(&kCommandInfo_SetNoWeaponSearch);
-	nvse->RegisterCommand(&kCommandInfo_GetNoWeaponSearch);
-	Log("Registered SetNoWeaponSearch/GetNoWeaponSearch at 0x402A-0x402B");
-
 	PreventWeaponSwitch_Init();
-	nvse->SetOpcodeBase(0x402C);
-	PreventWeaponSwitch_RegisterCommands(nvse);
-	Log("Registered SetPreventWeaponSwitch/GetPreventWeaponSwitch at 0x402C-0x402D");
 }
 
 namespace ITR
@@ -632,11 +621,7 @@ namespace ITR
 		ImperativeCommands_Init((void*)nvse);
 		StringCommands_Init((void*)nvse);
 		RadioCommands_Init((void*)nvse);
-		ChallengeCommands_Init((void*)nvse);
-		DialogueCommands_Init((void*)nvse);
-		WeaponEmissiveCommands_Init((void*)nvse);
-		UICommands_Init((void*)nvse);
-		ActorValueCommands_Init((void*)nvse);
+		RegisterAllCommands((void*)nvse);
 		RegisterHandlers(nvse);
 
 		Log("itr-nvse loaded successfully");
