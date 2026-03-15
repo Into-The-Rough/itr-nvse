@@ -39,12 +39,13 @@
 // 0x4039  SetDialogueInfoFlags
 // 0x403A  GetDisplayedDialogueInfos
 // 0x403B  SetRaceAlt
+// 0x403C  ForceSay
 // 0x4050  SetWeaponEmissiveColor
 // 0x4051  ClearWeaponEmissiveColor
 // 0x4052  SetUIAlphaMap
 // 0x4053  DamageActorValueAlt
 //
-// gaps: 0x4032-0x4033, 0x403C-0x404F
+// gaps: 0x4032-0x4033, 0x403D-0x404F
 // next free: 0x4054
 
 void RegisterAllCommands(void* nvse);
