@@ -377,10 +377,17 @@ void RadioCommands_Init(void* nvse)
 {
 	NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
 	g_strInterface = (NVSEStringVarInterface*)nvseIntf->QueryInterface(kInterface_StringVar);
+}
 
-	nvseIntf->SetOpcodeBase(0x402E);
-	nvseIntf->RegisterTypedCommand(&kCommandInfo_GetPlayingRadioTrack, kRetnType_Form);
-	nvseIntf->RegisterTypedCommand(&kCommandInfo_GetPlayingRadioTrackFileName, kRetnType_String);
-	nvseIntf->SetOpcodeBase(0x4031);
-	nvseIntf->RegisterTypedCommand(&kCommandInfo_GetPlayingRadioText, kRetnType_String);
+void RadioCommands_RegisterCommands(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterTypedCommand(&kCommandInfo_GetPlayingRadioTrack, kRetnType_Form);
+	nvse->RegisterTypedCommand(&kCommandInfo_GetPlayingRadioTrackFileName, kRetnType_String);
+}
+
+void RadioCommands_RegisterCommands2(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterTypedCommand(&kCommandInfo_GetPlayingRadioText, kRetnType_String);
 }

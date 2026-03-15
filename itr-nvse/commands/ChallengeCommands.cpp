@@ -149,9 +149,10 @@ static ParamInfo kParams_ModChallenge[2] = {
 
 DEFINE_COMMAND_PLUGIN(ModChallenge, "Modify challenge progress by amount (positive or negative). Works on all challenge types.", 0, 2, kParams_ModChallenge);
 
-void ChallengeCommands_Init(void* nvse)
+void ChallengeCommands_Init(void* nvse) {}
+
+void ChallengeCommands_RegisterCommands(void* nvsePtr)
 {
-	NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
-	nvseIntf->SetOpcodeBase(0x4034);
-	nvseIntf->RegisterCommand(&kCommandInfo_ModChallenge);
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_ModChallenge);
 }

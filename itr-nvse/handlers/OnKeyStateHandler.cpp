@@ -99,10 +99,12 @@ bool OKSH_Init(void* nvseInterface)
 	g_okshConsole = (NVSEConsoleInterface*)nvse->QueryInterface(kInterface_Console);
 	if (!g_okshConsole) return false;
 
-	nvse->SetOpcodeBase(0x4008);
-	nvse->RegisterCommand(&kCommandInfo_DisableKeyEx);
-	nvse->SetOpcodeBase(0x4009);
-	nvse->RegisterCommand(&kCommandInfo_EnableKeyEx);
-
 	return true;
+}
+
+void OKSH_RegisterCommands(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_DisableKeyEx);
+	nvse->RegisterCommand(&kCommandInfo_EnableKeyEx);
 }

@@ -192,6 +192,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="commands\ImperativeCommands.cpp" />
     <ClCompile Include="commands\StringCommands.cpp" />
     <ClCompile Include="commands\RadioCommands.cpp" />
+    <ClCompile Include="commands\CommandTable.cpp" />
     <ClCompile Include="commands\ChallengeCommands.cpp" />
     <ClCompile Include="commands\DialogueCommands.cpp" />
     <ClCompile Include="commands\WeaponEmissiveCommands.cpp" />

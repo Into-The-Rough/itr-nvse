@@ -217,16 +217,13 @@ namespace
 	}
 }
 
-bool WeaponEmissiveCommands_Init(void* nvsePtr)
+bool WeaponEmissiveCommands_Init(void* nvsePtr) { return true; }
+
+void WeaponEmissiveCommands_RegisterCommands(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-
-	nvse->SetOpcodeBase(0x4050);
-	/*4050*/ nvse->RegisterCommand(&kCommandInfo_SetWeaponEmissiveColor);
-	/*4051*/ nvse->RegisterCommand(&kCommandInfo_ClearWeaponEmissiveColor);
-
-	Log("Registered SetWeaponEmissiveColor/ClearWeaponEmissiveColor at 0x4050-0x4051");
-	return true;
+	nvse->RegisterCommand(&kCommandInfo_SetWeaponEmissiveColor);
+	nvse->RegisterCommand(&kCommandInfo_ClearWeaponEmissiveColor);
 }
 
 void WeaponEmissive_ClearState()

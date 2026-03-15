@@ -170,3 +170,10 @@ void NoWeaponSearch_Init()
 {
 	NoWeaponSearch::Init();
 }
+
+void NoWeaponSearch_RegisterCommands(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_SetNoWeaponSearch);
+	nvse->RegisterCommand(&kCommandInfo_GetNoWeaponSearch);
+}

@@ -139,11 +139,12 @@ bool Cmd_GetDisplayedDialogueInfos_Execute(COMMAND_ARGS)
 	return true;
 }
 
-void DialogueCommands_Init(void* nvse)
+void DialogueCommands_Init(void* nvse) {}
+
+void DialogueCommands_RegisterCommands(void* nvsePtr)
 {
-	NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
-	nvseIntf->SetOpcodeBase(0x4038);
-	nvseIntf->RegisterCommand(&kCommandInfo_GetDialogueInfoFlags);
-	nvseIntf->RegisterCommand(&kCommandInfo_SetDialogueInfoFlags);
-	nvseIntf->RegisterTypedCommand(&kCommandInfo_GetDisplayedDialogueInfos, kRetnType_Array);
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_GetDialogueInfoFlags);
+	nvse->RegisterCommand(&kCommandInfo_SetDialogueInfoFlags);
+	nvse->RegisterTypedCommand(&kCommandInfo_GetDisplayedDialogueInfos, kRetnType_Array);
 }

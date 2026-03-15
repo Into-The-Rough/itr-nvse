@@ -50,9 +50,10 @@ bool Cmd_DamageActorValueAlt_Execute(COMMAND_ARGS)
 	return true;
 }
 
-void ActorValueCommands_Init(void* nvse)
+void ActorValueCommands_Init(void* nvse) {}
+
+void ActorValueCommands_RegisterCommands(void* nvsePtr)
 {
-	NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
-	nvseIntf->SetOpcodeBase(0x4053);
-	nvseIntf->RegisterCommand(&kCommandInfo_DamageActorValueAlt);
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_DamageActorValueAlt);
 }

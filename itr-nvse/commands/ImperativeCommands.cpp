@@ -1328,38 +1328,45 @@ bool ImperativeCommands_Init(void* nvsePtr)
 			dataInterface->GetFunc(kNVSEData_InventoryReferenceCreateEntry));
 	}
 
-	nvse->SetOpcodeBase(0x4021);
-	/*4021*/ nvse->RegisterTypedCommand(&kCommandInfo_GetRefsSortedByDistance, kRetnType_Array);
-	/*4022*/ nvse->RegisterTypedCommand(&kCommandInfo_Duplicate, kRetnType_Form);
-	/*4023*/ nvse->RegisterTypedCommand(&kCommandInfo_GetAvailableRecipes, kRetnType_Array);
-
-	nvse->SetOpcodeBase(0x4024);
-	/*4024*/ bool itrChangeRadioTrackRegistered = nvse->RegisterCommand(&kCommandInfo_ChangeRadioTrack);
-
-	nvse->SetOpcodeBase(0x4025);
-	/*4025*/ nvse->RegisterCommand(&kCommandInfo_DumpCombatTarget);
-	/*4026*/ nvse->RegisterTypedCommand(&kCommandInfo_GetTargetLastSeenLocation, kRetnType_Array);
-	/*4027*/ nvse->RegisterTypedCommand(&kCommandInfo_GetTargetDetectedLocation, kRetnType_Array);
-	/*4028*/ nvse->RegisterTypedCommand(&kCommandInfo_GetTargetLastFullyVisibleLocation, kRetnType_Array);
-	/*4029*/ nvse->RegisterTypedCommand(&kCommandInfo_GetTargetInitialLocation, kRetnType_Array);
-
-	nvse->SetOpcodeBase(0x4030);
-	/*4030*/ nvse->RegisterCommand(&kCommandInfo_UseAidItem);
-
-	nvse->SetOpcodeBase(0x4035);
-	/*4035*/ nvse->RegisterCommand(&kCommandInfo_SetCreatureCombatSkill);
-	/*4036*/ nvse->RegisterCommand(&kCommandInfo_ResurrectAll);
-	/*4037*/ nvse->RegisterCommand(&kCommandInfo_ForceReload);
-
-	nvse->SetOpcodeBase(0x403B);
-	/*403B*/ nvse->RegisterCommand(&kCommandInfo_SetRaceAlt);
-
-	nvse->SetOpcodeBase(0x401C);
-	/*401C*/ bool isRadioPlayingRegistered = nvse->RegisterCommand(&kCommandInfo_IsRadioPlaying);
-
-	Log("Registered ImperativeCommands at 0x401C, 0x4021-0x4030, 0x4035-0x4037, 0x403B");
-	Log("Register ChangeRadioTrack (0x4024): %s", itrChangeRadioTrackRegistered ? "OK" : "FAILED");
-	Log("Register IsRadioPlaying (0x401C): %s", isRadioPlayingRegistered ? "OK" : "FAILED");
-
 	return true;
+}
+
+void ImperativeCommands_RegisterCommands(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_IsRadioPlaying);
+}
+
+void ImperativeCommands_RegisterCommands2(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterTypedCommand(&kCommandInfo_GetRefsSortedByDistance, kRetnType_Array);
+	nvse->RegisterTypedCommand(&kCommandInfo_Duplicate, kRetnType_Form);
+	nvse->RegisterTypedCommand(&kCommandInfo_GetAvailableRecipes, kRetnType_Array);
+	nvse->RegisterCommand(&kCommandInfo_ChangeRadioTrack);
+	nvse->RegisterCommand(&kCommandInfo_DumpCombatTarget);
+	nvse->RegisterTypedCommand(&kCommandInfo_GetTargetLastSeenLocation, kRetnType_Array);
+	nvse->RegisterTypedCommand(&kCommandInfo_GetTargetDetectedLocation, kRetnType_Array);
+	nvse->RegisterTypedCommand(&kCommandInfo_GetTargetLastFullyVisibleLocation, kRetnType_Array);
+	nvse->RegisterTypedCommand(&kCommandInfo_GetTargetInitialLocation, kRetnType_Array);
+}
+
+void ImperativeCommands_RegisterCommands3(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_UseAidItem);
+}
+
+void ImperativeCommands_RegisterCommands4(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_SetCreatureCombatSkill);
+	nvse->RegisterCommand(&kCommandInfo_ResurrectAll);
+	nvse->RegisterCommand(&kCommandInfo_ForceReload);
+}
+
+void ImperativeCommands_RegisterCommands5(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_SetRaceAlt);
 }

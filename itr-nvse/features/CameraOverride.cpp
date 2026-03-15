@@ -96,7 +96,7 @@ void CameraOverride_Init()
 	CameraOverride::g_rotation.Identity();
 }
 
-void CameraOverride_RegisterCommands(const void* nvse)
+void CameraOverride_RegisterCommands(void* nvse)
 {
 	NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
 	nvseIntf->RegisterCommand(&kCommandInfo_SetCameraAngle);
