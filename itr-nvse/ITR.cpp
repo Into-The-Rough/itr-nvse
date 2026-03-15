@@ -332,81 +332,76 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				break;
 
 		case kMessage_ReloadConfig:
-			if (msg->data && msg->dataLen > 0)
-			{
-				const char* pluginName = (const char*)msg->data;
-				if (_stricmp(pluginName, "itr-nvse") == 0)
+				if (msg->data && msg->dataLen > 0)
 				{
-					bool oldGodMode = Settings::bAutoGodMode;
-					Settings::Load();
-
-					LocationVisitPopup_UpdateSettings(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
-
-					if (Settings::bQuickDrop || Settings::bQuick180)
-						PlayerUpdateHook_UpdateSettings(
-						    Settings::iQuickDropModifierKey,
-                            Settings::iQuickDropControlID,
-						    Settings::iQuick180ModifierKey,
-						    Settings::iQuick180ControlID
-                        );
-
-					if (Settings::bOwnerNameInfo)
-						ONI_UpdateSettings();
-
-					if (Settings::bQuickReadNote)
-						QuickReadNote_UpdateSettings(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
-
-					FriendlyFire_SetEnabled(Settings::bFriendlyFire != 0);
-					OwnedBeds_SetEnabled(Settings::bOwnedBeds != 0);
-					OwnedCorpses_SetEnabled(Settings::bOwnedCorpses != 0);
-					KillActorXPFix_SetEnabled(Settings::bKillActorXPFix != 0);
-					NoDoorFade_SetEnabled(Settings::bNoDoorFade != 0);
-					ApplyVATSSpeechFixSetting();
-					ReversePickpocketNoKarmaFix_SetEnabled(Settings::bReversePickpocketNoKarma != 0);
-					CompanionNoInfamy_SetEnabled(Settings::bCompanionNoInfamy != 0);
-					CompanionWeightlessOverencumberedFix_SetEnabled(Settings::bCompanionWeightlessOverencumberedFix != 0);
-					NPCDoorUnlockBlock_SetLevel(Settings::iNPCDoorUnlockBlock);
-
-					//apply god mode immediately if setting changed
-					if (Settings::bAutoGodMode && !oldGodMode)
+					const char* pluginName = (const char*)msg->data;
+					if (_stricmp(pluginName, "itr-nvse") == 0)
 					{
-						*(UInt8*)0x11E07BA = 1;
-						Console_Print("itr-nvse: God mode enabled");
-					}
-					else if (!Settings::bAutoGodMode && oldGodMode)
-					{
-						*(UInt8*)0x11E07BA = 0;
-						Console_Print("itr-nvse: God mode disabled");
-					}
+						bool oldGodMode = Settings::bAutoGodMode;
+						Settings::Load();
 
-					Log("Config reloaded via ReloadPluginConfig");
-					Console_Print("itr-nvse: Config reloaded");
+						LocationVisitPopup_UpdateSettings(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
+
+						if (Settings::bQuickDrop || Settings::bQuick180)
+							PlayerUpdateHook_UpdateSettings(Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
+							                                Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
+
+						if (Settings::bOwnerNameInfo)
+							ONI_UpdateSettings();
+
+						if (Settings::bQuickReadNote)
+							QuickReadNote_UpdateSettings(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
+
+						FriendlyFire_SetEnabled(Settings::bFriendlyFire != 0);
+						OwnedBeds_SetEnabled(Settings::bOwnedBeds != 0);
+						OwnedCorpses_SetEnabled(Settings::bOwnedCorpses != 0);
+						KillActorXPFix_SetEnabled(Settings::bKillActorXPFix != 0);
+						NoDoorFade_SetEnabled(Settings::bNoDoorFade != 0);
+						ApplyVATSSpeechFixSetting();
+						ReversePickpocketNoKarmaFix_SetEnabled(Settings::bReversePickpocketNoKarma != 0);
+						CompanionNoInfamy_SetEnabled(Settings::bCompanionNoInfamy != 0);
+						CompanionWeightlessOverencumberedFix_SetEnabled(Settings::bCompanionWeightlessOverencumberedFix != 0);
+						NPCDoorUnlockBlock_SetLevel(Settings::iNPCDoorUnlockBlock);
+
+						if (Settings::bAutoGodMode && !oldGodMode)
+						{
+							*(UInt8*)0x11E07BA = 1;
+							Console_Print("itr-nvse: God mode enabled");
+						}
+						else if (!Settings::bAutoGodMode && oldGodMode)
+						{
+							*(UInt8*)0x11E07BA = 0;
+							Console_Print("itr-nvse: God mode disabled");
+						}
+
+						Log("Config reloaded via ReloadPluginConfig");
+						Console_Print("itr-nvse: Config reloaded");
+					}
 				}
-			}
-			break;
+				break;
 
-        case kMessage_MainGameLoop:
-            AshPileNames_Update();
-            OCH_Update();
-			DTF_Update();
-			if (Settings::bLocationVisitPopup)
-				LocationVisitPopup_Update();
-			ONI_Update();
-			KHH_Update();
-			DTH_Update();
-			OSPH_Update();
-			OJLH_Update();
-			OCPH_Update();
-			OMFCH_Update();
-			OMSCH_Update();
-			if (Settings::bQuickReadNote)
-				QuickReadNote_Update();
-			if (Settings::bDialogueCamera)
-				DCH_Update();
-			AutoQuickLoad_Update();
-			if (Settings::bAltTabMute)
-				AltTabMute_Update();
-			break;
+		case kMessage_MainGameLoop:
+				AshPileNames_Update();
+				OCH_Update();
+				DTF_Update();
+				if (Settings::bLocationVisitPopup)
+					LocationVisitPopup_Update();
+				ONI_Update();
+				KHH_Update();
+				DTH_Update();
+				OSPH_Update();
+				OJLH_Update();
+				OCPH_Update();
+				OMFCH_Update();
+				OMSCH_Update();
+				if (Settings::bQuickReadNote)
+					QuickReadNote_Update();
+				if (Settings::bDialogueCamera)
+					DCH_Update();
+				AutoQuickLoad_Update();
+				if (Settings::bAltTabMute)
+					AltTabMute_Update();
+				break;
 	}
 }
 
