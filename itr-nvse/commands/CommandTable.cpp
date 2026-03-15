@@ -13,6 +13,7 @@
 #include "commands/RadioCommands.h"
 #include "commands/ChallengeCommands.h"
 #include "commands/DialogueCommands.h"
+#include "commands/ForceSayCommand.h"
 #include "commands/WeaponEmissiveCommands.h"
 #include "commands/UICommands.h"
 #include "commands/ActorValueCommands.h"
@@ -73,6 +74,9 @@ void RegisterAllCommands(void* nvsePtr)
 
 	/*403B*/ nvse->SetOpcodeBase(0x403B);
 	ImperativeCommands_RegisterCommands5(nvse);    //SetRaceAlt
+
+	/*403C*/ nvse->SetOpcodeBase(0x403C);
+	ForceSayCommand_RegisterCommands(nvse);        //ForceSay
 
 	/*4050*/ nvse->SetOpcodeBase(0x4050);
 	WeaponEmissiveCommands_RegisterCommands(nvse); //SetWeaponEmissiveColor, ClearWeaponEmissiveColor
