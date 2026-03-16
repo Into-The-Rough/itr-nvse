@@ -45,8 +45,10 @@
 // 0x4052  SetUIAlphaMap
 // 0x4053  DamageActorValueAlt
 // 0x4054  IsSaying
+// 0x4055  SetDialogueCameraDolly
+// 0x4056  SetDialogueCameraShake
 //
 // gaps: 0x4032-0x4033, 0x403D-0x404F
-// next free: 0x4055
+// next free: 0x4057
 
 void RegisterAllCommands(void* nvse);

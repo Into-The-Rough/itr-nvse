@@ -619,21 +619,56 @@ static void ApplyCameraAngle(CameraAngle angle) {
 	CameraHooks::SetPosition(camX, camY, camZ, pitch, yaw);
 }
 
+float g_dollySpeed = 0.0f;
+float g_dollyMaxDist = 0.0f;
+int g_dollyRunOnce = 1;
+static float g_dollyProgress = 0.0f;
+static bool g_dollyFirstDone = false;
+float g_shakeAmplitude = -1.0f; //-1 = use default
+
 static void ApplyCameraNoise() {
-	constexpr float kRotAmp = 3.0f;
+	float rotAmp = (g_shakeAmplitude >= 0.0f) ? g_shakeAmplitude : 3.0f;
 
 	float toDirX = g_baseLookX - g_baseCamX;
 	float toDirY = g_baseLookY - g_baseCamY;
 	float toDirZ = g_baseLookZ - g_baseCamZ;
-	float horizDist = sqrtf(toDirX*toDirX + toDirY*toDirY);
 
+	float camX = g_baseCamX;
+	float camY = g_baseCamY;
+	float camZ = g_baseCamZ;
+
+	//dolly: smoothstep zoom toward look target per angle, holds at max
+	if (g_dollyMaxDist != 0.0f)
+	{
+		if (g_dollyProgress < 1.0f)
+		{
+			g_dollyProgress += g_dollySpeed * 0.001f;
+			if (g_dollyProgress > 1.0f)
+			{
+				g_dollyProgress = 1.0f;
+				g_dollyFirstDone = true;
+			}
+		}
+
+		float toDist = sqrtf(toDirX*toDirX + toDirY*toDirY + toDirZ*toDirZ);
+		if (toDist > 1.0f)
+		{
+			float t = g_dollyProgress * g_dollyProgress * (3.0f - 2.0f * g_dollyProgress);
+			float dolly = t * g_dollyMaxDist;
+			camX += (toDirX / toDist) * dolly;
+			camY += (toDirY / toDist) * dolly;
+			camZ += (toDirZ / toDist) * dolly;
+		}
+	}
+
+	float horizDist = sqrtf(toDirX*toDirX + toDirY*toDirY);
 	float yaw = atan2f(toDirX, toDirY) * (180.0f / PI);
 	float pitch = -atan2f(toDirZ, horizDist) * (180.0f / PI);
 
-	yaw += (float)g_perlinYaw.octave1D(g_noiseTime, 3, 0.5) * kRotAmp;
-	pitch += (float)g_perlinPitch.octave1D(g_noiseTime, 3, 0.5) * kRotAmp * 0.5f;
+	yaw += (float)g_perlinYaw.octave1D(g_noiseTime, 3, 0.5) * rotAmp;
+	pitch += (float)g_perlinPitch.octave1D(g_noiseTime, 3, 0.5) * rotAmp * 0.5f;
 
-	CameraHooks::SetPosition(g_baseCamX, g_baseCamY, g_baseCamZ, pitch, yaw);
+	CameraHooks::SetPosition(camX, camY, camZ, pitch, yaw);
 }
 
 static void OnDialogueStart() {
@@ -664,6 +699,8 @@ static void OnDialogueStart() {
 	g_currentAngle = kAngle_Vanilla;
 	g_dialogueLineCount = 0;
 	g_lastTopicInfoID = 0;
+	g_dollyProgress = 0.0f;
+	g_dollyFirstDone = false;
 	g_cameraActive = true;
 
 	ApplyCameraAngle(g_currentAngle);
@@ -710,6 +747,8 @@ void Update() {
 			g_lastTopicInfoID = currentInfoAddr;
 			g_dialogueLineCount++;
 			g_currentAngle = (CameraAngle)(g_dialogueLineCount % kAngle_Count);
+			if (!g_dollyRunOnce || !g_dollyFirstDone)
+				g_dollyProgress = 0.0f;
 			ApplyCameraAngle(g_currentAngle);
 		}
 	}
@@ -751,4 +790,70 @@ void DCH_SetExternalRotation(const Mat3& rot) {
 
 void DCH_ClearExternalRotation() {
 	CameraHooks::ClearExternalRotation();
+}
+
+static ParamInfo kParams_SetDialogueCameraDolly[3] = {
+	{"speed", kParamType_Float, 0},
+	{"maxDist", kParamType_Float, 0},
+	{"runOnce", kParamType_Integer, 1},
+};
+
+DEFINE_COMMAND_PLUGIN(SetDialogueCameraDolly, "Set dialogue camera dolly (0 0 to disable). runOnce=1 (default): only first angle", 0, 3, kParams_SetDialogueCameraDolly);
+
+bool Cmd_SetDialogueCameraDolly_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	float speed = 0.0f, maxDist = 0.0f;
+	UInt32 runOnce = 1;
+	if (!ExtractArgs(EXTRACT_ARGS, &speed, &maxDist, &runOnce))
+		return true;
+
+	DialogueCameraHandler::g_dollySpeed = speed;
+	DialogueCameraHandler::g_dollyMaxDist = maxDist;
+	DialogueCameraHandler::g_dollyRunOnce = runOnce;
+	*result = 1;
+
+	if (IsConsoleMode())
+	{
+		if (maxDist != 0.0f)
+			Console_Print("DialogueCameraDolly >> speed=%.2f maxDist=%.1f runOnce=%d", speed, maxDist, runOnce);
+		else
+			Console_Print("DialogueCameraDolly >> disabled");
+	}
+	return true;
+}
+
+static ParamInfo kParams_SetDialogueCameraShake[1] = {
+	{"amplitude", kParamType_Float, 0},
+};
+
+DEFINE_COMMAND_PLUGIN(SetDialogueCameraShake, "Set dialogue camera shake amplitude (-1 for default, 0 to disable)", 0, 1, kParams_SetDialogueCameraShake);
+
+bool Cmd_SetDialogueCameraShake_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	float amplitude = -1.0f;
+	if (!ExtractArgs(EXTRACT_ARGS, &amplitude))
+		return true;
+
+	DialogueCameraHandler::g_shakeAmplitude = amplitude;
+	*result = 1;
+
+	if (IsConsoleMode())
+	{
+		if (amplitude < 0.0f)
+			Console_Print("DialogueCameraShake >> default (3.0)");
+		else if (amplitude == 0.0f)
+			Console_Print("DialogueCameraShake >> disabled");
+		else
+			Console_Print("DialogueCameraShake >> %.2f", amplitude);
+	}
+	return true;
+}
+
+void DCH_RegisterCommands(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_SetDialogueCameraDolly);
+	nvse->RegisterCommand(&kCommandInfo_SetDialogueCameraShake);
 }

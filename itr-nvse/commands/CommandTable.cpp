@@ -21,6 +21,7 @@
 #include "features/CameraOverride.h"
 #include "features/NoWeaponSearch.h"
 #include "features/PreventWeaponSwitch.h"
+#include "handlers/DialogueCameraHandler.h"
 
 extern void Log(const char* fmt, ...);
 
@@ -91,5 +92,8 @@ void RegisterAllCommands(void* nvsePtr)
 	/*4054*/ nvse->SetOpcodeBase(0x4054);
 	IsSayingCommand_RegisterCommands(nvse);        //IsSaying
 
-	Log("All commands registered (0x4008-0x4054)");
+	/*4055*/ nvse->SetOpcodeBase(0x4055);
+	DCH_RegisterCommands(nvse);                    //SetDialogueCameraDolly, SetDialogueCameraShake
+
+	Log("All commands registered (0x4008-0x4055)");
 }
