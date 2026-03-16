@@ -24,6 +24,8 @@ namespace Settings
 	inline int bSaveFileSize = 1;
 	inline int bOwnerNameInfo = 1;
 	inline int bDialogueCamera = 0;
+	inline int bSmoothCameraAngleInterp = 0;
+	inline int iShakeAmplitude = 3;
 	inline int bVATSProjectileFix = 1;
 	inline int bVATSLimbFix = 0;
 	inline int bOwnedBeds = 0;
@@ -104,6 +106,8 @@ namespace Settings
 		bSaveFileSize = GetINIInt("Tweaks", "bSaveFileSize", 1);
 		bOwnerNameInfo = GetINIInt("Tweaks", "bOwnerNameInfo", 1);
 		bDialogueCamera = GetINIInt("Tweaks", "bDialogueCamera", 0);
+		bSmoothCameraAngleInterp = GetINIInt("DialogueCamera", "bSmoothCameraAngleInterp", 0);
+		iShakeAmplitude = GetINIInt("DialogueCamera", "iShakeAmplitude", 3);
 		bVATSProjectileFix = GetINIInt("Tweaks", "bVATSProjectileFix", 1);
 		bVATSLimbFix = GetINIInt("Tweaks", "bVATSLimbFix", 0);
 		bOwnedBeds = GetINIInt("Tweaks", "bOwnedBeds", 0);

@@ -4,6 +4,7 @@
 #include "internal/SafeWrite.h"
 #include "internal/globals.h"
 #include "internal/Mat3.h"
+#include "internal/settings.h"
 #include "PerlinNoise.hpp"
 #include <cmath>
 
@@ -371,6 +372,13 @@ static UInt32 g_lastTopicInfoID = 0;
 static float g_baseCamX = 0, g_baseCamY = 0, g_baseCamZ = 0;
 static float g_baseLookX = 0, g_baseLookY = 0, g_baseLookZ = 0;
 static double g_noiseTime = 0;
+
+static float g_transFromCamX = 0, g_transFromCamY = 0, g_transFromCamZ = 0;
+static float g_transFromLookX = 0, g_transFromLookY = 0, g_transFromLookZ = 0;
+static float g_transToCamX = 0, g_transToCamY = 0, g_transToCamZ = 0;
+static float g_transToLookX = 0, g_transToLookY = 0, g_transToLookZ = 0;
+static float g_transProgress = 1.0f; //1.0 = no transition active
+static float g_transSpeed = 1.5f; //progress per second (~0.7s transition)
 static bool g_patchesInstalled = false;
 
 static const siv::PerlinNoise g_perlinPitch{ 4 };
@@ -601,22 +609,41 @@ static void ApplyCameraAngle(CameraAngle angle) {
 		camZ = lookZ + (camZ - lookZ) * finalClipFrac;
 	}
 
-	g_baseCamX = camX;
-	g_baseCamY = camY;
-	g_baseCamZ = camZ;
-	g_baseLookX = lookX;
-	g_baseLookY = lookY;
-	g_baseLookZ = lookZ;
+	bool isFirstAngle = (g_baseCamX == 0 && g_baseCamY == 0 && g_baseCamZ == 0);
 
-	float toDirX = lookX - camX;
-	float toDirY = lookY - camY;
-	float toDirZ = lookZ - camZ;
-	float horizDist = sqrtf(toDirX*toDirX + toDirY*toDirY);
+	if (!Settings::bSmoothCameraAngleInterp || isFirstAngle)
+	{
+		g_baseCamX = camX;
+		g_baseCamY = camY;
+		g_baseCamZ = camZ;
+		g_baseLookX = lookX;
+		g_baseLookY = lookY;
+		g_baseLookZ = lookZ;
 
-	float yaw = atan2f(toDirX, toDirY) * (180.0f / PI);
-	float pitch = -atan2f(toDirZ, horizDist) * (180.0f / PI);
-
-	CameraHooks::SetPosition(camX, camY, camZ, pitch, yaw);
+		float toDirX = lookX - camX;
+		float toDirY = lookY - camY;
+		float toDirZ = lookZ - camZ;
+		float horizDist = sqrtf(toDirX*toDirX + toDirY*toDirY);
+		float yaw = atan2f(toDirX, toDirY) * (180.0f / PI);
+		float pitch = -atan2f(toDirZ, horizDist) * (180.0f / PI);
+		CameraHooks::SetPosition(camX, camY, camZ, pitch, yaw);
+	}
+	else
+	{
+		g_transFromCamX = g_baseCamX;
+		g_transFromCamY = g_baseCamY;
+		g_transFromCamZ = g_baseCamZ;
+		g_transFromLookX = g_baseLookX;
+		g_transFromLookY = g_baseLookY;
+		g_transFromLookZ = g_baseLookZ;
+		g_transToCamX = camX;
+		g_transToCamY = camY;
+		g_transToCamZ = camZ;
+		g_transToLookX = lookX;
+		g_transToLookY = lookY;
+		g_transToLookZ = lookZ;
+		g_transProgress = 0.0f;
+	}
 }
 
 float g_dollySpeed = 0.0f;
@@ -627,7 +654,23 @@ static bool g_dollyFirstDone = false;
 float g_shakeAmplitude = -1.0f; //-1 = use default
 
 static void ApplyCameraNoise() {
-	float rotAmp = (g_shakeAmplitude >= 0.0f) ? g_shakeAmplitude : 3.0f;
+	float rotAmp = (g_shakeAmplitude >= 0.0f) ? g_shakeAmplitude : (float)Settings::iShakeAmplitude;
+	if (rotAmp > 15.0f) rotAmp = 15.0f;
+
+	//advance transition
+	if (g_transProgress < 1.0f)
+	{
+		g_transProgress += g_transSpeed * (1.0f / 60.0f); //assume ~60fps
+		if (g_transProgress > 1.0f) g_transProgress = 1.0f;
+
+		float t = g_transProgress * g_transProgress * (3.0f - 2.0f * g_transProgress);
+		g_baseCamX = g_transFromCamX + (g_transToCamX - g_transFromCamX) * t;
+		g_baseCamY = g_transFromCamY + (g_transToCamY - g_transFromCamY) * t;
+		g_baseCamZ = g_transFromCamZ + (g_transToCamZ - g_transFromCamZ) * t;
+		g_baseLookX = g_transFromLookX + (g_transToLookX - g_transFromLookX) * t;
+		g_baseLookY = g_transFromLookY + (g_transToLookY - g_transFromLookY) * t;
+		g_baseLookZ = g_transFromLookZ + (g_transToLookZ - g_transFromLookZ) * t;
+	}
 
 	float toDirX = g_baseLookX - g_baseCamX;
 	float toDirY = g_baseLookY - g_baseCamY;
@@ -701,6 +744,9 @@ static void OnDialogueStart() {
 	g_lastTopicInfoID = 0;
 	g_dollyProgress = 0.0f;
 	g_dollyFirstDone = false;
+	g_transProgress = 1.0f;
+	g_baseCamX = g_baseCamY = g_baseCamZ = 0;
+	g_baseLookX = g_baseLookY = g_baseLookZ = 0;
 	g_cameraActive = true;
 
 	ApplyCameraAngle(g_currentAngle);
