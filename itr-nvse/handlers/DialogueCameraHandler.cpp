@@ -428,17 +428,47 @@ static void DisableCamera() {
 	CameraHooks::Disable();
 }
 
+typedef void* (__cdecl* GetObjectByName_t)(void* rootNode, const char* name);
+static GetObjectByName_t GetObjectByName = (GetObjectByName_t)0x4AAE30;
+
+static bool GetHeadPos(TESObjectREFR* ref, float& outX, float& outY, float& outZ)
+{
+	if (!ref) return false;
+	void* renderData = *(void**)((UInt8*)ref + 0x64);
+	if (!renderData) return false;
+	void* rootNode = *(void**)((UInt8*)renderData + 0x14);
+	if (!rootNode) return false;
+
+	//try head bone, fall back to neck
+	void* bone = GetObjectByName(rootNode, "Bip01 Head");
+	if (!bone) bone = GetObjectByName(rootNode, "Bip01 Neck1");
+	if (!bone) return false;
+
+	float* worldPos = (float*)((UInt8*)bone + 0x8C);
+	outX = worldPos[0];
+	outY = worldPos[1];
+	outZ = worldPos[2];
+	return true;
+}
+
 static void ApplyCameraAngle(CameraAngle angle) {
 	PlayerCharacter* player = *g_thePlayer;
 	if (!player || !g_dialogueTarget) return;
 
-	float px = player->posX;
-	float py = player->posY;
-	float pz = player->posZ + 60.0f;
+	//use actual head positions when available, fall back to estimated
+	float px, py, pz;
+	if (!GetHeadPos((TESObjectREFR*)player, px, py, pz)) {
+		px = player->posX;
+		py = player->posY;
+		pz = player->posZ + 60.0f;
+	}
 
-	float nx = g_dialogueTarget->posX;
-	float ny = g_dialogueTarget->posY;
-	float nz = g_dialogueTarget->posZ + 60.0f;
+	float nx, ny, nz;
+	if (!GetHeadPos(g_dialogueTarget, nx, ny, nz)) {
+		nx = g_dialogueTarget->posX;
+		ny = g_dialogueTarget->posY;
+		nz = g_dialogueTarget->posZ + 60.0f;
+	}
 
 	float dx = nx - px;
 	float dy = ny - py;
@@ -455,59 +485,64 @@ static void ApplyCameraAngle(CameraAngle angle) {
 	float midY = (py + ny) / 2.0f;
 	float midZ = (pz + nz) / 2.0f;
 
+	//scale offsets by distance - designed for ~100 unit separation
+	float s = dist / 100.0f;
+	if (s < 0.5f) s = 0.5f;
+	if (s > 2.0f) s = 2.0f;
+
 	struct CamCandidate {
-		float x, y, z;             //camera position
-		float lookX, lookY, lookZ; //where to look
+		float x, y, z;
+		float lookX, lookY, lookZ;
 	};
 	CamCandidate candidates[2];
 
 	switch (angle) {
 		case kAngle_Vanilla:
-			candidates[0] = { px + dirX * 5.0f, py + dirY * 5.0f, pz + 50.0f, nx, ny, nz + 10.0f };
+			candidates[0] = { px + dirX * 5.0f, py + dirY * 5.0f, pz + 50.0f*s, nx, ny, nz };
 			candidates[1] = candidates[0];
 			break;
 		case kAngle_OverShoulder:
-			candidates[0] = { px - dirX * 70.0f + perpX * 50.0f, py - dirY * 70.0f + perpY * 50.0f, pz + 20.0f, nx, ny, nz };
-			candidates[1] = { px - dirX * 70.0f - perpX * 50.0f, py - dirY * 70.0f - perpY * 50.0f, pz + 20.0f, nx, ny, nz };
+			candidates[0] = { px - dirX*70*s + perpX*50*s, py - dirY*70*s + perpY*50*s, pz + 20.0f, nx, ny, nz };
+			candidates[1] = { px - dirX*70*s - perpX*50*s, py - dirY*70*s - perpY*50*s, pz + 20.0f, nx, ny, nz };
 			break;
 		case kAngle_NPCCloseup:
-			candidates[0] = { nx + dirX * 40.0f + perpX * 80.0f, ny + dirY * 40.0f + perpY * 80.0f, nz + 40.0f, px, py, pz };
-			candidates[1] = { nx + dirX * 40.0f - perpX * 80.0f, ny + dirY * 40.0f - perpY * 80.0f, nz + 40.0f, px, py, pz };
+			candidates[0] = { nx + dirX*40*s + perpX*80*s, ny + dirY*40*s + perpY*80*s, nz, px, py, pz };
+			candidates[1] = { nx + dirX*40*s - perpX*80*s, ny + dirY*40*s - perpY*80*s, nz, px, py, pz };
 			break;
 		case kAngle_TwoShot:
-			candidates[0] = { midX + perpX * 120.0f, midY + perpY * 120.0f, midZ + 20.0f, midX, midY, midZ - 10.0f };
-			candidates[1] = { midX - perpX * 120.0f, midY - perpY * 120.0f, midZ + 20.0f, midX, midY, midZ - 10.0f };
+			candidates[0] = { midX + perpX*120*s, midY + perpY*120*s, midZ + 20.0f, midX, midY, midZ };
+			candidates[1] = { midX - perpX*120*s, midY - perpY*120*s, midZ + 20.0f, midX, midY, midZ };
 			break;
 		case kAngle_NPCFace:
-			candidates[0] = { nx - dirX * 60.0f + perpX * 20.0f, ny - dirY * 60.0f + perpY * 20.0f, nz + 60.0f, nx, ny, nz };
-			candidates[1] = { nx - dirX * 60.0f - perpX * 20.0f, ny - dirY * 60.0f - perpY * 20.0f, nz + 60.0f, nx, ny, nz };
+			candidates[0] = { nx - dirX*60*s + perpX*20*s, ny - dirY*60*s + perpY*20*s, nz + 5.0f, nx, ny, nz };
+			candidates[1] = { nx - dirX*60*s - perpX*20*s, ny - dirY*60*s - perpY*20*s, nz + 5.0f, nx, ny, nz };
 			break;
 		case kAngle_LowAngle:
-			candidates[0] = { nx - dirX * 80.0f + perpX * 30.0f, ny - dirY * 80.0f + perpY * 30.0f, nz - 30.0f, nx, ny, nz + 30.0f };
-			candidates[1] = { nx - dirX * 80.0f - perpX * 30.0f, ny - dirY * 80.0f - perpY * 30.0f, nz - 30.0f, nx, ny, nz + 30.0f };
+			candidates[0] = { nx - dirX*80*s + perpX*30*s, ny - dirY*80*s + perpY*30*s, nz - 30.0f, nx, ny, nz };
+			candidates[1] = { nx - dirX*80*s - perpX*30*s, ny - dirY*80*s - perpY*30*s, nz - 30.0f, nx, ny, nz };
 			break;
 		case kAngle_HighAngle:
-			candidates[0] = { nx - dirX * 60.0f + perpX * 30.0f, ny - dirY * 60.0f + perpY * 30.0f, nz + 80.0f, nx, ny, nz };
-			candidates[1] = { nx - dirX * 60.0f - perpX * 30.0f, ny - dirY * 60.0f - perpY * 30.0f, nz + 80.0f, nx, ny, nz };
+			candidates[0] = { nx - dirX*60*s + perpX*30*s, ny - dirY*60*s + perpY*30*s, nz + 80.0f*s, nx, ny, nz };
+			candidates[1] = { nx - dirX*60*s - perpX*30*s, ny - dirY*60*s - perpY*30*s, nz + 80.0f*s, nx, ny, nz };
 			break;
 		case kAngle_PlayerFace:
-			candidates[0] = { px + perpX * 80.0f, py + perpY * 80.0f, pz + 30.0f, nx, ny, nz };
-			candidates[1] = { px - perpX * 80.0f, py - perpY * 80.0f, pz + 30.0f, nx, ny, nz };
+			candidates[0] = { px + perpX*80*s, py + perpY*80*s, pz, nx, ny, nz };
+			candidates[1] = { px - perpX*80*s, py - perpY*80*s, pz, nx, ny, nz };
 			break;
 		case kAngle_WideShot:
-			candidates[0] = { midX + perpX * 200.0f, midY + perpY * 200.0f, midZ + 60.0f, midX, midY, midZ };
-			candidates[1] = { midX - perpX * 200.0f, midY - perpY * 200.0f, midZ + 60.0f, midX, midY, midZ };
+			candidates[0] = { midX + perpX*200*s, midY + perpY*200*s, midZ + 60.0f*s, midX, midY, midZ };
+			candidates[1] = { midX - perpX*200*s, midY - perpY*200*s, midZ + 60.0f*s, midX, midY, midZ };
 			break;
 		case kAngle_NPCProfile:
-			candidates[0] = { nx + perpX * 90.0f, ny + perpY * 90.0f, nz + 40.0f, nx, ny, nz + 15.0f };
-			candidates[1] = { nx - perpX * 90.0f, ny - perpY * 90.0f, nz + 40.0f, nx, ny, nz + 15.0f };
+			candidates[0] = { nx + perpX*90*s, ny + perpY*90*s, nz, nx, ny, nz };
+			candidates[1] = { nx - perpX*90*s, ny - perpY*90*s, nz, nx, ny, nz };
 			break;
 		case kAngle_PlayerProfile:
-			candidates[0] = { px + perpX * 90.0f, py + perpY * 90.0f, pz + 40.0f, px, py, pz + 15.0f };
-			candidates[1] = { px - perpX * 90.0f, py - perpY * 90.0f, pz + 40.0f, px, py, pz + 15.0f };
+			candidates[0] = { px + perpX*90*s, py + perpY*90*s, pz, px, py, pz };
+			candidates[1] = { px - perpX*90*s, py - perpY*90*s, pz, px, py, pz };
 			break;
 		case kAngle_Overhead:
-			candidates[0] = { midX, midY, midZ + 150.0f, midX, midY, midZ - 20.0f };
+			candidates[0] = { midX, midY, midZ + 150.0f*s, midX, midY, midZ };
 			candidates[1] = candidates[0];
 			break;
 		default:
@@ -599,7 +634,7 @@ static void OnDialogueStart() {
 	PlayerCharacter* player = *g_thePlayer;
 	if (!player) return;
 
-	g_wasFirstPerson = !*(bool*)((UInt8*)player + 0x650); //bThirdPerson
+	g_wasFirstPerson = !*(bool*)((UInt8*)player + 0x64A); //is3rdPerson
 	if (g_wasFirstPerson) {
 		SetFirstPerson(player, false);
 	}
