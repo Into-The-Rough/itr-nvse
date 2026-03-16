@@ -139,30 +139,50 @@ namespace DialogueCameraHandler {
 typedef void (__thiscall *SetFirstPerson_t)(void* player, bool bFirst);
 static SetFirstPerson_t SetFirstPerson = (SetFirstPerson_t)0x950110;
 
-typedef void* (__thiscall *GetAnimData_t)(Actor* actor); //vtable 0x1E4
 
-typedef UInt16 (__thiscall *GetAnimGroupForAction_t)(Actor* actor, UInt32 action, UInt32 unk1, UInt32 unk2, void* animData);
-static GetAnimGroupForAction_t GetAnimGroupForAction = (GetAnimGroupForAction_t)0x897910;
+static float g_savedFreqs[64] = {0};
+static UInt32 g_savedStates[64] = {0};
+static int g_savedCount = 0;
 
-typedef void (__thiscall *PlayAnimSeq_t)(void* animData, UInt32 seqID, UInt32 flags, SInt32 unk1, SInt32 unk2);
-static PlayAnimSeq_t PlayAnimSeq = (PlayAnimSeq_t)0x494740;
+static void FreezePlayerAnim(bool freeze)
+{
+	PlayerCharacter* player = *(PlayerCharacter**)0x11DEA3C;
+	if (!player) return;
 
-typedef void (__thiscall *AnimDataRefresh_t)(void* animData, UInt32 unk);
-static AnimDataRefresh_t AnimDataRefresh = (AnimDataRefresh_t)0x499240;
+	void* renderData = *(void**)((UInt8*)player + 0x64);
+	if (!renderData) return;
+	void* rootNode = *(void**)((UInt8*)renderData + 0x14);
+	if (!rootNode) return;
 
-static void ForcePlayerIdle(Actor* player) {
-	void** vtable = *(void***)player;
-	GetAnimData_t getAnimData = (GetAnimData_t)vtable[0x1E4/4];
-	UInt8* animData = (UInt8*)getAnimData(player);
-	if (!animData) return;
+	void* controller = *(void**)((UInt8*)rootNode + 0x18);
+	if (!controller) return;
 
-	void** animSequences = (void**)(animData + 0xE0); //animSequences array
-	animSequences[1] = nullptr; //kSequence_Movement
+	void** seqData = *(void***)((UInt8*)controller + 0x2C);
+	UInt16 seqCount = *(UInt16*)((UInt8*)controller + 0x34);
+	if (!seqData || seqCount == 0) return;
+	if (seqCount > 64) seqCount = 64;
 
-
-	UInt16 seqID = GetAnimGroupForAction(player, 0, 0, 0, animData);
-	if (seqID != 0xFFFF) {
-		PlayAnimSeq(animData, seqID, 1, -1, -1);
+	if (freeze)
+	{
+		g_savedCount = seqCount;
+		for (int i = 0; i < seqCount; i++)
+		{
+			if (!seqData[i]) { g_savedFreqs[i] = 1.0f; g_savedStates[i] = 0; continue; }
+			g_savedFreqs[i] = *(float*)((UInt8*)seqData[i] + 0x28);
+			g_savedStates[i] = *(UInt32*)((UInt8*)seqData[i] + 0x44);
+			*(float*)((UInt8*)seqData[i] + 0x28) = 0.0f;
+			*(UInt32*)((UInt8*)seqData[i] + 0x44) = 0;
+		}
+	}
+	else
+	{
+		for (int i = 0; i < g_savedCount && i < (int)seqCount; i++)
+		{
+			if (!seqData[i]) continue;
+			*(float*)((UInt8*)seqData[i] + 0x28) = g_savedFreqs[i];
+			*(UInt32*)((UInt8*)seqData[i] + 0x44) = g_savedStates[i];
+		}
+		g_savedCount = 0;
 	}
 }
 
@@ -639,7 +659,7 @@ static void OnDialogueStart() {
 		SetFirstPerson(player, false);
 	}
 
-	ForcePlayerIdle(player);
+	FreezePlayerAnim(true);
 
 	g_currentAngle = kAngle_Vanilla;
 	g_dialogueLineCount = 0;
@@ -651,6 +671,7 @@ static void OnDialogueStart() {
 
 static void OnDialogueEnd() {
 	if (g_cameraActive) {
+		FreezePlayerAnim(false);
 		DisableCamera();
 		if (g_wasFirstPerson) {
 			PlayerCharacter* player = *g_thePlayer;
@@ -680,8 +701,7 @@ void Update() {
 
 	if (!g_cameraActive || !g_dialogueTarget) return;
 
-	PlayerCharacter* player = *g_thePlayer;
-	if (player) ForcePlayerIdle(player);
+	FreezePlayerAnim(true);
 
 	DialogueMenu* dlgMenu = DialogueMenu::GetSingleton();
 	if (dlgMenu) {
