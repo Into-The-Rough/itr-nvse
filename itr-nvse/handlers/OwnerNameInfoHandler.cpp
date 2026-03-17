@@ -183,8 +183,12 @@ static void CleanFactionName(const char* input, char* output, size_t outputSize)
 
 	char* start = result;
 	while (*start && isspace(*start)) start++;
-	char* end = start + strlen(start) - 1;
-	while (end > start && isspace(*end)) *end-- = '\0';
+	size_t slen = strlen(start);
+	if (slen > 0)
+	{
+		char* end = start + slen - 1;
+		while (end > start && isspace(*end)) *end-- = '\0';
+	}
 
 	strncpy_s(output, outputSize, start, _TRUNCATE);
 }
@@ -318,6 +322,7 @@ bool ONI_Init()
 void ONI_UpdateSettings()
 {
 	LoadINIPath();
+	g_bOwnerNameInfo = GetPrivateProfileIntA("Tweaks", "bOwnerNameInfo", 1, g_iniPath) != 0;
 	g_bCompatMode = GetPrivateProfileIntA("OwnerNameInfo", "bCompatibilityMode", 1, g_iniPath) != 0;
 	g_bShowFactionName = GetPrivateProfileIntA("OwnerNameInfo", "bShowFactionName", 1, g_iniPath) != 0;
 	g_bShowNameOnlyCrime = GetPrivateProfileIntA("OwnerNameInfo", "bShowNameOnlyCrime", 1, g_iniPath) != 0;

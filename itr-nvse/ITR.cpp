@@ -346,8 +346,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 							PlayerUpdateHook_UpdateSettings(Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
 							                                Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
 
-						if (Settings::bOwnerNameInfo)
-							ONI_UpdateSettings();
+						ONI_UpdateSettings();
 
 						if (Settings::bQuickReadNote)
 							QuickReadNote_UpdateSettings(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
