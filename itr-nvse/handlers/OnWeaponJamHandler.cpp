@@ -4,7 +4,7 @@
 #include "internal/NVSEMinimal.h"
 #include "internal/EventDispatch.h"
 
-static Actor* g_jamActor = nullptr;
+static thread_local Actor* g_jamActor = nullptr;
 
 namespace OnWeaponJamHandler {
     bool g_hookInstalled = false;
@@ -27,7 +27,12 @@ static TESObjectWEAP* GetActorCurrentWeapon(Actor* actor)
     return (TESObjectWEAP*)(*(UInt32*)(itemChange + 0x08));
 }
 
-static void DispatchWeaponJamEvent()
+static void __cdecl SaveJamActor(Actor* actor)
+{
+    g_jamActor = actor;
+}
+
+static void __cdecl DispatchWeaponJamEvent()
 {
     if (!g_jamActor) return;
 
@@ -35,8 +40,8 @@ static void DispatchWeaponJamEvent()
     if (!weapon) return;
 
     if (g_eventManagerInterface)
-        g_eventManagerInterface->DispatchEvent("ITR:OnWeaponJam",
-            reinterpret_cast<TESObjectREFR*>(g_jamActor),
+        g_eventManagerInterface->DispatchEventThreadSafe("ITR:OnWeaponJam",
+            nullptr, reinterpret_cast<TESObjectREFR*>(g_jamActor),
             g_jamActor, weapon);
 }
 
@@ -45,7 +50,9 @@ static UInt32 s_SetAnimActionAddr = 0x8A73E0;
 static __declspec(naked) void Hook_SetAnimAction_Jam()
 {
     __asm {
-        mov g_jamActor, ecx
+        push ecx
+        call SaveJamActor
+        add esp, 4
         pushad
         pushfd
         call DispatchWeaponJamEvent
