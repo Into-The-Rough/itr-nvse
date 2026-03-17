@@ -53,8 +53,10 @@ static __declspec(naked) void TryDropWeaponHook()
     __asm
     {
         push    ecx
+        push    ecx
         call    SaveDropActor
         add     esp, 4
+        pop     ecx
 
         pushad
         pushfd
