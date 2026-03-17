@@ -54,7 +54,11 @@ struct DataHandler {
 };
 
 namespace OnEntryPointHandler {
-    std::unordered_map<UInt32, BGSPerk*> g_entryToPerkMap;
+    //double-buffered: build into new map, swap pointer atomically
+    //readers always see a complete map, never a half-built one
+    typedef std::unordered_map<UInt32, BGSPerk*> EntryMap;
+    static EntryMap g_mapA, g_mapB;
+    static EntryMap* volatile g_activeMap = nullptr;
 
     struct EntryPointContext {
         UInt8 entryPoint;
@@ -63,15 +67,22 @@ namespace OnEntryPointHandler {
         BGSEntryPointPerkEntry* perkEntry;
         UInt32 returnAddr;
     };
-    std::vector<EntryPointContext> g_contextStack;
+
+    //per-thread to avoid races between AI worker threads
+    static thread_local std::vector<EntryPointContext> g_contextStack;
+    static thread_local UInt32 g_savedReturnAddr = 0;
 
     bool g_hookInstalled = false;
-    bool g_mapBuilt = false;
+    static bool g_useMapB = false; //which buffer to build into next
 }
 
 void OEPH_BuildEntryMap()
 {
-    OnEntryPointHandler::g_entryToPerkMap.clear();
+    using namespace OnEntryPointHandler;
+
+    //build into the inactive buffer while readers use the active one
+    EntryMap* buildMap = g_useMapB ? &g_mapB : &g_mapA;
+    buildMap->clear();
 
     DataHandler** pDataHandler = (DataHandler**)0x11C3F2C;
     if (!pDataHandler || !*pDataHandler) return;
@@ -87,7 +98,7 @@ void OEPH_BuildEntryMap()
             BGSPerkEntry* entry = node->data;
 
             if (*(UInt32*)entry == 0x1046D0C)
-                OnEntryPointHandler::g_entryToPerkMap[(UInt32)entry] = perk;
+                (*buildMap)[(UInt32)entry] = perk;
 
             node = node->next;
         }
@@ -95,11 +106,12 @@ void OEPH_BuildEntryMap()
         perkNode = perkNode->next;
     }
 
-    OnEntryPointHandler::g_mapBuilt = true;
+    //atomic swap - readers instantly see the new complete map
+    InterlockedExchangePointer((volatile PVOID*)&g_activeMap, buildMap);
+    g_useMapB = !g_useMapB;
 }
 
 static UInt32 s_ExecuteFunctionAddr = 0x5E5B40;
-static UInt32 s_savedReturnAddr = 0;
 
 static void __cdecl PushContext(UInt32 entryPoint, Actor* actor, TESForm* filterForm1, BGSEntryPointPerkEntry* perkEntry)
 {
@@ -108,26 +120,28 @@ static void __cdecl PushContext(UInt32 entryPoint, Actor* actor, TESForm* filter
     ctx.actor = actor;
     ctx.filterForm1 = filterForm1;
     ctx.perkEntry = perkEntry;
-    ctx.returnAddr = s_savedReturnAddr;
+    ctx.returnAddr = OnEntryPointHandler::g_savedReturnAddr;
     OnEntryPointHandler::g_contextStack.push_back(ctx);
 }
 
 static void DispatchEntryPointEvent()
 {
     if (OnEntryPointHandler::g_contextStack.empty()) return;
-    if (!OnEntryPointHandler::g_mapBuilt) return;
+
+    auto* map = OnEntryPointHandler::g_activeMap;
+    if (!map) return;
 
     const auto& ctx = OnEntryPointHandler::g_contextStack.back();
     if (!ctx.perkEntry) return;
 
-    auto it = OnEntryPointHandler::g_entryToPerkMap.find((UInt32)ctx.perkEntry);
-    if (it == OnEntryPointHandler::g_entryToPerkMap.end()) return;
+    auto it = map->find((UInt32)ctx.perkEntry);
+    if (it == map->end()) return;
 
     BGSPerk* perk = it->second;
 
     if (g_eventManagerInterface && ctx.actor)
-        g_eventManagerInterface->DispatchEvent("ITR:OnEntryPoint",
-            reinterpret_cast<TESObjectREFR*>(ctx.actor),
+        g_eventManagerInterface->DispatchEventThreadSafe("ITR:OnEntryPoint",
+            nullptr, reinterpret_cast<TESObjectREFR*>(ctx.actor),
             (TESForm*)perk, (int)ctx.entryPoint, (TESForm*)ctx.actor, ctx.filterForm1);
 }
 
@@ -135,16 +149,28 @@ static void __cdecl DoDispatchAndPop()
 {
     DispatchEntryPointEvent();
     if (!OnEntryPointHandler::g_contextStack.empty()) {
-        s_savedReturnAddr = OnEntryPointHandler::g_contextStack.back().returnAddr;
+        OnEntryPointHandler::g_savedReturnAddr = OnEntryPointHandler::g_contextStack.back().returnAddr;
         OnEntryPointHandler::g_contextStack.pop_back();
     }
+}
+
+static void __cdecl SaveReturnAddr(UInt32 addr)
+{
+    OnEntryPointHandler::g_savedReturnAddr = addr;
+}
+
+static UInt32 __cdecl GetReturnAddr()
+{
+    return OnEntryPointHandler::g_savedReturnAddr;
 }
 
 static __declspec(naked) void Hook_ExecuteFunctionCall()
 {
     __asm {
         pop eax
-        mov s_savedReturnAddr, eax
+        push eax
+        call SaveReturnAddr
+        add esp, 4
 
         push [ebp-0x74]
         push [ebp+0x10]
@@ -162,7 +188,8 @@ static __declspec(naked) void Hook_ExecuteFunctionCall()
         popfd
         popad
 
-        jmp dword ptr [s_savedReturnAddr]
+        call GetReturnAddr
+        jmp eax
     }
 }
 

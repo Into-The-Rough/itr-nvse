@@ -75,11 +75,14 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 	UInt32 challengeType = *(UInt32*)(challenge + 0x54); //data.type
 	UInt16 value1 = *(UInt16*)(challenge + 0x64); //data.value1
 
-	//increment the amount
-	ThisStdCall(kAddr_TESChallenge_IncrementAmount, form, amount);
+	//increment the amount, clamp to 0 to prevent unsigned wrap triggering completion
+	SInt32 signedOld = (SInt32)oldAmount;
+	SInt32 signedNew = signedOld + amount;
+	if (signedNew < 0) signedNew = 0;
+	*(UInt32*)(challenge + kOffset_Challenge_Amount) = (UInt32)signedNew;
+	ThisStdCall(0x5F5800, form); //TESChallenge::MarkCountAsModified
 
-	//get new amount
-	UInt32 newAmount = *(UInt32*)(challenge + kOffset_Challenge_Amount);
+	UInt32 newAmount = (UInt32)signedNew;
 
 	//show progress notification at interval boundaries (vanilla behavior)
 	if (newAmount < threshold)
