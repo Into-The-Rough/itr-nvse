@@ -51,8 +51,10 @@ static __declspec(naked) void Hook_SetAnimAction_Jam()
 {
     __asm {
         push ecx
+        push ecx
         call SaveJamActor
         add esp, 4
+        pop ecx
         pushad
         pushfd
         call DispatchWeaponJamEvent
