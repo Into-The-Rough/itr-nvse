@@ -5,14 +5,13 @@
 #include "nvse/ParamInfos.h"
 #include "FallDamageHandler.h"
 #include "internal/SafeWrite.h"
+#include "internal/ScopedLock.h"
 #include <unordered_map>
-
-//fall damage modification system
-//provides global multiplier + per-actor overrides
-//scripts can use SetFallDamageMult/GetFallDamageMult to control
 
 static float g_globalFallDamageMult = 1.0f;
 static std::unordered_map<UInt32, float> g_actorFallDamageMults;
+static CRITICAL_SECTION g_fdhLock;
+static volatile LONG g_fdhLockInit = 0;
 
 static UInt32 s_setMultOpcode = 0;
 static UInt32 s_getMultOpcode = 0;
@@ -23,6 +22,8 @@ static UInt32 s_getMultOpcode = 0;
 //returns in st(0) for asm hook
 static float __cdecl GetFallDamageMultForActor(UInt32 refID)
 {
+	InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
+	ScopedLock lock(&g_fdhLock);
 	if (refID && !g_actorFallDamageMults.empty())
 	{
 		auto it = g_actorFallDamageMults.find(refID);
@@ -124,26 +125,32 @@ bool Cmd_SetFallDamageMult_Execute(COMMAND_ARGS)
 
 	if (mult < 0.0f) mult = 0.0f;
 
-	if (actor)
 	{
-		if (mult == 1.0f)
+		InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
+		ScopedLock lock(&g_fdhLock);
+		if (actor)
 		{
-			//remove override, use global
-			g_actorFallDamageMults.erase(actor->refID);
-			if (IsConsoleMode())
-				Console_Print("SetFallDamageMult >> Cleared override for %08X (using global %.2f)", actor->refID, g_globalFallDamageMult);
+			if (mult == 1.0f)
+				g_actorFallDamageMults.erase(actor->refID);
+			else
+				g_actorFallDamageMults[actor->refID] = mult;
 		}
 		else
 		{
-			g_actorFallDamageMults[actor->refID] = mult;
-			if (IsConsoleMode())
-				Console_Print("SetFallDamageMult >> Set %08X to %.2f", actor->refID, mult);
+			g_globalFallDamageMult = mult;
 		}
 	}
-	else
+
+	if (IsConsoleMode())
 	{
-		g_globalFallDamageMult = mult;
-		if (IsConsoleMode())
+		if (actor)
+		{
+			if (mult == 1.0f)
+				Console_Print("SetFallDamageMult >> Cleared override for %08X (using global %.2f)", actor->refID, g_globalFallDamageMult);
+			else
+				Console_Print("SetFallDamageMult >> Set %08X to %.2f", actor->refID, mult);
+		}
+		else
 			Console_Print("SetFallDamageMult >> Set global to %.2f", mult);
 	}
 
@@ -161,24 +168,19 @@ DEFINE_COMMAND_PLUGIN(GetFallDamageMult, "Gets fall damage multiplier (global or
 
 bool Cmd_GetFallDamageMult_Execute(COMMAND_ARGS)
 {
-	*result = g_globalFallDamageMult;
 	Actor* actor = nullptr;
-
 	ExtractArgs(EXTRACT_ARGS, &actor);
-
-	//use thisObj if no explicit actor
 	if (!actor)
 		actor = RefToActor(thisObj);
 
-	if (actor)
+	//GetFallDamageMultForActor already locks
+	*result = GetFallDamageMultForActor(actor ? actor->refID : 0);
+
+	if (IsConsoleMode())
 	{
-		*result = GetFallDamageMultForActor(actor->refID);
-		if (IsConsoleMode())
+		if (actor)
 			Console_Print("GetFallDamageMult >> %08X = %.2f", actor->refID, *result);
-	}
-	else
-	{
-		if (IsConsoleMode())
+		else
 			Console_Print("GetFallDamageMult >> global = %.2f", *result);
 	}
 
@@ -204,18 +206,27 @@ bool Cmd_ClearFallDamageMult_Execute(COMMAND_ARGS)
 	if (!actor)
 		actor = RefToActor(thisObj);
 
-	if (actor)
+	size_t count = 0;
 	{
-		g_actorFallDamageMults.erase(actor->refID);
-		if (IsConsoleMode())
-			Console_Print("ClearFallDamageMult >> Cleared %08X", actor->refID);
+		InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
+		ScopedLock lock(&g_fdhLock);
+		if (actor)
+		{
+			g_actorFallDamageMults.erase(actor->refID);
+		}
+		else
+		{
+			count = g_actorFallDamageMults.size();
+			g_actorFallDamageMults.clear();
+			g_globalFallDamageMult = 1.0f;
+		}
 	}
-	else
+
+	if (IsConsoleMode())
 	{
-		size_t count = g_actorFallDamageMults.size();
-		g_actorFallDamageMults.clear();
-		g_globalFallDamageMult = 1.0f;
-		if (IsConsoleMode())
+		if (actor)
+			Console_Print("ClearFallDamageMult >> Cleared %08X", actor->refID);
+		else
 			Console_Print("ClearFallDamageMult >> Cleared all (%d actors + global)", count);
 	}
 
