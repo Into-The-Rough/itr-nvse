@@ -6,8 +6,7 @@
 
 namespace OnWeaponDropHandler {
     bool g_hookInstalled = false;
-    static Actor* s_actor = nullptr;
-    static TESObjectWEAP* s_weapon = nullptr;
+    static thread_local Actor* s_actor = nullptr;
 }
 
 constexpr UInt32 kAddr_TryDropWeapon = 0x89F580;
@@ -30,22 +29,32 @@ static TESObjectWEAP* GetActorCurrentWeapon(Actor* actor)
     return (TESObjectWEAP*)(*(UInt32*)(itemChange + 0x08));
 }
 
-static void DispatchWeaponDropEvent()
+static void __cdecl SaveDropActor(Actor* actor)
 {
-    OnWeaponDropHandler::s_weapon = GetActorCurrentWeapon(OnWeaponDropHandler::s_actor);
-    if (!OnWeaponDropHandler::s_weapon) return;
+    OnWeaponDropHandler::s_actor = actor;
+}
+
+static void __cdecl DispatchWeaponDropEvent()
+{
+    auto* actor = OnWeaponDropHandler::s_actor;
+    if (!actor) return;
+
+    auto* weapon = GetActorCurrentWeapon(actor);
+    if (!weapon) return;
 
     if (g_eventManagerInterface)
-        g_eventManagerInterface->DispatchEvent("ITR:OnWeaponDrop",
-            reinterpret_cast<TESObjectREFR*>(OnWeaponDropHandler::s_actor),
-            OnWeaponDropHandler::s_actor, OnWeaponDropHandler::s_weapon);
+        g_eventManagerInterface->DispatchEventThreadSafe("ITR:OnWeaponDrop",
+            nullptr, reinterpret_cast<TESObjectREFR*>(actor),
+            actor, weapon);
 }
 
 static __declspec(naked) void TryDropWeaponHook()
 {
     __asm
     {
-        mov     OnWeaponDropHandler::s_actor, ecx
+        push    ecx
+        call    SaveDropActor
+        add     esp, 4
 
         pushad
         pushfd
