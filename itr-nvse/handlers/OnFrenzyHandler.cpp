@@ -12,7 +12,7 @@ static void DispatchFrenzyEvent(Actor* actor) {
     if (!actor) return;
 
     if (g_eventManagerInterface)
-        g_eventManagerInterface->DispatchEvent("ITR:OnFrenzy", nullptr, (TESForm*)actor);
+        g_eventManagerInterface->DispatchEventThreadSafe("ITR:OnFrenzy", nullptr, nullptr, (TESForm*)actor);
 }
 
 static void __cdecl Hook_LimbCondition_HandleChange(
