@@ -19,7 +19,7 @@ typedef bool (__thiscall* _IsCrime)(void* refr);
 static const _IsCrime IsCrime = (_IsCrime)0x579690;
 
 //settings
-static bool g_bOwnerNameInfo = true;
+static bool g_bOwnerNameInfo = false;
 static bool g_bCompatMode = true;
 static bool g_bShowFactionName = true;
 static bool g_bShowNameOnlyCrime = true;
