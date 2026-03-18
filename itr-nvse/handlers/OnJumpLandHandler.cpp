@@ -247,33 +247,14 @@ static bool InstallHooks()
     return true;
 }
 
-static void RefreshHooksIfOverwritten()
-{
-    if (!OnJumpLandHandler::g_hooksInstalled) return;
-
-    const UInt32 jumpSlot = kVtbl_bhkCharacterStateJumping + (kVFuncIdx_UpdateVelocity * 4);
-    const UInt32 inAirSlot = kVtbl_bhkCharacterStateInAir + (kVFuncIdx_UpdateVelocity * 4);
-
-    auto currentJump = reinterpret_cast<StateUpdateVelocity_t>(*(UInt32*)jumpSlot);
-    auto currentInAir = reinterpret_cast<StateUpdateVelocity_t>(*(UInt32*)inAirSlot);
-
-    if (currentJump != reinterpret_cast<StateUpdateVelocity_t>(Hook_bhkCharacterStateJumping_UpdateVelocity)) {
-        if (currentJump) s_originalJumpingUpdateVelocity = currentJump;
-        SafeWrite::Write32(jumpSlot, (UInt32)Hook_bhkCharacterStateJumping_UpdateVelocity);
-    }
-
-    if (currentInAir != reinterpret_cast<StateUpdateVelocity_t>(Hook_bhkCharacterStateInAir_UpdateVelocity)) {
-        if (currentInAir) s_originalInAirUpdateVelocity = currentInAir;
-        SafeWrite::Write32(inAirSlot, (UInt32)Hook_bhkCharacterStateInAir_UpdateVelocity);
-    }
-}
+//vtable slots are write-once at init. if another plugin overwrites us, we lose
+//our hook - but that's better than reclaiming and causing infinite recursion
+//when both plugins save each other as their "original"
 
 void OJLH_Update()
 {
     if (OnJumpLandHandler::g_stateLockInit != 2) return;
     if (!g_eventManagerInterface) return;
-
-    RefreshHooksIfOverwritten();
 
     DWORD currentThreadId = GetCurrentThreadId();
     if (!OnJumpLandHandler::g_mainThreadId)
