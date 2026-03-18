@@ -37,6 +37,13 @@ namespace
 			|| vtbl == 0x109E704; //BSResizableTriShape
 	}
 
+	static bool IsNiNode(void* obj)
+	{
+		//vtable[3] = NiObject::IsNiNode - returns this for NiNode subclasses, nullptr otherwise
+		auto fn = (void*(__thiscall*)(void*))(*((UInt32**)obj))[3];
+		return fn(obj) != nullptr;
+	}
+
 	static void* GetMaterialProp(UInt8* geom)
 	{
 		return *(void**)(geom + 0xA4);
@@ -71,6 +78,8 @@ namespace
 			return 1;
 		}
 
+		if (!IsNiNode(node)) return 0;
+
 		UInt8* n = (UInt8*)node;
 		void** childData = *(void***)(n + 0xA0);
 		UInt16 childCount = *(UInt16*)(n + 0xA6);
@@ -96,6 +105,8 @@ namespace
 				SetEmissive(matProp, r, g, b, emitMult);
 			return;
 		}
+
+		if (!IsNiNode(node)) return;
 
 		UInt8* n = (UInt8*)node;
 		void** childData = *(void***)(n + 0xA0);
@@ -124,6 +135,8 @@ namespace
 			idx++;
 			return;
 		}
+
+		if (!IsNiNode(node)) return;
 
 		UInt8* n = (UInt8*)node;
 		void** childData = *(void***)(n + 0xA0);
