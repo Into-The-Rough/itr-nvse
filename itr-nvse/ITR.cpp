@@ -615,7 +615,6 @@ namespace ITR
 		ImperativeCommands_Init((void*)nvse);
 		StringCommands_Init((void*)nvse);
 		RadioCommands_Init((void*)nvse);
-		RegisterAllCommands((void*)nvse);
 		RegisterHandlers(nvse);
 
 		Log("itr-nvse loaded successfully");
