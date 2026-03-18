@@ -2,6 +2,7 @@
 #include "nvse/PluginAPI.h"
 #include "nvse/GameObjects.h"
 #include "internal/SafeWrite.h"
+#include "internal/CallTemplates.h"
 #include "internal/globals.h"
 #include "internal/Mat3.h"
 #include "internal/settings.h"
@@ -392,61 +393,111 @@ static bool IsNopRange(UInt32 addr, UInt32 size) {
 	return true;
 }
 
-static bool ValidateNopSite(UInt32 addr, UInt32 size, UInt8 expectedOpcode, const char* name) {
-	if (IsNopRange(addr, size))
-		return true;
-	if (*(UInt8*)addr != expectedOpcode) {
-		Log("DialogueCameraHandler: %s patch site 0x%08X expected opcode 0x%02X or NOPs, found 0x%02X", name, addr, expectedOpcode, *(UInt8*)addr);
-		return false;
-	}
-	return true;
+static int* g_pDialogueCamera = &Settings::bDialogueCamera;
+static const UInt32 kAddr_bShouldRestore1stPerson = 0x11F21D0;
+
+//sites 1&2: call wrappers for Show1stPerson (0x951A10)
+//when dialogue camera active, skip the force-third-person call
+static void __fastcall Hook_Show1stPerson(void* player, void* edx, bool show) {
+	if (!Settings::bDialogueCamera)
+		ThisCall<void>(0x951A10, player, show);
 }
 
-static bool ValidateRelJumpSite(UInt32 addr, UInt32 dst, const char* name) {
-	UInt8 opcode = *(UInt8*)addr;
-	if (CameraHooks::IsRel32Patched(addr, 0xE9, dst))
-		return true;
-	if (opcode == 0xE9) {
-		Log("DialogueCameraHandler: %s patch site 0x%08X already jumps to 0x%08X", name, addr, *(UInt32*)(addr + 1) + addr + 5);
-		return false;
+//site 3: FocusOnActor force-third-person branch (0x953ABF)
+//original: push 1; mov ecx, [ebp-0x9C] (8 bytes)
+static const UInt32 kSite3_Return = 0x953AC7;
+static const UInt32 kSite3_Skip = 0x953AF5;
+__declspec(naked) void Hook_ForceThirdPerson_Branch1() {
+	__asm {
+		mov eax, g_pDialogueCamera
+		cmp dword ptr [eax], 0
+		jnz skip
+		push 1
+		mov ecx, [ebp-0x9C]
+		jmp kSite3_Return
+	skip:
+		jmp kSite3_Skip
 	}
-	return true;
 }
 
-static bool ValidateBytePatchSite(UInt32 addr, UInt8 patchedValue, UInt8 allowedOriginalA, UInt8 allowedOriginalB, const char* name) {
-	UInt8 current = *(UInt8*)addr;
-	if (current == patchedValue)
-		return true;
-	if (current != allowedOriginalA && current != allowedOriginalB) {
-		Log("DialogueCameraHandler: %s patch site 0x%08X expected 0x%02X/0x%02X or patched 0x%02X, found 0x%02X", name, addr, allowedOriginalA, allowedOriginalB, patchedValue, current);
-		return false;
+//site 4: DoIdle save/restore first-person state (0x762E55)
+//original: mov byte ptr [0x11F21D0], 1 (7 bytes)
+static const UInt32 kSite4_Return = 0x762E5C;
+static const UInt32 kSite4_Skip = 0x762E72;
+__declspec(naked) void Hook_ForceThirdPerson_Branch2() {
+	__asm {
+		mov eax, g_pDialogueCamera
+		cmp dword ptr [eax], 0
+		jnz skip
+		mov eax, kAddr_bShouldRestore1stPerson
+		mov byte ptr [eax], 1
+		jmp kSite4_Return
+	skip:
+		jmp kSite4_Skip
 	}
-	return true;
+}
+
+//site 5: FocusOnActor dialogue zoom conditional (0x9533BE)
+//original: jz 0x953562 (6 bytes, 0F 84 9E 01 00 00)
+//when dialogue camera active, always skip zoom
+static const UInt32 kSite5_Zoom = 0x9533C4;
+static const UInt32 kSite5_NoZoom = 0x953562;
+__declspec(naked) void Hook_DisableDialogueZoom() {
+	__asm {
+		mov eax, g_pDialogueCamera
+		cmp dword ptr [eax], 0
+		jnz skip_zoom
+		cmp dword ptr [ebp-0x44], 0
+		jz skip_zoom
+		jmp kSite5_Zoom
+	skip_zoom:
+		jmp kSite5_NoZoom
+	}
 }
 
 static bool InstallDialoguePatches() {
 	if (g_patchesInstalled)
 		return true;
 
-	if (!ValidateNopSite(0x953124, 5, 0xE8, "ForceThirdPerson start"))
+	//site 1: FocusOnActor call to Show1stPerson
+	if (*(UInt8*)0x953124 != 0xE8) {
+		Log("DialogueCameraHandler: site 1 (0x953124) expected CALL, found 0x%02X", *(UInt8*)0x953124);
 		return false;
-	if (!ValidateNopSite(0x761DEF, 5, 0xE8, "ForceThirdPerson end"))
-		return false;
-	if (!ValidateRelJumpSite(0x953ABF, 0x953AF5, "ForceThirdPerson branch 1"))
-		return false;
-	if (!ValidateRelJumpSite(0x762E55, 0x762E72, "ForceThirdPerson branch 2"))
-		return false;
-	if (!ValidateRelJumpSite(0x9533BE, 0x953562, "DisableDialogueZoom branch"))
-		return false;
-	if (!ValidateBytePatchSite(0x953BBA, 0xEB, 0x74, 0x75, "DisableDialogueZoom conditional"))
-		return false;
+	}
+	SafeWrite::WriteRelCall(0x953124, (UInt32)Hook_Show1stPerson);
 
-	SafeWrite::WriteNop(0x953124, 5);
-	SafeWrite::WriteNop(0x761DEF, 5);
-	SafeWrite::WriteRelJump(0x953ABF, 0x953AF5);
-	SafeWrite::WriteRelJump(0x762E55, 0x762E72);
-	SafeWrite::WriteRelJump(0x9533BE, 0x953562);
-	SafeWrite::Write8(0x953BBA, 0xEB);
+	//site 2: DialogMenu::Create call to Show1stPerson
+	if (*(UInt8*)0x761DEF != 0xE8) {
+		Log("DialogueCameraHandler: site 2 (0x761DEF) expected CALL, found 0x%02X", *(UInt8*)0x761DEF);
+		return false;
+	}
+	SafeWrite::WriteRelCall(0x761DEF, (UInt32)Hook_Show1stPerson);
+
+	//site 3: FocusOnActor force-third-person branch (8 bytes: push 1 + mov ecx)
+	if (*(UInt8*)0x953ABF != 0x6A) {
+		Log("DialogueCameraHandler: site 3 (0x953ABF) expected 0x6A, found 0x%02X", *(UInt8*)0x953ABF);
+		return false;
+	}
+	SafeWrite::WriteRelJump(0x953ABF, (UInt32)Hook_ForceThirdPerson_Branch1);
+	SafeWrite::WriteNop(0x953AC4, 3); //pad remainder of 8-byte overwrite
+
+	//site 4: DoIdle save first-person state (7 bytes: mov byte ptr)
+	if (*(UInt8*)0x762E55 != 0xC6) {
+		Log("DialogueCameraHandler: site 4 (0x762E55) expected 0xC6, found 0x%02X", *(UInt8*)0x762E55);
+		return false;
+	}
+	SafeWrite::WriteRelJump(0x762E55, (UInt32)Hook_ForceThirdPerson_Branch2);
+	SafeWrite::WriteNop(0x762E5A, 2); //pad remainder of 7-byte overwrite
+
+	//site 5: FocusOnActor dialogue zoom conditional (6 bytes: jz near)
+	if (*(UInt8*)0x9533BE != 0x0F) {
+		Log("DialogueCameraHandler: site 5 (0x9533BE) expected 0x0F, found 0x%02X", *(UInt8*)0x9533BE);
+		return false;
+	}
+	SafeWrite::WriteRelJump(0x9533BE, (UInt32)Hook_DisableDialogueZoom);
+	SafeWrite::Write8(0x9533C3, 0x90); //pad 6th byte
+
+	//site 6 (0x953BBA) not needed - site 5 skips past it when active
 
 	g_patchesInstalled = true;
 	return true;
@@ -809,9 +860,9 @@ bool Init(NVSEConsoleInterface* console) {
 }
 
 bool InstallCameraHooks() {
-	if (!InstallDialoguePatches())
+	if (!CameraHooks::InstallHooks())
 		return false;
-	return CameraHooks::InstallHooks();
+	return InstallDialoguePatches();
 }
 
 }
