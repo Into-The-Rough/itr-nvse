@@ -13,7 +13,6 @@ __declspec(dllexport) bool NVSEPlugin_Query(const NVSEInterface* nvse, PluginInf
 
 	if (nvse->isEditor) return true;
 	if (nvse->nvseVersion < NVSE_VERSION_INTEGER) return false;
-	// hardcoded engine addresses require exact runtime match
 	if (nvse->runtimeVersion != RUNTIME_VERSION_1_4_0_525) return false;
 	if (nvse->isNogore) return false;
 
