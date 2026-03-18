@@ -345,37 +345,72 @@ static void PlayImpactSound(Actor* target, TESObjectWEAP* weapon, SInt32 hitLoca
 	}
 }
 
-static bool Cmd_FakeHit_Execute(COMMAND_ARGS) {
-	*result = 0;
-	if (!thisObj || !extractArgs) return true;
+static bool IsActorTypeID(UInt8 typeID) {
+	return typeID == 0x3B || typeID == 0x3C;
+}
 
-	Actor* attacker = nullptr;
-	float damage = -1.0f;
-	TESForm* weaponForm = nullptr;
-	SInt32 hitLocation = -1;
-	UInt32 flags = 0;
+//0x5AC750 - fires OnHit/OnHitWith script blocks and NVSE events
+typedef bool (__cdecl* MarkScriptEvent_t)(TESForm* eventSource, void* extraDataList, UInt32 eventMask);
+static MarkScriptEvent_t MarkScriptEvent = (MarkScriptEvent_t)0x5AC750;
 
-	if (!extractArgs(EXTRACT_ARGS_EX, &attacker, &damage, &weaponForm, &hitLocation, &flags)) return true;
-	if (!attacker) return true;
+static void* GetExtraDataList(void* ref) {
+	return (void*)((UInt8*)ref + 0x44);
+}
 
-	Actor* target = (Actor*)thisObj;
-	if (!target->baseProcess) return true;
-
-	TESObjectWEAP* weapon = weaponForm ? (TESObjectWEAP*)weaponForm : nullptr;
-	if (damage < 0.0f) damage = weapon ? (float)weapon->attackDmg : 1.0f;
-
+static ActorHitData BuildHitData(Actor* target, Actor* attacker, TESObjectWEAP* weapon,
+	float damage, float fatigueDmg, float limbDmg, SInt32 hitLocation, UInt32 flags)
+{
 	ActorHitData hitData;
 	memset(&hitData, 0, sizeof(ActorHitData));
-	hitData.source = attacker; hitData.target = target;
+	hitData.source = attacker;
+	hitData.target = target;
+	hitData.projectile = nullptr;
 	hitData.weaponAV = weapon ? weapon->weaponSkill : 0;
-	hitData.hitLocation = hitLocation; hitData.healthDmg = damage; hitData.wpnBaseDmg = damage;
-	hitData.weapon = weapon; hitData.weapHealthPerc = weapon ? 1.0f : 0.0f;
+	hitData.hitLocation = hitLocation;
+	hitData.healthDmg = damage;
+	hitData.wpnBaseDmg = damage;
+	hitData.fatigueDmg = fatigueDmg;
+	hitData.limbDmg = limbDmg;
+	hitData.weapon = weapon;
+	hitData.weapHealthPerc = weapon ? 1.0f : 0.0f;
 	NiPoint3* tp = target->GetPos();
-	hitData.impactPos.x = tp->x; hitData.impactPos.y = tp->y; hitData.impactPos.z = tp->z + 50.0f;
-	hitData.impactAngle.z = 1.0f; hitData.flags = flags; hitData.dmgMult = 1.0f; hitData.unk60 = hitLocation;
+	hitData.impactPos.x = tp->x;
+	hitData.impactPos.y = tp->y;
+	hitData.impactPos.z = tp->z + 50.0f;
+	hitData.impactAngle.z = 1.0f;
+	hitData.flags = flags;
+	hitData.dmgMult = 1.0f;
+	hitData.unk60 = hitLocation;
+	return hitData;
+}
 
-	target->baseProcess->CopyHitData(&hitData);
-	target->DamageHealthAndFatigue(damage, 0.0f, attacker);
+//0x8C0460 - triggers crime/combat when player attacks an NPC
+typedef void (__thiscall* AttackAlarm_t)(Actor* victim, void* attacker, UInt32 minorCrime, int unk);
+static AttackAlarm_t AttackAlarm = (AttackAlarm_t)0x8C0460;
+
+static void* g_playerSingleton = (void*)0x11DEA3C;
+
+static void ApplyHit(Actor* target, Actor* attacker, ActorHitData* hitData,
+	float damage, float fatigueDmg, float limbDmg, SInt32 hitLocation,
+	TESObjectWEAP* weapon, bool skipOnHit)
+{
+	target->baseProcess->CopyHitData(hitData);
+	target->DamageHealthAndFatigue(damage, fatigueDmg, attacker);
+	if (limbDmg > 0.0f && hitLocation >= 0 && hitLocation <= 6)
+		target->DamageActorValue(40 + hitLocation, limbDmg, attacker);
+
+	if (!skipOnHit) {
+		//script events: OnHit (0x80) and OnHitWith (0x100)
+		void* targetExtra = GetExtraDataList(target);
+		if (attacker)
+			MarkScriptEvent((TESForm*)attacker, targetExtra, 0x80);
+		if (weapon)
+			MarkScriptEvent((TESForm*)weapon, targetExtra, 0x100);
+
+		//hostility: if player is the attacker, trigger crime/combat AI
+		if (attacker && attacker == *(Actor**)g_playerSingleton)
+			AttackAlarm(target, attacker, 0, 0);
+	}
 
 	if (weapon) {
 		SInt32 bloodLoc = (hitLocation >= 0) ? hitLocation : 0;
@@ -383,6 +418,32 @@ static bool Cmd_FakeHit_Execute(COMMAND_ARGS) {
 		PlaceSkinnedBloodDecal(target, attacker, weapon, bloodLoc);
 		PlayImpactSound(target, weapon, bloodLoc);
 	}
+}
+
+static bool Cmd_FakeHit_Execute(COMMAND_ARGS) {
+	*result = 0;
+	if (!thisObj || !extractArgs) return true;
+
+	UInt8 typeID = *((UInt8*)thisObj + 4);
+	if (!IsActorTypeID(typeID)) return true;
+
+	Actor* attacker = nullptr;
+	float damage = -1.0f;
+	TESForm* weaponForm = nullptr;
+	SInt32 hitLocation = 0;
+	UInt32 flags = 0;
+	UInt32 bSkipOnHit = 0;
+
+	if (!extractArgs(EXTRACT_ARGS_EX, &attacker, &damage, &weaponForm, &hitLocation, &flags, &bSkipOnHit)) return true;
+
+	Actor* target = (Actor*)thisObj;
+	if (!target->baseProcess) return true;
+
+	TESObjectWEAP* weapon = weaponForm ? (TESObjectWEAP*)weaponForm : nullptr;
+	if (damage < 0.0f) damage = weapon ? (float)weapon->attackDmg : 1.0f;
+
+	auto hitData = BuildHitData(target, attacker, weapon, damage, 0.0f, 0.0f, hitLocation, flags);
+	ApplyHit(target, attacker, &hitData, damage, 0.0f, 0.0f, hitLocation, weapon, bSkipOnHit != 0);
 
 	*result = 1;
 	return true;
@@ -392,66 +453,50 @@ static bool Cmd_FakeHitEx_Execute(COMMAND_ARGS) {
 	*result = 0;
 	if (!thisObj || !extractArgs) return true;
 
+	UInt8 typeID = *((UInt8*)thisObj + 4);
+	if (!IsActorTypeID(typeID)) return true;
+
 	Actor* attacker = nullptr;
 	float damage = 0.0f, fatigueDmg = 0.0f, limbDmg = 0.0f;
-	SInt32 hitLocation = -1;
-	UInt32 flags = 0;
+	SInt32 hitLocation = 0;
 	TESForm* weaponForm = nullptr;
+	UInt32 flags = 0;
+	UInt32 bSkipOnHit = 0;
 
-	if (!extractArgs(EXTRACT_ARGS_EX, &attacker, &damage, &fatigueDmg, &limbDmg, &hitLocation, &flags, &weaponForm)) return true;
+	if (!extractArgs(EXTRACT_ARGS_EX, &attacker, &damage, &fatigueDmg, &limbDmg, &weaponForm, &hitLocation, &flags, &bSkipOnHit)) return true;
 
 	Actor* target = (Actor*)thisObj;
-	if (!target->baseProcess || target->baseProcess->processLevel > 1) return true;
-	if (!attacker) return true;
+	if (!target->baseProcess) return true;
 
 	TESObjectWEAP* weapon = weaponForm ? (TESObjectWEAP*)weaponForm : nullptr;
 
-	ActorHitData hitData;
-	memset(&hitData, 0, sizeof(ActorHitData));
-	hitData.source = attacker; hitData.target = target;
-	hitData.weaponAV = weapon ? weapon->weaponSkill : 0;
-	hitData.hitLocation = hitLocation; hitData.healthDmg = damage; hitData.wpnBaseDmg = damage;
-	hitData.fatigueDmg = fatigueDmg; hitData.limbDmg = limbDmg;
-	hitData.weapon = weapon; hitData.weapHealthPerc = weapon ? 1.0f : 0.0f;
-	NiPoint3* tp = target->GetPos();
-	hitData.impactPos.x = tp->x; hitData.impactPos.y = tp->y; hitData.impactPos.z = tp->z + 50.0f;
-	hitData.impactAngle.z = 1.0f; hitData.flags = flags; hitData.dmgMult = 1.0f; hitData.unk60 = hitLocation;
-
-	target->baseProcess->CopyHitData(&hitData);
-	target->DamageHealthAndFatigue(damage, fatigueDmg, attacker);
-
-	if (limbDmg > 0.0f && hitLocation >= 0 && hitLocation <= 6)
-		target->DamageActorValue(40 + hitLocation, limbDmg, attacker);
-
-	if (weapon) {
-		SInt32 bloodLoc = (hitLocation >= 0) ? hitLocation : 0;
-		PlaceBloodEffect(target, attacker, weapon, bloodLoc);
-		PlaceSkinnedBloodDecal(target, attacker, weapon, bloodLoc);
-		PlayImpactSound(target, weapon, bloodLoc);
-	}
+	auto hitData = BuildHitData(target, attacker, weapon, damage, fatigueDmg, limbDmg, hitLocation, flags);
+	ApplyHit(target, attacker, &hitData, damage, fatigueDmg, limbDmg, hitLocation, weapon, bSkipOnHit != 0);
 
 	*result = 1;
 	return true;
 }
 
-static ParamInfo kParams_FakeHit[5] = {
-	{"attacker", kParamType_ObjectRef, 0}, {"damage", kParamType_Float, 1},
-	{"weapon", kParamType_ObjectID, 1}, {"hitLocation", kParamType_Integer, 1}, {"flags", kParamType_Integer, 1}
+static ParamInfo kParams_FakeHit[6] = {
+	{"attacker", kParamType_ObjectRef, 1}, {"damage", kParamType_Float, 1},
+	{"weapon", kParamType_ObjectID, 1}, {"hitLocation", kParamType_Integer, 1},
+	{"flags", kParamType_Integer, 1}, {"bSkipOnHit", kParamType_Integer, 1}
 };
 
-static ParamInfo kParams_FakeHitEx[7] = {
-	{"attacker", kParamType_ObjectRef, 0}, {"damage", kParamType_Float, 0},
+static ParamInfo kParams_FakeHitEx[8] = {
+	{"attacker", kParamType_ObjectRef, 1}, {"damage", kParamType_Float, 1},
 	{"fatigueDamage", kParamType_Float, 1}, {"limbDamage", kParamType_Float, 1},
-	{"hitLocation", kParamType_Integer, 1}, {"flags", kParamType_Integer, 1}, {"weapon", kParamType_ObjectID, 1}
+	{"weapon", kParamType_ObjectID, 1}, {"hitLocation", kParamType_Integer, 1},
+	{"flags", kParamType_Integer, 1}, {"bSkipOnHit", kParamType_Integer, 1}
 };
 
 static CommandInfo kCommandInfo_FakeHit = {
-	"FakeHit", "", 0, "Simulates a hit on an actor", 1, 5, kParams_FakeHit,
+	"FakeHit", "", 0, "Simulates a hit on an actor with OnHit events. bSkipOnHit=1 to skip events.", 1, 6, kParams_FakeHit,
 	Cmd_FakeHit_Execute, nullptr, nullptr, 0
 };
 
 static CommandInfo kCommandInfo_FakeHitEx = {
-	"FakeHitEx", "", 0, "Extended FakeHit with fatigue and limb damage", 1, 7, kParams_FakeHitEx,
+	"FakeHitEx", "", 0, "Extended FakeHit with fatigue/limb damage. bSkipOnHit=1 to skip events.", 1, 8, kParams_FakeHitEx,
 	Cmd_FakeHitEx_Execute, nullptr, nullptr, 0
 };
 
