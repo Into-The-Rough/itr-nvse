@@ -304,7 +304,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 
 			case NVSEMessagingInterface::kMessage_PostPostLoad:
-				DCH_InstallCameraHooks(); //always install - used by CameraOverride and DialogueCamera
+				DCH_InstallCameraHooks(); //always install - hooks check bDialogueCamera at runtime
 				InitVATSSpeechFixWithCompatibility();
 				AshPileNames_Init();
 				if (Settings::bVATSExtender)
