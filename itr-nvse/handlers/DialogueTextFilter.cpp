@@ -192,9 +192,25 @@ static bool BuildVoicePath(char* outPath, size_t outSize,
 
 	if (responseNum == 0) responseNum = 1;
 
+	//engine truncates quest+topic EDIDs if combined length > 25
+	//quest gets max 10, topic gets max 15, topic gets leftover from quest
+	char questBuf[264], topicBuf[264];
+	strncpy_s(questBuf, questID, _TRUNCATE);
+	strncpy_s(topicBuf, topicID, _TRUNCATE);
+	size_t qLen = strlen(questBuf);
+	size_t tLen = strlen(topicBuf);
+	if (qLen + tLen > 25) {
+		int topicMax = 15;
+		if (qLen <= 10)
+			topicMax = (int)(10 - qLen) + 15;
+		else
+			questBuf[10] = '\0';
+		topicBuf[topicMax] = '\0';
+	}
+
 	sprintf_s(outPath, outSize,
 	          "Data\\Sound\\Voice\\%s\\%s\\%s_%s_%08X_%u.ogg",
-	          modName, voiceTypeID, questID, topicID, baseFormID, responseNum);
+	          modName, voiceTypeID, questBuf, topicBuf, baseFormID, responseNum);
 
 	return true;
 }
