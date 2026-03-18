@@ -1,5 +1,6 @@
 #include "nvse/PluginAPI.h"
 #include "ITR.h"
+#include "commands/CommandTable.h"
 
 #define ITR_VERSION 100
 
@@ -21,6 +22,7 @@ __declspec(dllexport) bool NVSEPlugin_Query(const NVSEInterface* nvse, PluginInf
 
 __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 {
+	RegisterAllCommands((void*)nvse);
 	if (nvse->isEditor) return true;
 	return ITR::Init((void*)nvse);
 }
