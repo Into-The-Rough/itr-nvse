@@ -1,4 +1,6 @@
 #pragma once
 
-void VATSSpeechFix_Init(bool enabled);
-void VATSSpeechFix_SetEnabled(bool enabled);
+namespace VATSSpeechFix {
+	void Init(bool enabled);
+	void SetEnabled(bool enabled);
+}

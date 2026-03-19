@@ -1,3 +1,5 @@
 #pragma once
 
-void NavMeshInfoCrashFix_Init();
+namespace NavMeshInfoCrashFix {
+	void Init();
+}

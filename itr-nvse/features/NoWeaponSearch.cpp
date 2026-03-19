@@ -66,9 +66,9 @@ namespace NoWeaponSearch
 			return Original(combatState);
 
 		if (Settings::bNPCAntidoteUse)
-			NPCAntidoteUse_Check(combatState);
+			NPCAntidoteUse::Check(combatState);
 		if (Settings::bNPCDoctorsBagUse)
-			NPCDoctorsBagUse_Check(combatState);
+			NPCDoctorsBagUse::Check(combatState);
 
 		bool isDisabled = false;
 		{

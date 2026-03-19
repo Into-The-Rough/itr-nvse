@@ -1,4 +1,6 @@
 #pragma once
 
-void NPCAntidoteUse_Init(float cureTimer, float healthThreshold);
-void NPCAntidoteUse_Check(void* combatState);
+namespace NPCAntidoteUse {
+	void Init(float cureTimer, float healthThreshold);
+	void Check(void* combatState);
+}

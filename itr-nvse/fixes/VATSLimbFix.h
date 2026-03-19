@@ -1,3 +1,5 @@
 #pragma once
 
-void VATSLimbFix_Init();
+namespace VATSLimbFix {
+	void Init();
+}

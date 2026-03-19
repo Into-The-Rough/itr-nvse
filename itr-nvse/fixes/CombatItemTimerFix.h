@@ -1,3 +1,5 @@
 #pragma once
 
-void CombatItemTimerFix_Init();
+namespace CombatItemTimerFix {
+	void Init();
+}

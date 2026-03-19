@@ -1,4 +1,6 @@
 #pragma once
 
-void KillActorXPFix_Init(bool enabled);
-void KillActorXPFix_SetEnabled(bool enabled);
+namespace KillActorXPFix {
+	void Init(bool enabled);
+	void SetEnabled(bool enabled);
+}

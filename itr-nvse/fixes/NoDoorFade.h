@@ -1,4 +1,6 @@
 #pragma once
 
-void NoDoorFade_Init(bool enabled);
-void NoDoorFade_SetEnabled(bool enabled);
+namespace NoDoorFade {
+	void Init(bool enabled);
+	void SetEnabled(bool enabled);
+}

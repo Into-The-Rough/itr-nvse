@@ -110,12 +110,3 @@ namespace CompanionNoInfamy
 	}
 }
 
-void CompanionNoInfamy_Init(bool enabled)
-{
-	CompanionNoInfamy::Init(enabled);
-}
-
-void CompanionNoInfamy_SetEnabled(bool enabled)
-{
-	CompanionNoInfamy::SetEnabled(enabled);
-}

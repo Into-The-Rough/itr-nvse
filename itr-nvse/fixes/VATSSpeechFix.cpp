@@ -166,12 +166,3 @@ namespace VATSSpeechFix
 	}
 }
 
-void VATSSpeechFix_Init(bool enabled)
-{
-	VATSSpeechFix::Init(enabled);
-}
-
-void VATSSpeechFix_SetEnabled(bool enabled)
-{
-	VATSSpeechFix::SetEnabled(enabled);
-}

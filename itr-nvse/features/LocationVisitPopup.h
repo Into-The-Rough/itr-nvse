@@ -1,5 +1,7 @@
 #pragma once
 
-void LocationVisitPopup_Init(int cooldownSeconds, bool disableSound);
-void LocationVisitPopup_UpdateSettings(int cooldownSeconds, bool disableSound);
-void LocationVisitPopup_Update();
+namespace LocationVisitPopup {
+	void Init(int cooldownSeconds, bool disableSound);
+	void UpdateSettings(int cooldownSeconds, bool disableSound);
+	void Update();
+}

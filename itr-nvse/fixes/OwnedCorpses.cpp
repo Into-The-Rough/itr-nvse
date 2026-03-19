@@ -156,12 +156,3 @@ namespace OwnedCorpses
 	}
 }
 
-void OwnedCorpses_Init(bool enabled)
-{
-	OwnedCorpses::Init(enabled);
-}
-
-void OwnedCorpses_SetEnabled(bool enabled)
-{
-	OwnedCorpses::SetEnabled(enabled);
-}

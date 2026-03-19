@@ -1,4 +1,6 @@
 #pragma once
 
-void FriendlyFire_Init(bool enabled);
-void FriendlyFire_SetEnabled(bool enabled);
+namespace FriendlyFire {
+	void Init(bool enabled);
+	void SetEnabled(bool enabled);
+}

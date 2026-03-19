@@ -113,12 +113,3 @@ namespace AshPileNames
 	}
 }
 
-void AshPileNames_Init()
-{
-	AshPileNames::Init();
-}
-
-void AshPileNames_Update()
-{
-	AshPileNames::Update();
-}

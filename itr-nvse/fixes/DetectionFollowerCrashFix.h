@@ -1,3 +1,5 @@
 #pragma once
 
-void DetectionFollowerCrashFix_Init();
+namespace DetectionFollowerCrashFix {
+	void Init();
+}

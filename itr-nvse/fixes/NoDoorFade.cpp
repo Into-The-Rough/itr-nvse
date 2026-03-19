@@ -50,12 +50,3 @@ namespace NoDoorFade
 	}
 }
 
-void NoDoorFade_Init(bool enabled)
-{
-	NoDoorFade::Init(enabled);
-}
-
-void NoDoorFade_SetEnabled(bool enabled)
-{
-	NoDoorFade::SetEnabled(enabled);
-}

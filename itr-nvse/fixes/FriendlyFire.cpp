@@ -73,12 +73,3 @@ namespace FriendlyFire
 	}
 }
 
-void FriendlyFire_Init(bool enabled)
-{
-	FriendlyFire::Init(enabled);
-}
-
-void FriendlyFire_SetEnabled(bool enabled)
-{
-	FriendlyFire::SetEnabled(enabled);
-}

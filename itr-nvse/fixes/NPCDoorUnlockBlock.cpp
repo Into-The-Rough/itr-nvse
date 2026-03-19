@@ -54,20 +54,10 @@ namespace NPCDoorUnlockBlock
 	}
 
 	//prologue: push ebp; mov ebp, esp = 5 bytes
-	void Init()
+	void Init(int level)
 	{
 		if (!s_detour.WriteRelJump(0x518F00, CanActorIgnoreLock_Hook, 5)) //CanActorIgnoreLock
 			Log("ERROR: NPCDoorUnlockBlock hook failed");
+		g_blockLevel = level;
 	}
-}
-
-void NPCDoorUnlockBlock_Init(int level)
-{
-	NPCDoorUnlockBlock::Init();
-	NPCDoorUnlockBlock::SetLevel(level);
-}
-
-void NPCDoorUnlockBlock_SetLevel(int level)
-{
-	NPCDoorUnlockBlock::SetLevel(level);
 }

@@ -87,7 +87,3 @@ namespace VATSProjectileFix
 	}
 }
 
-void VATSProjectileFix_Init()
-{
-	VATSProjectileFix::Init();
-}
