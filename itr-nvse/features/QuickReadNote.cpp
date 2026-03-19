@@ -508,7 +508,7 @@ namespace QuickReadNote
 
 	const char* __fastcall ProcessNoteAdded(void* setting, BGSNote* note) {
 		OnNoteAddedCallback(note);
-		return ((const char*(__thiscall*)(void*))s_originalNoteAddedCall)(setting);
+		return ThisCall<const char*>(s_originalNoteAddedCall, setting);
 	}
 
 	__declspec(naked) void OnNoteAddedHook() {

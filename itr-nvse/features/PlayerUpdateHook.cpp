@@ -3,6 +3,7 @@
 #include "PlayerUpdateHook.h"
 #include "internal/SafeWrite.h"
 #include "internal/EngineFunctions.h"
+#include "internal/CallTemplates.h"
 
 #include "internal/globals.h"
 
@@ -44,7 +45,7 @@ namespace PlayerUpdateHook
 	}
 
 	void __fastcall PlayerUpdate_Hook(void* player, void* edx, float timeDelta) {
-		((void(__thiscall*)(void*, float))g_originalCallTarget)(player, timeDelta);
+		ThisCall<void>(g_originalCallTarget, player, timeDelta);
 
 		void* osGlobals = *(void**)0x11DEA0C;
 		void* inputGlobals = *(void**)0x11F35CC;

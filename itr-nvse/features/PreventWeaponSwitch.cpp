@@ -6,6 +6,7 @@
 #include <cstring>
 #include "internal/Detours.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/CallTemplates.h"
 #include "internal/EngineFunctions.h"
 
 #include "internal/globals.h"
@@ -113,7 +114,7 @@ inline bool IsActorRef(TESObjectREFR* ref) {
 	if (!ref) return false;
 	UInt32 vtable = *(UInt32*)ref;
 	UInt32 isActorFn = *(UInt32*)(vtable + 0x100);
-	return ((bool (__thiscall*)(TESObjectREFR*))isActorFn)(ref);
+	return ThisCall<bool>(isActorFn, ref);
 }
 
 static bool Cmd_SetPreventWeaponSwitch_Execute(COMMAND_ARGS)

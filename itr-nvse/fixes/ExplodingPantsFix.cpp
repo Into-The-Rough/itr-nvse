@@ -3,6 +3,7 @@
 
 #include "ExplodingPantsFix.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/CallTemplates.h"
 
 #include "internal/globals.h"
 
@@ -12,7 +13,7 @@ namespace ExplodingPantsFix
 
 	bool __fastcall Hook_IsAltTrigger(void* projBase, void* projectileRef) {
 		if (!projBase) return false;
-		if (((bool(__thiscall*)(void*))0x975300)(projBase)) //BGSProjectile::IsAltTrigger
+		if (ThisCall<bool>(0x975300, projBase)) //BGSProjectile::IsAltTrigger
 			return true;
 		//flag 0x400 at offset 0xC8
 		if (projectileRef && (*(uint32_t*)((uint8_t*)projectileRef + 0xC8) & 0x400))
