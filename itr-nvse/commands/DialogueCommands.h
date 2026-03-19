@@ -1,4 +1,6 @@
 #pragma once
 
-void DialogueCommands_Init(void* nvse);
-void DialogueCommands_RegisterCommands(void* nvse);
+namespace DialogueCommands {
+	void Init(void* nvse);
+	void RegisterCommands(void* nvse);
+}

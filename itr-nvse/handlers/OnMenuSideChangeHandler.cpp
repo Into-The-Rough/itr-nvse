@@ -31,7 +31,8 @@ static void DispatchSideChangeEvent(UInt32 menuID, UInt32 oldSide, UInt32 newSid
             (int)menuID, (int)oldSide, (int)newSide);
 }
 
-void OMSCH_Update() {
+namespace OnMenuSideChangeHandler {
+void Update() {
     if (!g_eventManagerInterface) return;
 
     void* contMenu = *(void**)0x11D93F8;
@@ -67,8 +68,9 @@ void OMSCH_Update() {
     }
 }
 
-bool OMSCH_Init(void* nvseInterface) {
+bool Init(void* nvseInterface) {
     NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
     if (nvse->isEditor) return false;
     return true;
+}
 }

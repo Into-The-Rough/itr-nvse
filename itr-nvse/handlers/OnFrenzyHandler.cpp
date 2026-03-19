@@ -38,7 +38,8 @@ static void __cdecl Hook_LimbCondition_HandleChange(
         DispatchFrenzyEvent(actor);
 }
 
-bool OFH_Init(void* nvseInterface) {
+namespace OnFrenzyHandler {
+bool Init(void* nvseInterface) {
     NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
     if (nvse->isEditor) return false;
 
@@ -47,4 +48,5 @@ bool OFH_Init(void* nvseInterface) {
         return false;
 
     return true;
+}
 }

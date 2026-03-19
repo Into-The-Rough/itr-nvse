@@ -87,7 +87,8 @@ bool Cmd_EnableKeyEx_Execute(COMMAND_ARGS)
 	return true;
 }
 
-bool OKSH_Init(void* nvseInterface)
+namespace OnKeyStateHandler {
+bool Init(void* nvseInterface)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
 	if (nvse->isEditor) return false;
@@ -102,9 +103,10 @@ bool OKSH_Init(void* nvseInterface)
 	return true;
 }
 
-void OKSH_RegisterCommands(void* nvsePtr)
+void RegisterCommands(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_DisableKeyEx);
 	nvse->RegisterCommand(&kCommandInfo_EnableKeyEx);
+}
 }

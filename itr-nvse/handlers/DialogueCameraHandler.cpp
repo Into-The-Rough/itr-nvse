@@ -854,7 +854,7 @@ void Update() {
 	ApplyCameraNoise();
 }
 
-bool Init(NVSEConsoleInterface* console) {
+static bool InitConsole(NVSEConsoleInterface* console) {
 	g_console = console;
 	return true;
 }
@@ -867,26 +867,20 @@ bool InstallCameraHooks() {
 
 }
 
-bool DCH_Init(void* nvse) {
+namespace DialogueCameraHandler {
+bool Init(void* nvse) {
 	NVSEInterface* nvseIntfc = (NVSEInterface*)nvse;
 	NVSEConsoleInterface* console = (NVSEConsoleInterface*)nvseIntfc->QueryInterface(kInterface_Console);
-	return DialogueCameraHandler::Init(console);
+	return InitConsole(console);
 }
 
-void DCH_Update() {
-	DialogueCameraHandler::Update();
-}
-
-bool DCH_InstallCameraHooks() {
-	return DialogueCameraHandler::InstallCameraHooks();
-}
-
-void DCH_SetExternalRotation(const Mat3& rot) {
+void SetExternalRotation(const Mat3& rot) {
 	CameraHooks::SetExternalRotation(rot);
 }
 
-void DCH_ClearExternalRotation() {
+void ClearExternalRotation() {
 	CameraHooks::ClearExternalRotation();
+}
 }
 
 static ParamInfo kParams_SetDialogueCameraDolly[3] = {
@@ -948,9 +942,11 @@ bool Cmd_SetDialogueCameraShake_Execute(COMMAND_ARGS)
 	return true;
 }
 
-void DCH_RegisterCommands(void* nvsePtr)
+namespace DialogueCameraHandler {
+void RegisterCommands(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_SetDialogueCameraDolly);
 	nvse->RegisterCommand(&kCommandInfo_SetDialogueCameraShake);
+}
 }

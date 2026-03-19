@@ -8,5 +8,7 @@ enum CornerMessageMetaType
     kCornerMeta_ReputationChange = 3,
 };
 
-bool CMH_Init(void* nvseInterface);
-void CMH_TrackMessageMeta(const char* text, float displayTime, int metaType);
+namespace CornerMessageHandler {
+	bool Init(void* nvseInterface);
+	void TrackMessageMeta(const char* text, float displayTime, int metaType);
+}

@@ -35,7 +35,3 @@ namespace ExplodingPantsFix
 	}
 }
 
-void ExplodingPantsFix_Init()
-{
-	ExplodingPantsFix::Init();
-}

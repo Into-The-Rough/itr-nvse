@@ -21,7 +21,7 @@ namespace CameraOverride
 		g_overrideRot = enable;
 		if (!enable) {
 			g_rotation.Identity();
-			DCH_ClearExternalRotation();
+			DialogueCameraHandler::ClearExternalRotation();
 			return;
 		}
 
@@ -35,7 +35,7 @@ namespace CameraOverride
 			default: return;
 		}
 		g_rotation = g_rotation * rot;
-		DCH_SetExternalRotation(g_rotation);
+		DialogueCameraHandler::SetExternalRotation(g_rotation);
 	}
 
 	void ResetRotation() {
@@ -91,13 +91,15 @@ bool Cmd_SetCameraAngle_Execute(COMMAND_ARGS)
 	return true;
 }
 
-void CameraOverride_Init()
+namespace CameraOverride {
+void Init()
 {
-	CameraOverride::g_rotation.Identity();
+	g_rotation.Identity();
 }
 
-void CameraOverride_RegisterCommands(void* nvse)
+void RegisterCommands(void* nvse)
 {
 	NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
 	nvseIntf->RegisterCommand(&kCommandInfo_SetCameraAngle);
+}
 }

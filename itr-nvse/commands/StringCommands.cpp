@@ -107,7 +107,8 @@ bool Cmd_Sv_TrimStr_Execute(COMMAND_ARGS)
 	return true;
 }
 
-bool StringCommands_Init(void* nvsePtr)
+namespace StringCommands {
+bool Init(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 
@@ -130,10 +131,11 @@ bool StringCommands_Init(void* nvsePtr)
 	return true;
 }
 
-void StringCommands_RegisterCommands(void* nvsePtr)
+void RegisterCommands(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterTypedCommand(&kCommandInfo_Sv_TrimStr, kRetnType_String);
 	nvse->RegisterTypedCommand(&kCommandInfo_Sv_Join, kRetnType_String);
 	nvse->RegisterTypedCommand(&kCommandInfo_Sv_Reverse, kRetnType_String);
+}
 }

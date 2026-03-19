@@ -30,70 +30,70 @@ void RegisterAllCommands(void* nvsePtr)
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 
 	/*4008*/ nvse->SetOpcodeBase(0x4008);
-	OKSH_RegisterCommands(nvse);                   //DisableKeyEx, EnableKeyEx
+	OnKeyStateHandler::RegisterCommands(nvse);                   //DisableKeyEx, EnableKeyEx
 
 	/*4017*/ nvse->SetOpcodeBase(0x4017);
-	FDH_RegisterCommands(nvse);                    //SetFallDamageMult, GetFallDamageMult, ClearFallDamageMult
+	FallDamageHandler::RegisterCommands(nvse);                    //SetFallDamageMult, GetFallDamageMult, ClearFallDamageMult
 
 	/*401A*/ nvse->SetOpcodeBase(0x401A);
-	FakeHit_RegisterCommands(nvse);                //FakeHit, FakeHitEx
+	FakeHitHandler::RegisterCommands(nvse);                //FakeHit, FakeHitEx
 
 	/*401C*/ nvse->SetOpcodeBase(0x401C);
-	ImperativeCommands_RegisterCommands(nvse);     //IsRadioPlaying
+	ImperativeCommands::RegisterCommands(nvse);     //IsRadioPlaying
 
 	/*401D*/ nvse->SetOpcodeBase(0x401D);
-	CameraOverride_RegisterCommands(nvse);         //SetCameraAngle
+	CameraOverride::RegisterCommands(nvse);         //SetCameraAngle
 
 	/*401E*/ nvse->SetOpcodeBase(0x401E);
-	StringCommands_RegisterCommands(nvse);         //Sv_TrimStr, Sv_Join, Sv_Reverse
+	StringCommands::RegisterCommands(nvse);         //Sv_TrimStr, Sv_Join, Sv_Reverse
 
 	/*4021*/ nvse->SetOpcodeBase(0x4021);
-	ImperativeCommands_RegisterCommands2(nvse);    //GetRefsSortedByDistance..GetTargetInitialLocation
+	ImperativeCommands::RegisterCommands2(nvse);    //GetRefsSortedByDistance..GetTargetInitialLocation
 
 	/*402A*/ nvse->SetOpcodeBase(0x402A);
-	NoWeaponSearch_RegisterCommands(nvse);         //SetNoWeaponSearch, GetNoWeaponSearch
+	NoWeaponSearch::RegisterCommands(nvse);         //SetNoWeaponSearch, GetNoWeaponSearch
 
 	/*402C*/ nvse->SetOpcodeBase(0x402C);
-	PreventWeaponSwitch_RegisterCommands(nvse);    //SetPreventWeaponSwitch, GetPreventWeaponSwitch
+	PreventWeaponSwitch::RegisterCommands(nvse);    //SetPreventWeaponSwitch, GetPreventWeaponSwitch
 
 	/*402E*/ nvse->SetOpcodeBase(0x402E);
-	RadioCommands_RegisterCommands(nvse);          //GetPlayingRadioTrack, GetPlayingRadioTrackFileName
+	RadioCommands::RegisterCommands(nvse);          //GetPlayingRadioTrack, GetPlayingRadioTrackFileName
 
 	/*4030*/ nvse->SetOpcodeBase(0x4030);
-	ImperativeCommands_RegisterCommands3(nvse);    //UseAidItem
+	ImperativeCommands::RegisterCommands3(nvse);    //UseAidItem
 
 	/*4031*/ nvse->SetOpcodeBase(0x4031);
-	RadioCommands_RegisterCommands2(nvse);         //GetPlayingRadioText
+	RadioCommands::RegisterCommands2(nvse);         //GetPlayingRadioText
 
 	/*4034*/ nvse->SetOpcodeBase(0x4034);
-	ChallengeCommands_RegisterCommands(nvse);      //ModChallenge
+	ChallengeCommands::RegisterCommands(nvse);      //ModChallenge
 
 	/*4035*/ nvse->SetOpcodeBase(0x4035);
-	ImperativeCommands_RegisterCommands4(nvse);    //SetCreatureCombatSkill, ResurrectAll, ForceReload
+	ImperativeCommands::RegisterCommands4(nvse);    //SetCreatureCombatSkill, ResurrectAll, ForceReload
 
 	/*4038*/ nvse->SetOpcodeBase(0x4038);
-	DialogueCommands_RegisterCommands(nvse);       //GetDialogueInfoFlags, SetDialogueInfoFlags, GetDisplayedDialogueInfos
+	DialogueCommands::RegisterCommands(nvse);       //GetDialogueInfoFlags, SetDialogueInfoFlags, GetDisplayedDialogueInfos
 
 	/*403B*/ nvse->SetOpcodeBase(0x403B);
-	ImperativeCommands_RegisterCommands5(nvse);    //SetRaceAlt
+	ImperativeCommands::RegisterCommands5(nvse);    //SetRaceAlt
 
 	/*403C*/ nvse->SetOpcodeBase(0x403C);
-	ForceSayCommand_RegisterCommands(nvse);        //ForceSay
+	ForceSayCommand::RegisterCommands(nvse);        //ForceSay
 
 	/*4050*/ nvse->SetOpcodeBase(0x4050);
-	WeaponEmissiveCommands_RegisterCommands(nvse); //SetWeaponEmissiveColor, ClearWeaponEmissiveColor
+	WeaponEmissiveCommands::RegisterCommands(nvse); //SetWeaponEmissiveColor, ClearWeaponEmissiveColor
 
 	/*4052*/ nvse->SetOpcodeBase(0x4052);
-	UICommands_RegisterCommands(nvse);             //SetUIAlphaMap
+	UICommands::RegisterCommands(nvse);             //SetUIAlphaMap
 
 	/*4053*/ nvse->SetOpcodeBase(0x4053);
-	ActorValueCommands_RegisterCommands(nvse);     //DamageActorValueAlt
+	ActorValueCommands::RegisterCommands(nvse);     //DamageActorValueAlt
 
 	/*4054*/ nvse->SetOpcodeBase(0x4054);
-	IsSayingCommand_RegisterCommands(nvse);        //IsSaying
+	IsSayingCommand::RegisterCommands(nvse);        //IsSaying
 
 	/*4055*/ nvse->SetOpcodeBase(0x4055);
-	DCH_RegisterCommands(nvse);                    //SetDialogueCameraDolly, SetDialogueCameraShake
+	DialogueCameraHandler::RegisterCommands(nvse);                    //SetDialogueCameraDolly, SetDialogueCameraShake
 
 	Log("All commands registered (0x4008-0x4055)");
 }

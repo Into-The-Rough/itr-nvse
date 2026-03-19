@@ -1,4 +1,6 @@
 #pragma once
 
-bool OCH_Init(void* nvseInterface);
-void OCH_Update();
+namespace OnConsoleHandler {
+	bool Init(void* nvseInterface);
+	void Update();
+}

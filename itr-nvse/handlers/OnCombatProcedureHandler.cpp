@@ -114,7 +114,8 @@ static void __cdecl QueueCombatProcedureEvent(void* combatController, void* proc
     }
 }
 
-void OCPH_Update()
+namespace OnCombatProcedureHandler {
+void Update()
 {
     if (OnCombatProcedureHandler::g_stateLockInit != 2) return;
 
@@ -139,6 +140,7 @@ void OCPH_Update()
                 reinterpret_cast<TESObjectREFR*>(actor),
                 actor, (int)evt.procType, evt.isActionProcedure ? 1 : 0);
     }
+}
 }
 
 static __declspec(naked) void Hook_SetActionProcedure()
@@ -175,7 +177,8 @@ static __declspec(naked) void Hook_SetMovementProcedure()
     }
 }
 
-bool OCPH_Init(void* nvseInterface)
+namespace OnCombatProcedureHandler {
+bool Init(void* nvseInterface)
 {
     NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
     if (nvse->isEditor) return false;
@@ -206,4 +209,5 @@ bool OCPH_Init(void* nvseInterface)
     }
 
     return true;
+}
 }

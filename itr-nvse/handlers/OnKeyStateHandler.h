@@ -1,4 +1,6 @@
 #pragma once
 
-bool OKSH_Init(void* nvseInterface);
-void OKSH_RegisterCommands(void* nvse);
+namespace OnKeyStateHandler {
+	bool Init(void* nvseInterface);
+	void RegisterCommands(void* nvse);
+}

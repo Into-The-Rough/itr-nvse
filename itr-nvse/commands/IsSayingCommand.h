@@ -1,3 +1,5 @@
 #pragma once
 
-void IsSayingCommand_RegisterCommands(void* nvse);
+namespace IsSayingCommand {
+	void RegisterCommands(void* nvse);
+}
