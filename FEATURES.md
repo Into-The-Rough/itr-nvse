@@ -66,7 +66,7 @@
 - SetOnEntryPointEventHandler - fires when perk entry points execute
 - SetOnSoundPlayedEventHandler - fires on any sound playback
 - SetOnSoundCompletedEventHandler - fires when tracked voice sounds complete
-- SetOnActorLandedEventHandler - fires when actor lands, with pre-clear fall time
+- SetOnActorLandedEventHandler - fires when actor lands, with last sampled airborne fall time (approximate on short falls)
 - SetOnJumpStartEventHandler - fires when actor jump starts
 - SetCornerMessageHandler - fires on HUD corner message
 - SetOnDialogueTextEventHandler - fires on dialogue text display
