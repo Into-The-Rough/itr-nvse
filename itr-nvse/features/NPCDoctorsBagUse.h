@@ -1,4 +1,6 @@
 #pragma once
 
-void NPCDoctorsBagUse_Init(float useTimer);
-void NPCDoctorsBagUse_Check(void* combatState);
+namespace NPCDoctorsBagUse {
+	void Init(float useTimer);
+	void Check(void* combatState);
+}

@@ -150,7 +150,3 @@ namespace VATSExtender
 	}
 }
 
-void VATSExtender_Init()
-{
-	VATSExtender::Init();
-}

@@ -1,3 +1,5 @@
 #pragma once
 
-void ArmorDTDRFix_Init();
+namespace ArmorDTDRFix {
+	void Init();
+}

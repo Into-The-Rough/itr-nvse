@@ -171,6 +171,12 @@ namespace LocationVisitPopup
 			cooldownSeconds, disableSound ? "off" : "on");
 	}
 
+	void UpdateSettings(int cooldownSeconds, bool disableSound)
+	{
+		g_cooldownMs = cooldownSeconds * 1000;
+		g_disableSound = disableSound;
+	}
+
 	void Update()
 	{
 		if (!s_lockInitialized || GetCurrentThreadId() != g_mainThreadId)
@@ -185,20 +191,4 @@ namespace LocationVisitPopup
 		for (const auto& popup : pending)
 			ShowPopup(popup.name);
 	}
-}
-
-void LocationVisitPopup_Init(int cooldownSeconds, bool disableSound)
-{
-	LocationVisitPopup::Init(cooldownSeconds, disableSound);
-}
-
-void LocationVisitPopup_UpdateSettings(int cooldownSeconds, bool disableSound)
-{
-	LocationVisitPopup::g_cooldownMs = cooldownSeconds * 1000;
-	LocationVisitPopup::g_disableSound = disableSound;
-}
-
-void LocationVisitPopup_Update()
-{
-	LocationVisitPopup::Update();
 }

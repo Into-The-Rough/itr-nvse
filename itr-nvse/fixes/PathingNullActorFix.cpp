@@ -34,7 +34,3 @@ namespace PathingNullActorFix
 	}
 }
 
-void PathingNullActorFix_Init()
-{
-	PathingNullActorFix::Init();
-}

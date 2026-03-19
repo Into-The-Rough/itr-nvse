@@ -41,7 +41,3 @@ namespace InitHavokCrashFix
 	}
 }
 
-void InitHavokCrashFix_Init()
-{
-	InitHavokCrashFix::Init();
-}

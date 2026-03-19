@@ -90,12 +90,3 @@ namespace OwnedBeds
 	}
 }
 
-void OwnedBeds_Init(bool enabled)
-{
-	OwnedBeds::Init(enabled);
-}
-
-void OwnedBeds_SetEnabled(bool enabled)
-{
-	OwnedBeds::SetEnabled(enabled);
-}

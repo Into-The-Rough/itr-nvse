@@ -52,6 +52,13 @@ namespace NPCAntidoteUse
 		return false;
 	}
 
+	void Init(float cureTimer, float healthThreshold)
+	{
+		g_cooldown = cureTimer;
+		g_healthThreshold = healthThreshold;
+		g_enabled = true;
+	}
+
 	void Check(void* combatState)
 	{
 		if (!g_enabled) return;
@@ -71,16 +78,4 @@ namespace NPCAntidoteUse
 
 		CombatItemUse::UseItem(actor, item);
 	}
-}
-
-void NPCAntidoteUse_Init(float cureTimer, float healthThreshold)
-{
-	NPCAntidoteUse::g_cooldown = cureTimer;
-	NPCAntidoteUse::g_healthThreshold = healthThreshold;
-	NPCAntidoteUse::g_enabled = true;
-}
-
-void NPCAntidoteUse_Check(void* combatState)
-{
-	NPCAntidoteUse::Check(combatState);
 }

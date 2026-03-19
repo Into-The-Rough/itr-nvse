@@ -78,12 +78,3 @@ namespace CompanionWeightlessOverencumberedFix
 	}
 }
 
-void CompanionWeightlessOverencumberedFix_Init(bool enabled)
-{
-	CompanionWeightlessOverencumberedFix::Init(enabled);
-}
-
-void CompanionWeightlessOverencumberedFix_SetEnabled(bool enabled)
-{
-	CompanionWeightlessOverencumberedFix::SetEnabled(enabled);
-}

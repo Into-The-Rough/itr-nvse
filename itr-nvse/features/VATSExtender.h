@@ -1,3 +1,5 @@
 #pragma once
 
-void VATSExtender_Init();
+namespace VATSExtender {
+	void Init();
+}

@@ -58,12 +58,3 @@ namespace KillActorXPFix
 	}
 }
 
-void KillActorXPFix_Init(bool enabled)
-{
-	KillActorXPFix::Init(enabled);
-}
-
-void KillActorXPFix_SetEnabled(bool enabled)
-{
-	KillActorXPFix::SetEnabled(enabled);
-}
