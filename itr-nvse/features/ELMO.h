@@ -1,3 +1,5 @@
 #pragma once
 
-void ELMO_Init(bool suppressObjectives, bool suppressReputation);
+namespace ELMO {
+	void Init(bool suppressObjectives, bool suppressReputation);
+}

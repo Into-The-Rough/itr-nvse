@@ -237,8 +237,10 @@ bool Cmd_ForceSay_Execute(COMMAND_ARGS)
 	return true;
 }
 
-void ForceSayCommand_RegisterCommands(void* nvsePtr)
+namespace ForceSayCommand {
+void RegisterCommands(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_ForceSay);
+}
 }

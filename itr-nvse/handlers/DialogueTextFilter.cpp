@@ -265,8 +265,10 @@ static bool IsValidFormPointer(void* form) {
 	}
 }
 
-void DTF_Suppress(bool suppress) {
-	DialogueTextFilter::g_suppressed = suppress;
+namespace DialogueTextFilter {
+void Suppress(bool suppress) {
+	g_suppressed = suppress;
+}
 }
 
 //check if this RunResult call is a false positive from a script chain during greeting evaluation.
@@ -505,7 +507,8 @@ static __declspec(naked) void SpeakSoundHook() {
 	}
 }
 
-void DTF_Update()
+namespace DialogueTextFilter {
+void Update()
 {
 	EnsureStateLockInitialized();
 	if (g_dtfStateLockInit != 2) return;
@@ -699,7 +702,7 @@ void DTF_Update()
 	}
 }
 
-bool DTF_Init(void* nvseInterface) {
+bool Init(void* nvseInterface) {
 	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
 	if (nvse->isEditor) return false;
 
@@ -727,4 +730,5 @@ bool DTF_Init(void* nvseInterface) {
 	DialogueTextFilter::g_hookInstalled = true;
 
 	return true;
+}
 }

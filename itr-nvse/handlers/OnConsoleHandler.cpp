@@ -8,7 +8,8 @@
 
 static bool g_lastVisible = false;
 
-void OCH_Update()
+namespace OnConsoleHandler {
+void Update()
 {
 	//MenuConsole::Instance(1) at 0x71B160
 	void* console = CdeclCall<void*>(0x71B160, 1);
@@ -30,9 +31,10 @@ void OCH_Update()
 	}
 }
 
-bool OCH_Init(void* nvseInterface)
+bool Init(void* nvseInterface)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
 	if (nvse->isEditor) return false;
 	return true;
+}
 }

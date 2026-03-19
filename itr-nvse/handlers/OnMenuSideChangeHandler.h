@@ -1,4 +1,6 @@
 #pragma once
 
-bool OMSCH_Init(void* nvseInterface);
-void OMSCH_Update();
+namespace OnMenuSideChangeHandler {
+	bool Init(void* nvseInterface);
+	void Update();
+}

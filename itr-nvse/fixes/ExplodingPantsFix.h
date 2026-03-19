@@ -1,3 +1,5 @@
 #pragma once
 
-void ExplodingPantsFix_Init();
+namespace ExplodingPantsFix {
+	void Init();
+}

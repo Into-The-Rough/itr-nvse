@@ -114,7 +114,7 @@ namespace SaveFileSizeHandler
 		}
 	}
 
-	void Init()
+	static void InstallHooks()
 	{
 		g_chainTarget = ReadCallTarget(kAddr_HookSite);
 		if (g_chainTarget == 0)
@@ -123,10 +123,10 @@ namespace SaveFileSizeHandler
 		SafeWriteBuf(kAddr_JnzPatch, "\x90\x90\x90\x90\x90\x90", 6);
 		SafeWrite::WriteRelCall(kAddr_HookSite, (UInt32)Hook);
 	}
-}
 
-bool SFSH_Init()
-{
-	SaveFileSizeHandler::Init();
-	return true;
+	bool Init()
+	{
+		InstallHooks();
+		return true;
+	}
 }

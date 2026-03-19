@@ -56,12 +56,3 @@ namespace AutoQuickLoad
 	}
 }
 
-void AutoQuickLoad_InstallHook()
-{
-	AutoQuickLoad::InstallHook();
-}
-
-void AutoQuickLoad_Update()
-{
-	AutoQuickLoad::Update();
-}

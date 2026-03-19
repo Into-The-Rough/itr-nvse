@@ -500,7 +500,8 @@ static CommandInfo kCommandInfo_FakeHitEx = {
 	Cmd_FakeHitEx_Execute, nullptr, nullptr, 0
 };
 
-bool FakeHit_Init(void* nvse)
+namespace FakeHitHandler {
+bool Init(void* nvse)
 {
 	NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
 	g_scriptInterface = (NVSEScriptInterface*)nvseIntf->QueryInterface(kInterface_Script);
@@ -510,9 +511,10 @@ bool FakeHit_Init(void* nvse)
 	return true;
 }
 
-void FakeHit_RegisterCommands(void* nvsePtr)
+void RegisterCommands(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_FakeHit);
 	nvse->RegisterCommand(&kCommandInfo_FakeHitEx);
+}
 }

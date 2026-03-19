@@ -1,4 +1,6 @@
 #pragma once
 
-bool OJLH_Init(void* nvseInterface);
-void OJLH_Update();
+namespace OnJumpLandHandler {
+	bool Init(void* nvseInterface);
+	void Update();
+}

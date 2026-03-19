@@ -2,9 +2,11 @@
 
 struct Mat3;
 
-bool DCH_Init(void* nvse);
-void DCH_Update();
-bool DCH_InstallCameraHooks();
-void DCH_SetExternalRotation(const Mat3& rot);
-void DCH_ClearExternalRotation();
-void DCH_RegisterCommands(void* nvse);
+namespace DialogueCameraHandler {
+	bool Init(void* nvse);
+	void Update();
+	bool InstallCameraHooks();
+	void SetExternalRotation(const Mat3& rot);
+	void ClearExternalRotation();
+	void RegisterCommands(void* nvse);
+}

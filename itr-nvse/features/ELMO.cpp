@@ -8,6 +8,8 @@
 
 #include "internal/globals.h"
 
+static auto TrackMessageMeta_Fn = &CornerMessageHandler::TrackMessageMeta;
+
 namespace ELMO
 {
 	char g_msgBuffer[512];
@@ -25,7 +27,7 @@ namespace ELMO
 	{
 		if (text) {
 			const int metaType = isCompleted ? kCornerMeta_ObjectiveCompleted : kCornerMeta_ObjectiveDisplayed;
-			CMH_TrackMessageMeta(text, 10.0f, metaType);
+			CornerMessageHandler::TrackMessageMeta(text, 10.0f, metaType);
 			QueueUIMsg(text, 2, nullptr, nullptr, 10.0f, false);
 		}
 	}
@@ -88,7 +90,7 @@ namespace ELMO
 				push 3
 				push 0x41000000
 				push esi
-				call CMH_TrackMessageMeta
+				call [TrackMessageMeta_Fn]
 				add esp, 0xC
 				push 0
 				push 0x41000000
@@ -133,7 +135,7 @@ namespace ELMO
 				push 3
 				push 0x41000000
 				push esi
-				call CMH_TrackMessageMeta
+				call [TrackMessageMeta_Fn]
 				add esp, 0xC
 				push 0
 				push 0x41000000
@@ -177,7 +179,7 @@ namespace ELMO
 				push 3
 				push 0x41000000
 				push esi
-				call CMH_TrackMessageMeta
+				call [TrackMessageMeta_Fn]
 				add esp, 0xC
 				push 0
 				push 0x41000000
@@ -221,7 +223,7 @@ namespace ELMO
 				push 3
 				push 0x41000000
 				push esi
-				call CMH_TrackMessageMeta
+				call [TrackMessageMeta_Fn]
 				add esp, 0xC
 				push 0
 				push 0x41000000
@@ -265,7 +267,7 @@ namespace ELMO
 				push 3
 				push 0x41000000
 				push esi
-				call CMH_TrackMessageMeta
+				call [TrackMessageMeta_Fn]
 				add esp, 0xC
 				push 0
 				push 0x41000000
@@ -299,7 +301,3 @@ namespace ELMO
 	}
 }
 
-void ELMO_Init(bool suppressObjectives, bool suppressReputation)
-{
-	ELMO::Init(suppressObjectives, suppressReputation);
-}

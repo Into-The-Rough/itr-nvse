@@ -166,14 +166,11 @@ CommandInfo kCommandInfo_GetNoWeaponSearch = {
 	1, 0, nullptr, Cmd_GetNoWeaponSearch_Execute, nullptr, nullptr, 0
 };
 
-void NoWeaponSearch_Init()
-{
-	NoWeaponSearch::Init();
-}
-
-void NoWeaponSearch_RegisterCommands(void* nvsePtr)
+namespace NoWeaponSearch {
+void RegisterCommands(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_SetNoWeaponSearch);
 	nvse->RegisterCommand(&kCommandInfo_GetNoWeaponSearch);
+}
 }

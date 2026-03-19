@@ -1,4 +1,6 @@
 #pragma once
 
-bool FakeHit_Init(void* nvse);
-void FakeHit_RegisterCommands(void* nvse);
+namespace FakeHitHandler {
+	bool Init(void* nvse);
+	void RegisterCommands(void* nvse);
+}

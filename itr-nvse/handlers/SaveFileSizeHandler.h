@@ -1,3 +1,5 @@
 #pragma once
 
-bool SFSH_Init();
+namespace SaveFileSizeHandler {
+	bool Init();
+}

@@ -230,17 +230,19 @@ namespace
 	}
 }
 
-bool WeaponEmissiveCommands_Init(void* nvsePtr) { return true; }
+namespace WeaponEmissiveCommands {
+bool Init(void* nvsePtr) { return true; }
 
-void WeaponEmissiveCommands_RegisterCommands(void* nvsePtr)
+void RegisterCommands(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_SetWeaponEmissiveColor);
 	nvse->RegisterCommand(&kCommandInfo_ClearWeaponEmissiveColor);
 }
 
-void WeaponEmissive_ClearState()
+void ClearState()
 {
 	s_count = 0;
 	s_active = false;
+}
 }

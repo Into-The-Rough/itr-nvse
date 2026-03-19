@@ -1,3 +1,5 @@
 #pragma once
 
-bool OFH_Init(void* nvseInterface);
+namespace OnFrenzyHandler {
+	bool Init(void* nvseInterface);
+}

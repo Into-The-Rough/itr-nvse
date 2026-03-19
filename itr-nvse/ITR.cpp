@@ -258,13 +258,13 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					PlayerUpdateHook_Init(Settings::bQuickDrop, Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
 					                      Settings::bQuick180, Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
 				if (Settings::bSlowMotionPhysicsFix)
-					SlowMotionPhysicsFix_Init();
+					SlowMotionPhysicsFix::Init();
 				if (Settings::bExplodingPantsFix)
-					ExplodingPantsFix_Init();
+					ExplodingPantsFix::Init();
 				KillActorXPFix_Init(Settings::bKillActorXPFix != 0);
 				ReversePickpocketNoKarmaFix_Init(Settings::bReversePickpocketNoKarma != 0);
 				if (Settings::bSaveFileSize)
-					SFSH_Init();
+					SaveFileSizeHandler::Init();
 				if (Settings::bVATSProjectileFix)
 					VATSProjectileFix_Init();
 				if (Settings::bVATSLimbFix)
@@ -278,7 +278,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bArmorDTDRFix)
 					ArmorDTDRFix_Init();
 				if (Settings::bQuickReadNote)
-					QuickReadNote_Init(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
+					QuickReadNote::Init(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
 				if (Settings::bDoorPackageOwnershipFix)
 					DoorPackageOwnershipFix_Init();
 				NPCDoorUnlockBlock_Init(Settings::iNPCDoorUnlockBlock);
@@ -298,19 +298,19 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					InitHavokCrashFix_Init();
 				if (Settings::bDetectionFollowerCrashFix)
 					DetectionFollowerCrashFix_Init();
-				ITR_RegisterEvents();
+				EventDispatch::RegisterEvents();
 				g_hooksInstalled = true;
 			}
 			break;
 
 			case NVSEMessagingInterface::kMessage_PostPostLoad:
-				DCH_InstallCameraHooks(); //always install - hooks check bDialogueCamera at runtime
+				DialogueCameraHandler::InstallCameraHooks(); //always install - hooks check bDialogueCamera at runtime
 				InitVATSSpeechFixWithCompatibility();
 				AshPileNames_Init();
 				if (Settings::bVATSExtender)
 					VATSExtender_Init();
 				if (Settings::bSuppressObjectives || Settings::bSuppressReputation)
-					ELMO_Init(Settings::bSuppressObjectives != 0, Settings::bSuppressReputation != 0);
+					ELMO::Init(Settings::bSuppressObjectives != 0, Settings::bSuppressReputation != 0);
 				break;
 
 			case NVSEMessagingInterface::kMessage_NewGame:
@@ -320,9 +320,9 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					ResetMusicStateForLoad();
 					Log("Music state reset for post-load");
 				}
-				WeaponEmissive_ClearState();
+				WeaponEmissiveCommands::ClearState();
 
-				OEPH_BuildEntryMap();
+				OnEntryPointHandler::BuildEntryMap();
 				if (Settings::bAutoGodMode && !g_godModeExecuted)
 				{
 					*(UInt8*)0x11E07BA = 1;
@@ -346,10 +346,10 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 							PlayerUpdateHook_UpdateSettings(Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
 							                                Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
 
-						ONI_UpdateSettings();
+						OwnerNameInfoHandler::UpdateSettings();
 
 						if (Settings::bQuickReadNote)
-							QuickReadNote_UpdateSettings(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
+							QuickReadNote::UpdateSettings(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
 
 						FriendlyFire_SetEnabled(Settings::bFriendlyFire != 0);
 						OwnedBeds_SetEnabled(Settings::bOwnedBeds != 0);
@@ -381,25 +381,25 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 		case kMessage_MainGameLoop:
 				AshPileNames_Update();
-				OCH_Update();
-				DTF_Update();
+				OnConsoleHandler::Update();
+				DialogueTextFilter::Update();
 				if (Settings::bLocationVisitPopup)
 					LocationVisitPopup_Update();
-				ONI_Update();
-				KHH_Update();
-				DTH_Update();
-				OSPH_Update();
-				OJLH_Update();
-				OCPH_Update();
-				OMFCH_Update();
-				OMSCH_Update();
+				OwnerNameInfoHandler::Update();
+				KeyHeldHandler::Update();
+				DoubleTapHandler::Update();
+				OnSoundPlayedHandler::Update();
+				OnJumpLandHandler::Update();
+				OnCombatProcedureHandler::Update();
+				OnMenuFilterChangeHandler::Update();
+				OnMenuSideChangeHandler::Update();
 				if (Settings::bQuickReadNote)
-					QuickReadNote_Update();
+					QuickReadNote::Update();
 				if (Settings::bDialogueCamera)
-					DCH_Update();
-				AutoQuickLoad_Update();
+					DialogueCameraHandler::Update();
+				AutoQuickLoad::Update();
 				if (Settings::bAltTabMute)
-					AltTabMute_Update();
+					AltTabMute::Update();
 				break;
 	}
 }
@@ -456,108 +456,108 @@ static void LogSettings()
 
 static void RegisterHandlers(NVSEInterface* nvse)
 {
-	if (DTF_Init((void*)nvse))
+	if (DialogueTextFilter::Init((void*)nvse))
 		Log("DialogueTextFilter initialized");
 	else
 		Log("DialogueTextFilter failed to initialize");
 
-	if (OSH_Init((void*)nvse))
+	if (OnStealHandler::Init((void*)nvse))
 		Log("OnStealHandler initialized");
 	else
 		Log("OnStealHandler failed to initialize");
 
-	if (OWDH_Init((void*)nvse))
+	if (OnWeaponDropHandler::Init((void*)nvse))
 		Log("OnWeaponDropHandler initialized");
 	else
 		Log("OnWeaponDropHandler failed to initialize");
 
-	if (OCH_Init((void*)nvse))
+	if (OnConsoleHandler::Init((void*)nvse))
 		Log("OnConsoleHandler initialized");
 	else
 		Log("OnConsoleHandler failed to initialize");
 
-	if (OWJH_Init((void*)nvse))
+	if (OnWeaponJamHandler::Init((void*)nvse))
 		Log("OnWeaponJamHandler initialized");
 	else
 		Log("OnWeaponJamHandler failed to initialize");
 
-	if (OKSH_Init((void*)nvse))
+	if (OnKeyStateHandler::Init((void*)nvse))
 		Log("OnKeyStateHandler initialized");
 	else
 		Log("OnKeyStateHandler failed to initialize");
 
-	if (KHH_Init())
+	if (KeyHeldHandler::Init())
 		Log("KeyHeldHandler initialized");
 	else
 		Log("KeyHeldHandler failed to initialize");
 
-	if (DTH_Init())
+	if (DoubleTapHandler::Init())
 		Log("DoubleTapHandler initialized");
 	else
 		Log("DoubleTapHandler failed to initialize");
 
-	if (OFH_Init((void*)nvse))
+	if (OnFrenzyHandler::Init((void*)nvse))
 		Log("OnFrenzyHandler initialized");
 	else
 		Log("OnFrenzyHandler failed to initialize");
 
-	if (CMH_Init((void*)nvse))
+	if (CornerMessageHandler::Init((void*)nvse))
 		Log("CornerMessageHandler initialized");
 	else
 		Log("CornerMessageHandler failed to initialize");
 
-	if (OEPH_Init((void*)nvse))
+	if (OnEntryPointHandler::Init((void*)nvse))
 		Log("OnEntryPointHandler initialized");
 	else
 		Log("OnEntryPointHandler failed to initialize");
 
-	if (OCPH_Init((void*)nvse))
+	if (OnCombatProcedureHandler::Init((void*)nvse))
 		Log("OnCombatProcedureHandler initialized");
 	else
 		Log("OnCombatProcedureHandler failed to initialize");
 
-	if (OSPH_Init((void*)nvse))
+	if (OnSoundPlayedHandler::Init((void*)nvse))
 		Log("OnSoundPlayedHandler initialized");
 	else
 		Log("OnSoundPlayedHandler failed to initialize");
 
-	if (OJLH_Init((void*)nvse))
+	if (OnJumpLandHandler::Init((void*)nvse))
 		Log("OnJumpLandHandler initialized");
 	else
 		Log("OnJumpLandHandler failed to initialize");
 
-	if (FDH_Init((void*)nvse))
-		Log("FallDamageHandler initialized (SetMult=0x%04X, GetMult=0x%04X)", FDH_GetSetMultOpcode(), FDH_GetGetMultOpcode());
+	if (FallDamageHandler::Init((void*)nvse))
+		Log("FallDamageHandler initialized (SetMult=0x%04X, GetMult=0x%04X)", FallDamageHandler::GetSetMultOpcode(), FallDamageHandler::GetGetMultOpcode());
 	else
 		Log("FallDamageHandler failed to initialize");
 
 	if (Settings::bDialogueCamera)
 	{
-		if (DCH_Init((void*)nvse))
+		if (DialogueCameraHandler::Init((void*)nvse))
 			Log("DialogueCameraHandler initialized");
 		else
 			Log("DialogueCameraHandler failed to initialize");
 	}
 
-	if (FakeHit_Init((void*)nvse))
+	if (FakeHitHandler::Init((void*)nvse))
 		Log("FakeHitHandler initialized");
 	else
 		Log("FakeHitHandler failed to initialize");
 
 	if (Settings::bOwnerNameInfo)
 	{
-		if (ONI_Init())
+		if (OwnerNameInfoHandler::Init())
 			Log("OwnerNameInfoHandler initialized");
 		else
 			Log("OwnerNameInfoHandler failed to initialize");
 	}
 
-	if (OMFCH_Init((void*)nvse))
+	if (OnMenuFilterChangeHandler::Init((void*)nvse))
 		Log("OnMenuFilterChangeHandler initialized");
 	else
 		Log("OnMenuFilterChangeHandler failed to initialize");
 
-	if (OMSCH_Init((void*)nvse))
+	if (OnMenuSideChangeHandler::Init((void*)nvse))
 		Log("OnMenuSideChangeHandler initialized");
 	else
 		Log("OnMenuSideChangeHandler failed to initialize");
@@ -565,8 +565,8 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	if (Settings::bSaveFileSize)
 		Log("SaveFileSizeHandler will initialize in PostLoad");
 
-	NoWeaponSearch_Init();
-	PreventWeaponSwitch_Init();
+	NoWeaponSearch::Init();
+	PreventWeaponSwitch::Init();
 }
 
 namespace ITR
@@ -595,7 +595,7 @@ namespace ITR
 		LogSettings();
 
 		if (Settings::bAutoQuickLoad)
-			AutoQuickLoad_InstallHook();
+			AutoQuickLoad::InstallHook();
 
 		if (Settings::bConsoleLogCleaner)
 		{
@@ -605,16 +605,16 @@ namespace ITR
 
 		if (Settings::bMessageBoxQuickClose)
 		{
-			MBQC_Init();
+			MessageBoxQuickClose::Init();
 			Log("MessageBoxQuickClose enabled");
 		}
 
 		g_msgInterface->RegisterListener(g_pluginHandle, "NVSE", MessageHandler);
 
-		ITR_InitEventManager((void*)nvse);
-		ImperativeCommands_Init((void*)nvse);
-		StringCommands_Init((void*)nvse);
-		RadioCommands_Init((void*)nvse);
+		EventDispatch::InitEventManager((void*)nvse);
+		ImperativeCommands::Init((void*)nvse);
+		StringCommands::Init((void*)nvse);
+		RadioCommands::Init((void*)nvse);
 		RegisterHandlers(nvse);
 
 		Log("itr-nvse loaded successfully");

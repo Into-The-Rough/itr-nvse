@@ -45,8 +45,10 @@ bool Cmd_IsSaying_Execute(COMMAND_ARGS)
 	return true;
 }
 
-void IsSayingCommand_RegisterCommands(void* nvsePtr)
+namespace IsSayingCommand {
+void RegisterCommands(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_IsSaying);
+}
 }

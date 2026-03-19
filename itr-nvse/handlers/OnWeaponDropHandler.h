@@ -1,3 +1,5 @@
 #pragma once
 
-bool OWDH_Init(void* nvseInterface);
+namespace OnWeaponDropHandler {
+	bool Init(void* nvseInterface);
+}

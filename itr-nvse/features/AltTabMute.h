@@ -1,3 +1,5 @@
 #pragma once
 
-void AltTabMute_Update();
+namespace AltTabMute {
+	void Update();
+}

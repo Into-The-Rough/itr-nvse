@@ -76,7 +76,8 @@ namespace OnEntryPointHandler {
     static bool g_useMapB = false; //which buffer to build into next
 }
 
-void OEPH_BuildEntryMap()
+namespace OnEntryPointHandler {
+void BuildEntryMap()
 {
     using namespace OnEntryPointHandler;
 
@@ -109,6 +110,7 @@ void OEPH_BuildEntryMap()
     //atomic swap - readers instantly see the new complete map
     InterlockedExchangePointer((volatile PVOID*)&g_activeMap, buildMap);
     g_useMapB = !g_useMapB;
+}
 }
 
 static UInt32 s_ExecuteFunctionAddr = 0x5E5B40;
@@ -193,15 +195,17 @@ static __declspec(naked) void Hook_ExecuteFunctionCall()
     }
 }
 
-bool OEPH_Init(void* nvseInterface)
+namespace OnEntryPointHandler {
+bool Init(void* nvseInterface)
 {
     NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
     if (nvse->isEditor) return false;
 
-    if (!OnEntryPointHandler::g_hookInstalled) {
+    if (!g_hookInstalled) {
         SafeWrite::WriteRelCall(0x5E5AB9, (UInt32)Hook_ExecuteFunctionCall);
-        OnEntryPointHandler::g_hookInstalled = true;
+        g_hookInstalled = true;
     }
 
     return true;
+}
 }

@@ -1,4 +1,6 @@
 #pragma once
 
-bool KHH_Init();
-void KHH_Update();
+namespace KeyHeldHandler {
+	bool Init();
+	void Update();
+}

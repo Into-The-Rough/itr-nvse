@@ -58,15 +58,17 @@ static __declspec(naked) void StealAlarmHook()
     }
 }
 
-bool OSH_Init(void* nvseInterface)
+namespace OnStealHandler {
+bool Init(void* nvseInterface)
 {
     NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
     if (nvse->isEditor) return false;
 
-    if (!OnStealHandler::g_hookInstalled) {
+    if (!g_hookInstalled) {
         SafeWrite::WriteRelJump(kAddr_StealAlarm, (UInt32)StealAlarmHook);
-        OnStealHandler::g_hookInstalled = true;
+        g_hookInstalled = true;
     }
 
     return true;
+}
 }

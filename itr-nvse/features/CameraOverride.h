@@ -1,4 +1,6 @@
 #pragma once
 
-void CameraOverride_Init();
-void CameraOverride_RegisterCommands(void* nvse);
+namespace CameraOverride {
+	void Init();
+	void RegisterCommands(void* nvse);
+}

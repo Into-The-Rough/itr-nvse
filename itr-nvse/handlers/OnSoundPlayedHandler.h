@@ -1,4 +1,6 @@
 #pragma once
 
-bool OSPH_Init(void* nvseInterface);
-void OSPH_Update();
+namespace OnSoundPlayedHandler {
+	bool Init(void* nvseInterface);
+	void Update();
+}

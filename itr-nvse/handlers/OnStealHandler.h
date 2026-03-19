@@ -1,3 +1,5 @@
 #pragma once
 
-bool OSH_Init(void* nvseInterface);
+namespace OnStealHandler {
+	bool Init(void* nvseInterface);
+}

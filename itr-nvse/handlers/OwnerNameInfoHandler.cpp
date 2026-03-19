@@ -193,7 +193,8 @@ static void CleanFactionName(const char* input, char* output, size_t outputSize)
 	strncpy_s(output, outputSize, start, _TRUNCATE);
 }
 
-void ONI_Update()
+namespace OwnerNameInfoHandler {
+void Update()
 {
 	if (!g_bOwnerNameInfo)
 		return;
@@ -309,7 +310,7 @@ static void LoadINIPath()
 	strcat_s(g_iniPath, "\\Data\\config\\itr-nvse.ini");
 }
 
-bool ONI_Init()
+bool Init()
 {
 	LoadINIPath();
 	g_bOwnerNameInfo = GetPrivateProfileIntA("Tweaks", "bOwnerNameInfo", 1, g_iniPath) != 0;
@@ -319,11 +320,12 @@ bool ONI_Init()
 	return true;
 }
 
-void ONI_UpdateSettings()
+void UpdateSettings()
 {
 	LoadINIPath();
 	g_bOwnerNameInfo = GetPrivateProfileIntA("Tweaks", "bOwnerNameInfo", 1, g_iniPath) != 0;
 	g_bCompatMode = GetPrivateProfileIntA("OwnerNameInfo", "bCompatibilityMode", 1, g_iniPath) != 0;
 	g_bShowFactionName = GetPrivateProfileIntA("OwnerNameInfo", "bShowFactionName", 1, g_iniPath) != 0;
 	g_bShowNameOnlyCrime = GetPrivateProfileIntA("OwnerNameInfo", "bShowNameOnlyCrime", 1, g_iniPath) != 0;
+}
 }

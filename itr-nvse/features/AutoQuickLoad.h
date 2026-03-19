@@ -1,4 +1,6 @@
 #pragma once
 
-void AutoQuickLoad_InstallHook();
-void AutoQuickLoad_Update();
+namespace AutoQuickLoad {
+	void InstallHook();
+	void Update();
+}

@@ -1314,7 +1314,8 @@ bool Cmd_SetRaceAlt_Execute(COMMAND_ARGS)
 	return true;
 }
 
-bool ImperativeCommands_Init(void* nvsePtr)
+namespace ImperativeCommands {
+bool Init(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 
@@ -1331,13 +1332,13 @@ bool ImperativeCommands_Init(void* nvsePtr)
 	return true;
 }
 
-void ImperativeCommands_RegisterCommands(void* nvsePtr)
+void RegisterCommands(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_IsRadioPlaying);
 }
 
-void ImperativeCommands_RegisterCommands2(void* nvsePtr)
+void RegisterCommands2(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterTypedCommand(&kCommandInfo_GetRefsSortedByDistance, kRetnType_Array);
@@ -1351,13 +1352,13 @@ void ImperativeCommands_RegisterCommands2(void* nvsePtr)
 	nvse->RegisterTypedCommand(&kCommandInfo_GetTargetInitialLocation, kRetnType_Array);
 }
 
-void ImperativeCommands_RegisterCommands3(void* nvsePtr)
+void RegisterCommands3(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_UseAidItem);
 }
 
-void ImperativeCommands_RegisterCommands4(void* nvsePtr)
+void RegisterCommands4(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_SetCreatureCombatSkill);
@@ -1365,8 +1366,9 @@ void ImperativeCommands_RegisterCommands4(void* nvsePtr)
 	nvse->RegisterCommand(&kCommandInfo_ForceReload);
 }
 
-void ImperativeCommands_RegisterCommands5(void* nvsePtr)
+void RegisterCommands5(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_SetRaceAlt);
+}
 }

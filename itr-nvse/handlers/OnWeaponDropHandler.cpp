@@ -72,16 +72,18 @@ static __declspec(naked) void TryDropWeaponHook()
     }
 }
 
-bool OWDH_Init(void* nvseInterface)
+namespace OnWeaponDropHandler {
+bool Init(void* nvseInterface)
 {
     NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
     if (nvse->isEditor) return false;
 
-    if (!OnWeaponDropHandler::g_hookInstalled) {
+    if (!g_hookInstalled) {
         SafeWrite::WriteRelJump(kAddr_TryDropWeapon, (UInt32)TryDropWeaponHook);
         SafeWrite::Write8(kAddr_TryDropWeapon + 5, 0x90);
-        OnWeaponDropHandler::g_hookInstalled = true;
+        g_hookInstalled = true;
     }
 
     return true;
+}
 }

@@ -106,9 +106,9 @@ void __fastcall MessageMenu_HandleClick_Hook(MessageMenu* menu, void* edx, SInt3
 		OriginalHandleClick(menu, tileID, clickedTile);
 }
 
-bool MBQC_Init()
+namespace MessageBoxQuickClose {
+bool Init()
 {
-	using namespace MessageBoxQuickClose;
 
 	UInt32* vtbl = reinterpret_cast<UInt32*>(kVtbl_MessageMenu);
 
@@ -119,4 +119,5 @@ bool MBQC_Init()
 	SafeWrite32(kVtbl_MessageMenu + kOffset_HandleClick, reinterpret_cast<UInt32>(MessageMenu_HandleClick_Hook));
 
 	return true;
+}
 }

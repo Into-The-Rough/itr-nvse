@@ -11,7 +11,8 @@ static int g_thresholdMs = 300;
 static bool g_wasDown[256];
 static DWORD g_lastPressTime[256];
 
-void DTH_Update()
+namespace DoubleTapHandler {
+void Update()
 {
 	if (!g_eventManagerInterface) return;
 
@@ -31,7 +32,7 @@ void DTH_Update()
 	}
 }
 
-bool DTH_Init()
+bool Init()
 {
 	char path[MAX_PATH];
 	GetModuleFileNameA(nullptr, path, MAX_PATH);
@@ -42,4 +43,5 @@ bool DTH_Init()
 	memset(g_wasDown, 0, sizeof(g_wasDown));
 	memset(g_lastPressTime, 0, sizeof(g_lastPressTime));
 	return true;
+}
 }

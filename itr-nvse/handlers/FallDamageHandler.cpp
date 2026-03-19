@@ -234,7 +234,8 @@ bool Cmd_ClearFallDamageMult_Execute(COMMAND_ARGS)
 	return true;
 }
 
-bool FDH_Init(void* nvse)
+namespace FallDamageHandler {
+bool Init(void* nvse)
 {
 	FallDamageHook::Init();
 	s_setMultOpcode = 0x4017;
@@ -242,7 +243,7 @@ bool FDH_Init(void* nvse)
 	return true;
 }
 
-void FDH_RegisterCommands(void* nvsePtr)
+void RegisterCommands(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_SetFallDamageMult);
@@ -250,5 +251,6 @@ void FDH_RegisterCommands(void* nvsePtr)
 	nvse->RegisterCommand(&kCommandInfo_ClearFallDamageMult);
 }
 
-UInt32 FDH_GetSetMultOpcode() { return s_setMultOpcode; }
-UInt32 FDH_GetGetMultOpcode() { return s_getMultOpcode; }
+UInt32 GetSetMultOpcode() { return s_setMultOpcode; }
+UInt32 GetGetMultOpcode() { return s_getMultOpcode; }
+}

@@ -1,3 +1,5 @@
 #pragma once
 
-void SlowMotionPhysicsFix_Init();
+namespace SlowMotionPhysicsFix {
+	void Init();
+}
