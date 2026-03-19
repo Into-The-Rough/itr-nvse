@@ -271,9 +271,9 @@ namespace QuickReadNote
 						BSString* voiceLineStr = &currentResponse->strResponseText;
 						ThisCall<void>(0x7A1AC0, subtitles, voiceLineStr);
 						void* topicInfo = currentItem->pTopicInfo;
-						DTF_Suppress(true);
+						DialogueTextFilter::Suppress(true);
 						ThisCall<void>(0x61F170, topicInfo, 0, character);
-						DTF_Suppress(false);
+						DialogueTextFilter::Suppress(false);
 						BSSoundHandle toPlay = BSWin32Audio::GetSingleton()->GetSoundHandleByFilePath(
 							currentResponse->strVoiceFilePath.c_str(), audioFlags, nullptr);
 						toPlay.SetVolume(0.9f);
@@ -606,14 +606,3 @@ namespace QuickReadNote
 	}
 }
 
-void QuickReadNote_Init(int timeoutMs, int controlID, int maxLines) {
-	QuickReadNote::Init(timeoutMs, controlID, maxLines);
-}
-
-void QuickReadNote_Update() {
-	QuickReadNote::Update();
-}
-
-void QuickReadNote_UpdateSettings(int timeoutMs, int controlID, int maxLines) {
-	QuickReadNote::UpdateSettings(timeoutMs, controlID, maxLines);
-}

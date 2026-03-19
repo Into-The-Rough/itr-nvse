@@ -373,21 +373,23 @@ bool Cmd_GetPlayingRadioText_Execute(COMMAND_ARGS)
 	return true;
 }
 
-void RadioCommands_Init(void* nvse)
+namespace RadioCommands {
+void Init(void* nvse)
 {
 	NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
 	g_strInterface = (NVSEStringVarInterface*)nvseIntf->QueryInterface(kInterface_StringVar);
 }
 
-void RadioCommands_RegisterCommands(void* nvsePtr)
+void RegisterCommands(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterTypedCommand(&kCommandInfo_GetPlayingRadioTrack, kRetnType_Form);
 	nvse->RegisterTypedCommand(&kCommandInfo_GetPlayingRadioTrackFileName, kRetnType_String);
 }
 
-void RadioCommands_RegisterCommands2(void* nvsePtr)
+void RegisterCommands2(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterTypedCommand(&kCommandInfo_GetPlayingRadioText, kRetnType_String);
+}
 }

@@ -5,7 +5,8 @@
 
 NVSEEventManagerInterface* g_eventManagerInterface = nullptr;
 
-void ITR_InitEventManager(void* nvseInterface)
+namespace EventDispatch {
+void InitEventManager(void* nvseInterface)
 {
 	auto* nvse = reinterpret_cast<NVSEInterface*>(nvseInterface);
 	g_eventManagerInterface = reinterpret_cast<NVSEEventManagerInterface*>(
@@ -17,7 +18,7 @@ void ITR_InitEventManager(void* nvseInterface)
 		Log("EventManager interface not available (kNVSE not installed?)");
 }
 
-void ITR_RegisterEvents()
+void RegisterEvents()
 {
 	if (!g_eventManagerInterface) return;
 
@@ -74,4 +75,5 @@ void ITR_RegisterEvents()
 	g_eventManagerInterface->RegisterEvent("ITR:OnSoundCompleted", 3, soundParams, F::kFlag_FlushOnLoad);
 
 	Log("ITR events registered with EventManager");
+}
 }

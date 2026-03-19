@@ -1,3 +1,5 @@
 #pragma once
 
-bool MBQC_Init();
+namespace MessageBoxQuickClose {
+	bool Init();
+}

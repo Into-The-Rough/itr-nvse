@@ -71,7 +71,8 @@ static int ConsumeMessageMeta(const char* text, float displayTime)
     return kCornerMeta_Generic;
 }
 
-void CMH_TrackMessageMeta(const char* text, float displayTime, int metaType)
+namespace CornerMessageHandler {
+void TrackMessageMeta(const char* text, float displayTime, int metaType)
 {
     if (!text || !text[0]) return;
     EnsureMetaLockInitialized();
@@ -119,7 +120,7 @@ static bool __fastcall Hook_HUDMainMenu_ShowNotify(
     return s_detour.GetTrampoline<ShowNotify_t>()(thisPtr, text, emotion, iconPath, soundPath, displayTime, instant);
 }
 
-bool CMH_Init(void* nvseInterface) {
+bool Init(void* nvseInterface) {
     NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
     if (nvse->isEditor) return false;
 
@@ -130,4 +131,5 @@ bool CMH_Init(void* nvseInterface) {
         return false;
 
     return true;
+}
 }

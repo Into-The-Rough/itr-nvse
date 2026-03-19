@@ -142,7 +142,8 @@ struct PendingEvent {
 	float fallTime;
 };
 
-void OJLH_Update()
+namespace OnJumpLandHandler {
+void Update()
 {
 	if (!g_eventManagerInterface) return;
 
@@ -188,10 +189,11 @@ void OJLH_Update()
 	}
 }
 
-bool OJLH_Init(void* nvseInterface)
+bool Init(void* nvseInterface)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
 	if (nvse->isEditor) return false;
 	g_initialized = true;
 	return true;
+}
 }

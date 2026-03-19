@@ -1,4 +1,6 @@
 #pragma once
 
-void PreventWeaponSwitch_Init();
-void PreventWeaponSwitch_RegisterCommands(void* nvse);
+namespace PreventWeaponSwitch {
+	void Init();
+	void RegisterCommands(void* nvse);
+}

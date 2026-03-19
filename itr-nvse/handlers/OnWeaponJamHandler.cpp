@@ -64,15 +64,17 @@ static __declspec(naked) void Hook_SetAnimAction_Jam()
     }
 }
 
-bool OWJH_Init(void* nvseInterface)
+namespace OnWeaponJamHandler {
+bool Init(void* nvseInterface)
 {
     NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
     if (nvse->isEditor) return false;
 
-    if (!OnWeaponJamHandler::g_hookInstalled) {
+    if (!g_hookInstalled) {
         SafeWrite::WriteRelCall(0x894081, (UInt32)Hook_SetAnimAction_Jam);
-        OnWeaponJamHandler::g_hookInstalled = true;
+        g_hookInstalled = true;
     }
 
     return true;
+}
 }

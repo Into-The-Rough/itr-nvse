@@ -1,3 +1,5 @@
 #pragma once
 
-bool OWJH_Init(void* nvseInterface);
+namespace OnWeaponJamHandler {
+	bool Init(void* nvseInterface);
+}

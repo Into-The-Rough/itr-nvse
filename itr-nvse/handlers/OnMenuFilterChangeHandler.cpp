@@ -31,7 +31,8 @@ static void DispatchFilterChangeEvent(UInt32 menuID, UInt32 oldFilter, UInt32 ne
             (int)menuID, (int)oldFilter, (int)newFilter, (int)side);
 }
 
-void OMFCH_Update() {
+namespace OnMenuFilterChangeHandler {
+void Update() {
     if (!g_eventManagerInterface) return;
 
     void* invMenu = *(void**)0x11D9EA4;
@@ -95,8 +96,9 @@ void OMFCH_Update() {
     }
 }
 
-bool OMFCH_Init(void* nvseInterface) {
+bool Init(void* nvseInterface) {
     NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
     if (nvse->isEditor) return false;
     return true;
+}
 }

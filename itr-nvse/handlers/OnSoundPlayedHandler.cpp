@@ -156,7 +156,8 @@ static BSSoundHandle* __fastcall HookedGetSoundHandle(
     return result;
 }
 
-void OSPH_Update()
+namespace OnSoundPlayedHandler {
+void Update()
 {
     if (OnSoundPlayedHandler::g_stateLockInit != 2) return;
     if (!g_eventManagerInterface) return;
@@ -252,7 +253,7 @@ void OSPH_Update()
     }
 }
 
-bool OSPH_Init(void* nvseInterface)
+bool Init(void* nvseInterface)
 {
     NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
     if (nvse->isEditor) return false;
@@ -266,4 +267,5 @@ bool OSPH_Init(void* nvseInterface)
 
     OnSoundPlayedHandler::g_hookInstalled = true;
     return true;
+}
 }

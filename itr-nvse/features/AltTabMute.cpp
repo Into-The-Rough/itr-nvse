@@ -70,7 +70,3 @@ namespace AltTabMute
 	}
 }
 
-void AltTabMute_Update()
-{
-	AltTabMute::Update();
-}

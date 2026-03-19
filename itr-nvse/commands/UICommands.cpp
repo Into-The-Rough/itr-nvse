@@ -136,10 +136,12 @@ namespace
 	}
 }
 
-bool UICommands_Init(void* nvsePtr) { return true; }
+namespace UICommands {
+bool Init(void* nvsePtr) { return true; }
 
-void UICommands_RegisterCommands(void* nvsePtr)
+void RegisterCommands(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_SetUIAlphaMap);
+}
 }

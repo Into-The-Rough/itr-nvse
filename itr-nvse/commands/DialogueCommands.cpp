@@ -139,12 +139,14 @@ bool Cmd_GetDisplayedDialogueInfos_Execute(COMMAND_ARGS)
 	return true;
 }
 
-void DialogueCommands_Init(void* nvse) {}
+namespace DialogueCommands {
+void Init(void* nvse) {}
 
-void DialogueCommands_RegisterCommands(void* nvsePtr)
+void RegisterCommands(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_GetDialogueInfoFlags);
 	nvse->RegisterCommand(&kCommandInfo_SetDialogueInfoFlags);
 	nvse->RegisterTypedCommand(&kCommandInfo_GetDisplayedDialogueInfos, kRetnType_Array);
+}
 }

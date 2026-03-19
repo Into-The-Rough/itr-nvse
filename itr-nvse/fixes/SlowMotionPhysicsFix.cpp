@@ -47,7 +47,3 @@ namespace SlowMotionPhysicsFix
 	}
 }
 
-void SlowMotionPhysicsFix_Init()
-{
-	SlowMotionPhysicsFix::Init();
-}

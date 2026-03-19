@@ -102,7 +102,8 @@ void __fastcall Hook_SwitchWeaponUpdate(void* procedure, void* edx)
 }
 
 //prologue: 6 bytes
-void PreventWeaponSwitch_Init()
+namespace PreventWeaponSwitch {
+void Init()
 {
 	EnsureLockInit();
 	if (!s_detour.WriteRelJump(0x9DA7C0, Hook_SwitchWeaponUpdate, 6))
@@ -158,9 +159,10 @@ static CommandInfo kCommandInfo_GetPreventWeaponSwitch = {
 	1, 0, nullptr, Cmd_GetPreventWeaponSwitch_Execute, nullptr, nullptr, 0
 };
 
-void PreventWeaponSwitch_RegisterCommands(void* nvse)
+void RegisterCommands(void* nvse)
 {
 	NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
 	nvseIntf->RegisterCommand(&kCommandInfo_SetPreventWeaponSwitch);
 	nvseIntf->RegisterCommand(&kCommandInfo_GetPreventWeaponSwitch);
+}
 }

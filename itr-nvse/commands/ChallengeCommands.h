@@ -1,4 +1,6 @@
 #pragma once
 
-void ChallengeCommands_Init(void* nvse);
-void ChallengeCommands_RegisterCommands(void* nvse);
+namespace ChallengeCommands {
+	void Init(void* nvse);
+	void RegisterCommands(void* nvse);
+}

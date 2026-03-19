@@ -12,7 +12,8 @@ static int g_repeatMs = 250;
 static DWORD g_downSince[256];
 static DWORD g_lastDispatch[256];
 
-void KHH_Update()
+namespace KeyHeldHandler {
+void Update()
 {
 	if (!g_eventManagerInterface) return;
 
@@ -41,7 +42,7 @@ void KHH_Update()
 	}
 }
 
-bool KHH_Init()
+bool Init()
 {
 	char path[MAX_PATH];
 	GetModuleFileNameA(nullptr, path, MAX_PATH);
@@ -53,4 +54,5 @@ bool KHH_Init()
 	memset(g_downSince, 0, sizeof(g_downSince));
 	memset(g_lastDispatch, 0, sizeof(g_lastDispatch));
 	return true;
+}
 }

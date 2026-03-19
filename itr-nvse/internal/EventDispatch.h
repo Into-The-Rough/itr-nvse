@@ -16,5 +16,7 @@ inline void* PackEventFloatArg(float value)
 	return reinterpret_cast<void*>(bits.u);
 }
 
-void ITR_InitEventManager(void* nvseInterface);
-void ITR_RegisterEvents();
+namespace EventDispatch {
+	void InitEventManager(void* nvseInterface);
+	void RegisterEvents();
+}
