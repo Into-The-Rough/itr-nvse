@@ -136,11 +136,21 @@ static void RebuildTracked() {
 	g_tracked = std::move(fresh);
 }
 
+struct PendingEvent {
+	UInt8 type; //1=jump, 2=land
+	UInt32 refID;
+	float fallTime;
+};
+
 void OJLH_Update()
 {
 	if (!g_eventManagerInterface) return;
 
 	RebuildTracked();
+
+	//scan and collect events without dispatching - a handler could
+	//unload cells/actors and invalidate other entries mid-iteration
+	std::vector<PendingEvent> pending;
 
 	for (auto& t : g_tracked) {
 		UInt32 curState = ReadState(t.charCtrl);
@@ -150,30 +160,31 @@ void OJLH_Update()
 			continue;
 		}
 
-		//jump start: entered Jumping from any non-jumping state
-		if (curState == kHkState_Jumping && t.prevState != kHkState_Jumping) {
-			void* actor = Engine::LookupFormByID(t.refID);
-			if (actor)
-				g_eventManagerInterface->DispatchEvent("ITR:OnJumpStart",
-					reinterpret_cast<TESObjectREFR*>(actor),
-					(TESForm*)actor);
-		}
+		if (curState == kHkState_Jumping && t.prevState != kHkState_Jumping)
+			pending.push_back({1, t.refID, 0.0f});
 
-		//landed: was airborne (Jumping/InAir), now not airborne
 		//mirrors old hook: newState == 0 || (newState & 0x2) == 0
-		//matches OnGround, Jumping(1), Swimming(5), Flying(4) but not Climbing(3) or Projectile(6)
 		bool wasAirborne = (t.prevState == kHkState_Jumping || t.prevState == kHkState_InAir);
 		bool nowGrounded = (curState == 0 || (curState & 0x2) == 0);
-		if (wasAirborne && nowGrounded && curState != kHkState_Jumping) {
-			void* actor = Engine::LookupFormByID(t.refID);
-			if (actor)
-				g_eventManagerInterface->DispatchEvent("ITR:OnActorLanded",
-					reinterpret_cast<TESObjectREFR*>(actor),
-					(TESForm*)actor, PackEventFloatArg(t.prevFallTime));
-		}
+		if (wasAirborne && nowGrounded && curState != kHkState_Jumping)
+			pending.push_back({2, t.refID, t.prevFallTime});
 
 		t.prevFallTime = curFallTime;
 		t.prevState = curState;
+	}
+
+	//dispatch after iteration - no controller pointers touched from here
+	for (const auto& evt : pending) {
+		void* actor = Engine::LookupFormByID(evt.refID);
+		if (!actor) continue;
+
+		if (evt.type == 1)
+			g_eventManagerInterface->DispatchEvent("ITR:OnJumpStart",
+				reinterpret_cast<TESObjectREFR*>(actor), (TESForm*)actor);
+		else
+			g_eventManagerInterface->DispatchEvent("ITR:OnActorLanded",
+				reinterpret_cast<TESObjectREFR*>(actor),
+				(TESForm*)actor, PackEventFloatArg(evt.fallTime));
 	}
 }
 
