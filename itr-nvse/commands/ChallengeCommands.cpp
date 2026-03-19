@@ -10,6 +10,7 @@
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
 #include <cstdio>
+#include "internal/CallTemplates.h"
 
 extern const _ExtractArgs ExtractArgs;
 
@@ -31,7 +32,7 @@ static void ShowChallengeNotification(UInt8* challenge, TESForm* form, UInt32 cu
 	void** descVtbl = *(void***)descObj;
 	const char* desc = ((_TESDescriptionGet)descVtbl[4])(descObj, nullptr, 0x43534544); //'DESC' chunk ID
 
-	const char* iconPath = ((const char*(__cdecl*)(TESForm*, void*))0x48E730)(form, nullptr); //TESTexture::GetTextureName
+	const char* iconPath = CdeclCall<const char*>(0x48E730, form, nullptr); //TESTexture::GetTextureName
 
 	char msg[512];
 	snprintf(msg, 512, "%s   %d\\%d\n%s", name ? name : "", currentAmount, threshold, desc ? desc : "");
@@ -114,19 +115,19 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 		//increment challenges completed stat (unless this IS a challenges completed MiscStat challenge)
 		if (challengeType != 11 || value1 != kMiscStat_ChallengesCompleted) //11=MiscStat type
 		{
-			((void(__cdecl*)(UInt32))0x4D5C60)(kMiscStat_ChallengesCompleted); //IncPCMiscStat
+			CdeclCall(0x4D5C60, kMiscStat_ChallengesCompleted); //IncPCMiscStat
 		}
 
 		//show completion notification and play sound
 		ShowChallengeNotification(challenge, form, threshold, threshold);
-		((void(__cdecl*)(int))0x706F30)(21); //PlayMenuSound
+		CdeclCall(0x706F30, 21); //PlayMenuSound
 
 		//handle completion vs recurring
 		if (!isRecurring || isNoRecur)
 		{
 			//mark as completed
 			ThisStdCall(0x5F6000, form, 1); //TESChallenge::ToggleIsCompleted
-			((void(__cdecl*)())0x5F5880)(); //InitChallengesList
+			CdeclCall(0x5F5880); //InitChallengesList
 		}
 		else
 		{

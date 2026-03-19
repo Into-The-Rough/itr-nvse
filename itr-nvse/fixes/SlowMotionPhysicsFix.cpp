@@ -3,6 +3,7 @@
 
 #include "SlowMotionPhysicsFix.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/CallTemplates.h"
 
 #include "internal/globals.h"
 
@@ -24,17 +25,17 @@ namespace SlowMotionPhysicsFix
 			if (delta > maxDelta)
 				delta = maxDelta;
 		}
-		((void(__thiscall*)(void*, float))originalSetFrameTimeMarker)(hkpWorld, delta);
+		ThisCall<void>(originalSetFrameTimeMarker, hkpWorld, delta);
 	}
 
 	void __fastcall Hook_StepDeltaTime(void* hkpWorld, void* edx, float stepTime) {
 		if (IsVATSActive()) {
-			((void(__thiscall*)(void*, float))originalStepDeltaTime)(hkpWorld, stepTime);
+			ThisCall<void>(originalStepDeltaTime, hkpWorld, stepTime);
 			return;
 		}
 		if (stepTime < kMinStepTime)
 			stepTime = kMinStepTime;
-		((void(__thiscall*)(void*, float))originalStepDeltaTime)(hkpWorld, stepTime);
+		ThisCall<void>(originalStepDeltaTime, hkpWorld, stepTime);
 	}
 
 	void Init() {
