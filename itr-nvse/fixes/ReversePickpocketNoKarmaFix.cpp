@@ -69,12 +69,3 @@ namespace ReversePickpocketNoKarmaFix
 	}
 }
 
-void ReversePickpocketNoKarmaFix_Init(bool enabled)
-{
-	ReversePickpocketNoKarmaFix::Init(enabled);
-}
-
-void ReversePickpocketNoKarmaFix_SetEnabled(bool enabled)
-{
-	ReversePickpocketNoKarmaFix::SetEnabled(enabled);
-}

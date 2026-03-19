@@ -122,7 +122,3 @@ namespace VATSLimbFix
 	}
 }
 
-void VATSLimbFix_Init()
-{
-	VATSLimbFix::Init();
-}

@@ -5,5 +5,7 @@
 //1 = only direct door owners/faction can bypass (no cell ownership, no guard bypass)
 //2 = nobody bypasses locks, must use key or lockpicks
 
-void NPCDoorUnlockBlock_Init(int level);
-void NPCDoorUnlockBlock_SetLevel(int level);
+namespace NPCDoorUnlockBlock {
+	void Init(int level);
+	void SetLevel(int level);
+}

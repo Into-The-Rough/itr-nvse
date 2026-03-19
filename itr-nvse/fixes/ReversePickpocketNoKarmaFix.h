@@ -1,4 +1,6 @@
 #pragma once
 
-void ReversePickpocketNoKarmaFix_Init(bool enabled);
-void ReversePickpocketNoKarmaFix_SetEnabled(bool enabled);
+namespace ReversePickpocketNoKarmaFix {
+	void Init(bool enabled);
+	void SetEnabled(bool enabled);
+}

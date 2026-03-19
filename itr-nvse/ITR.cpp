@@ -209,7 +209,7 @@ static void InitVATSSpeechFixWithCompatibility()
 		return;
 	}
 
-	VATSSpeechFix_Init(Settings::bVATSSpeechFix != 0);
+	VATSSpeechFix::Init(Settings::bVATSSpeechFix != 0);
 	g_vatsSpeechFixInitialized = true;
 }
 
@@ -223,7 +223,7 @@ static void ApplyVATSSpeechFixSetting()
 	}
 
 	if (g_vatsSpeechFixInitialized)
-		VATSSpeechFix_SetEnabled(Settings::bVATSSpeechFix != 0);
+		VATSSpeechFix::SetEnabled(Settings::bVATSSpeechFix != 0);
 }
 
 static void DeleteConsoleLog()
@@ -255,49 +255,49 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			if (!g_hooksInstalled)
 			{
 				if (Settings::bQuickDrop || Settings::bQuick180)
-					PlayerUpdateHook_Init(Settings::bQuickDrop, Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
-					                      Settings::bQuick180, Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
+					PlayerUpdateHook::Init(Settings::bQuickDrop, Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
+					                       Settings::bQuick180, Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
 				if (Settings::bSlowMotionPhysicsFix)
 					SlowMotionPhysicsFix::Init();
 				if (Settings::bExplodingPantsFix)
 					ExplodingPantsFix::Init();
-				KillActorXPFix_Init(Settings::bKillActorXPFix != 0);
-				ReversePickpocketNoKarmaFix_Init(Settings::bReversePickpocketNoKarma != 0);
+				KillActorXPFix::Init(Settings::bKillActorXPFix != 0);
+				ReversePickpocketNoKarmaFix::Init(Settings::bReversePickpocketNoKarma != 0);
 				if (Settings::bSaveFileSize)
 					SaveFileSizeHandler::Init();
 				if (Settings::bVATSProjectileFix)
-					VATSProjectileFix_Init();
+					VATSProjectileFix::Init();
 				if (Settings::bVATSLimbFix)
-					VATSLimbFix_Init();
-				OwnedBeds_Init(Settings::bOwnedBeds != 0);
-				OwnedCorpses_Init(Settings::bOwnedCorpses != 0);
+					VATSLimbFix::Init();
+				OwnedBeds::Init(Settings::bOwnedBeds != 0);
+				OwnedCorpses::Init(Settings::bOwnedCorpses != 0);
 				if (Settings::bLocationVisitPopup)
-					LocationVisitPopup_Init(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
-				FriendlyFire_Init(Settings::bFriendlyFire != 0);
-				NoDoorFade_Init(Settings::bNoDoorFade != 0);
+					LocationVisitPopup::Init(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
+				FriendlyFire::Init(Settings::bFriendlyFire != 0);
+				NoDoorFade::Init(Settings::bNoDoorFade != 0);
 				if (Settings::bArmorDTDRFix)
-					ArmorDTDRFix_Init();
+					ArmorDTDRFix::Init();
 				if (Settings::bQuickReadNote)
 					QuickReadNote::Init(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
 				if (Settings::bDoorPackageOwnershipFix)
-					DoorPackageOwnershipFix_Init();
-				NPCDoorUnlockBlock_Init(Settings::iNPCDoorUnlockBlock);
+					DoorPackageOwnershipFix::Init();
+				NPCDoorUnlockBlock::Init(Settings::iNPCDoorUnlockBlock);
 				if (Settings::bCombatItemTimerFix)
-					CombatItemTimerFix_Init();
+					CombatItemTimerFix::Init();
 				if (Settings::bNPCAntidoteUse)
-					NPCAntidoteUse_Init(Settings::fCombatItemCureTimer, Settings::fCureHealthThreshold);
+					NPCAntidoteUse::Init(Settings::fCombatItemCureTimer, Settings::fCureHealthThreshold);
 				if (Settings::bNPCDoctorsBagUse)
-					NPCDoctorsBagUse_Init(Settings::fDoctorsBagUseTimer);
-				CompanionNoInfamy_Init(Settings::bCompanionNoInfamy != 0);
-				CompanionWeightlessOverencumberedFix_Init(Settings::bCompanionWeightlessOverencumberedFix != 0);
+					NPCDoctorsBagUse::Init(Settings::fDoctorsBagUseTimer);
+				CompanionNoInfamy::Init(Settings::bCompanionNoInfamy != 0);
+				CompanionWeightlessOverencumberedFix::Init(Settings::bCompanionWeightlessOverencumberedFix != 0);
 				if (Settings::bPathingNullActorFix)
-					PathingNullActorFix_Init();
+					PathingNullActorFix::Init();
 				if (Settings::bNavMeshInfoCrashFix)
-					NavMeshInfoCrashFix_Init();
+					NavMeshInfoCrashFix::Init();
 				if (Settings::bInitHavokCrashFix)
-					InitHavokCrashFix_Init();
+					InitHavokCrashFix::Init();
 				if (Settings::bDetectionFollowerCrashFix)
-					DetectionFollowerCrashFix_Init();
+					DetectionFollowerCrashFix::Init();
 				EventDispatch::RegisterEvents();
 				g_hooksInstalled = true;
 			}
@@ -306,9 +306,9 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			case NVSEMessagingInterface::kMessage_PostPostLoad:
 				DialogueCameraHandler::InstallCameraHooks(); //always install - hooks check bDialogueCamera at runtime
 				InitVATSSpeechFixWithCompatibility();
-				AshPileNames_Init();
+				AshPileNames::Init();
 				if (Settings::bVATSExtender)
-					VATSExtender_Init();
+					VATSExtender::Init();
 				if (Settings::bSuppressObjectives || Settings::bSuppressReputation)
 					ELMO::Init(Settings::bSuppressObjectives != 0, Settings::bSuppressReputation != 0);
 				break;
@@ -340,27 +340,27 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 						bool oldGodMode = Settings::bAutoGodMode;
 						Settings::Load();
 
-						LocationVisitPopup_UpdateSettings(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
+						LocationVisitPopup::UpdateSettings(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
 
 						if (Settings::bQuickDrop || Settings::bQuick180)
-							PlayerUpdateHook_UpdateSettings(Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
-							                                Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
+							PlayerUpdateHook::UpdateSettings(Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
+							                                 Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
 
 						OwnerNameInfoHandler::UpdateSettings();
 
 						if (Settings::bQuickReadNote)
 							QuickReadNote::UpdateSettings(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
 
-						FriendlyFire_SetEnabled(Settings::bFriendlyFire != 0);
-						OwnedBeds_SetEnabled(Settings::bOwnedBeds != 0);
-						OwnedCorpses_SetEnabled(Settings::bOwnedCorpses != 0);
-						KillActorXPFix_SetEnabled(Settings::bKillActorXPFix != 0);
-						NoDoorFade_SetEnabled(Settings::bNoDoorFade != 0);
+						FriendlyFire::SetEnabled(Settings::bFriendlyFire != 0);
+						OwnedBeds::SetEnabled(Settings::bOwnedBeds != 0);
+						OwnedCorpses::SetEnabled(Settings::bOwnedCorpses != 0);
+						KillActorXPFix::SetEnabled(Settings::bKillActorXPFix != 0);
+						NoDoorFade::SetEnabled(Settings::bNoDoorFade != 0);
 						ApplyVATSSpeechFixSetting();
-						ReversePickpocketNoKarmaFix_SetEnabled(Settings::bReversePickpocketNoKarma != 0);
-						CompanionNoInfamy_SetEnabled(Settings::bCompanionNoInfamy != 0);
-						CompanionWeightlessOverencumberedFix_SetEnabled(Settings::bCompanionWeightlessOverencumberedFix != 0);
-						NPCDoorUnlockBlock_SetLevel(Settings::iNPCDoorUnlockBlock);
+						ReversePickpocketNoKarmaFix::SetEnabled(Settings::bReversePickpocketNoKarma != 0);
+						CompanionNoInfamy::SetEnabled(Settings::bCompanionNoInfamy != 0);
+						CompanionWeightlessOverencumberedFix::SetEnabled(Settings::bCompanionWeightlessOverencumberedFix != 0);
+						NPCDoorUnlockBlock::SetLevel(Settings::iNPCDoorUnlockBlock);
 
 						if (Settings::bAutoGodMode && !oldGodMode)
 						{
@@ -380,11 +380,11 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				break;
 
 		case kMessage_MainGameLoop:
-				AshPileNames_Update();
+				AshPileNames::Update();
 				OnConsoleHandler::Update();
 				DialogueTextFilter::Update();
 				if (Settings::bLocationVisitPopup)
-					LocationVisitPopup_Update();
+					LocationVisitPopup::Update();
 				OwnerNameInfoHandler::Update();
 				KeyHeldHandler::Update();
 				DoubleTapHandler::Update();

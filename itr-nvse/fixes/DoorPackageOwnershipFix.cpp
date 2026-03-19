@@ -127,7 +127,3 @@ namespace DoorPackageOwnershipFix
 	}
 }
 
-void DoorPackageOwnershipFix_Init()
-{
-	DoorPackageOwnershipFix::Init();
-}

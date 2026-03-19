@@ -37,7 +37,3 @@ namespace NavMeshInfoCrashFix
 	}
 }
 
-void NavMeshInfoCrashFix_Init()
-{
-	NavMeshInfoCrashFix::Init();
-}

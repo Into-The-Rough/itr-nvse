@@ -1,3 +1,5 @@
 #pragma once
 
-void DoorPackageOwnershipFix_Init();
+namespace DoorPackageOwnershipFix {
+	void Init();
+}

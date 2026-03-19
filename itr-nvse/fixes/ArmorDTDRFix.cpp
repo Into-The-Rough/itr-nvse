@@ -66,7 +66,3 @@ namespace ArmorDTDRFix
 	}
 }
 
-void ArmorDTDRFix_Init()
-{
-	ArmorDTDRFix::Init();
-}

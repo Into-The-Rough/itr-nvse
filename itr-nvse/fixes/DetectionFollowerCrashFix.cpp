@@ -36,7 +36,3 @@ namespace DetectionFollowerCrashFix
 	}
 }
 
-void DetectionFollowerCrashFix_Init()
-{
-	DetectionFollowerCrashFix::Init();
-}

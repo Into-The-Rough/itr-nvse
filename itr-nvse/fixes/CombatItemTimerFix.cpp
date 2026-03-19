@@ -61,7 +61,3 @@ namespace CombatItemTimerFix
 	}
 }
 
-void CombatItemTimerFix_Init()
-{
-	CombatItemTimerFix::Init();
-}

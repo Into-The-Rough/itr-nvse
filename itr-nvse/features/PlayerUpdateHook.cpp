@@ -86,30 +86,26 @@ namespace PlayerUpdateHook
 		}
 	}
 
-	void Init() {
+	void Init(bool quickDrop, int quickDropModKey, int quickDropControlID,
+	          bool quick180, int quick180ModKey, int quick180ControlID)
+	{
+		g_quickDropEnabled = quickDrop;
+		g_quickDropModifierKey = quickDropModKey;
+		g_quickDropControlID = quickDropControlID;
+		g_quick180Enabled = quick180;
+		g_quick180ModifierKey = quick180ModKey;
+		g_quick180ControlID = quick180ControlID;
 		g_originalCallTarget = SafeWrite::GetRelJumpTarget(kAddr_PlayerUpdateCall);
 		SafeWrite::Write32(kAddr_PlayerUpdateCall + 1, (UInt32)PlayerUpdate_Hook - kAddr_PlayerUpdateCall - 5);
 		Log("PlayerUpdateHook installed (chaining to 0x%08X)", g_originalCallTarget);
 	}
-}
 
-void PlayerUpdateHook_Init(bool quickDrop, int quickDropModKey, int quickDropControlID,
-                           bool quick180, int quick180ModKey, int quick180ControlID)
-{
-	PlayerUpdateHook::g_quickDropEnabled = quickDrop;
-	PlayerUpdateHook::g_quickDropModifierKey = quickDropModKey;
-	PlayerUpdateHook::g_quickDropControlID = quickDropControlID;
-	PlayerUpdateHook::g_quick180Enabled = quick180;
-	PlayerUpdateHook::g_quick180ModifierKey = quick180ModKey;
-	PlayerUpdateHook::g_quick180ControlID = quick180ControlID;
-	PlayerUpdateHook::Init();
-}
-
-void PlayerUpdateHook_UpdateSettings(int quickDropModKey, int quickDropControlID,
-                                     int quick180ModKey, int quick180ControlID)
-{
-	PlayerUpdateHook::g_quickDropModifierKey = quickDropModKey;
-	PlayerUpdateHook::g_quickDropControlID = quickDropControlID;
-	PlayerUpdateHook::g_quick180ModifierKey = quick180ModKey;
-	PlayerUpdateHook::g_quick180ControlID = quick180ControlID;
+	void UpdateSettings(int quickDropModKey, int quickDropControlID,
+	                    int quick180ModKey, int quick180ControlID)
+	{
+		g_quickDropModifierKey = quickDropModKey;
+		g_quickDropControlID = quickDropControlID;
+		g_quick180ModifierKey = quick180ModKey;
+		g_quick180ControlID = quick180ControlID;
+	}
 }

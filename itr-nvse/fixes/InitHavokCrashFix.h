@@ -1,3 +1,5 @@
 #pragma once
 
-void InitHavokCrashFix_Init();
+namespace InitHavokCrashFix {
+	void Init();
+}

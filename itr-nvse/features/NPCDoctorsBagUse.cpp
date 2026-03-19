@@ -31,6 +31,12 @@ namespace NPCDoctorsBagUse
 		return false;
 	}
 
+	void Init(float useTimer)
+	{
+		g_cooldown = useTimer;
+		g_enabled = true;
+	}
+
 	void Check(void* combatState)
 	{
 		if (!g_enabled) return;
@@ -49,15 +55,4 @@ namespace NPCDoctorsBagUse
 
 		CombatItemUse::UseItem(actor, item);
 	}
-}
-
-void NPCDoctorsBagUse_Init(float useTimer)
-{
-	NPCDoctorsBagUse::g_cooldown = useTimer;
-	NPCDoctorsBagUse::g_enabled = true;
-}
-
-void NPCDoctorsBagUse_Check(void* combatState)
-{
-	NPCDoctorsBagUse::Check(combatState);
 }

@@ -1,3 +1,5 @@
 #pragma once
 
-void PathingNullActorFix_Init();
+namespace PathingNullActorFix {
+	void Init();
+}
