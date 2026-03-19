@@ -250,21 +250,6 @@ static bool ParseVoicePathIDs(const char* path, UInt32& outFormID, UInt8& outRes
 	return outFormID != 0;
 }
 
-static bool IsValidFormPointer(void* form) {
-	if (!form) return false;
-	//SEH required: called from AI thread where form pointers can be dangling
-	__try {
-		UInt32 refID = *(UInt32*)((UInt8*)form + 0x0C);
-		UInt32 flags = *(UInt32*)((UInt8*)form + 0x08);
-		if (refID == 0) return false;
-		if (flags & 0x20) return false;  //kFormFlags_Deleted
-		if (flags & 0x800) return false; //kFormFlags_Temporary
-		return true;
-	} __except(EXCEPTION_EXECUTE_HANDLER) {
-		return false;
-	}
-}
-
 namespace DialogueTextFilter {
 void Suppress(bool suppress) {
 	g_suppressed = suppress;
@@ -316,7 +301,7 @@ static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt3
 
 static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 	if (DialogueTextFilter::g_suppressed) return;
-	if (!IsValidFormPointer(topicInfo) || !IsValidFormPointer(speaker))
+	if (!topicInfo || !speaker)
 		return;
 
 	UInt32 speakerRefID = ReadRefID(speaker);
