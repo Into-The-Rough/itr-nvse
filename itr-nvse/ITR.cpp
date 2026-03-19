@@ -83,6 +83,7 @@
 #include "commands/ActorValueCommands.h"
 
 #include <cstdio>
+#include <cstdarg>
 #include <cstring>
 
 #include "internal/CallTemplates.h"
@@ -122,12 +123,10 @@ void Console_Print(const char* fmt, ...)
 
 	va_list args;
 	va_start(args, fmt);
-	char buf[4096];
-	vsnprintf(buf, sizeof(buf), fmt, args);
+	// 0x71D0A0 is MenuConsole::Print(fmt, va_list), not a simple Print(const char*).
+	typedef void (__thiscall *_ConsolePrint)(void*, char*, va_list);
+	((_ConsolePrint)0x0071D0A0)(consoleManager, const_cast<char*>(fmt), args);
 	va_end(args);
-
-	typedef void (__thiscall *_ConsolePrint)(void*, const char*);
-	((_ConsolePrint)0x0071D0A0)(consoleManager, buf);
 }
 
 PlayerCharacter* PlayerCharacter::GetSingleton()
