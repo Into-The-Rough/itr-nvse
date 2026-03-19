@@ -20,13 +20,13 @@ enum HkCharState : UInt32 {
 	kHkState_Projectile = 6,
 };
 
-struct ListNode {
-	void* item;
-	ListNode* next;
-};
-
-static void* g_actorProcessManager = (void*)0x11E0E80;
+static void* g_processManager = (void*)0x11E0E80;
 static void** g_thePlayer = (void**)0x011DEA3C;
+
+//ProcessManager layout:
+//+0x04: NiTArray<MobileObject*> objects (vtbl+0x00, data+0x04, capacity+0x08, firstFree+0x0A, numObjs+0x0C)
+//+0x14: UInt32 beginOffsets[4] — 0:High, 1:MidHigh, 2:MidLow, 3:Low
+//+0x24: UInt32 endOffsets[4]
 
 struct TrackedController {
 	void* charCtrl;
@@ -77,28 +77,34 @@ static void* GetCharController(void* actor) {
 	return *(void**)((UInt8*)process + 0x138);
 }
 
-static void CollectFromList(std::vector<TrackedController>& out, UInt32 listOffset) {
-	if (!g_actorProcessManager) return;
+static void TryAddActor(std::vector<TrackedController>& out, void* actor) {
+	if (!actor) return;
+	void* ctrl = GetCharController(actor);
+	if (!ctrl || !IsReadableAddress(ctrl, 0x550)) return;
+	UInt32 refID = *(UInt32*)((UInt8*)actor + 0x0C);
+	if (!refID) return;
+	for (const auto& t : out)
+		if (t.charCtrl == ctrl) return;
+	out.push_back({ctrl, refID, ReadState(ctrl), 0.0f});
+}
 
-	ListNode* node = (ListNode*)((UInt8*)g_actorProcessManager + listOffset);
-	UInt32 guard = 0;
-	while (node && guard++ < 4096) {
-		if (!IsReadableAddress(node, sizeof(ListNode))) break;
-		void* actor = node->item;
-		if (actor) {
-			void* ctrl = GetCharController(actor);
-			if (ctrl) {
-				UInt32 refID = *(UInt32*)((UInt8*)actor + 0x0C);
-				if (refID) {
-					bool found = false;
-					for (const auto& t : out)
-						if (t.charCtrl == ctrl) { found = true; break; }
-					if (!found)
-						out.push_back({ctrl, refID, ReadState(ctrl), 0.0f});
-				}
-			}
-		}
-		node = node->next;
+//iterate ProcessManager::objects NiTArray for buckets 0 (High) and 1 (MidHigh)
+static void CollectFromProcessManager(std::vector<TrackedController>& out) {
+	if (!g_processManager) return;
+
+	UInt8* pm = (UInt8*)g_processManager;
+	void** arr = *(void***)(pm + 0x08); //NiTArray::data (ProcessManager+0x04 vtbl, +0x08 data)
+	if (!arr) return;
+
+	UInt32* beginOffsets = (UInt32*)(pm + 0x14);
+	UInt32* endOffsets = (UInt32*)(pm + 0x24);
+
+	//bucket 0 = High process, bucket 1 = MidHigh process
+	for (int bucket = 0; bucket < 2; bucket++) {
+		UInt32 begin = beginOffsets[bucket];
+		UInt32 end = endOffsets[bucket];
+		for (UInt32 i = begin; i < end; i++)
+			TryAddActor(out, arr[i]);
 	}
 }
 
@@ -106,23 +112,12 @@ static void RebuildTracked() {
 	std::vector<TrackedController> fresh;
 	fresh.reserve(64);
 
-	CollectFromList(fresh, 0x00);
-	CollectFromList(fresh, 0x5C);
+	CollectFromProcessManager(fresh);
 
 	void* player = g_thePlayer ? *g_thePlayer : nullptr;
-	if (player) {
-		void* ctrl = GetCharController(player);
-		if (ctrl) {
-			UInt32 refID = *(UInt32*)((UInt8*)player + 0x0C);
-			bool found = false;
-			for (const auto& t : fresh)
-				if (t.charCtrl == ctrl) { found = true; break; }
-			if (!found)
-				fresh.push_back({ctrl, refID, ReadState(ctrl), 0.0f});
-		}
-	}
+	if (player)
+		TryAddActor(fresh, player);
 
-	//carry over prevState from previous frame's tracking
 	for (auto& f : fresh) {
 		for (const auto& old : g_tracked) {
 			if (old.charCtrl == f.charCtrl) {
