@@ -2,6 +2,7 @@
 
 #include "ReversePickpocketNoKarmaFix.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/CallTemplates.h"
 
 #include "internal/globals.h"
 
@@ -30,29 +31,13 @@ namespace ReversePickpocketNoKarmaFix
 		return false;
 	}
 
-	__declspec(naked) void Hook_TryPickpocket()
+	bool __fastcall Hook_TryPickpocket(void* menu, void*, void* actor, UInt32 count)
 	{
-		__asm
-		{
-			cmp g_enabled, 0
-			je call_original
+		if (g_enabled && ShouldSkipKarma(menu, actor))
+			return true;
 
-			push ecx
-			mov edx, [esp+8]
-			call ShouldSkipKarma
-			pop ecx
-
-			test al, al
-			jnz skip
-
-		call_original:
-			jmp kAddr_TryPickpocket
-
-			skip:
-				mov al, 1
-				ret 8
-			}
-		}
+		return ThisCall<bool>(kAddr_TryPickpocket, menu, actor, count);
+	}
 
 	void SetEnabled(bool enabled)
 	{

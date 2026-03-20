@@ -65,12 +65,10 @@ namespace OnEntryPointHandler {
         Actor* actor;
         TESForm* filterForm1;
         BGSEntryPointPerkEntry* perkEntry;
-        UInt32 returnAddr;
     };
 
     //per-thread to avoid races between AI worker threads
     static thread_local std::vector<EntryPointContext> g_contextStack;
-    static thread_local UInt32 g_savedReturnAddr = 0;
 
     bool g_hookInstalled = false;
     static bool g_useMapB = false; //which buffer to build into next
@@ -122,7 +120,6 @@ static void __cdecl PushContext(UInt32 entryPoint, Actor* actor, TESForm* filter
     ctx.actor = actor;
     ctx.filterForm1 = filterForm1;
     ctx.perkEntry = perkEntry;
-    ctx.returnAddr = OnEntryPointHandler::g_savedReturnAddr;
     OnEntryPointHandler::g_contextStack.push_back(ctx);
 }
 
@@ -151,29 +148,15 @@ static void __cdecl DoDispatchAndPop()
 {
     DispatchEntryPointEvent();
     if (!OnEntryPointHandler::g_contextStack.empty()) {
-        OnEntryPointHandler::g_savedReturnAddr = OnEntryPointHandler::g_contextStack.back().returnAddr;
         OnEntryPointHandler::g_contextStack.pop_back();
     }
 }
 
-static void __cdecl SaveReturnAddr(UInt32 addr)
-{
-    OnEntryPointHandler::g_savedReturnAddr = addr;
-}
-
-static UInt32 __cdecl GetReturnAddr()
-{
-    return OnEntryPointHandler::g_savedReturnAddr;
-}
+static UInt32 s_ExecuteFunctionReturnAddr = 0x5E5ABE;
 
 static __declspec(naked) void Hook_ExecuteFunctionCall()
 {
     __asm {
-        pop eax
-        push eax
-        call SaveReturnAddr
-        add esp, 4
-
         push [ebp-0x74]
         push [ebp+0x10]
         push [ebp+0x0C]
@@ -190,8 +173,7 @@ static __declspec(naked) void Hook_ExecuteFunctionCall()
         popfd
         popad
 
-        call GetReturnAddr
-        jmp eax
+        jmp dword ptr [s_ExecuteFunctionReturnAddr]
     }
 }
 
@@ -202,7 +184,7 @@ bool Init(void* nvseInterface)
     if (nvse->isEditor) return false;
 
     if (!g_hookInstalled) {
-        SafeWrite::WriteRelCall(0x5E5AB9, (UInt32)Hook_ExecuteFunctionCall);
+        SafeWrite::WriteRelJump(0x5E5AB9, (UInt32)Hook_ExecuteFunctionCall);
         g_hookInstalled = true;
     }
 

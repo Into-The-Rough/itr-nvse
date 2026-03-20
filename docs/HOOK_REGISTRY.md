@@ -21,6 +21,7 @@ Prevents infamy when companion kills faction members.
 | 0x89F3DF | call | 5 | ret 8 | conditional | ActorKillReputationHook |
 
 Stack: standard call site, args on stack. Hooks check teammate status and skip reputation call if true.
+Verified 2026-03-20: `Actor::HandleMajorCrimeFactionReputations(0x8B7D20)` and `Actor::HandleMinorCrimeFactionReputations(0x8B7C00)` both end in `retn 8`.
 
 ### ExplodingPantsFix
 Fixes explosive pants bug with alt trigger weapons.
@@ -54,10 +55,10 @@ Prevents karma loss when reverse pickpocketing non-grenades.
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
-| 0x75DBDA | call | 5 | continues/ret 12 | conditional | Hook_TryPickpocket |
-| 0x75DFA7 | call | 5 | continues/ret 12 | conditional | Hook_TryPickpocket |
+| 0x75DBDA | call | 5 | continues | conditional | Hook_TryPickpocket |
+| 0x75DFA7 | call | 5 | continues | conditional | Hook_TryPickpocket |
 
-Stack: ECX=menu, [esp+8]=actor. Calls ShouldSkipKarma to decide.
+Stack: `HandlePickpocket(0x75E0B0)` is `__thiscall` and ends in `retn 8`. The hook is now a typed `__fastcall` replacement with `ECX=menu` and stack args `actor`, `count`, so the compiler owns cleanup.
 
 ### CompanionWeightlessOverencumberedFix
 Allows giving zero-weight items to overencumbered companions.
@@ -197,9 +198,9 @@ Captures jump start and landing transitions. Landing queues pre-clear `fallTimeE
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
-| 0x5E5AB9 | call | 5 | 0x5E5ABE | yes | Hook_ExecuteFunctionCall |
+| 0x5E5AB9 | jump | 5 | 0x5E5ABE | yes | Hook_ExecuteFunctionCall |
 
-Stack: naked hook, dispatches entry point events.
+Stack: inline detour over the original `call BGSEntryPointFunction::ExecuteFunction`. The hook calls `0x5E5B40` itself, then jumps to `0x5E5ABE` so the caller's `add esp, 18h` still runs.
 
 ### OnFastTravelHandler
 
@@ -229,7 +230,7 @@ Stack: ECX=thief, [esp+4..14]=args. Prologue: push ebp; mov ebp,esp; push -1 (5 
 |-----------|------|------|--------|-------|----------|
 | 0x894081 | call | 5 | continues | yes | Hook_SetAnimAction_Jam |
 
-Stack: ECX=actor, args follow. Dispatches jam event.
+Stack: ECX=actor, args follow. Dispatches jam event, then tail-jumps the original callee `Actor::SetAnimAction(0x8A73E0)`.
 
 ### SaveFileSizeHandler
 
@@ -238,7 +239,7 @@ Stack: ECX=actor, args follow. Dispatches jam event.
 | 0x7D6806 | nop | 6 | - | - | (JNZ patch) |
 | 0x7D6931 | call | 5 | continues | yes | Hook |
 
-Stack: ECX=tile, [ebp+C]=entry. Chains to original, calls OnSetupTile.
+Stack: ECX=tile, [ebp+C]=entry. Calls `OnSetupTile`, then tail-jumps the original callee `Tile::PropagateIntValue`.
 
 ---
 
