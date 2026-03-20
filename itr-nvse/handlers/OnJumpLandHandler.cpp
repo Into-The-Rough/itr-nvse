@@ -54,7 +54,6 @@ struct TrackedState {
 };
 
 static std::unordered_map<UInt32, TrackedState> g_trackedStates;
-static bool g_initialized = false;
 
 static UInt32 ReadState(const void* charCtrl) {
 	return charCtrl ? *(const UInt32*)((const UInt8*)charCtrl + 0x3F0) : 0xFFFFFFFF;
@@ -109,7 +108,7 @@ static void CollectFromProcessManager(std::vector<SampledActor>& out) {
 
 		auto** objArray = processManager->objects.data + begin;
 		auto** arrEnd = processManager->objects.data + end;
-		for (; objArray != arrEnd; ++objArray)
+		for (; objArray < arrEnd; ++objArray)
 			TryAddActor(out, seenRefIDs, *objArray);
 	}
 
@@ -153,6 +152,7 @@ void Update()
 			pending.push_back({1, actor.refID, 0.0f});
 
 		bool wasAirborne = (prevState == kHkState_Jumping || prevState == kHkState_InAir);
+		// mirrors old hook: newState == 0 || (newState & 0x2) == 0
 		bool nowGrounded = (actor.state == 0 || (actor.state & 0x2) == 0);
 		if (wasAirborne && nowGrounded && actor.state != kHkState_Jumping)
 			pending.push_back({2, actor.refID, prevFallTime});
@@ -180,7 +180,6 @@ bool Init(void* nvseInterface)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
 	if (nvse->isEditor) return false;
-	g_initialized = true;
 	return true;
 }
 }
