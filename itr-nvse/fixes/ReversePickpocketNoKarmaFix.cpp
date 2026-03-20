@@ -48,11 +48,11 @@ namespace ReversePickpocketNoKarmaFix
 		call_original:
 			jmp kAddr_TryPickpocket
 
-		skip:
-			mov al, 1
-			ret 12
+			skip:
+				mov al, 1
+				ret 8
+			}
 		}
-	}
 
 	void SetEnabled(bool enabled)
 	{
