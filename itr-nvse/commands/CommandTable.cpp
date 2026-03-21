@@ -97,7 +97,7 @@ void RegisterAllCommands(void* nvsePtr)
 	DialogueCameraHandler::RegisterCommands(nvse);                    //SetDialogueCameraDolly, SetDialogueCameraShake
 
 	/*4057*/ nvse->SetOpcodeBase(0x4057);
-	GroundCommands::RegisterCommands(nvse);                           //MoveToGround, GetDistanceToGround
+	GroundCommands::RegisterCommands(nvse);                           //MoveToTerrain, GetDistanceToTerrain, MoveToGround, GetDistanceToGround
 
-	Log("All commands registered (0x4008-0x4058)");
+	Log("All commands registered (0x4008-0x405A)");
 }
