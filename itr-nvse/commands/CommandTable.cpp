@@ -22,6 +22,7 @@
 #include "features/NoWeaponSearch.h"
 #include "features/PreventWeaponSwitch.h"
 #include "handlers/DialogueCameraHandler.h"
+#include "commands/GroundCommands.h"
 
 extern void Log(const char* fmt, ...);
 
@@ -95,5 +96,8 @@ void RegisterAllCommands(void* nvsePtr)
 	/*4055*/ nvse->SetOpcodeBase(0x4055);
 	DialogueCameraHandler::RegisterCommands(nvse);                    //SetDialogueCameraDolly, SetDialogueCameraShake
 
-	Log("All commands registered (0x4008-0x4055)");
+	/*4057*/ nvse->SetOpcodeBase(0x4057);
+	GroundCommands::RegisterCommands(nvse);                           //MoveToGround, GetDistanceToGround
+
+	Log("All commands registered (0x4008-0x4058)");
 }
