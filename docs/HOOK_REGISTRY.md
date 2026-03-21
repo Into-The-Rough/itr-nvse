@@ -16,12 +16,11 @@ Prevents infamy when companion kills faction members.
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
-| 0x8C0E6E | call | 5 | ret 8 | conditional | MurderAlarmReputationHook |
-| 0x8C0930 | call | 5 | ret 8 | conditional | AttackAlarmReputationHook |
-| 0x89F3DF | call | 5 | ret 8 | conditional | ActorKillReputationHook |
+| 0x8C0E6E | call | 5 | normal | conditional | MurderAlarmReputationHook_Wrapper |
+| 0x8C0930 | call | 5 | normal | conditional | AttackAlarmReputationHook_Wrapper |
+| 0x89F3DF | call | 5 | normal | conditional | ActorKillReputationHook_Wrapper |
 
-Stack: standard call site, args on stack. Hooks check teammate status and skip reputation call if true.
-Verified 2026-03-20: `Actor::HandleMajorCrimeFactionReputations(0x8B7D20)` and `Actor::HandleMinorCrimeFactionReputations(0x8B7C00)` both end in `retn 8`.
+Stack: wrappers load the extra condition into `EDX` (`[ebp-0x15]`, `[ebp+8]`, `[ebx+8]`) and tail-jump to typed `__fastcall` replacements. The replacements either return normally or call the original reputation handlers, so the compiler owns the `retn 8` cleanup path.
 
 ### ExplodingPantsFix
 Fixes explosive pants bug with alt trigger weapons.

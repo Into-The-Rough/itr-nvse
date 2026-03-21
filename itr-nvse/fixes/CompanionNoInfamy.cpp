@@ -2,6 +2,7 @@
 
 #include "CompanionNoInfamy.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/CallTemplates.h"
 #include <cstring>
 
 namespace CompanionNoInfamy
@@ -19,66 +20,71 @@ namespace CompanionNoInfamy
 	static const UInt32 kAddr_MurderAlarmReputationCall = 0x8C0E6E;
 	static const UInt32 kAddr_AttackAlarmReputationCall = 0x8C0930;
 	static const UInt32 kAddr_ActorKillReputationCall = 0x89F3DF;
+	static const UInt32 kAddr_PlayerSingleton = 0x11DEA3C;
 
-	//MurderAlarm: checks IsTeammate at [ebp-0x15]
-	__declspec(naked) void MurderAlarmReputationHook()
+	static void __fastcall Hook_MurderAlarmReputation(Actor* actor, UInt32 isTeammate, UInt32 a2, UInt32 a3)
+	{
+		if (isTeammate)
+			return;
+
+		ThisCall<void>(kAddr_HandleMajorCrimeFactionReputations, actor, a2, static_cast<char>(a3));
+	}
+
+	__declspec(naked) static void MurderAlarmReputationHook_Wrapper()
 	{
 		__asm
 		{
-			cmp byte ptr [ebp-0x15], 0
-			jnz skipCall
-			mov eax, kAddr_HandleMajorCrimeFactionReputations
-			jmp eax
-		skipCall:
-			ret 8
+			movzx edx, byte ptr [ebp-0x15]
+			jmp Hook_MurderAlarmReputation
 		}
 	}
 
-	//AttackAlarm: only apply rep hit if attacker is the player
-	//[ebp+8] compared as integer, no dereference - safe even if stack frame is wrong
-	__declspec(naked) void AttackAlarmReputationHook()
+	static void __fastcall Hook_AttackAlarmReputation(Actor* actor, Actor* attacker, UInt32 a2, UInt32 a3)
+	{
+		if (attacker != *(Actor**)kAddr_PlayerSingleton)
+			return;
+
+		ThisCall<void>(kAddr_HandleMajorCrimeFactionReputations, actor, a2, static_cast<char>(a3));
+	}
+
+	__declspec(naked) static void AttackAlarmReputationHook_Wrapper()
 	{
 		__asm
 		{
-			mov eax, [ebp+8]
-			cmp eax, dword ptr ds:[0x11DEA3C]  //PlayerCharacter::pSingleton
-			jne skipAttack
-			mov eax, kAddr_HandleMajorCrimeFactionReputations
-			jmp eax
-		skipAttack:
-			ret 8
+			mov edx, [ebp+8]
+			jmp Hook_AttackAlarmReputation
 		}
 	}
 
-	//Actor::Kill: checks if attacker at [ebx+8] is player
-	__declspec(naked) void ActorKillReputationHook()
+	static void __fastcall Hook_ActorKillReputation(Actor* actor, Actor* attacker, UInt32 a2, UInt32 a3)
+	{
+		if (attacker != *(Actor**)kAddr_PlayerSingleton)
+			return;
+
+		ThisCall<void>(kAddr_HandleMinorCrimeFactionReputations, actor, a2, static_cast<bool>(a3));
+	}
+
+	__declspec(naked) static void ActorKillReputationHook_Wrapper()
 	{
 		__asm
 		{
-			mov eax, [ebx+8]
-			cmp eax, dword ptr ds:[0x11DEA3C]  //PlayerCharacter::pSingleton
-			jne skipKillReputation
-			mov eax, kAddr_HandleMinorCrimeFactionReputations
-			jmp eax
-		skipKillReputation:
-			ret 8
+			mov edx, [ebx+8]
+			jmp Hook_ActorKillReputation
 		}
 	}
 
 	void ApplyPatch()
 	{
-		SafeWrite::WriteRelCall(kAddr_MurderAlarmReputationCall, (UInt32)MurderAlarmReputationHook);
-		SafeWrite::WriteRelCall(kAddr_AttackAlarmReputationCall, (UInt32)AttackAlarmReputationHook);
-		SafeWrite::WriteRelCall(kAddr_ActorKillReputationCall, (UInt32)ActorKillReputationHook);
+		SafeWrite::WriteRelCall(kAddr_MurderAlarmReputationCall, (UInt32)MurderAlarmReputationHook_Wrapper);
+		SafeWrite::WriteRelCall(kAddr_AttackAlarmReputationCall, (UInt32)AttackAlarmReputationHook_Wrapper);
+		SafeWrite::WriteRelCall(kAddr_ActorKillReputationCall, (UInt32)ActorKillReputationHook_Wrapper);
 	}
 
 	void RemovePatch()
 	{
-		for (int i = 0; i < 5; i++) {
-			SafeWrite::Write8(kAddr_MurderAlarmReputationCall + i, g_origBytesMurder[i]);
-			SafeWrite::Write8(kAddr_AttackAlarmReputationCall + i, g_origBytesAttack[i]);
-			SafeWrite::Write8(kAddr_ActorKillReputationCall + i, g_origBytesKill[i]);
-		}
+		SafeWrite::WriteBuf(kAddr_MurderAlarmReputationCall, g_origBytesMurder, sizeof(g_origBytesMurder));
+		SafeWrite::WriteBuf(kAddr_AttackAlarmReputationCall, g_origBytesAttack, sizeof(g_origBytesAttack));
+		SafeWrite::WriteBuf(kAddr_ActorKillReputationCall, g_origBytesKill, sizeof(g_origBytesKill));
 	}
 
 	void SetEnabled(bool enabled)
