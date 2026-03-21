@@ -112,14 +112,16 @@ Fixes timescale during VATS speech.
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
-| 0x77A5B0 | jump | 5 | ret | no | Hook_SetQuestUpdateText |
+| 0x5EC653 | call | 5 | continues | yes | ShowAsCornerMessage |
+| 0x5EC6BA | call | 5 | continues | yes | ShowAsCornerMessage |
+| 0x77377E | call | 5 | continues | yes | ShowAsCornerMessage |
 | 0x6155F0 | jump | 5 | retn | no | ReputationPopup_Hook |
 | 0x615F4A | jump | 5 | 0x615F71 | no | ReputationCornerMessage_Hook_AddRep |
 | 0x61598B | jump | 5 | 0x6159B2 | no | ReputationCornerMessage_Hook_AddRepExact |
 | 0x615C43 | jump | 5 | 0x615C6A | no | ReputationCornerMessage_Hook_RemRepExact |
 | 0x616242 | jump | 5 | 0x616269 | no | ReputationCornerMessage_Hook_RemRep |
 
-Stack: pushad/popfd pattern, calls FormatReputationMessage and QueueUIMsg.
+Stack: objective popup detours replace the three SetQuestUpdateText call sites. Reputation hooks use pushad/popfd pattern, call FormatReputationMessage and QueueUIMsg.
 
 ### LocationVisitPopup
 
