@@ -1,8 +1,9 @@
 //ELMO - convert objectives and reputation popups to corner messages
-//NOT hot-reloadable - mid-function patches break instruction boundaries
+//NOT fully hot-reloadable - reload does not remove inline patches
 
 #include "ELMO.h"
 #include "handlers/CornerMessageHandler.h"
+#include "internal/Detours.h"
 #include "internal/SafeWrite.h"
 #include <cstdio>
 
@@ -16,6 +17,14 @@ namespace ELMO
 
 	typedef bool (*_QueueUIMessage)(const char* msg, UInt32 emotion, const char* ddsPath, const char* soundName, float msgTime, bool maybeNextToDisplay);
 	static const _QueueUIMessage QueueUIMsg = (_QueueUIMessage)0x007052F0;
+	static constexpr UInt32 kObjectiveDisplayedCall = 0x5EC653;
+	static constexpr UInt32 kObjectiveCompletedCall = 0x5EC6BA;
+	static constexpr UInt32 kObjectiveReminderCall = 0x77377E;
+
+	static Detours::CallDetour s_objectiveDisplayedCall;
+	static Detours::CallDetour s_objectiveCompletedCall;
+	static Detours::CallDetour s_objectiveReminderCall;
+	static bool s_objectiveHooksInstalled = false;
 
 	const char* __cdecl FormatReputationMessage(const char* factionName, const char* repTitle, const char* repDesc)
 	{
@@ -32,33 +41,34 @@ namespace ELMO
 		}
 	}
 
-	__declspec(naked) void Hook_SetQuestUpdateText()
+	// Hook direct callers so other plugins can still patch SetQuestUpdateText itself.
+	bool InstallObjectiveHooks()
 	{
-		__asm {
-			push ebp
-			mov ebp, esp
-			sub esp, 8
-			push eax
-			push ecx
-			push edx
-			mov eax, [ebp + 8]
-			push eax
-			mov ecx, [ebp + 0xC]
-			push ecx
-			mov edx, [ebp + 0x10]
-			push edx
-			push edx
-			push ecx
-			push eax
-			call ShowAsCornerMessage
-			add esp, 0xC
-			pop edx
-			pop ecx
-			pop eax
-			mov esp, ebp
-			pop ebp
-			ret
+		if (s_objectiveHooksInstalled)
+			return true;
+
+		static constexpr UInt32 kObjectiveHookSites[] = {
+			kObjectiveDisplayedCall,
+			kObjectiveCompletedCall,
+			kObjectiveReminderCall
+		};
+
+		for (auto hookSite : kObjectiveHookSites) {
+			if (*reinterpret_cast<UInt8*>(hookSite) != 0xE8) {
+				Log("ELMO: Objective hook site %08X is not a CALL", hookSite);
+				return false;
+			}
 		}
+
+		if (!s_objectiveDisplayedCall.WriteRelCall(kObjectiveDisplayedCall, ShowAsCornerMessage) ||
+			!s_objectiveCompletedCall.WriteRelCall(kObjectiveCompletedCall, ShowAsCornerMessage) ||
+			!s_objectiveReminderCall.WriteRelCall(kObjectiveReminderCall, ShowAsCornerMessage)) {
+			Log("ELMO: Failed to install objective call-site hooks");
+			return false;
+		}
+
+		s_objectiveHooksInstalled = true;
+		return true;
 	}
 
 	__declspec(naked) void ReputationPopup_Hook()
@@ -285,10 +295,8 @@ namespace ELMO
 
 	void Init(bool suppressObjectives, bool suppressReputation)
 	{
-		if (suppressObjectives) {
-			SafeWrite::WriteRelJump(0x77A5B0, (UInt32)Hook_SetQuestUpdateText);
-			Log("ELMO: Objectives popup suppressed");
-		}
+		if (suppressObjectives && InstallObjectiveHooks())
+			Log("ELMO: Objectives popup suppressed via call-site hooks");
 
 		if (suppressReputation) {
 			SafeWrite::WriteRelJump(0x6155F0, (UInt32)ReputationPopup_Hook);

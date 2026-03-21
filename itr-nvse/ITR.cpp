@@ -337,6 +337,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					if (_stricmp(pluginName, "itr-nvse") == 0)
 					{
 						bool oldGodMode = Settings::bAutoGodMode;
+						bool oldSuppressObjectives = Settings::bSuppressObjectives != 0;
+						bool oldSuppressReputation = Settings::bSuppressReputation != 0;
 						Settings::Load();
 
 						LocationVisitPopup::UpdateSettings(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
@@ -370,6 +372,13 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 						{
 							*(UInt8*)0x11E07BA = 0;
 							Console_Print("itr-nvse: God mode disabled");
+						}
+
+						if ((Settings::bSuppressObjectives != 0) != oldSuppressObjectives ||
+							(Settings::bSuppressReputation != 0) != oldSuppressReputation)
+						{
+							Log("Config reload changed objective/reputation popup suppression; restart required");
+							Console_Print("itr-nvse: Suppress Objectives/Reputation changes require restart");
 						}
 
 						Log("Config reloaded via ReloadPluginConfig");
