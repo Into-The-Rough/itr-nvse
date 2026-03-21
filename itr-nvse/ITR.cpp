@@ -62,6 +62,7 @@
 #include "features/MessageBoxQuickClose.h"
 #include "features/PreventWeaponSwitch.h"
 #include "features/ELMO.h"
+#include "commands/GroundCommands.h"
 #include "features/LocationVisitPopup.h"
 #include "features/QuickReadNote.h"
 #include "features/VATSExtender.h"
@@ -320,6 +321,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					Log("Music state reset for post-load");
 				}
 				WeaponEmissiveCommands::ClearState();
+				GroundCommands::ClearState();
 
 				OnEntryPointHandler::BuildEntryMap();
 				if (Settings::bAutoGodMode && !g_godModeExecuted)
@@ -408,6 +410,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				AutoQuickLoad::Update();
 				if (Settings::bAltTabMute)
 					AltTabMute::Update();
+				GroundCommands::Update();
 				break;
 	}
 }
