@@ -425,14 +425,14 @@
 					"title": "Suppress Objectives",
 					"type": 5,
 					"enable": 1,
-					"mouse": "Convert quest objectives popup to corner message",
+					"mouse": "Convert quest objectives popup to corner message. Requires restart after changing.",
 					"vars": [{ "configINI": "Tweaks:bSuppressObjectives", "default": 1 }]
 				},
 				"3": {
 					"title": "Suppress Reputation",
 					"type": 5,
 					"enable": 1,
-					"mouse": "Convert reputation change popup to corner message",
+					"mouse": "Convert reputation change popup to corner message. Requires restart after changing.",
 					"vars": [{ "configINI": "Tweaks:bSuppressReputation", "default": 1 }]
 				}
 			}
