@@ -65,9 +65,9 @@ Allows giving zero-weight items to overencumbered companions.
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
-| 0x75DE17 | jump | 5 | 0x75DE1C/0x75DEA5 | conditional | Hook_OverburdenedBranch |
+| 0x75DE01 | call | 5 | normal | typed replacement | Hook_GetMaxCarryWeightPerkModified_Wrapper |
 
-Stack: uses EBP frame locals in `ContainerMenu::TransferItem` to compute added transfer weight (`[ebp-0x14C] - [ebp-0x144]`).
+Stack: wrapper loads `ContainerMenu::TransferItem`'s `arg_0` item count from `[ebp+8]` into `EDX` and tail-jumps to a typed `__fastcall` replacement. The replacement calls `Actor::GetMaxCarryWeightPerkModified(0x8A0C20)` and only overrides the immediate compare when the selected item adds non-positive weight.
 
 ### SlowMotionPhysicsFix
 Prevents physics explosion during extreme slowmo.
