@@ -38,6 +38,30 @@ TEST(SafeWrite_Write32)
 	return true;
 }
 
+TEST(SafeWrite_WriteBuf)
+{
+	ClearBuf();
+	const UInt8 src[] = { 0x10, 0x20, 0x30, 0x40, 0x50 };
+	SafeWrite::WriteBuf((UInt32)&g_testBuf[4], src, sizeof(src));
+	for (int i = 0; i < 5; i++) {
+		ASSERT_EQ(g_testBuf[4 + i], src[i]);
+	}
+	ASSERT_EQ(g_testBuf[3], 0xCC);
+	ASSERT_EQ(g_testBuf[9], 0xCC);
+	return true;
+}
+
+TEST(SafeWrite_WriteBuf_ZeroSize)
+{
+	ClearBuf();
+	const UInt8 src[] = { 0x11, 0x22, 0x33 };
+	SafeWrite::WriteBuf((UInt32)&g_testBuf[0], src, 0);
+	for (int i = 0; i < 3; i++) {
+		ASSERT_EQ(g_testBuf[i], 0xCC);
+	}
+	return true;
+}
+
 TEST(SafeWrite_WriteRelCall_Opcode)
 {
 	ClearBuf();
@@ -114,6 +138,15 @@ TEST(SafeWrite_WriteNop_Multiple)
 		ASSERT_EQ(g_testBuf[i], 0x90);
 	}
 	ASSERT_EQ(g_testBuf[6], 0xCC); //unchanged
+	return true;
+}
+
+TEST(SafeWrite_WriteNop_ZeroSize)
+{
+	ClearBuf();
+	SafeWrite::WriteNop((UInt32)&g_testBuf[0], 0);
+	ASSERT_EQ(g_testBuf[0], 0xCC);
+	ASSERT_EQ(g_testBuf[1], 0xCC);
 	return true;
 }
 
