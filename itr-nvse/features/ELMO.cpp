@@ -3,23 +3,29 @@
 
 #include "ELMO.h"
 #include "handlers/CornerMessageHandler.h"
+#include "internal/CallTemplates.h"
 #include "internal/Detours.h"
 #include "internal/SafeWrite.h"
 #include <cstdio>
 
 #include "internal/globals.h"
 
-static auto TrackMessageMeta_Fn = &CornerMessageHandler::TrackMessageMeta;
-
 namespace ELMO
 {
 	char g_msgBuffer[512];
+
+	enum eEmotion : UInt32 {
+		kEmotion_Neutral = 0,
+		kEmotion_Happy = 1,
+	};
 
 	typedef bool (*_QueueUIMessage)(const char* msg, UInt32 emotion, const char* ddsPath, const char* soundName, float msgTime, bool maybeNextToDisplay);
 	static const _QueueUIMessage QueueUIMsg = (_QueueUIMessage)0x007052F0;
 	static constexpr UInt32 kObjectiveDisplayedCall = 0x5EC653;
 	static constexpr UInt32 kObjectiveCompletedCall = 0x5EC6BA;
 	static constexpr UInt32 kObjectiveReminderCall = 0x77377E;
+	static constexpr float kObjectiveDisplayTime = 10.0f;
+	static constexpr float kReputationDisplayTime = 8.0f;
 
 	static Detours::CallDetour s_objectiveDisplayedCall;
 	static Detours::CallDetour s_objectiveCompletedCall;
@@ -32,12 +38,44 @@ namespace ELMO
 		return g_msgBuffer;
 	}
 
-	void __cdecl ShowAsCornerMessage(const char* text, UInt32 isCompleted, UInt32 allowDisplayMultiple)
+	static UInt32 GetObjectiveEmotion(UInt32 isCompleted, UInt32 isReminder)
+	{
+		if (isReminder)
+			return kEmotion_Neutral;
+		return isCompleted ? kEmotion_Happy : kEmotion_Neutral;
+	}
+
+	static const char* GetINIString(UInt32 settingAddr)
+	{
+		return ThisCall<const char*>(0x403DF0, reinterpret_cast<void*>(settingAddr));
+	}
+
+	static void ShowReputationThresholdAsCornerMessage(void* reputation)
+	{
+		if (!reputation)
+			return;
+
+		auto repDesc = ThisCall<const char*>(0x616890, reputation);
+		auto repTitle = ThisCall<const char*>(0x616710, reputation);
+		auto factionName = ThisCall<const char*>(0x408DA0, reinterpret_cast<UInt8*>(reputation) + 0x18);
+		auto message = FormatReputationMessage(
+			factionName ? factionName : "",
+			repTitle ? repTitle : "",
+			repDesc ? repDesc : "");
+		auto iconPath = ThisCall<const char*>(0x6167D0, reputation);
+		auto wasPositive = *reinterpret_cast<UInt32*>(reinterpret_cast<UInt8*>(reputation) + 0x4C) == 1;
+		auto soundPath = GetINIString(wasPositive ? 0x11CBCB0 : 0x11CBA30);
+
+		CornerMessageHandler::TrackMessageMeta(message, kReputationDisplayTime, kCornerMeta_ReputationChange);
+		QueueUIMsg(message, kEmotion_Neutral, iconPath, soundPath, kReputationDisplayTime, false);
+	}
+
+	void __cdecl ShowAsCornerMessage(const char* text, UInt32 isCompleted, UInt32 isReminder)
 	{
 		if (text) {
 			const int metaType = isCompleted ? kCornerMeta_ObjectiveCompleted : kCornerMeta_ObjectiveDisplayed;
-			CornerMessageHandler::TrackMessageMeta(text, 10.0f, metaType);
-			QueueUIMsg(text, 2, nullptr, nullptr, 10.0f, false);
+			CornerMessageHandler::TrackMessageMeta(text, kObjectiveDisplayTime, metaType);
+			QueueUIMsg(text, GetObjectiveEmotion(isCompleted, isReminder), nullptr, nullptr, kObjectiveDisplayTime, false);
 		}
 	}
 
@@ -71,90 +109,22 @@ namespace ELMO
 		return true;
 	}
 
-	__declspec(naked) void ReputationPopup_Hook()
+	bool __fastcall ReputationPopup_Hook(void* reputation)
 	{
-		static const UInt32 queueUIMsg = 0x007052F0;
-		static const UInt32 getRepDesc = 0x00616890;
-		static const UInt32 getRepTitle = 0x00616710;
-		static const UInt32 getFactionName = 0x00408DA0;
-
-		__asm {
-			push ebp
-			mov ebp, esp
-			pushad
-			pushfd
-			mov edi, ecx
-			mov ecx, edi
-			call getRepDesc
-			push eax
-			mov ecx, edi
-			call getRepTitle
-			push eax
-			mov ecx, edi
-			add ecx, 0x18
-			call getFactionName
-			push eax
-				call FormatReputationMessage
-				add esp, 0xC
-				mov esi, eax
-				push 3
-				push 0x41000000
-				push esi
-				call [TrackMessageMeta_Fn]
-				add esp, 0xC
-				push 0
-				push 0x41000000
-				push 0
-				push 0
-				push 2
-				push esi
-				call queueUIMsg
-				add esp, 0x18
-			popfd
-			popad
-			pop ebp
-			retn
-		}
+		ShowReputationThresholdAsCornerMessage(reputation);
+		return true;
 	}
 
 	__declspec(naked) void ReputationCornerMessage_Hook_AddRep()
 	{
-		static const UInt32 queueUIMsg = 0x007052F0;
-		static const UInt32 getRepDesc = 0x00616890;
-		static const UInt32 getRepTitle = 0x00616710;
-		static const UInt32 getFactionName = 0x00408DA0;
 		static const UInt32 returnAddr = 0x615F71;
 
 		__asm {
 			pushad
 			pushfd
-			mov edi, [ebp - 0x128]
-			mov ecx, edi
-			call getRepDesc
-			push eax
-			mov ecx, edi
-			call getRepTitle
-			push eax
-			mov ecx, edi
-			add ecx, 0x18
-			call getFactionName
-			push eax
-				call FormatReputationMessage
-				add esp, 0xC
-				mov esi, eax
-				push 3
-				push 0x41000000
-				push esi
-				call [TrackMessageMeta_Fn]
-				add esp, 0xC
-				push 0
-				push 0x41000000
-				push 0
-				push 0
-				push 2
-				push esi
-				call queueUIMsg
-				add esp, 0x18
+			push dword ptr [ebp - 0x128]
+			call ShowReputationThresholdAsCornerMessage
+			add esp, 4
 			popfd
 			popad
 			jmp returnAddr
@@ -163,42 +133,14 @@ namespace ELMO
 
 	__declspec(naked) void ReputationCornerMessage_Hook_AddRepExact()
 	{
-		static const UInt32 queueUIMsg = 0x007052F0;
-		static const UInt32 getRepDesc = 0x00616890;
-		static const UInt32 getRepTitle = 0x00616710;
-		static const UInt32 getFactionName = 0x00408DA0;
 		static const UInt32 returnAddr = 0x6159B2;
 
 		__asm {
 			pushad
 			pushfd
-			mov edi, [ebp - 0x110]
-			mov ecx, edi
-			call getRepDesc
-			push eax
-			mov ecx, edi
-			call getRepTitle
-			push eax
-			mov ecx, edi
-			add ecx, 0x18
-			call getFactionName
-			push eax
-				call FormatReputationMessage
-				add esp, 0xC
-				mov esi, eax
-				push 3
-				push 0x41000000
-				push esi
-				call [TrackMessageMeta_Fn]
-				add esp, 0xC
-				push 0
-				push 0x41000000
-				push 0
-				push 0
-				push 2
-				push esi
-				call queueUIMsg
-				add esp, 0x18
+			push dword ptr [ebp - 0x110]
+			call ShowReputationThresholdAsCornerMessage
+			add esp, 4
 			popfd
 			popad
 			jmp returnAddr
@@ -207,42 +149,14 @@ namespace ELMO
 
 	__declspec(naked) void ReputationCornerMessage_Hook_RemRepExact()
 	{
-		static const UInt32 queueUIMsg = 0x007052F0;
-		static const UInt32 getRepDesc = 0x00616890;
-		static const UInt32 getRepTitle = 0x00616710;
-		static const UInt32 getFactionName = 0x00408DA0;
 		static const UInt32 returnAddr = 0x615C6A;
 
 		__asm {
 			pushad
 			pushfd
-			mov edi, [ebp - 0x110]
-			mov ecx, edi
-			call getRepDesc
-			push eax
-			mov ecx, edi
-			call getRepTitle
-			push eax
-			mov ecx, edi
-			add ecx, 0x18
-			call getFactionName
-			push eax
-				call FormatReputationMessage
-				add esp, 0xC
-				mov esi, eax
-				push 3
-				push 0x41000000
-				push esi
-				call [TrackMessageMeta_Fn]
-				add esp, 0xC
-				push 0
-				push 0x41000000
-				push 0
-				push 0
-				push 2
-				push esi
-				call queueUIMsg
-				add esp, 0x18
+			push dword ptr [ebp - 0x110]
+			call ShowReputationThresholdAsCornerMessage
+			add esp, 4
 			popfd
 			popad
 			jmp returnAddr
@@ -251,42 +165,14 @@ namespace ELMO
 
 	__declspec(naked) void ReputationCornerMessage_Hook_RemRep()
 	{
-		static const UInt32 queueUIMsg = 0x007052F0;
-		static const UInt32 getRepDesc = 0x00616890;
-		static const UInt32 getRepTitle = 0x00616710;
-		static const UInt32 getFactionName = 0x00408DA0;
 		static const UInt32 returnAddr = 0x616269;
 
 		__asm {
 			pushad
 			pushfd
-			mov edi, [ebp - 0x128]
-			mov ecx, edi
-			call getRepDesc
-			push eax
-			mov ecx, edi
-			call getRepTitle
-			push eax
-			mov ecx, edi
-			add ecx, 0x18
-			call getFactionName
-			push eax
-				call FormatReputationMessage
-				add esp, 0xC
-				mov esi, eax
-				push 3
-				push 0x41000000
-				push esi
-				call [TrackMessageMeta_Fn]
-				add esp, 0xC
-				push 0
-				push 0x41000000
-				push 0
-				push 0
-				push 2
-				push esi
-				call queueUIMsg
-				add esp, 0x18
+			push dword ptr [ebp - 0x128]
+			call ShowReputationThresholdAsCornerMessage
+			add esp, 4
 			popfd
 			popad
 			jmp returnAddr
