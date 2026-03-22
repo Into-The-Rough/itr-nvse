@@ -102,5 +102,8 @@ void RegisterAllCommands(void* nvsePtr)
 	/*4057*/ nvse->SetOpcodeBase(0x4057);
 	GroundCommands::RegisterCommands(nvse);                           //MoveToTerrain, GetDistanceToTerrain, MoveToGround, GetDistanceToGround
 
-	Log("All commands registered (0x4008-0x405A)");
+	/*405B*/ nvse->SetOpcodeBase(0x405B);
+	ImperativeCommands::RegisterCommands7(nvse);                     //ForceCrouch, DisableCrouching
+
+	Log("All commands registered (0x4008-0x405C)");
 }
