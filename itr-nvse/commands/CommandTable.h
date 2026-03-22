@@ -49,7 +49,9 @@
 // 0x4055  SetDialogueCameraDolly
 // 0x4056  SetDialogueCameraShake
 //
-// gaps: 0x4032-0x4033, 0x403D-0x404F
-// next free: 0x4057
+// 0x405B  ForceCrouch
+// 0x405C  DisableCrouching
+// gaps: 0x4033, 0x403D-0x404F
+// next free: 0x405D
 
 void RegisterAllCommands(void* nvse);

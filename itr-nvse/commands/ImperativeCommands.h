@@ -10,4 +10,5 @@ namespace ImperativeCommands {
 	void RegisterCommands6(void* nvse);  //0x4032: ResurrectActorEx
 	void RegisterCommands4(void* nvse);  //0x4035-0x4037
 	void RegisterCommands5(void* nvse);  //0x403B: SetRaceAlt
+	void RegisterCommands7(void* nvse);  //0x405B: ForceCrouch, DisableCrouching
 }
