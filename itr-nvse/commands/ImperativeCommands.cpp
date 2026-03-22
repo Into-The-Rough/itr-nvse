@@ -16,6 +16,7 @@
 #include "nvse/ParamInfos.h"
 #include <vector>
 #include <algorithm>
+#include <set>
 #include <cmath>
 
 extern const _ExtractArgs ExtractArgs;
@@ -23,6 +24,8 @@ extern const _ExtractArgs ExtractArgs;
 extern NVSEArrayVarInterface* g_arrInterface;
 
 using namespace FormUtils;
+
+static std::set<UInt32> g_crouchDisabledActors;
 
 namespace
 {
@@ -1502,11 +1505,13 @@ void ImperativeCommands::Update()
 
 		++i;
 	}
+
 }
 
 void ImperativeCommands::ClearState()
 {
 	s_resurrectActorExTraces.clear();
+	g_crouchDisabledActors.clear();
 }
 
 //ForceReload - forces actor to play reload animation and refill ammo
@@ -1849,4 +1854,138 @@ void RegisterCommands5(void* nvsePtr)
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_SetRaceAlt);
 }
+
+//--- ForceCrouch / DisableCrouching ---
+//
+//three hook sites block all paths that set sneak on NPCs:
+//  0x88977A - Actor::Update follower sneak matching (OR's 0x400 for player followers)
+//  0x998681 - CombatState::UpdateDetection (sets bShouldSneak to match target)
+//  0x9986D2 - CombatState::UpdateDetection (clears bShouldSneak when out of range)
+
+typedef void (__thiscall *_SetShouldSneak)(void*, bool);
+typedef void (__thiscall *_SetMovementFlag)(Actor*, UInt32);
+static const _SetShouldSneak SetShouldSneak = (_SetShouldSneak)0x981520;
+static const _SetMovementFlag OrigSetMovementFlag = (_SetMovementFlag)0x8B39F0;
+
+//hook for Actor::Update follower sneak matching at 0x88977A
+//original: call Actor::SetMovementFlag with flags | 0x400
+static void __fastcall Hook_FollowerSetMovementFlag(Actor* actor, void* edx, UInt32 flags) {
+	if (g_crouchDisabledActors.count(actor->refID))
+		flags &= ~0x400; //strip sneak
+	OrigSetMovementFlag(actor, flags);
+}
+
+//hook for CombatState::UpdateDetection SetShouldSneak calls
+static void __fastcall Hook_SetShouldSneak(void* cc, void* edx, bool shouldSneak) {
+	Actor* owner = *(Actor**)((UInt8*)cc + 0xBC);
+	if (owner && g_crouchDisabledActors.count(owner->refID)) {
+		*(UInt8*)((UInt8*)cc + 0xC7) = 0;
+		return;
+	}
+	SetShouldSneak(cc, shouldSneak);
+}
+
+static bool g_crouchHookInstalled = false;
+static void InstallCrouchHooks() {
+	if (g_crouchHookInstalled) return;
+
+	//follower path: Actor::Update at 0x88977A
+	if (*(UInt8*)0x88977A != 0xE8) {
+		Log("DisableCrouching: site 0x88977A expected CALL, found 0x%02X", *(UInt8*)0x88977A);
+		return;
+	}
+	DWORD oldProtect;
+	VirtualProtect((void*)0x88977A, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
+	*(UInt32*)(0x88977A + 1) = (UInt32)Hook_FollowerSetMovementFlag - 0x88977A - 5;
+	VirtualProtect((void*)0x88977A, 5, oldProtect, &oldProtect);
+	FlushInstructionCache(GetCurrentProcess(), (void*)0x88977A, 5);
+
+	//combat path: two call sites in UpdateDetection
+	if (*(UInt8*)0x998681 != 0xE8 || *(UInt8*)0x9986D2 != 0xE8) {
+		Log("DisableCrouching: unexpected bytes at combat hook sites");
+		return;
+	}
+	VirtualProtect((void*)0x998681, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
+	*(UInt32*)(0x998681 + 1) = (UInt32)Hook_SetShouldSneak - 0x998681 - 5;
+	VirtualProtect((void*)0x998681, 5, oldProtect, &oldProtect);
+	FlushInstructionCache(GetCurrentProcess(), (void*)0x998681, 5);
+
+	VirtualProtect((void*)0x9986D2, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
+	*(UInt32*)(0x9986D2 + 1) = (UInt32)Hook_SetShouldSneak - 0x9986D2 - 5;
+	VirtualProtect((void*)0x9986D2, 5, oldProtect, &oldProtect);
+	FlushInstructionCache(GetCurrentProcess(), (void*)0x9986D2, 5);
+
+	g_crouchHookInstalled = true;
+	Log("DisableCrouching: hooks installed (follower + combat)");
+}
+
+static ParamInfo kParams_ForceCrouch[1] = {
+	{"crouch", kParamType_Integer, 0},
+};
+DEFINE_COMMAND_PLUGIN(ForceCrouch, "Force actor to crouch (1) or stand (0)", 1, 1, kParams_ForceCrouch);
+
+bool Cmd_ForceCrouch_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	UInt32 crouch = 0;
+	if (!ExtractArgs(EXTRACT_ARGS, &crouch)) return true;
+
+	Actor* actor = (Actor*)thisObj;
+	if (!actor || actor->typeID < kFormType_Creature) return true;
+
+	//set via all paths
+	void* cc = GetCombatController(actor);
+	if (cc)
+		SetShouldSneak(cc, (bool)crouch);
+	*(UInt8*)((UInt8*)actor + 0x125) = crouch ? 1 : 0; //bForceSneak
+	OrigSetMovementFlag(actor, crouch ? 0x400 : 0);
+
+	*result = 1;
+	if (IsConsoleMode())
+		Console_Print("ForceCrouch >> %s", crouch ? "crouch" : "stand");
+	return true;
+}
+
+static ParamInfo kParams_DisableCrouching[1] = {
+	{"disable", kParamType_Integer, 0},
+};
+DEFINE_COMMAND_PLUGIN(DisableCrouching, "Prevent actor from crouching (1=disable, 0=enable)", 1, 1, kParams_DisableCrouching);
+
+bool Cmd_DisableCrouching_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	UInt32 disable = 0;
+	if (!ExtractArgs(EXTRACT_ARGS, &disable)) return true;
+
+	Actor* actor = (Actor*)thisObj;
+	if (!actor || actor->typeID < kFormType_Creature) return true;
+
+	InstallCrouchHooks();
+
+	if (disable) {
+		g_crouchDisabledActors.insert(actor->refID);
+		//force stand immediately
+		void* cc = GetCombatController(actor);
+		if (cc) {
+			*(UInt8*)((UInt8*)cc + 0xC7) = 0;
+			SetShouldSneak(cc, false);
+		}
+		*(UInt8*)((UInt8*)actor + 0x125) = 0;
+	} else {
+		g_crouchDisabledActors.erase(actor->refID);
+	}
+
+	*result = 1;
+	if (IsConsoleMode())
+		Console_Print("DisableCrouching >> %s", disable ? "disabled" : "enabled");
+	return true;
+}
+
+void RegisterCommands7(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_ForceCrouch);
+	nvse->RegisterCommand(&kCommandInfo_DisableCrouching);
+}
+
 }
