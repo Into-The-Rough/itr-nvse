@@ -1974,12 +1974,12 @@ bool Cmd_DisableCrouching_Execute(COMMAND_ARGS)
 	auto* actor = (Actor*)thisObj;
 	if (disable) {
 		g_crouchDisabledActors.insert(actor->refID);
-		//force stand immediately
+		//force stand immediately - SetShouldSneak clears bShouldSneak AND
+		//updates movement flags via SetMovementFlags. don't pre-zero 0xC7
+		//or the early-out check (bShouldSneak != a2) skips the flag update.
 		void* cc = GetCombatController(actor);
-		if (cc) {
-			*(UInt8*)((UInt8*)cc + 0xC7) = 0;
+		if (cc)
 			SetShouldSneak(cc, false);
-		}
 		*(UInt8*)((UInt8*)actor + 0x125) = 0;
 	} else {
 		g_crouchDisabledActors.erase(actor->refID);
