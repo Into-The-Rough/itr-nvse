@@ -1876,24 +1876,32 @@ static void __fastcall Hook_FollowerSetMovementFlag(Actor* actor, void* edx, UIn
 }
 
 //hook for CombatState::UpdateDetection SetShouldSneak calls
+//call original with false instead of just zeroing the byte - original also
+//pushes movement flags via SetMovementFlags to keep mover state consistent
 static void __fastcall Hook_SetShouldSneak(void* cc, void* edx, bool shouldSneak) {
 	Actor* owner = *(Actor**)((UInt8*)cc + 0xBC);
 	if (owner && g_crouchDisabledActors.count(owner->refID)) {
-		*(UInt8*)((UInt8*)cc + 0xC7) = 0;
+		SetShouldSneak(cc, false);
 		return;
 	}
 	SetShouldSneak(cc, shouldSneak);
 }
 
 static bool g_crouchHookInstalled = false;
-static void InstallCrouchHooks() {
-	if (g_crouchHookInstalled) return;
+static bool InstallCrouchHooks() {
+	if (g_crouchHookInstalled) return true;
 
-	//follower path: Actor::Update at 0x88977A
+	//validate all sites before patching any
 	if (*(UInt8*)0x88977A != 0xE8) {
 		Log("DisableCrouching: site 0x88977A expected CALL, found 0x%02X", *(UInt8*)0x88977A);
-		return;
+		return false;
 	}
+	if (*(UInt8*)0x998681 != 0xE8 || *(UInt8*)0x9986D2 != 0xE8) {
+		Log("DisableCrouching: unexpected bytes at combat hook sites");
+		return false;
+	}
+
+	//follower path: Actor::Update at 0x88977A
 	DWORD oldProtect;
 	VirtualProtect((void*)0x88977A, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
 	*(UInt32*)(0x88977A + 1) = (UInt32)Hook_FollowerSetMovementFlag - 0x88977A - 5;
@@ -1901,10 +1909,6 @@ static void InstallCrouchHooks() {
 	FlushInstructionCache(GetCurrentProcess(), (void*)0x88977A, 5);
 
 	//combat path: two call sites in UpdateDetection
-	if (*(UInt8*)0x998681 != 0xE8 || *(UInt8*)0x9986D2 != 0xE8) {
-		Log("DisableCrouching: unexpected bytes at combat hook sites");
-		return;
-	}
 	VirtualProtect((void*)0x998681, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
 	*(UInt32*)(0x998681 + 1) = (UInt32)Hook_SetShouldSneak - 0x998681 - 5;
 	VirtualProtect((void*)0x998681, 5, oldProtect, &oldProtect);
@@ -1916,7 +1920,7 @@ static void InstallCrouchHooks() {
 	FlushInstructionCache(GetCurrentProcess(), (void*)0x9986D2, 5);
 
 	g_crouchHookInstalled = true;
-	Log("DisableCrouching: hooks installed (follower + combat)");
+	return true;
 }
 
 static ParamInfo kParams_ForceCrouch[1] = {
@@ -1929,16 +1933,23 @@ bool Cmd_ForceCrouch_Execute(COMMAND_ARGS)
 	*result = 0;
 	UInt32 crouch = 0;
 	if (!ExtractArgs(EXTRACT_ARGS, &crouch)) return true;
+	if (!IsActorRef(thisObj)) return true;
 
-	Actor* actor = (Actor*)thisObj;
-	if (!actor || actor->typeID < kFormType_Creature) return true;
+	auto* actor = (Actor*)thisObj;
+	typedef UInt32 (__thiscall *_GetFlags)(Actor*);
+	auto GetMoveFlags = (_GetFlags)0x8846E0;
 
-	//set via all paths
 	void* cc = GetCombatController(actor);
 	if (cc)
 		SetShouldSneak(cc, (bool)crouch);
 	*(UInt8*)((UInt8*)actor + 0x125) = crouch ? 1 : 0; //bForceSneak
-	OrigSetMovementFlag(actor, crouch ? 0x400 : 0);
+	//read-modify-write to preserve other movement bits
+	UInt32 flags = GetMoveFlags(actor);
+	if (crouch)
+		flags |= 0x400;
+	else
+		flags &= ~0x400;
+	OrigSetMovementFlag(actor, flags);
 
 	*result = 1;
 	if (IsConsoleMode())
@@ -1956,12 +1967,11 @@ bool Cmd_DisableCrouching_Execute(COMMAND_ARGS)
 	*result = 0;
 	UInt32 disable = 0;
 	if (!ExtractArgs(EXTRACT_ARGS, &disable)) return true;
+	if (!IsActorRef(thisObj)) return true;
 
-	Actor* actor = (Actor*)thisObj;
-	if (!actor || actor->typeID < kFormType_Creature) return true;
+	if (!InstallCrouchHooks()) return true;
 
-	InstallCrouchHooks();
-
+	auto* actor = (Actor*)thisObj;
 	if (disable) {
 		g_crouchDisabledActors.insert(actor->refID);
 		//force stand immediately
