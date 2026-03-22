@@ -320,8 +320,9 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					ResetMusicStateForLoad();
 					Log("Music state reset for post-load");
 				}
-				WeaponEmissiveCommands::ClearState();
-				GroundCommands::ClearState();
+					WeaponEmissiveCommands::ClearState();
+					GroundCommands::ClearState();
+					ImperativeCommands::ClearState();
 
 				OnEntryPointHandler::BuildEntryMap();
 				if (Settings::bAutoGodMode && !g_godModeExecuted)
@@ -408,10 +409,11 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bDialogueCamera)
 					DialogueCameraHandler::Update();
 				AutoQuickLoad::Update();
-				if (Settings::bAltTabMute)
-					AltTabMute::Update();
-				GroundCommands::Update();
-				break;
+					if (Settings::bAltTabMute)
+						AltTabMute::Update();
+					GroundCommands::Update();
+					ImperativeCommands::Update();
+					break;
 	}
 }
 
