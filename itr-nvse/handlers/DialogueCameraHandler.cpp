@@ -73,10 +73,6 @@ namespace CameraHooks {
 		g_overrideActive = false;
 	}
 
-	static bool IsRel32Patched(UInt32 src, UInt8 opcode, UInt32 dst) {
-		return *(UInt8*)src == opcode && (*(UInt32*)(src + 1) + src + 5) == dst;
-	}
-
 	template<typename T>
 	static bool PatchRelCall(UInt32 src, UInt32 dst, T& orig, const char* name) {
 		if (*(UInt8*)src != 0xE8) {
@@ -140,53 +136,6 @@ namespace DialogueCameraHandler {
 //0x950110 = PlayerCharacter::SetFirstPerson(bool abFirst)
 typedef void (__thiscall *SetFirstPerson_t)(void* player, bool bFirst);
 static SetFirstPerson_t SetFirstPerson = (SetFirstPerson_t)0x950110;
-
-
-static float g_savedFreqs[64] = {0};
-static UInt32 g_savedStates[64] = {0};
-static int g_savedCount = 0;
-
-static void FreezePlayerAnim(bool freeze)
-{
-	PlayerCharacter* player = *(PlayerCharacter**)0x11DEA3C;
-	if (!player) return;
-
-	void* renderData = *(void**)((UInt8*)player + 0x64);
-	if (!renderData) return;
-	void* rootNode = *(void**)((UInt8*)renderData + 0x14);
-	if (!rootNode) return;
-
-	void* controller = *(void**)((UInt8*)rootNode + 0x18);
-	if (!controller) return;
-
-	void** seqData = *(void***)((UInt8*)controller + 0x2C);
-	UInt16 seqCount = *(UInt16*)((UInt8*)controller + 0x34);
-	if (!seqData || seqCount == 0) return;
-	if (seqCount > 64) seqCount = 64;
-
-	if (freeze)
-	{
-		g_savedCount = seqCount;
-		for (int i = 0; i < seqCount; i++)
-		{
-			if (!seqData[i]) { g_savedFreqs[i] = 1.0f; g_savedStates[i] = 0; continue; }
-			g_savedFreqs[i] = *(float*)((UInt8*)seqData[i] + 0x28);
-			g_savedStates[i] = *(UInt32*)((UInt8*)seqData[i] + 0x44);
-			*(float*)((UInt8*)seqData[i] + 0x28) = 0.0f;
-			*(UInt32*)((UInt8*)seqData[i] + 0x44) = 0;
-		}
-	}
-	else
-	{
-		for (int i = 0; i < g_savedCount && i < (int)seqCount; i++)
-		{
-			if (!seqData[i]) continue;
-			*(float*)((UInt8*)seqData[i] + 0x28) = g_savedFreqs[i];
-			*(UInt32*)((UInt8*)seqData[i] + 0x44) = g_savedStates[i];
-		}
-		g_savedCount = 0;
-	}
-}
 
 constexpr float PI = 3.14159265358979323846f;
 constexpr float kHavokScale = 0.1428571f; //1/7, game units to havok
@@ -338,7 +287,6 @@ enum CameraAngle {
 	kAngle_Count
 };
 
-static NVSEConsoleInterface* g_console = nullptr;
 static PlayerCharacter** g_thePlayer = (PlayerCharacter**)0x11DEA3C;
 
 struct InterfaceManager {
@@ -384,14 +332,6 @@ static bool g_patchesInstalled = false;
 
 static const siv::PerlinNoise g_perlinPitch{ 4 };
 static const siv::PerlinNoise g_perlinYaw{ 5 };
-
-static bool IsNopRange(UInt32 addr, UInt32 size) {
-	for (UInt32 i = 0; i < size; i++) {
-		if (*(UInt8*)(addr + i) != 0x90)
-			return false;
-	}
-	return true;
-}
 
 static int* g_pDialogueCamera = &Settings::bDialogueCamera;
 static const UInt32 kAddr_bShouldRestore1stPerson = 0x11F21D0;
@@ -455,6 +395,44 @@ __declspec(naked) void Hook_DisableDialogueZoom() {
 	}
 }
 
+//site 6: FocusOnActor fallback SetFOV (0x953BB4)
+//when site 5 skips the zoom block, v78 stays 0 and the fallback
+//calls SetFOV with a narrow distance-based value every frame.
+//skip it when dialogue camera active.
+//original: movzx eax,[ebp-15h]; test eax,eax; jnz short 0x953BFB (8 bytes)
+static const UInt32 kSite6_Continue = 0x953BBC;
+static const UInt32 kSite6_Skip = 0x953BFB;
+__declspec(naked) void Hook_SkipFallbackFOV() {
+	__asm {
+		mov eax, g_pDialogueCamera
+		cmp dword ptr [eax], 0
+		jnz skip_fov
+		movzx eax, byte ptr [ebp-0x15]
+		test eax, eax
+		jnz skip_fov
+		jmp kSite6_Continue
+	skip_fov:
+		jmp kSite6_Skip
+	}
+}
+
+//site 7: skip PickAnimations in FocusOnActor heading block (0x953B2F)
+//the heading block rotates the player toward NPC (good) but PickAnimations
+//sees the heading change and selects a walk/turn animation (bad).
+//skip just this call - heading still applies to 3D via UpdateAnimation.
+static void __fastcall Hook_SkipPickAnimations(void* actor, void* edx, float a1, float a2) {
+	if (!Settings::bDialogueCamera)
+		ThisCall<void>(0x895110, actor, a1, a2); //Actor::PickAnimations
+}
+
+//site 8: SetFirstPerson(true) in heading block (0x953AC7)
+//the heading block forces 1st person every frame, which prevents the
+//3rd person model from being updated with the new rotation.
+static void __fastcall Hook_SkipSetFirstPerson(void* player, void* edx, bool bFirst) {
+	if (!Settings::bDialogueCamera)
+		ThisCall<void>(0x950110, player, bFirst); //PlayerCharacter::SetFirstPerson
+}
+
 static bool InstallDialoguePatches() {
 	if (g_patchesInstalled)
 		return true;
@@ -497,7 +475,27 @@ static bool InstallDialoguePatches() {
 	SafeWrite::WriteRelJump(0x9533BE, (UInt32)Hook_DisableDialogueZoom);
 	SafeWrite::Write8(0x9533C3, 0x90); //pad 6th byte
 
-	//site 6 (0x953BBA) not needed - site 5 skips past it when active
+	//site 6: FocusOnActor fallback SetFOV (8 bytes: movzx+test+jnz)
+	if (*(UInt8*)0x953BB4 != 0x0F) {
+		Log("DialogueCameraHandler: site 6 (0x953BB4) expected 0x0F, found 0x%02X", *(UInt8*)0x953BB4);
+		return false;
+	}
+	SafeWrite::WriteRelJump(0x953BB4, (UInt32)Hook_SkipFallbackFOV);
+	SafeWrite::WriteNop(0x953BB9, 3); //pad remainder of 8-byte overwrite
+
+	//site 7: PickAnimations call in FocusOnActor heading block (5 bytes: call)
+	if (*(UInt8*)0x953B2F != 0xE8) {
+		Log("DialogueCameraHandler: site 7 (0x953B2F) expected CALL, found 0x%02X", *(UInt8*)0x953B2F);
+		return false;
+	}
+	SafeWrite::WriteRelCall(0x953B2F, (UInt32)Hook_SkipPickAnimations);
+
+	//site 8: SetFirstPerson(true) in heading block (5 bytes: call)
+	if (*(UInt8*)0x953AC7 != 0xE8) {
+		Log("DialogueCameraHandler: site 8 (0x953AC7) expected CALL, found 0x%02X", *(UInt8*)0x953AC7);
+		return false;
+	}
+	SafeWrite::WriteRelCall(0x953AC7, (UInt32)Hook_SkipSetFirstPerson);
 
 	g_patchesInstalled = true;
 	return true;
@@ -788,8 +786,6 @@ static void OnDialogueStart() {
 		SetFirstPerson(player, false);
 	}
 
-	FreezePlayerAnim(true);
-
 	g_currentAngle = kAngle_Vanilla;
 	g_dialogueLineCount = 0;
 	g_lastTopicInfoID = 0;
@@ -805,7 +801,6 @@ static void OnDialogueStart() {
 
 static void OnDialogueEnd() {
 	if (g_cameraActive) {
-		FreezePlayerAnim(false);
 		DisableCamera();
 		if (g_wasFirstPerson) {
 			PlayerCharacter* player = *g_thePlayer;
@@ -835,8 +830,6 @@ void Update() {
 
 	if (!g_cameraActive || !g_dialogueTarget) return;
 
-	FreezePlayerAnim(true);
-
 	DialogueMenu* dlgMenu = DialogueMenu::GetSingleton();
 	if (dlgMenu) {
 		UInt32 currentInfoAddr = (UInt32)dlgMenu->currentInfo;
@@ -850,13 +843,20 @@ void Update() {
 		}
 	}
 
+	//apply player heading to 3rd person NiNode - the heading block updates
+	//rotZ correctly but b3rdPerson toggling prevents the 3D from following
+	PlayerCharacter* player = *g_thePlayer;
+	if (player) {
+		void* node3rd = ThisCall<void*>(0x950BB0, player, 0); //GetNode(3rdPerson)
+		if (node3rd) {
+			Mat3 rot;
+			rot.RotateZ(player->rotZ);
+			ThisCall<void>(0x43FA80, node3rd, &rot); //NiAVObject::SetLocalRotate
+		}
+	}
+
 	g_noiseTime += 0.005;
 	ApplyCameraNoise();
-}
-
-static bool InitConsole(NVSEConsoleInterface* console) {
-	g_console = console;
-	return true;
 }
 
 bool InstallCameraHooks() {
@@ -868,10 +868,8 @@ bool InstallCameraHooks() {
 }
 
 namespace DialogueCameraHandler {
-bool Init(void* nvse) {
-	NVSEInterface* nvseIntfc = (NVSEInterface*)nvse;
-	NVSEConsoleInterface* console = (NVSEConsoleInterface*)nvseIntfc->QueryInterface(kInterface_Console);
-	return InitConsole(console);
+bool Init(void*) {
+	return true;
 }
 
 void SetExternalRotation(const Mat3& rot) {
