@@ -4,6 +4,7 @@
 #define FORMUTILS_USE_NVSE_TYPES
 #include "internal/FormUtils.h"
 #include "internal/EngineFunctions.h"
+#include "internal/BSSpinLock.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/GameObjects.h"
@@ -1092,19 +1093,421 @@ bool Cmd_SetCreatureCombatSkill_Execute(COMMAND_ARGS)
 }
 
 static ActorProcessManager* g_actorProcessManager = (ActorProcessManager*)0x11E0E80;
-
 typedef void (__thiscall *_ActorResurrect)(Actor*, bool, bool, bool);
 static const _ActorResurrect ActorResurrect = (_ActorResurrect)0x89F780;
-
-//Update3D to properly reload model after resurrection
-typedef void (__thiscall *_TESObjectREFR_Set3D)(TESObjectREFR*, void*, bool);
-static const _TESObjectREFR_Set3D TESObjectREFR_Set3D = (_TESObjectREFR_Set3D)0x94EB40;
+static BSSpinLock* g_processListsActorLock = (BSSpinLock*)0x11F11A0;
+typedef void* (__cdecl *_FormHeap_Allocate)(UInt32);
+typedef void (__cdecl *_FormHeap_Free)(void*);
+typedef void (__thiscall *_BaseExtraList_Copy)(void*, void*);
+static const _FormHeap_Allocate s_formHeapAllocate = (_FormHeap_Allocate)0x401000;
+static const _FormHeap_Free s_formHeapFree = (_FormHeap_Free)0x401030;
+static const _BaseExtraList_Copy BaseExtraList_Copy = (_BaseExtraList_Copy)0x411EC0;
 
 static void** g_modelLoader = (void**)0x11C3B3C;
 typedef void (__thiscall *_ModelLoader_QueueReference)(void*, TESObjectREFR*, UInt32, bool);
 static const _ModelLoader_QueueReference ModelLoader_QueueReference = (_ModelLoader_QueueReference)0x444850;
+typedef NiNode* (__thiscall *_TESObjectREFR_Get3D)(TESObjectREFR*);
+static const _TESObjectREFR_Get3D TESObjectREFR_Get3D = (_TESObjectREFR_Get3D)0x43FCD0;
+static constexpr UInt32 kExtraDataListVtbl = 0x010143E8;
+static constexpr UInt32 kExtraContainerChangesVtbl = 0x01015BB8;
 
+enum ResurrectActorExFlags : UInt32
+{
+	kResurrectActorEx_ResetInventory = 1 << 0,
+};
+
+struct ResurrectActorExTrace
+{
+	UInt32 refID;
+	UInt32 flags;
+	UInt32 frameIndex;
+	float lastPosZ;
+};
+
+struct ResurrectActorExEntrySnapshot
+{
+	TESForm* type = nullptr;
+	SInt32 countDelta = 0;
+	std::vector<ExtraDataList*> extraLists;
+};
+
+struct ResurrectActorExInventorySnapshot
+{
+	float unk2 = 0.0f;
+	float unk3 = 0.0f;
+	UInt8 byte10 = 0;
+	std::vector<ResurrectActorExEntrySnapshot> entries;
+};
+
+static std::vector<ResurrectActorExTrace> s_resurrectActorExTraces;
+static constexpr UInt32 kResurrectActorExTraceFrames = 15;
+
+static ParamInfo kParams_ResurrectActorEx[1] = {
+	{ "flags", kParamType_Integer, 1 },
+};
+
+DEFINE_COMMAND_PLUGIN(ResurrectActorEx, "Resurrect actor with flags: 1=reset inventory", 1, 1, kParams_ResurrectActorEx);
 DEFINE_COMMAND_PLUGIN(ResurrectAll, "Resurrects all dead actors in high process", 0, 0, nullptr);
+
+static void TESObjectREFR_Set3D(TESObjectREFR* ref, void* niNode, bool unloadArt)
+{
+	if (!ref) return;
+	auto* vtbl = *(UInt32**)ref;
+	if (!vtbl) return;
+	auto fn = reinterpret_cast<void(__thiscall*)(TESObjectREFR*, void*, bool)>(vtbl[0x1CC / 4]);
+	fn(ref, niNode, unloadArt);
+}
+
+static bool BaseExtraList_HasType(const BaseExtraList* list, UInt32 type)
+{
+	if (!list) return false;
+	UInt32 index = (type >> 3);
+	UInt8 bitMask = 1 << (type % 8);
+	return (list->m_presenceBitfield[index] & bitMask) != 0;
+}
+
+static void BaseExtraList_MarkType(BaseExtraList* list, UInt32 type, bool cleared)
+{
+	if (!list) return;
+	UInt32 index = (type >> 3);
+	UInt8 bitMask = 1 << (type % 8);
+	UInt8& flag = list->m_presenceBitfield[index];
+	if (cleared)
+		flag &= ~bitMask;
+	else
+		flag |= bitMask;
+}
+
+static BSExtraData* BaseExtraList_GetByTypeLocal(BaseExtraList* list, UInt32 type)
+{
+	if (!list || !BaseExtraList_HasType(list, type)) return nullptr;
+	for (BSExtraData* traverse = list->m_data; traverse; traverse = traverse->next)
+		if (traverse->type == type)
+			return traverse;
+	return nullptr;
+}
+
+static bool BaseExtraList_RemoveLocal(BaseExtraList* list, BSExtraData* toRemove, bool freeData)
+{
+	if (!list || !toRemove || !BaseExtraList_HasType(list, toRemove->type))
+		return false;
+
+	bool removed = false;
+	if (list->m_data == toRemove)
+	{
+		list->m_data = toRemove->next;
+		removed = true;
+	}
+	else
+	{
+		for (BSExtraData* traverse = list->m_data; traverse; traverse = traverse->next)
+		{
+			if (traverse->next == toRemove)
+			{
+				traverse->next = toRemove->next;
+				removed = true;
+				break;
+			}
+		}
+	}
+
+	if (!removed)
+		return false;
+
+	BaseExtraList_MarkType(list, toRemove->type, true);
+	if (freeData)
+		s_formHeapFree(toRemove);
+	return true;
+}
+
+static bool BaseExtraList_RemoveByTypeLocal(BaseExtraList* list, UInt32 type, bool freeData)
+{
+	return BaseExtraList_RemoveLocal(list, BaseExtraList_GetByTypeLocal(list, type), freeData);
+}
+
+static bool BaseExtraList_AddLocal(BaseExtraList* list, BSExtraData* toAdd)
+{
+	if (!list || !toAdd || BaseExtraList_HasType(list, toAdd->type))
+		return false;
+
+	toAdd->next = list->m_data;
+	list->m_data = toAdd;
+	BaseExtraList_MarkType(list, toAdd->type, false);
+	return true;
+}
+
+template <class TList, class TItem>
+static void AppendListItem(TList* list, TItem* item)
+{
+	if (!list || !item) return;
+
+	using Node = typename TList::_Node;
+	Node* head = list->Head();
+	if (!head->item)
+	{
+		head->item = item;
+		head->next = nullptr;
+		return;
+	}
+
+	Node* node = head;
+	while (node->next)
+		node = node->next;
+
+	Node* newNode = static_cast<Node*>(s_formHeapAllocate(sizeof(Node)));
+	memset(newNode, 0, sizeof(Node));
+	newNode->item = item;
+	node->next = newNode;
+}
+
+static ExtraDataList* CreateEmptyExtraDataList()
+{
+	auto* list = static_cast<ExtraDataList*>(s_formHeapAllocate(sizeof(ExtraDataList)));
+	memset(list, 0, sizeof(ExtraDataList));
+	*(UInt32*)list = kExtraDataListVtbl;
+	return list;
+}
+
+static ExtraContainerChanges* CreateEmptyExtraContainerChanges(TESObjectREFR* owner)
+{
+	auto* xChanges = static_cast<ExtraContainerChanges*>(s_formHeapAllocate(sizeof(ExtraContainerChanges)));
+	memset(xChanges, 0, sizeof(ExtraContainerChanges));
+	*(UInt32*)xChanges = kExtraContainerChangesVtbl;
+	xChanges->type = kExtraData_ContainerChanges;
+
+	xChanges->data = static_cast<ExtraContainerChanges::Data*>(s_formHeapAllocate(sizeof(ExtraContainerChanges::Data)));
+	memset(xChanges->data, 0, sizeof(ExtraContainerChanges::Data));
+	xChanges->data->owner = owner;
+	return xChanges;
+}
+
+static ExtraContainerChanges::EntryDataList* CreateEmptyEntryDataList()
+{
+	auto* list = static_cast<ExtraContainerChanges::EntryDataList*>(s_formHeapAllocate(sizeof(ExtraContainerChanges::EntryDataList)));
+	memset(list, 0, sizeof(ExtraContainerChanges::EntryDataList));
+	return list;
+}
+
+static ExtraContainerChanges::ExtendDataList* CreateEmptyExtendDataList()
+{
+	auto* list = static_cast<ExtraContainerChanges::ExtendDataList*>(s_formHeapAllocate(sizeof(ExtraContainerChanges::ExtendDataList)));
+	memset(list, 0, sizeof(ExtraContainerChanges::ExtendDataList));
+	return list;
+}
+
+static ExtraContainerChanges::EntryData* CreateEntryData(TESForm* form, SInt32 countDelta)
+{
+	auto* entry = static_cast<ExtraContainerChanges::EntryData*>(s_formHeapAllocate(sizeof(ExtraContainerChanges::EntryData)));
+	memset(entry, 0, sizeof(ExtraContainerChanges::EntryData));
+	entry->type = form;
+	entry->countDelta = countDelta;
+	return entry;
+}
+
+static ExtraDataList* CloneExtraDataList(ExtraDataList* source)
+{
+	if (!source) return nullptr;
+	auto* copy = CreateEmptyExtraDataList();
+	BaseExtraList_Copy(copy, source);
+	return copy;
+}
+
+static void FreeExtraDataListOwned(ExtraDataList* xData)
+{
+	if (!xData) return;
+	for (UInt32 type = 0; type < 0xFF; type++)
+		BaseExtraList_RemoveByTypeLocal(xData, type, true);
+	s_formHeapFree(xData);
+}
+
+template <class TList, class TItem, class FreeItemFn>
+static void FreeListOwned(TList* list, FreeItemFn&& freeItem)
+{
+	if (!list) return;
+
+	using Node = typename TList::_Node;
+	Node* node = list->Head();
+	while (node)
+	{
+		Node* next = node->next;
+		if (node->item)
+			freeItem(node->item);
+		if (node != list->Head())
+				s_formHeapFree(node);
+		node = next;
+	}
+		s_formHeapFree(list);
+}
+
+static void FreeEntryDataOwned(ExtraContainerChanges::EntryData* entry)
+{
+	if (!entry) return;
+	if (entry->extendData)
+	{
+		FreeListOwned<ExtraContainerChanges::ExtendDataList, ExtraDataList>(
+			entry->extendData,
+			[](ExtraDataList* xData) { FreeExtraDataListOwned(xData); });
+	}
+	s_formHeapFree(entry);
+}
+
+static void FreeInventorySnapshot(ResurrectActorExInventorySnapshot& snapshot)
+{
+	for (auto& entry : snapshot.entries)
+	{
+		for (auto* xData : entry.extraLists)
+			FreeExtraDataListOwned(xData);
+		entry.extraLists.clear();
+	}
+	snapshot.entries.clear();
+}
+
+static ResurrectActorExInventorySnapshot CaptureInventorySnapshot(Actor* actor)
+{
+	ResurrectActorExInventorySnapshot snapshot;
+	if (!actor) return snapshot;
+
+	auto* xChanges = static_cast<ExtraContainerChanges*>(BaseExtraList_GetByTypeLocal(&actor->extraDataList, kExtraData_ContainerChanges));
+	if (!xChanges || !xChanges->data || !xChanges->data->objList)
+		return snapshot;
+
+	snapshot.unk2 = xChanges->data->unk2;
+	snapshot.unk3 = xChanges->data->unk3;
+	snapshot.byte10 = xChanges->data->byte10;
+
+	for (auto entryIter = xChanges->data->objList->Begin(); !entryIter.End(); ++entryIter)
+	{
+		auto* entry = entryIter.Get();
+		if (!entry || !entry->type)
+			continue;
+
+		ResurrectActorExEntrySnapshot entrySnapshot;
+		entrySnapshot.type = entry->type;
+		entrySnapshot.countDelta = entry->countDelta;
+
+		if (entry->extendData)
+		{
+			for (auto xDataIter = entry->extendData->Begin(); !xDataIter.End(); ++xDataIter)
+			{
+				if (auto* xData = xDataIter.Get())
+					entrySnapshot.extraLists.push_back(CloneExtraDataList(xData));
+			}
+		}
+
+		snapshot.entries.push_back(std::move(entrySnapshot));
+	}
+
+	return snapshot;
+}
+
+static void RestoreInventorySnapshot(Actor* actor, ResurrectActorExInventorySnapshot& snapshot)
+{
+	if (!actor) return;
+
+	auto* xChanges = static_cast<ExtraContainerChanges*>(BaseExtraList_GetByTypeLocal(&actor->extraDataList, kExtraData_ContainerChanges));
+	if (!xChanges)
+	{
+		xChanges = CreateEmptyExtraContainerChanges(actor);
+		BaseExtraList_AddLocal(&actor->extraDataList, xChanges);
+	}
+	else if (!xChanges->data)
+	{
+		xChanges->data = static_cast<ExtraContainerChanges::Data*>(s_formHeapAllocate(sizeof(ExtraContainerChanges::Data)));
+		memset(xChanges->data, 0, sizeof(ExtraContainerChanges::Data));
+	}
+
+	if (xChanges->data->objList)
+		FreeListOwned<ExtraContainerChanges::EntryDataList, ExtraContainerChanges::EntryData>(
+			xChanges->data->objList,
+			[](ExtraContainerChanges::EntryData* entry) { FreeEntryDataOwned(entry); });
+
+	xChanges->data->owner = actor;
+	xChanges->data->unk2 = snapshot.unk2;
+	xChanges->data->unk3 = snapshot.unk3;
+	xChanges->data->byte10 = snapshot.byte10;
+	xChanges->data->objList = snapshot.entries.empty() ? nullptr : CreateEmptyEntryDataList();
+
+	for (auto& snapshotEntry : snapshot.entries)
+	{
+		auto* entry = CreateEntryData(snapshotEntry.type, snapshotEntry.countDelta);
+		if (!snapshotEntry.extraLists.empty())
+		{
+			entry->extendData = CreateEmptyExtendDataList();
+			for (auto* xData : snapshotEntry.extraLists)
+				AppendListItem(entry->extendData, xData);
+			snapshotEntry.extraLists.clear();
+		}
+		AppendListItem(xChanges->data->objList, entry);
+	}
+
+	snapshot.entries.clear();
+}
+
+static void LogResurrectActorExState(const char* stage, Actor* actor, UInt32 flags, ExtraContainerChanges* savedChanges = nullptr)
+{
+	if (!actor)
+	{
+		Log("ResurrectActorEx <null actor> stage=%s flags=%u", stage, flags);
+		return;
+	}
+
+	auto* currentChanges = static_cast<ExtraContainerChanges*>(BaseExtraList_GetByTypeLocal(&actor->extraDataList, kExtraData_ContainerChanges));
+	auto* node3D = TESObjectREFR_Get3D(actor);
+	auto* renderNode = actor->renderState ? actor->renderState->niNode : nullptr;
+	auto* process = actor->baseProcess;
+	SInt32 processLevel = process ? static_cast<SInt32>(process->processLevel) : -1;
+
+	Log(
+		"ResurrectActorEx[%08X] %s flags=%u lifeState=%u pos=(%.2f, %.2f, %.2f) process=%p level=%d renderNode=%p get3D=%p currentXChanges=%p savedXChanges=%p",
+		actor->refID,
+		stage,
+		flags,
+		actor->lifeState,
+		actor->posX,
+		actor->posY,
+		actor->posZ,
+		process,
+		processLevel,
+		renderNode,
+		node3D,
+		currentChanges,
+		savedChanges);
+}
+
+void ImperativeCommands::Update()
+{
+	for (size_t i = 0; i < s_resurrectActorExTraces.size();)
+	{
+		auto& trace = s_resurrectActorExTraces[i];
+		auto* form = static_cast<TESForm*>(Engine::LookupFormByID(trace.refID));
+		if (!form || !IsActorRef(reinterpret_cast<TESObjectREFR*>(form)))
+		{
+			Log("ResurrectActorEx[%08X] trace actor missing at frame %u", trace.refID, trace.frameIndex);
+			s_resurrectActorExTraces.erase(s_resurrectActorExTraces.begin() + i);
+			continue;
+		}
+
+		auto* actor = static_cast<Actor*>(form);
+		float deltaZ = actor->posZ - trace.lastPosZ;
+		LogResurrectActorExState("trace", actor, trace.flags);
+		Log("ResurrectActorEx[%08X] trace frame=%u deltaZ=%.2f", trace.refID, trace.frameIndex, deltaZ);
+		trace.lastPosZ = actor->posZ;
+		trace.frameIndex++;
+
+		if (trace.frameIndex >= kResurrectActorExTraceFrames)
+		{
+			s_resurrectActorExTraces.erase(s_resurrectActorExTraces.begin() + i);
+			continue;
+		}
+
+		++i;
+	}
+}
+
+void ImperativeCommands::ClearState()
+{
+	s_resurrectActorExTraces.clear();
+}
 
 //ForceReload - forces actor to play reload animation and refill ammo
 typedef bool (__thiscall *_ActorIsDead)(Actor*, bool);
@@ -1225,6 +1628,75 @@ bool Cmd_ResurrectAll_Execute(COMMAND_ARGS)
 	if (IsConsoleMode())
 		Console_Print("ResurrectAll >> Resurrected %d actors", count);
 
+	return true;
+}
+
+bool Cmd_ResurrectActorEx_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+
+	UInt32 flags = 0;
+	if (!ExtractArgs(EXTRACT_ARGS, &flags))
+		return true;
+
+	if (!IsActorRef(thisObj))
+		return true;
+
+	Actor* actor = static_cast<Actor*>(thisObj);
+	const UInt32 normalizedFlags = flags & kResurrectActorEx_ResetInventory;
+	const bool resetInventory = (normalizedFlags & kResurrectActorEx_ResetInventory) != 0;
+	const bool has3D = TESObjectREFR_Get3D(thisObj) != nullptr;
+	ResurrectActorExInventorySnapshot inventorySnapshot;
+	LogResurrectActorExState("start", actor, normalizedFlags);
+
+	if (flags != normalizedFlags)
+		Log("ResurrectActorEx[%08X] ignoring unsupported flags 0x%X", actor->refID, flags & ~kResurrectActorEx_ResetInventory);
+
+	if (!resetInventory)
+	{
+		inventorySnapshot = CaptureInventorySnapshot(actor);
+		Log(
+			"ResurrectActorEx[%08X] captured snapshot entries=%u has3D=%d",
+			actor->refID,
+			static_cast<UInt32>(inventorySnapshot.entries.size()),
+			has3D ? 1 : 0);
+	}
+
+	if (has3D)
+	{
+		TESObjectREFR_Set3D(thisObj, nullptr, true);
+		LogResurrectActorExState("after_unload3d", actor, normalizedFlags);
+	}
+
+	{
+		BSSpinLockScope actorLock(g_processListsActorLock);
+		ActorResurrect(actor, true, has3D, false);
+	}
+	LogResurrectActorExState("post_resurrect", actor, normalizedFlags);
+
+	if (!resetInventory)
+	{
+		RestoreInventorySnapshot(actor, inventorySnapshot);
+		LogResurrectActorExState("post_restore_snapshot", actor, normalizedFlags);
+	}
+	else
+	{
+		FreeInventorySnapshot(inventorySnapshot);
+	}
+
+	if (*g_modelLoader)
+		ModelLoader_QueueReference(*g_modelLoader, thisObj, 1, false);
+	LogResurrectActorExState("queued_model_reload", actor, normalizedFlags);
+
+	s_resurrectActorExTraces.erase(
+		std::remove_if(
+			s_resurrectActorExTraces.begin(),
+			s_resurrectActorExTraces.end(),
+			[&](const ResurrectActorExTrace& trace) { return trace.refID == actor->refID; }),
+		s_resurrectActorExTraces.end());
+	s_resurrectActorExTraces.push_back({ actor->refID, normalizedFlags, 0, actor->posZ });
+
+	*result = 1;
 	return true;
 }
 
@@ -1356,6 +1828,12 @@ void RegisterCommands3(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_UseAidItem);
+}
+
+void RegisterCommands6(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_ResurrectActorEx);
 }
 
 void RegisterCommands4(void* nvsePtr)

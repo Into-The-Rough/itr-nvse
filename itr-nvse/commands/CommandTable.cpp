@@ -66,6 +66,9 @@ void RegisterAllCommands(void* nvsePtr)
 	/*4031*/ nvse->SetOpcodeBase(0x4031);
 	RadioCommands::RegisterCommands2(nvse);         //GetPlayingRadioText
 
+	/*4032*/ nvse->SetOpcodeBase(0x4032);
+	ImperativeCommands::RegisterCommands6(nvse);    //ResurrectActorEx
+
 	/*4034*/ nvse->SetOpcodeBase(0x4034);
 	ChallengeCommands::RegisterCommands(nvse);      //ModChallenge
 

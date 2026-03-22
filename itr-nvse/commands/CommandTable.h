@@ -31,6 +31,7 @@
 // 0x402F  GetPlayingRadioTrackFileName
 // 0x4030  UseAidItem
 // 0x4031  GetPlayingRadioText
+// 0x4032  ResurrectActorEx
 // 0x4034  ModChallenge
 // 0x4035  SetCreatureCombatSkill
 // 0x4036  ResurrectAll
