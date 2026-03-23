@@ -51,7 +51,8 @@
 //
 // 0x405B  ForceCrouch
 // 0x405C  DisableCrouching
-// gaps: 0x4033, 0x403D-0x404F
-// next free: 0x405D
+// gaps in itr-nvse itself: 0x4033, 0x403D-0x404F
+// next free itr-nvse-local slot: 0x405D
+// shared suite occupancy for borrowed opcodes is tracked in /mnt/d/plugins/opcodes.txt
 
 void RegisterAllCommands(void* nvse);
