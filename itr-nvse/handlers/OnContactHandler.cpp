@@ -1,4 +1,4 @@
-//3-channel contact event system
+//4-channel contact event system
 //
 //channel 0: rigid body contacts - hook FOCollisionListener::contactPointAddedCallback (0x623CB0)
 //           end detection via per-frame polling of watched refs' contact arrays
@@ -6,6 +6,7 @@
 //           (0xCAD480/0xCAD4C0) with proxy-to-refID lookup map
 //channel 2: phantom overlaps - hook hkpSimpleShapePhantom/hkpCachingShapePhantom
 //           add/removeOverlappingCollidable (0xD1F690/0xD1F5A0/0xD4CF10/0xD4CCA0)
+//channel 3: dead-actor proximity fallback for watched actors stepping over corpses
 //
 //all havok callbacks fire during bhkWorld::Update which can run multithreaded.
 //events are queued under CRITICAL_SECTION and dispatched on main thread in Update().
@@ -30,6 +31,7 @@ enum ContactChannel : UInt8 {
 	kChannel_RigidBody = 0,
 	kChannel_CharProxy = 1,
 	kChannel_Phantom = 2,
+	kChannel_DeadActorProximity = 3,
 };
 
 struct QueuedContactEvent {
@@ -57,6 +59,14 @@ struct ContactPairHash {
 	}
 };
 
+struct DeadActorCandidate {
+	UInt32 refID;
+	TESObjectREFR* ref;
+	float posX;
+	float posY;
+	float posZ;
+};
+
 //all mutable state protected by g_contactLock when accessed from callbacks
 static std::unordered_set<UInt32> g_watchedRefIDs;         //main thread only (mutation)
 static std::unordered_set<UInt32> g_watchedSnapshot;       //read by hooks under lock
@@ -74,6 +84,9 @@ static std::unordered_map<void*, UInt32> g_proxyToRefID;   //read by hooks under
 static std::unordered_map<void*, UInt32> g_phantomToRefID;  //read by hooks under lock
 
 static constexpr size_t kMaxQueuedEvents = 2048;
+static constexpr float kDeadActorContactRadiusSq = 56.0f * 56.0f;
+static constexpr float kDeadActorContactMaxZBelow = 20.0f;
+static constexpr float kDeadActorContactMaxZAbove = 56.0f;
 
 //--- ref resolution ---
 
@@ -171,11 +184,144 @@ static void __fastcall Hook_ContactPointAdded(void* listener, void* edx, void* e
 		QueueEvent(refB, refA, kChannel_RigidBody, true);
 }
 
+static bool IsActorTypeID(UInt8 typeID) {
+	return typeID == 0x3B || typeID == 0x3C;
+}
+
+static bool IsDeadActor(void* actor) {
+	return actor && (*(UInt32*)((UInt8*)actor + 0x108) == 2);
+}
+
+static bool HasLoadedRootNode(void* ref) {
+	if (!ref) return false;
+	void* renderState = *(void**)((UInt8*)ref + 0x64);
+	return renderState && (*(void**)((UInt8*)renderState + 0x14) != nullptr);
+}
+
+static float GetRefPosX(void* ref) { return *(float*)((UInt8*)ref + 0x30); }
+static float GetRefPosY(void* ref) { return *(float*)((UInt8*)ref + 0x34); }
+static float GetRefPosZ(void* ref) { return *(float*)((UInt8*)ref + 0x38); }
+static UInt32 GetRefID(void* ref) { return *(UInt32*)((UInt8*)ref + 0x0C); }
+
 static void* GetActorController(void* form) {
 	void* process = *(void**)((UInt8*)form + 0x68);
 	if (!process) return nullptr;
 	if (*(UInt32*)((UInt8*)process + 0x28) > 1) return nullptr;
 	return *(void**)((UInt8*)process + 0x138);
+}
+
+static bool HasRealContactPair(UInt32 watchedRefID, UInt32 otherRefID) {
+	return
+		g_activeContacts.find({watchedRefID, otherRefID, kChannel_RigidBody}) != g_activeContacts.end() ||
+		g_activeContacts.find({watchedRefID, otherRefID, kChannel_CharProxy}) != g_activeContacts.end() ||
+		g_activeContacts.find({watchedRefID, otherRefID, kChannel_Phantom}) != g_activeContacts.end();
+}
+
+static void DispatchContactEventDirect(UInt32 watchedRefID, UInt32 otherRefID, UInt8 channel, bool isBegin) {
+	if (!g_watchedRefIDs.count(watchedRefID)) return;
+	auto* watched = (TESObjectREFR*)Engine::LookupFormByID(watchedRefID);
+	if (!watched) return;
+	auto* other = otherRefID ? (TESObjectREFR*)Engine::LookupFormByID(otherRefID) : nullptr;
+	if (!g_eventManagerInterface) return;
+	const char* eventName = isBegin ? "ITR:OnContactBegin" : "ITR:OnContactEnd";
+	g_eventManagerInterface->DispatchEvent(eventName, watched, (TESForm*)other, (int)channel);
+}
+
+static void* g_processManager = (void*)0x11E0E80;
+struct ProcessManagerLite {
+	UInt32 unk000;
+	struct { void** vtbl; void** data; UInt16 capacity; UInt16 firstFreeEntry; UInt16 numObjs; UInt16 growSize; } objects;
+	UInt32 beginOffsets[4];
+	UInt32 endOffsets[4];
+};
+
+static void CollectLoadedDeadActors(std::vector<DeadActorCandidate>& out) {
+	auto* pm = reinterpret_cast<ProcessManagerLite*>(g_processManager);
+	if (!pm || !pm->objects.data) return;
+
+	std::unordered_set<UInt32> seenRefIDs;
+	seenRefIDs.reserve(32);
+
+	UInt32 upper = pm->objects.firstFreeEntry;
+	for (int bucket = 0; bucket < 2; bucket++) {
+		UInt32 begin = pm->beginOffsets[bucket];
+		UInt32 end = pm->endOffsets[bucket];
+		if (begin > upper) begin = upper;
+		if (end > upper) end = upper;
+		for (UInt32 i = begin; i < end; i++) {
+			auto* actor = (TESObjectREFR*)pm->objects.data[i];
+			if (!actor) continue;
+			if (!IsActorTypeID(*(UInt8*)((UInt8*)actor + 0x04))) continue;
+			UInt32 refID = GetRefID(actor);
+			if (!refID || !seenRefIDs.emplace(refID).second) continue;
+			if (!IsDeadActor(actor) || !HasLoadedRootNode(actor)) continue;
+			out.push_back({refID, actor, GetRefPosX(actor), GetRefPosY(actor), GetRefPosZ(actor)});
+		}
+	}
+}
+
+static bool ShouldSynthesizeDeadActorContact(TESObjectREFR* watched, const DeadActorCandidate& deadActor) {
+	if (!watched || !deadActor.ref) return false;
+	if (GetRefID(watched) == deadActor.refID) return false;
+	if (!HasLoadedRootNode(watched)) return false;
+	if (IsDeadActor(watched)) return false;
+
+	float dx = GetRefPosX(watched) - deadActor.posX;
+	float dy = GetRefPosY(watched) - deadActor.posY;
+	float dz = GetRefPosZ(watched) - deadActor.posZ;
+	float distSq = dx * dx + dy * dy;
+	if (distSq > kDeadActorContactRadiusSq) return false;
+	if (dz < -kDeadActorContactMaxZBelow) return false;
+	if (dz > kDeadActorContactMaxZAbove) return false;
+	if (HasRealContactPair(GetRefID(watched), deadActor.refID)) return false;
+	return true;
+}
+
+static void PollDeadActorProximityContacts() {
+	if (g_watchedRefIDs.empty()) return;
+
+	std::vector<DeadActorCandidate> deadActors;
+	CollectLoadedDeadActors(deadActors);
+	if (deadActors.empty()) return;
+
+	std::unordered_set<ContactPair, ContactPairHash> currentPairs;
+	currentPairs.reserve(deadActors.size() * 2);
+
+	for (auto refID : g_watchedRefIDs) {
+		auto* watched = (TESObjectREFR*)Engine::LookupFormByID(refID);
+		if (!watched) continue;
+		if (!IsActorTypeID(*(UInt8*)((UInt8*)watched + 0x04))) continue;
+
+		for (const auto& deadActor : deadActors) {
+			if (ShouldSynthesizeDeadActorContact(watched, deadActor))
+				currentPairs.emplace(ContactPair{refID, deadActor.refID, kChannel_DeadActorProximity});
+		}
+	}
+
+	std::vector<ContactPair> begins;
+	std::vector<ContactPair> stale;
+
+	for (const auto& pair : currentPairs) {
+		if (g_activeContacts.find(pair) == g_activeContacts.end())
+			begins.push_back(pair);
+	}
+
+	for (const auto& [pair, count] : g_activeContacts) {
+		if (pair.channel != kChannel_DeadActorProximity) continue;
+		if (!currentPairs.count(pair))
+			stale.push_back(pair);
+	}
+
+	for (const auto& pair : stale) {
+		g_activeContacts.erase(pair);
+		DispatchContactEventDirect(pair.refA, pair.refB, pair.channel, false);
+	}
+
+	for (const auto& pair : begins) {
+		if (!g_watchedRefIDs.count(pair.refA)) continue;
+		g_activeContacts[pair] = 1;
+		DispatchContactEventDirect(pair.refA, pair.refB, pair.channel, true);
+	}
 }
 
 //end detection for ch0 (rigid body) and ch1 (character proxy):
@@ -261,7 +407,7 @@ static void __fastcall Hook_CharProxyContactRemoved(void* proxy, void* edx, void
 	s_charRemovedDetour.GetTrampoline<_fireContact>()(proxy, point);
 	//don't queue from the removed callback - collidable may be freed/invalid,
 	//and we can't identify WHICH specific contact was removed.
-	//ch1 end detection is handled by polling in PollRigidBodyContactEnd instead.
+	//ch1 end detection is handled by polling in PollContactEnd instead.
 }
 
 //--- channel 2: phantom overlaps ---
@@ -339,14 +485,6 @@ static void MapActorPhantom(void* form, UInt32 refID,
 	void* havokPhantom = *(void**)((UInt8*)chrPhantom + 0x08);
 	if (havokPhantom) phantomMap[havokPhantom] = refID;
 }
-
-static void* g_processManager = (void*)0x11E0E80;
-struct ProcessManagerLite {
-	UInt32 unk000;
-	struct { void** vtbl; void** data; UInt16 capacity; UInt16 firstFreeEntry; UInt16 numObjs; UInt16 growSize; } objects;
-	UInt32 beginOffsets[4];
-	UInt32 endOffsets[4];
-};
 
 static void RebuildProxyMap() {
 	std::unordered_map<void*, UInt32> newProxyMap;
@@ -567,6 +705,7 @@ void Update()
 
 	//channel 0 end detection via polling
 	PollContactEnd();
+	PollDeadActorProximityContacts();
 }
 
 void ClearState()
