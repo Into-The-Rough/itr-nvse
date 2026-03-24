@@ -651,9 +651,9 @@ bool Cmd_DumpCombatTarget_Execute(COMMAND_ARGS)
 	}
 
 	Log("DumpCombatTarget: thisObj=%08X target=%08X", thisObj, target);
-	if (!thisObj || !target)
+	if (!thisObj || !target || !IsActorRef(thisObj))
 	{
-		Console_Print("DumpCombatTarget >> Call on observer ref with target as param");
+		Console_Print("DumpCombatTarget >> Call on actor ref with target as param");
 		return true;
 	}
 
@@ -789,7 +789,7 @@ bool Cmd_GetTargetLastSeenLocation_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 	Actor* target = nullptr;
-	if (!ExtractArgs(EXTRACT_ARGS, &target)) return true;
+	if (!ExtractArgs(EXTRACT_ARGS, &target) || !IsActorRef(thisObj)) return true;
 
 	void* ct = GetCombatTargetData((Actor*)thisObj, target);
 	CreatePositionArray(PASS_COMMAND_ARGS, ct, 0x08);
@@ -800,7 +800,7 @@ bool Cmd_GetTargetDetectedLocation_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 	Actor* target = nullptr;
-	if (!ExtractArgs(EXTRACT_ARGS, &target)) return true;
+	if (!ExtractArgs(EXTRACT_ARGS, &target) || !IsActorRef(thisObj)) return true;
 
 	void* ct = GetCombatTargetData((Actor*)thisObj, target);
 	CreatePositionArray(PASS_COMMAND_ARGS, ct, 0x18);
@@ -811,7 +811,7 @@ bool Cmd_GetTargetLastFullyVisibleLocation_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 	Actor* target = nullptr;
-	if (!ExtractArgs(EXTRACT_ARGS, &target)) return true;
+	if (!ExtractArgs(EXTRACT_ARGS, &target) || !IsActorRef(thisObj)) return true;
 
 	void* ct = GetCombatTargetData((Actor*)thisObj, target);
 	CreatePositionArray(PASS_COMMAND_ARGS, ct, 0x28);
@@ -822,7 +822,7 @@ bool Cmd_GetTargetInitialLocation_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 	Actor* target = nullptr;
-	if (!ExtractArgs(EXTRACT_ARGS, &target)) return true;
+	if (!ExtractArgs(EXTRACT_ARGS, &target) || !IsActorRef(thisObj)) return true;
 
 	void* ct = GetCombatTargetData((Actor*)thisObj, target);
 	CreatePositionArray(PASS_COMMAND_ARGS, ct, 0x38);
@@ -1530,7 +1530,7 @@ bool Cmd_ForceReload_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 
-	if (!thisObj) return true;
+	if (!thisObj || !IsActorRef(thisObj)) return true;
 
 	Actor* actor = (Actor*)thisObj;
 	if (ActorIsDead(actor, false)) return true;
