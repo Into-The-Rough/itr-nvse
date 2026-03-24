@@ -1998,4 +1998,52 @@ void RegisterCommands7(void* nvsePtr)
 	nvse->RegisterCommand(&kCommandInfo_DisableCrouching);
 }
 
+//--- SetOnContactWatch / GetOnContactWatch ---
+
+}
+
+#include "handlers/OnContactHandler.h"
+
+namespace ImperativeCommands {
+
+static ParamInfo kParams_ContactWatch[1] = {
+	{"watch", kParamType_Integer, 0},
+};
+DEFINE_COMMAND_PLUGIN(SetOnContactWatch, "Enable/disable contact event watching for a ref", 1, 1, kParams_ContactWatch);
+
+bool Cmd_SetOnContactWatch_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	UInt32 watch = 0;
+	if (!ExtractArgs(EXTRACT_ARGS, &watch)) return true;
+	if (!thisObj) return true;
+
+	if (watch)
+		OnContactHandler::AddWatch(thisObj->refID);
+	else
+		OnContactHandler::RemoveWatch(thisObj->refID);
+
+	*result = 1;
+	if (IsConsoleMode())
+		Console_Print("SetOnContactWatch >> %s (0x%08X)", watch ? "watching" : "unwatching", thisObj->refID);
+	return true;
+}
+
+DEFINE_COMMAND_PLUGIN(GetOnContactWatch, "Check if a ref is being watched for contacts", 1, 0, nullptr);
+
+bool Cmd_GetOnContactWatch_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	if (!thisObj) return true;
+	*result = OnContactHandler::IsWatched(thisObj->refID) ? 1.0 : 0.0;
+	return true;
+}
+
+void RegisterCommands8(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_SetOnContactWatch);
+	nvse->RegisterCommand(&kCommandInfo_GetOnContactWatch);
+}
+
 }
