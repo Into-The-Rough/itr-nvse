@@ -241,13 +241,10 @@ static Detours::JumpDetour s_charAddedDetour;
 static Detours::JumpDetour s_charRemovedDetour;
 typedef void (__thiscall *_fireContact)(void*, void*);
 
-static int g_ch1AddedCount = 0;
 static void __fastcall Hook_CharProxyContactAdded(void* proxy, void* edx, void* point) {
 	s_charAddedDetour.GetTrampoline<_fireContact>()(proxy, point);
 
 	ScopedLock lock(&g_contactLock);
-	if (++g_ch1AddedCount % 300 == 1)
-		Log("Ch1 added: proxy=0x%08X, map size=%u, snapshot=%u", (UInt32)proxy, (UInt32)g_proxyToRefID.size(), (UInt32)g_watchedSnapshot.size());
 	auto it = g_proxyToRefID.find(proxy);
 	if (it == g_proxyToRefID.end()) return;
 
@@ -257,7 +254,6 @@ static void __fastcall Hook_CharProxyContactAdded(void* proxy, void* edx, void* 
 	UInt32 otherRefID = ResolveCollidableToRefID(otherCollidable);
 
 	if (otherRefID == actorRefID) return; //skip self-contact
-	Log("Ch1 QUEUE: actor=0x%08X other=0x%08X", actorRefID, otherRefID);
 	QueueEvent(actorRefID, otherRefID, kChannel_CharProxy, true);
 }
 
@@ -492,7 +488,7 @@ void Update()
 			if (!process) continue;
 			if (*(UInt32*)((UInt8*)process + 0x28) > 1) continue;
 			void* ctrl = *(void**)((UInt8*)process + 0x138);
-			if (!ctrl) { Log("Seed: 0x%08X no ctrl", refID); continue; }
+			if (!ctrl) continue;
 
 			//seed existing contacts into a local vector (not dispatched inline -
 			//handlers could mutate watch state during dispatch)
@@ -564,7 +560,6 @@ void Update()
 
 		if (g_eventManagerInterface) {
 			const char* eventName = evt.isBegin ? "ITR:OnContactBegin" : "ITR:OnContactEnd";
-			Log("DISPATCH %s watched=0x%08X other=0x%08X ch=%d", eventName, evt.watchedRefID, evt.otherRefID, evt.channel);
 			g_eventManagerInterface->DispatchEvent(eventName, watched,
 				(TESForm*)other, (int)evt.channel);
 		}
