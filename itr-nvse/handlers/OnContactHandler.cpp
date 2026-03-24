@@ -261,11 +261,14 @@ static void __fastcall Hook_CharProxyContactRemoved(void* proxy, void* edx, void
 	auto it = g_proxyToRefID.find(proxy);
 	if (it == g_proxyToRefID.end()) return;
 
+	//don't resolve the collidable for removed contacts - the body may be
+	//freed/invalid by the time the removal callback fires.
+	//queue end events for all active ch1 pairs for this actor instead.
 	UInt32 actorRefID = it->second;
-	void* otherCollidable = *(void**)((UInt8*)point + 0x10);
-	UInt32 otherRefID = ResolveCollidableToRefID(otherCollidable);
-
-	QueueEvent(actorRefID, otherRefID, kChannel_CharProxy, false);
+	for (auto& pair : g_activeContacts) {
+		if (pair.first.refA == actorRefID && pair.first.channel == kChannel_CharProxy)
+			QueueEvent(actorRefID, pair.first.refB, kChannel_CharProxy, false);
+	}
 }
 
 //--- channel 2: phantom overlaps ---
