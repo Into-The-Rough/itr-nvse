@@ -247,8 +247,8 @@ static void __fastcall Hook_CharProxyContactAdded(void* proxy, void* edx, void* 
 	if (it == g_proxyToRefID.end()) return;
 
 	UInt32 actorRefID = it->second;
-	//hkpRootCdPoint: m_rootCollidableB at +0x10
-	void* otherCollidable = *(void**)((UInt8*)point + 0x10);
+	//hkpRootCdPoint: m_rootCollidableB at +0x48 (verified from bhkCharacterListener disasm)
+	void* otherCollidable = *(void**)((UInt8*)point + 0x48);
 	UInt32 otherRefID = ResolveCollidableToRefID(otherCollidable);
 
 	QueueEvent(actorRefID, otherRefID, kChannel_CharProxy, true);
