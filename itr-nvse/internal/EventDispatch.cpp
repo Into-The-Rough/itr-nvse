@@ -74,6 +74,10 @@ void RegisterEvents()
 	g_eventManagerInterface->RegisterEvent("ITR:OnSoundPlayed", 3, soundParams, F::kFlag_FlushOnLoad);
 	g_eventManagerInterface->RegisterEvent("ITR:OnSoundCompleted", 3, soundParams, F::kFlag_FlushOnLoad);
 
+	static P contactParams[] = { P::eParamType_AnyForm, P::eParamType_Int };
+	g_eventManagerInterface->RegisterEvent("ITR:OnContactBegin", 2, contactParams, F::kFlag_FlushOnLoad);
+	g_eventManagerInterface->RegisterEvent("ITR:OnContactEnd", 2, contactParams, F::kFlag_FlushOnLoad);
+
 	Log("ITR events registered with EventManager");
 }
 }
