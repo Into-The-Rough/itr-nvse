@@ -20,6 +20,7 @@
 #include "internal/ScopedLock.h"
 #include "internal/Detours.h"
 #include <vector>
+#include <algorithm>
 #include <unordered_set>
 #include <unordered_map>
 
@@ -166,33 +167,58 @@ static void __fastcall Hook_ContactPointAdded(void* listener, void* edx, void* e
 		QueueEvent(refB, refA, kChannel_RigidBody, true);
 }
 
-//channel 0 end detection: collect stale pairs, dispatch AFTER iteration
-//rigid body contacts have no removal callback, so we check if active pairs
-//still have a live contact. for now only handles actor rigid body contacts
-//via the character controller contact arrays. non-actor rigid body end
-//detection requires walking NiNode contactObjects (TODO).
+//channel 0 end detection: check active rigid body pairs against live contacts
+//collects stale pairs first, dispatches after iteration (no iterator invalidation)
 static void PollRigidBodyContactEnd() {
-	//collect pairs to remove - never dispatch during iteration
 	std::vector<ContactPair> stale;
 
+	//build per-ref current contact sets from character controller contactBodies
+	//JIP offset: bhkCharacterController+0x10 (pointCollector) +0x3A4 (contactBodies)
+	//contactBodies is hkArray<hkpWorldObject*>: data at +0, size at +4
 	for (auto it = g_activeContacts.begin(); it != g_activeContacts.end(); ++it) {
 		if (it->first.channel != kChannel_RigidBody) continue;
 
 		auto* form = (TESObjectREFR*)Engine::LookupFormByID(it->first.refA);
-		if (!form) {
-			stale.push_back(it->first);
-			continue;
-		}
+		if (!form) { stale.push_back(it->first); continue; }
 
 		UInt8 typeID = *((UInt8*)form + 0x04);
 		if (typeID != 0x3B && typeID != 0x3C)
-			continue; //skip non-actors until NiNode walk is implemented
+			continue; //non-actor rigid body end detection not implemented
 
-		//TODO: check actor's rigid body contacts against this pair
-		//for now, rigid body begin events fire but ends only fire on ref death/unload
+		//get character controller
+		void* process = *(void**)((UInt8*)form + 0x68);
+		if (!process) { stale.push_back(it->first); continue; }
+		UInt32 processLevel = *(UInt32*)((UInt8*)process + 0x28);
+		if (processLevel > 1) continue;
+		void* ctrl = *(void**)((UInt8*)process + 0x138);
+		if (!ctrl) { stale.push_back(it->first); continue; }
+
+		//pointCollector.contactBodies at ctrl+0x10+0x3A4 = ctrl+0x3B4
+		//hkArray: data=+0, size=+4
+		void** bodies = *(void***)((UInt8*)ctrl + 0x3B4);
+		UInt32 count = *(UInt32*)((UInt8*)ctrl + 0x3B8);
+
+		//check if the other ref is still in contacts
+		bool found = false;
+		for (UInt32 i = 0; i < count && bodies; i++) {
+			if (!bodies[i]) continue;
+			UInt32 contactRefID = ResolveWorldObjToRefID(bodies[i]);
+			if (contactRefID == it->first.refB) { found = true; break; }
+		}
+
+		//also check bodyUnderFeet at ctrl+0x60C
+		if (!found) {
+			void* bodyUnderFeet = *(void**)((UInt8*)ctrl + 0x60C);
+			UInt8 noContact = *((UInt8*)ctrl + 0x608);
+			if (!noContact && bodyUnderFeet) {
+				UInt32 feetRefID = ResolveWorldObjToRefID(bodyUnderFeet);
+				if (feetRefID == it->first.refB) found = true;
+			}
+		}
+
+		if (!found) stale.push_back(it->first);
 	}
 
-	//dispatch end events after iteration is complete
 	for (const auto& pair : stale) {
 		g_activeContacts.erase(pair);
 		auto* watched = (TESObjectREFR*)Engine::LookupFormByID(pair.refA);
@@ -253,8 +279,9 @@ static void PhantomOverlapCommon(void* phantom, void* cdBody, bool isAdd) {
 
 	//phantom is hkpWorldObject, resolve via its inline collidable at +0x10
 	UInt32 phantomRefID = ResolveWorldObjToRefID(phantom);
-	//cdBody is a collidable pointer from the overlap
-	UInt32 bodyRefID = ResolveCollidableToRefID(cdBody);
+	//cdBody is hkCdBody*, walk to root collidable via getRoot (same parent field layout)
+	void* rootCollidable = cdBody ? getRoot(cdBody) : nullptr;
+	UInt32 bodyRefID = rootCollidable ? ResolveCollidableToRefID(rootCollidable) : 0;
 
 	if (phantomRefID && g_watchedSnapshot.count(phantomRefID))
 		QueueEvent(phantomRefID, bodyRefID, kChannel_Phantom, isAdd);
@@ -374,14 +401,19 @@ void Update()
 	if (!g_mainThreadId) g_mainThreadId = tid;
 	if (tid != g_mainThreadId) return;
 
-	//refresh snapshot and proxy map if watch set changed
+	//refresh snapshot if watch set changed
 	if (g_snapshotDirty) {
-		{
-			ScopedLock lock(&g_contactLock);
-			g_watchedSnapshot = g_watchedRefIDs;
-		}
-		RebuildProxyMap();
+		ScopedLock lock(&g_contactLock);
+		g_watchedSnapshot = g_watchedRefIDs;
 		g_snapshotDirty = false;
+	}
+
+	//rebuild proxy map periodically - catches controller/proxy changes from
+	//process level changes or 3D rebuilds, not just watch set mutations
+	static int s_proxyMapTimer = 0;
+	if (!g_watchedRefIDs.empty() && ++s_proxyMapTimer >= 60) {
+		RebuildProxyMap();
+		s_proxyMapTimer = 0;
 	}
 
 	//drain queue
@@ -444,6 +476,16 @@ void RemoveWatch(UInt32 refID)
 {
 	g_watchedRefIDs.erase(refID);
 	g_snapshotDirty = true;
+
+	//flush queued events for this ref so stale begin/end don't fire
+	{
+		ScopedLock lock(&g_contactLock);
+		g_pendingEvents.erase(
+			std::remove_if(g_pendingEvents.begin(), g_pendingEvents.end(),
+				[refID](const QueuedContactEvent& e) { return e.watchedRefID == refID; }),
+			g_pendingEvents.end());
+	}
+
 	//only remove pairs where this ref is the watched side
 	for (auto it = g_activeContacts.begin(); it != g_activeContacts.end();) {
 		if (it->first.refA == refID)
