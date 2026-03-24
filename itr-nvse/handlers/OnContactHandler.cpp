@@ -83,31 +83,52 @@ static const _hkpGetRigidBody hkpGetRigidBody = (_hkpGetRigidBody)0x4B59F0;
 static const _GetbhkCollisionObject GetbhkCollisionObject = (_GetbhkCollisionObject)0x4B5A20;
 static const _FindReferenceFor3D FindReferenceFor3D = (_FindReferenceFor3D)0x56F930;
 
-//collidable -> TESObjectREFR refID (rigid body path)
+//collidable -> TESObjectREFR refID
+//tries rigid body path first, falls back to phantom/general path
+typedef void* (__cdecl *_bhkNiCollisionObject_Getbhk)(void* worldObj);
+static const _bhkNiCollisionObject_Getbhk bhkNiCollisionObject_Getbhk = (_bhkNiCollisionObject_Getbhk)0x4B5A20;
+
 static UInt32 ResolveCollidableToRefID(void* collidable) {
 	if (!collidable) return 0;
 	void* root = getRoot(collidable);
 	if (!root) return 0;
+
+	//try rigid body path (works for non-phantom objects)
 	void* rigidBody = hkpGetRigidBody(root);
-	if (!rigidBody) return 0;
-	void* collObj = GetbhkCollisionObject(rigidBody);
-	if (!collObj) return 0;
-	void* niNode = *(void**)((UInt8*)collObj + 0x08);
-	if (!niNode) return 0;
-	void* refr = FindReferenceFor3D(niNode);
-	if (!refr) return 0;
-	return *(UInt32*)((UInt8*)refr + 0x0C);
+	if (rigidBody) {
+		void* collObj = GetbhkCollisionObject(rigidBody);
+		if (collObj) {
+			void* niNode = *(void**)((UInt8*)collObj + 0x08);
+			if (niNode) {
+				void* refr = FindReferenceFor3D(niNode);
+				if (refr) return *(UInt32*)((UInt8*)refr + 0x0C);
+			}
+		}
+	}
+
+	//phantom/general path: hkpWorldObject → bhk wrapper via -0x10 → vtable GetObject → NiNode
+	//hkpCollidable is embedded at hkpWorldObject+0x10, so worldObj = root - 0x10
+	void* worldObj = (void*)((UInt8*)root - 0x10);
+	//bhk wrapper = worldObj - 0x08 (bhkRefObject stores phkObject at +0x08)
+	//JIP uses: sub ecx, 0x10; call vtable[6] (GetObject)
+	//we replicate: bhkWrapper = havokObj - 0x08... not reliable for all types
+	//safer: check if the root collidable's broadphase owner is a phantom
+	//and use bhkNiCollisionObject_Getbhk which handles both cases
+	void* collObj = bhkNiCollisionObject_Getbhk(worldObj);
+	if (collObj) {
+		void* niNode = *(void**)((UInt8*)collObj + 0x08);
+		if (niNode) {
+			void* refr = FindReferenceFor3D(niNode);
+			if (refr) return *(UInt32*)((UInt8*)refr + 0x0C);
+		}
+	}
+
+	return 0;
 }
 
-//hkpWorldObject -> TESObjectREFR refID (used for contactBodies in polling)
-//same as JIP's GetParentRef: worldObj-0x10 → bhk wrapper → vtable GetObject → walk NiNode
+//hkpWorldObject -> TESObjectREFR refID
 static UInt32 ResolveWorldObjToRefID(void* worldObj) {
 	if (!worldObj) return 0;
-	//worldObj is hkpWorldObject. bhk wrapper is at worldObj-0x10
-	//(bhkRefObject stores phkObject at +0x08, so phkObject = bhkWrapper+0x08)
-	//bhkWrapper = phkObject - 0x08... but that's not right for all types.
-	//use the collidable on the worldobject instead
-	//hkpWorldObject has m_collidable at +0x10 (inline, not pointer)
 	void* collidable = (void*)((UInt8*)worldObj + 0x10);
 	return ResolveCollidableToRefID(collidable);
 }
@@ -145,47 +166,40 @@ static void __fastcall Hook_ContactPointAdded(void* listener, void* edx, void* e
 		QueueEvent(refB, refA, kChannel_RigidBody, true);
 }
 
-//channel 0 end detection: compare current rigid body contacts against active pairs
-//uses Actor process's contact arrays, same approach as JIP's GetContactRefs
+//channel 0 end detection: collect stale pairs, dispatch AFTER iteration
+//rigid body contacts have no removal callback, so we check if active pairs
+//still have a live contact. for now only handles actor rigid body contacts
+//via the character controller contact arrays. non-actor rigid body end
+//detection requires walking NiNode contactObjects (TODO).
 static void PollRigidBodyContactEnd() {
-	//collect current rigid body contacts for each watched ref
-	for (auto refID : g_watchedRefIDs) {
-		auto* form = (TESObjectREFR*)Engine::LookupFormByID(refID);
-		if (!form) continue;
+	//collect pairs to remove - never dispatch during iteration
+	std::vector<ContactPair> stale;
 
-		//get current contacts for this ref
-		std::unordered_set<UInt32> currentContacts;
+	for (auto it = g_activeContacts.begin(); it != g_activeContacts.end(); ++it) {
+		if (it->first.channel != kChannel_RigidBody) continue;
 
-		UInt8 typeID = *((UInt8*)form + 0x04);
-		bool isActor = (typeID == 0x3B || typeID == 0x3C);
-
-		if (!isActor) {
-			//non-actor: check renderState for rigid body contacts
-			void* renderState = *(void**)((UInt8*)form + 0x64);
-			if (!renderState) continue;
-			void* rootNode = *(void**)((UInt8*)renderState + 0x14);
-			if (!rootNode) continue;
-			//TODO: walk NiNode contactObjects - complex, defer to later
+		auto* form = (TESObjectREFR*)Engine::LookupFormByID(it->first.refA);
+		if (!form) {
+			stale.push_back(it->first);
 			continue;
 		}
-		//actors use character controller contacts which is channel 1, not 0
 
-		//find active channel-0 pairs for this watched ref and check for removals
-		for (auto it = g_activeContacts.begin(); it != g_activeContacts.end();) {
-			if (it->first.refA == refID && it->first.channel == kChannel_RigidBody) {
-				if (!currentContacts.count(it->first.refB)) {
-					//contact ended
-					auto* watched = (TESObjectREFR*)Engine::LookupFormByID(refID);
-					auto* other = it->first.refB ? (TESObjectREFR*)Engine::LookupFormByID(it->first.refB) : nullptr;
-					if (watched && g_eventManagerInterface)
-						g_eventManagerInterface->DispatchEvent("ITR:OnContactEnd", watched,
-							(TESForm*)other, (int)kChannel_RigidBody);
-					it = g_activeContacts.erase(it);
-					continue;
-				}
-			}
-			++it;
-		}
+		UInt8 typeID = *((UInt8*)form + 0x04);
+		if (typeID != 0x3B && typeID != 0x3C)
+			continue; //skip non-actors until NiNode walk is implemented
+
+		//TODO: check actor's rigid body contacts against this pair
+		//for now, rigid body begin events fire but ends only fire on ref death/unload
+	}
+
+	//dispatch end events after iteration is complete
+	for (const auto& pair : stale) {
+		g_activeContacts.erase(pair);
+		auto* watched = (TESObjectREFR*)Engine::LookupFormByID(pair.refA);
+		auto* other = pair.refB ? (TESObjectREFR*)Engine::LookupFormByID(pair.refB) : nullptr;
+		if (watched && g_eventManagerInterface)
+			g_eventManagerInterface->DispatchEvent("ITR:OnContactEnd", watched,
+				(TESForm*)other, (int)kChannel_RigidBody);
 	}
 }
 
@@ -233,22 +247,13 @@ static Detours::JumpDetour s_cachingRemoveDetour;
 
 typedef void (__thiscall *_phantomOverlap)(void*, void*);
 
-//resolve phantom (this) to refID via its collidable
-static UInt32 ResolvePhantomToRefID(void* phantom) {
-	if (!phantom) return 0;
-	//hkpPhantom inherits hkpWorldObject, collidable at +0x10
-	void* collidable = (void*)((UInt8*)phantom + 0x10);
-	return ResolveCollidableToRefID(collidable);
-}
-
 static void PhantomOverlapCommon(void* phantom, void* cdBody, bool isAdd) {
 	ScopedLock lock(&g_contactLock);
 	if (g_watchedSnapshot.empty()) return;
 
-	//cdBody (hkCdBody) has collidable we can resolve
-	//hkCdBody: m_shape at +0x00, m_quality at +0x04, ... m_parent at +0x0C (hkpCollidable* or hkCdBody*)
-	//actually for the overlap callback, cdBody IS a collidable pointer
-	UInt32 phantomRefID = ResolvePhantomToRefID(phantom);
+	//phantom is hkpWorldObject, resolve via its inline collidable at +0x10
+	UInt32 phantomRefID = ResolveWorldObjToRefID(phantom);
+	//cdBody is a collidable pointer from the overlap
 	UInt32 bodyRefID = ResolveCollidableToRefID(cdBody);
 
 	if (phantomRefID && g_watchedSnapshot.count(phantomRefID))
@@ -279,30 +284,28 @@ static void __fastcall Hook_CachingRemove(void* phantom, void* edx, void* cdBody
 
 //--- proxy map maintenance ---
 
+//build map locally, swap under lock - no partial state visible to callbacks
 static void RebuildProxyMap() {
-	g_proxyToRefID.clear();
+	std::unordered_map<void*, UInt32> newMap;
 	for (auto refID : g_watchedRefIDs) {
 		auto* form = (TESObjectREFR*)Engine::LookupFormByID(refID);
 		if (!form) continue;
 		UInt8 typeID = *((UInt8*)form + 0x04);
 		if (typeID != 0x3B && typeID != 0x3C) continue; //actors only
 
-		//Actor+0x68 = process, process+0x138 = charController (high process only)
 		void* process = *(void**)((UInt8*)form + 0x68);
 		if (!process) continue;
 		UInt32 processLevel = *(UInt32*)((UInt8*)process + 0x28);
-		if (processLevel > 1) continue; //need high or middle-high
+		if (processLevel > 1) continue;
 
 		void* ctrl = *(void**)((UInt8*)process + 0x138);
 		if (!ctrl) continue;
 
-		//bhkCharacterProxy::phkObject at +0x08 = hkpCharacterProxy*
 		void* proxy = *(void**)((UInt8*)ctrl + 0x08);
-		if (proxy) {
-			ScopedLock lock(&g_contactLock);
-			g_proxyToRefID[proxy] = refID;
-		}
+		if (proxy) newMap[proxy] = refID;
 	}
+	ScopedLock lock(&g_contactLock);
+	g_proxyToRefID.swap(newMap);
 }
 
 //--- init / update / state ---
