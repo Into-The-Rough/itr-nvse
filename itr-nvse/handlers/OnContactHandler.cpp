@@ -182,14 +182,17 @@ static void PollRigidBodyContactEnd() {
 		if (!form) { stale.push_back(it->first); continue; }
 
 		UInt8 typeID = *((UInt8*)form + 0x04);
-		if (typeID != 0x3B && typeID != 0x3C)
-			continue; //non-actor rigid body end detection not implemented
+		if (typeID != 0x3B && typeID != 0x3C) {
+			//non-actor: can't poll contacts, expire pair so it doesn't wedge
+			stale.push_back(it->first);
+			continue;
+		}
 
 		//get character controller
 		void* process = *(void**)((UInt8*)form + 0x68);
 		if (!process) { stale.push_back(it->first); continue; }
 		UInt32 processLevel = *(UInt32*)((UInt8*)process + 0x28);
-		if (processLevel > 1) continue;
+		if (processLevel > 1) { stale.push_back(it->first); continue; }
 		void* ctrl = *(void**)((UInt8*)process + 0x138);
 		if (!ctrl) { stale.push_back(it->first); continue; }
 
@@ -401,16 +404,19 @@ void Update()
 	if (!g_mainThreadId) g_mainThreadId = tid;
 	if (tid != g_mainThreadId) return;
 
-	//refresh snapshot if watch set changed
+	//refresh snapshot and proxy map when watch set changes
+	static int s_proxyMapTimer = 0;
 	if (g_snapshotDirty) {
-		ScopedLock lock(&g_contactLock);
-		g_watchedSnapshot = g_watchedRefIDs;
+		{
+			ScopedLock lock(&g_contactLock);
+			g_watchedSnapshot = g_watchedRefIDs;
+		}
+		RebuildProxyMap();
 		g_snapshotDirty = false;
+		s_proxyMapTimer = 0;
 	}
 
-	//rebuild proxy map periodically - catches controller/proxy changes from
-	//process level changes or 3D rebuilds, not just watch set mutations
-	static int s_proxyMapTimer = 0;
+	//also rebuild proxy map periodically for controller/proxy churn
 	if (!g_watchedRefIDs.empty() && ++s_proxyMapTimer >= 60) {
 		RebuildProxyMap();
 		s_proxyMapTimer = 0;
@@ -424,6 +430,10 @@ void Update()
 	}
 
 	for (const auto& evt : events) {
+		//re-check watch state before each dispatch - handles unwatching during
+		//handler callbacks and stale events from proxy map lag
+		if (!g_watchedRefIDs.count(evt.watchedRefID)) continue;
+
 		ContactPair pair = {evt.watchedRefID, evt.otherRefID, evt.channel};
 
 		if (evt.isBegin) {
