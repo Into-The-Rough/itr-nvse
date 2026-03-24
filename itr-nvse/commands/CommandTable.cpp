@@ -105,8 +105,8 @@ void RegisterAllCommands(void* nvsePtr)
 	/*405B*/ nvse->SetOpcodeBase(0x405B);
 	ImperativeCommands::RegisterCommands7(nvse);                     //ForceCrouch, DisableCrouching
 
-	/*405D*/ nvse->SetOpcodeBase(0x405D);
+	/*405F*/ nvse->SetOpcodeBase(0x405F);
 	ImperativeCommands::RegisterCommands8(nvse);                     //SetOnContactWatch, GetOnContactWatch
 
-	Log("All commands registered (0x4008-0x405E)");
+	Log("All commands registered (0x4008-0x4060)");
 }
