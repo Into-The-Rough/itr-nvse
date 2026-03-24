@@ -224,6 +224,7 @@ static void PollRigidBodyContactEnd() {
 
 	for (const auto& pair : stale) {
 		g_activeContacts.erase(pair);
+		if (!g_watchedRefIDs.count(pair.refA)) continue;
 		auto* watched = (TESObjectREFR*)Engine::LookupFormByID(pair.refA);
 		auto* other = pair.refB ? (TESObjectREFR*)Engine::LookupFormByID(pair.refB) : nullptr;
 		if (watched && g_eventManagerInterface)
