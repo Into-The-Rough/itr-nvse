@@ -51,10 +51,11 @@
 //
 // 0x405B  ForceCrouch
 // 0x405C  DisableCrouching
-// 0x405D  SetOnContactWatch
-// 0x405E  GetOnContactWatch
+// 0x405D-0x405E  SoundFilteringSoftware (SetActorSoundFilter, GetActorSoundFilter)
+// 0x405F  SetOnContactWatch
+// 0x4060  GetOnContactWatch
 // gaps in itr-nvse itself: 0x4033, 0x403D-0x404F
-// next free itr-nvse-local slot: 0x405F
+// next free itr-nvse-local slot: 0x4061
 // shared suite occupancy for borrowed opcodes is tracked in /mnt/d/plugins/opcodes.txt
 
 void RegisterAllCommands(void* nvse);
