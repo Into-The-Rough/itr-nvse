@@ -171,41 +171,40 @@ static void __fastcall Hook_ContactPointAdded(void* listener, void* edx, void* e
 		QueueEvent(refB, refA, kChannel_RigidBody, true);
 }
 
-//channel 0 end detection: check active rigid body pairs against live contacts
-//collects stale pairs first, dispatches after iteration (no iterator invalidation)
-static void PollRigidBodyContactEnd() {
+static void* GetActorController(void* form) {
+	void* process = *(void**)((UInt8*)form + 0x68);
+	if (!process) return nullptr;
+	if (*(UInt32*)((UInt8*)process + 0x28) > 1) return nullptr;
+	return *(void**)((UInt8*)process + 0x138);
+}
+
+//end detection for ch0 (rigid body) and ch1 (character proxy):
+//poll actor's pointCollector.contactBodies + bodyUnderFeet and compare
+//against active pairs. stale pairs get end events.
+//non-actor ch0 pairs are expired immediately (can't poll their contacts).
+static void PollContactEnd() {
 	std::vector<ContactPair> stale;
 
-	//build per-ref current contact sets from character controller contactBodies
-	//JIP offset: bhkCharacterController+0x10 (pointCollector) +0x3A4 (contactBodies)
-	//contactBodies is hkArray<hkpWorldObject*>: data at +0, size at +4
 	for (auto it = g_activeContacts.begin(); it != g_activeContacts.end(); ++it) {
-		if (it->first.channel != kChannel_RigidBody) continue;
+		if (it->first.channel != kChannel_RigidBody && it->first.channel != kChannel_CharProxy)
+			continue;
 
 		auto* form = (TESObjectREFR*)Engine::LookupFormByID(it->first.refA);
 		if (!form) { stale.push_back(it->first); continue; }
 
 		UInt8 typeID = *((UInt8*)form + 0x04);
 		if (typeID != 0x3B && typeID != 0x3C) {
-			//non-actor: can't poll contacts, expire pair so it doesn't wedge
-			stale.push_back(it->first);
+			stale.push_back(it->first); //non-actor, can't poll
 			continue;
 		}
 
-		//get character controller
-		void* process = *(void**)((UInt8*)form + 0x68);
-		if (!process) { stale.push_back(it->first); continue; }
-		UInt32 processLevel = *(UInt32*)((UInt8*)process + 0x28);
-		if (processLevel > 1) { stale.push_back(it->first); continue; }
-		void* ctrl = *(void**)((UInt8*)process + 0x138);
+		void* ctrl = GetActorController(form);
 		if (!ctrl) { stale.push_back(it->first); continue; }
 
-		//pointCollector.contactBodies at ctrl+0x10+0x3A4 = ctrl+0x3B4
-		//hkArray: data=+0, size=+4
+		//check pointCollector.contactBodies + bodyUnderFeet
 		void** bodies = *(void***)((UInt8*)ctrl + 0x3B4);
 		UInt32 count = *(UInt32*)((UInt8*)ctrl + 0x3B8);
 
-		//check if the other ref is still in contacts
 		bool found = false;
 		for (UInt32 i = 0; i < count && bodies; i++) {
 			if (!bodies[i]) continue;
@@ -213,7 +212,6 @@ static void PollRigidBodyContactEnd() {
 			if (contactRefID == it->first.refB) { found = true; break; }
 		}
 
-		//also check bodyUnderFeet at ctrl+0x60C
 		if (!found) {
 			void* bodyUnderFeet = *(void**)((UInt8*)ctrl + 0x60C);
 			UInt8 noContact = *((UInt8*)ctrl + 0x608);
@@ -233,7 +231,7 @@ static void PollRigidBodyContactEnd() {
 		auto* other = pair.refB ? (TESObjectREFR*)Engine::LookupFormByID(pair.refB) : nullptr;
 		if (watched && g_eventManagerInterface)
 			g_eventManagerInterface->DispatchEvent("ITR:OnContactEnd", watched,
-				(TESForm*)other, (int)kChannel_RigidBody);
+				(TESForm*)other, (int)pair.channel);
 	}
 }
 
@@ -334,14 +332,6 @@ static void __fastcall Hook_CachingRemove(void* phantom, void* edx, void* cdBody
 }
 
 //--- proxy map maintenance ---
-
-//helpers for extracting havok object addresses from actors
-static void* GetActorController(void* form) {
-	void* process = *(void**)((UInt8*)form + 0x68);
-	if (!process) return nullptr;
-	if (*(UInt32*)((UInt8*)process + 0x28) > 1) return nullptr;
-	return *(void**)((UInt8*)process + 0x138);
-}
 
 static void MapActorPhantom(void* form, UInt32 refID,
 	std::unordered_map<void*, UInt32>& phantomMap)
@@ -527,7 +517,11 @@ void Update()
 		//inject seed events into the pending queue for normal dispatch
 		if (!g_seedEvents.empty()) {
 			ScopedLock lock(&g_contactLock);
-			g_pendingEvents.insert(g_pendingEvents.end(), g_seedEvents.begin(), g_seedEvents.end());
+			size_t room = kMaxQueuedEvents > g_pendingEvents.size() ? kMaxQueuedEvents - g_pendingEvents.size() : 0;
+			size_t toAdd = g_seedEvents.size() < room ? g_seedEvents.size() : room;
+			g_pendingEvents.insert(g_pendingEvents.end(), g_seedEvents.begin(), g_seedEvents.begin() + toAdd);
+			if (toAdd < g_seedEvents.size())
+				Log("OnContactHandler: seed capped, dropped %u events", (UInt32)(g_seedEvents.size() - toAdd));
 		}
 	}
 
@@ -577,7 +571,7 @@ void Update()
 	}
 
 	//channel 0 end detection via polling
-	PollRigidBodyContactEnd();
+	PollContactEnd();
 }
 
 void ClearState()
