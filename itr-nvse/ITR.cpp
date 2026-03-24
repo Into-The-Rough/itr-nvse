@@ -27,6 +27,7 @@
 #include "handlers/CornerMessageHandler.h"
 #include "handlers/OnEntryPointHandler.h"
 #include "handlers/OnCombatProcedureHandler.h"
+#include "handlers/OnContactHandler.h"
 #include "handlers/OnSoundPlayedHandler.h"
 #include "handlers/OnJumpLandHandler.h"
 #include "handlers/FallDamageHandler.h"
@@ -323,6 +324,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					WeaponEmissiveCommands::ClearState();
 					GroundCommands::ClearState();
 					ImperativeCommands::ClearState();
+					OnContactHandler::ClearState();
 
 				OnEntryPointHandler::BuildEntryMap();
 				if (Settings::bAutoGodMode && !g_godModeExecuted)
@@ -402,6 +404,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				OnSoundPlayedHandler::Update();
 				OnJumpLandHandler::Update();
 				OnCombatProcedureHandler::Update();
+				OnContactHandler::Update();
 				OnMenuFilterChangeHandler::Update();
 				OnMenuSideChangeHandler::Update();
 				if (Settings::bQuickReadNote)
@@ -538,6 +541,11 @@ static void RegisterHandlers(NVSEInterface* nvse)
 		Log("OnJumpLandHandler initialized");
 	else
 		Log("OnJumpLandHandler failed to initialize");
+
+	if (OnContactHandler::Init((void*)nvse))
+		Log("OnContactHandler initialized");
+	else
+		Log("OnContactHandler failed to initialize");
 
 	if (FallDamageHandler::Init((void*)nvse))
 		Log("FallDamageHandler initialized (SetMult=0x%04X, GetMult=0x%04X)", FallDamageHandler::GetSetMultOpcode(), FallDamageHandler::GetGetMultOpcode());
