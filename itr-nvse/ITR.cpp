@@ -128,8 +128,12 @@ static const _GetSingleton ConsoleManager_GetSingleton = (_GetSingleton)0x0071B1
 
 void Console_Print(const char* fmt, ...)
 {
-	void* consoleManager = ConsoleManager_GetSingleton(true);
-	if (!consoleManager) return;
+	if (!IsConsoleMode())
+		return;
+
+	void* consoleManager = ConsoleManager_GetSingleton(false);
+	if (!consoleManager)
+		return;
 
 	va_list args;
 	va_start(args, fmt);

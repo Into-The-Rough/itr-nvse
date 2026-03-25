@@ -7,16 +7,22 @@
 #include "internal/CallTemplates.h"
 
 static bool g_lastVisible = false;
+static UInt8* g_consoleOpen = (UInt8*)0x11DEA2E;
 
 namespace OnConsoleHandler {
 void Update()
 {
-	//MenuConsole::Instance(1) at 0x71B160
-	void* console = CdeclCall<void*>(0x71B160, 1);
-	if (!console) return;
-
-	//MenuConsole::IsConsoleActive at 0x4A4020
-	bool visible = ThisCall<bool>(0x4A4020, console);
+	bool visible = false;
+	if (*g_consoleOpen)
+	{
+		//MenuConsole::Instance(0) at 0x71B160
+		void* console = CdeclCall<void*>(0x71B160, 0);
+		if (console)
+		{
+			//MenuConsole::IsConsoleActive at 0x4A4020
+			visible = ThisCall<bool>(0x4A4020, console);
+		}
+	}
 
 	if (visible != g_lastVisible)
 	{
