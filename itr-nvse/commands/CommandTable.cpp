@@ -108,5 +108,8 @@ void RegisterAllCommands(void* nvsePtr)
 	/*405F*/ nvse->SetOpcodeBase(0x405F);
 	ImperativeCommands::RegisterCommands8(nvse);                     //SetOnContactWatch, GetOnContactWatch
 
-	Log("All commands registered (0x4008-0x4060)");
+	/*4061*/ nvse->SetOpcodeBase(0x4061);
+	ImperativeCommands::RegisterCommands9(nvse);                     //ForceCombatTarget
+
+	Log("All commands registered (0x4008-0x4061)");
 }
