@@ -98,11 +98,16 @@ const _ExtractArgs ExtractArgs = (_ExtractArgs)0x005ACCB0;
 const _FormHeap_Free FormHeap_Free = (_FormHeap_Free)0x00401030;
 
 struct TLSData {
-	UInt32 unk000[1257];
-	bool consoleMode;
+	UInt32 pad000[(0x260 - 0x000) >> 2];
+	void* lastNiNode;
+	TESObjectREFR* lastNiNodeREFR;
+	UInt8 consoleMode;
+	UInt8 pad269[3];
 };
+static_assert(offsetof(TLSData, consoleMode) == 0x268);
 
 static UInt32* g_TlsIndexPtr = (UInt32*)0x0126FD98;
+static UInt8* g_consoleOpen = (UInt8*)0x11DEA2E;
 
 static TLSData* GetTLSData()
 {
@@ -111,8 +116,11 @@ static TLSData* GetTLSData()
 
 bool IsConsoleMode()
 {
+	if (!*g_consoleOpen)
+		return false;
+
 	TLSData* tlsData = GetTLSData();
-	return tlsData ? tlsData->consoleMode : false;
+	return tlsData ? tlsData->consoleMode != 0 : false;
 }
 
 typedef void* (*_GetSingleton)(bool canCreateNew);
