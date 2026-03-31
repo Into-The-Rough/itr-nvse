@@ -569,9 +569,6 @@ namespace QuickReadNote
 		UInt32* vtbl = reinterpret_cast<UInt32*>(kVtbl_MessageMenu);
 		ChainedHandleClick = reinterpret_cast<_MessageMenu_HandleClick>(vtbl[kOffset_HandleClick / 4]);
 		QRN_SafeWrite32(kVtbl_MessageMenu + kOffset_HandleClick, reinterpret_cast<UInt32>(MessageMenu_HandleClick_Hook));
-
-		Log("QuickReadNote installed (timeout=%dms, control=%d, maxLines=%d)",
-			timeoutMs, controlID, maxLines);
 	}
 
 	void Update() {

@@ -37,7 +37,6 @@ namespace InitHavokCrashFix
 		SafeWrite::WriteRelJump(kPatchAddr, (UInt32)Hook);
 		//nop the 6th byte (original instruction was 6 bytes, jmp is 5)
 		SafeWrite::Write8(kPatchAddr + 5, 0x90);
-		Log("InitHavokCrashFix: patched GethkWorld call at 0x576AB3");
 	}
 }
 

@@ -167,8 +167,6 @@ namespace LocationVisitPopup
 		SafeWrite::WriteRelJump(0x7795DD, (UInt32)CheckDiscoveredMarkerHook);
 		SafeWrite::Write8(0x7795E2, 0x90);
 		SafeWrite::Write8(0x7795E3, 0x90);
-		Log("LocationVisitPopup installed (cooldown=%ds, sound=%s)",
-			cooldownSeconds, disableSound ? "off" : "on");
 	}
 
 	void UpdateSettings(int cooldownSeconds, bool disableSound)

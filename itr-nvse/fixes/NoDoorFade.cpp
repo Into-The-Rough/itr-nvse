@@ -39,14 +39,12 @@ namespace NoDoorFade
 	void SetEnabled(bool enabled)
 	{
 		g_enabled = enabled;
-		Log("NoDoorFade %s", enabled ? "enabled" : "disabled");
 	}
 
 	void Init(bool enabled)
 	{
 		PatchCall(0x51895B, (uint32_t)Hook_FadeOut);
 		g_enabled = enabled;
-		Log("NoDoorFade initialized (enabled=%d)", enabled);
 	}
 }
 

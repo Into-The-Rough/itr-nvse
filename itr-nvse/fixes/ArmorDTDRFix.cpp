@@ -58,7 +58,6 @@ namespace ArmorDTDRFix
 				s_detour.Remove();
 				return;
 			}
-			Log("ArmorDTDRFix installed");
 		}
 		else {
 			Log("ArmorDTDRFix failed to install");

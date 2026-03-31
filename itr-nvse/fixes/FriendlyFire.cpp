@@ -52,7 +52,6 @@ namespace FriendlyFire
 			RemovePatch();
 
 		g_enabled = enabled;
-		Log("FriendlyFire %s", enabled ? "enabled" : "disabled");
 	}
 
 	void Init(bool enabled)
@@ -69,7 +68,6 @@ namespace FriendlyFire
 			g_enabled = true;
 		}
 
-		Log("FriendlyFire initialized (enabled=%d)", enabled);
 	}
 }
 
