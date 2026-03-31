@@ -1,7 +1,9 @@
 //quick view notes and play holotapes on pickup without opening pip-boy
 
-#include "nvse/PluginAPI.h"
-#include "nvse/GameUI.h"
+#include <Windows.h>
+#include "common/ITypes.h"
+#include <cstdio>
+#include <cstring>
 #include "QuickReadNote.h"
 #include "internal/SafeWrite.h"
 #include "internal/EngineFunctions.h"
@@ -9,6 +11,9 @@
 #include "internal/globals.h"
 #include "internal/CallTemplates.h"
 #include "handlers/DialogueTextFilter.h"
+
+class BGSNote;
+class Tile;
 
 static void QRN_SafeWrite32(UInt32 addr, UInt32 data) {
 	DWORD oldProtect;
