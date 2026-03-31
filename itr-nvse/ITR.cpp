@@ -485,80 +485,25 @@ static void LogSettings()
 
 static void RegisterHandlers(NVSEInterface* nvse)
 {
-	if (DialogueTextFilter::Init((void*)nvse))
-		Log("DialogueTextFilter initialized");
-	else
-		Log("DialogueTextFilter failed to initialize");
+	auto logInit = [](const char* name, bool ok) {
+		Log(ok ? "%s initialized" : "%s failed to initialize", name);
+	};
 
-	if (OnStealHandler::Init((void*)nvse))
-		Log("OnStealHandler initialized");
-	else
-		Log("OnStealHandler failed to initialize");
-
-	if (OnWeaponDropHandler::Init((void*)nvse))
-		Log("OnWeaponDropHandler initialized");
-	else
-		Log("OnWeaponDropHandler failed to initialize");
-
-	if (OnConsoleHandler::Init((void*)nvse))
-		Log("OnConsoleHandler initialized");
-	else
-		Log("OnConsoleHandler failed to initialize");
-
-	if (OnWeaponJamHandler::Init((void*)nvse))
-		Log("OnWeaponJamHandler initialized");
-	else
-		Log("OnWeaponJamHandler failed to initialize");
-
-	if (OnKeyStateHandler::Init((void*)nvse))
-		Log("OnKeyStateHandler initialized");
-	else
-		Log("OnKeyStateHandler failed to initialize");
-
-	if (KeyHeldHandler::Init())
-		Log("KeyHeldHandler initialized");
-	else
-		Log("KeyHeldHandler failed to initialize");
-
-	if (DoubleTapHandler::Init())
-		Log("DoubleTapHandler initialized");
-	else
-		Log("DoubleTapHandler failed to initialize");
-
-	if (OnFrenzyHandler::Init((void*)nvse))
-		Log("OnFrenzyHandler initialized");
-	else
-		Log("OnFrenzyHandler failed to initialize");
-
-	if (CornerMessageHandler::Init((void*)nvse))
-		Log("CornerMessageHandler initialized");
-	else
-		Log("CornerMessageHandler failed to initialize");
-
-	if (OnEntryPointHandler::Init((void*)nvse))
-		Log("OnEntryPointHandler initialized");
-	else
-		Log("OnEntryPointHandler failed to initialize");
-
-	if (OnCombatProcedureHandler::Init((void*)nvse))
-		Log("OnCombatProcedureHandler initialized");
-	else
-		Log("OnCombatProcedureHandler failed to initialize");
-
-	if (OnSoundPlayedHandler::Init((void*)nvse))
-		Log("OnSoundPlayedHandler initialized");
-	else
-		Log("OnSoundPlayedHandler failed to initialize");
-
-	if (OnJumpLandHandler::Init((void*)nvse))
-		Log("OnJumpLandHandler initialized");
-	else
-		Log("OnJumpLandHandler failed to initialize");
-
-	if (OnContactHandler::Init((void*)nvse))
-		Log("OnContactHandler initialized");
-	else
-		Log("OnContactHandler failed to initialize");
+	logInit("DialogueTextFilter", DialogueTextFilter::Init((void*)nvse));
+	logInit("OnStealHandler", OnStealHandler::Init((void*)nvse));
+	logInit("OnWeaponDropHandler", OnWeaponDropHandler::Init((void*)nvse));
+	logInit("OnConsoleHandler", OnConsoleHandler::Init((void*)nvse));
+	logInit("OnWeaponJamHandler", OnWeaponJamHandler::Init((void*)nvse));
+	logInit("OnKeyStateHandler", OnKeyStateHandler::Init((void*)nvse));
+	logInit("KeyHeldHandler", KeyHeldHandler::Init());
+	logInit("DoubleTapHandler", DoubleTapHandler::Init());
+	logInit("OnFrenzyHandler", OnFrenzyHandler::Init((void*)nvse));
+	logInit("CornerMessageHandler", CornerMessageHandler::Init((void*)nvse));
+	logInit("OnEntryPointHandler", OnEntryPointHandler::Init((void*)nvse));
+	logInit("OnCombatProcedureHandler", OnCombatProcedureHandler::Init((void*)nvse));
+	logInit("OnSoundPlayedHandler", OnSoundPlayedHandler::Init((void*)nvse));
+	logInit("OnJumpLandHandler", OnJumpLandHandler::Init((void*)nvse));
+	logInit("OnContactHandler", OnContactHandler::Init((void*)nvse));
 
 	if (FallDamageHandler::Init((void*)nvse))
 		Log("FallDamageHandler initialized (SetMult=0x%04X, GetMult=0x%04X)", FallDamageHandler::GetSetMultOpcode(), FallDamageHandler::GetGetMultOpcode());
@@ -566,35 +511,15 @@ static void RegisterHandlers(NVSEInterface* nvse)
 		Log("FallDamageHandler failed to initialize");
 
 	if (Settings::bDialogueCamera)
-	{
-		if (DialogueCameraHandler::Init((void*)nvse))
-			Log("DialogueCameraHandler initialized");
-		else
-			Log("DialogueCameraHandler failed to initialize");
-	}
+		logInit("DialogueCameraHandler", DialogueCameraHandler::Init((void*)nvse));
 
-	if (FakeHitHandler::Init((void*)nvse))
-		Log("FakeHitHandler initialized");
-	else
-		Log("FakeHitHandler failed to initialize");
+	logInit("FakeHitHandler", FakeHitHandler::Init((void*)nvse));
 
 	if (Settings::bOwnerNameInfo)
-	{
-		if (OwnerNameInfoHandler::Init())
-			Log("OwnerNameInfoHandler initialized");
-		else
-			Log("OwnerNameInfoHandler failed to initialize");
-	}
+		logInit("OwnerNameInfoHandler", OwnerNameInfoHandler::Init());
 
-	if (OnMenuFilterChangeHandler::Init((void*)nvse))
-		Log("OnMenuFilterChangeHandler initialized");
-	else
-		Log("OnMenuFilterChangeHandler failed to initialize");
-
-	if (OnMenuSideChangeHandler::Init((void*)nvse))
-		Log("OnMenuSideChangeHandler initialized");
-	else
-		Log("OnMenuSideChangeHandler failed to initialize");
+	logInit("OnMenuFilterChangeHandler", OnMenuFilterChangeHandler::Init((void*)nvse));
+	logInit("OnMenuSideChangeHandler", OnMenuSideChangeHandler::Init((void*)nvse));
 
 	if (Settings::bSaveFileSize)
 		Log("SaveFileSizeHandler will initialize in PostLoad");
