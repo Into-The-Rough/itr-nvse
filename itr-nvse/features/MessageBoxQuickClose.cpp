@@ -1,13 +1,16 @@
 //NOT hot-reloadable - requires game restart
 
-#include "nvse/PluginAPI.h"
-#include "nvse/GameUI.h"
 #include <Windows.h>
 
 #include "MessageBoxQuickClose.h"
+#include "internal/UIMinimal.h"
+
+using UIMinimal::MessageMenu;
+using UIMinimal::Tile;
 
 namespace MessageBoxQuickClose
 {
+	constexpr UInt32 kVtbl_MessageMenu = 0x107566C;
 	constexpr UInt32 kOffset_HandleSpecialKeyInput = 0x38;
 	constexpr UInt32 kOffset_HandleClick = 0x0C;
 
@@ -31,8 +34,8 @@ static Tile::Value* GetTileValue(const Tile* tile, UInt32 typeID)
 	if (!tile) return nullptr;
 
 	const auto& values = tile->values;
-	Tile::Value** data = values.Data();
-	UInt32 count = values.Size();
+	Tile::Value** data = values.data;
+	UInt32 count = values.size;
 
 	UInt32 left = 0;
 	UInt32 right = count;
@@ -59,9 +62,19 @@ static float GetTileValueFloat(const Tile* tile, UInt32 id)
 	return value ? value->num : 0.0f;
 }
 
+static void DispatchHandleClick(UIMinimal::MessageMenu* menu, SInt32 tileID, UIMinimal::Tile* clickedTile)
+{
+	using namespace MessageBoxQuickClose;
+
+	auto* vtbl = *reinterpret_cast<UInt32**>(menu);
+	auto handleClick = reinterpret_cast<_MessageMenu_HandleClick>(vtbl[kOffset_HandleClick / 4]);
+	handleClick(menu, tileID, clickedTile);
+}
+
 bool __fastcall MessageMenu_HandleSpecialKeyInput_Hook(MessageMenu* menu, void* edx, int code, float keyState)
 {
 	using namespace MessageBoxQuickClose;
+	using namespace UIMinimal;
 
 	if (!menu)
 		return OriginalHandleSpecialKeyInput ? OriginalHandleSpecialKeyInput(menu, code, keyState) : false;
@@ -73,7 +86,7 @@ bool __fastcall MessageMenu_HandleSpecialKeyInput_Hook(MessageMenu* menu, void* 
 		{
 			Tile* buttonTile = head->data->tile;
 			UInt32 tileID = static_cast<UInt32>(GetTileValueFloat(buttonTile, kTileValue_id));
-			menu->HandleClick(tileID, buttonTile);
+			DispatchHandleClick(menu, tileID, buttonTile);
 			return true;
 		}
 	}
@@ -85,6 +98,7 @@ bool __fastcall MessageMenu_HandleSpecialKeyInput_Hook(MessageMenu* menu, void* 
 void __fastcall MessageMenu_HandleClick_Hook(MessageMenu* menu, void* edx, SInt32 tileID, Tile* clickedTile)
 {
 	using namespace MessageBoxQuickClose;
+	using namespace UIMinimal;
 
 	if (!menu)
 	{
@@ -109,7 +123,6 @@ void __fastcall MessageMenu_HandleClick_Hook(MessageMenu* menu, void* edx, SInt3
 namespace MessageBoxQuickClose {
 bool Init()
 {
-
 	UInt32* vtbl = reinterpret_cast<UInt32*>(kVtbl_MessageMenu);
 
 	OriginalHandleSpecialKeyInput = reinterpret_cast<_MessageMenu_HandleSpecialKeyInput>(vtbl[kOffset_HandleSpecialKeyInput / 4]);
