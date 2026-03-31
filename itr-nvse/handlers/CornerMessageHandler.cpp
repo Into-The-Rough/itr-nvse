@@ -71,6 +71,8 @@ static int ConsumeMessageMeta(const char* text, float displayTime)
     return kCornerMeta_Generic;
 }
 
+static bool g_suppressSound = false;
+
 namespace CornerMessageHandler {
 void TrackMessageMeta(const char* text, float displayTime, int metaType)
 {
@@ -117,7 +119,38 @@ static bool __fastcall Hook_HUDMainMenu_ShowNotify(
         DispatchCornerMessage(text, emotion, iconPath, soundPath, displayTime, metaType);
 
     typedef bool(__thiscall* ShowNotify_t)(void*, const char*, UInt32, const char*, const char*, float, bool);
-    return s_detour.GetTrampoline<ShowNotify_t>()(thisPtr, text, emotion, iconPath, soundPath, displayTime, instant);
+    const char* trampolineSound = g_suppressSound ? "" : soundPath;
+    return s_detour.GetTrampoline<ShowNotify_t>()(thisPtr, text, emotion, iconPath, trampolineSound, displayTime, instant);
+}
+
+static void LoadIntegrationINIs()
+{
+    char dirPath[MAX_PATH];
+    GetModuleFileNameA(nullptr, dirPath, MAX_PATH);
+    char* s = strrchr(dirPath, '\\');
+    if (!s) return;
+    strcpy_s(s + 1, MAX_PATH - (s + 1 - dirPath), "Data\\config\\itr\\");
+
+    char searchPath[MAX_PATH];
+    strcpy_s(searchPath, dirPath);
+    strcat_s(searchPath, "*.ini");
+
+    WIN32_FIND_DATAA fd;
+    HANDLE hFind = FindFirstFileA(searchPath, &fd);
+    if (hFind == INVALID_HANDLE_VALUE) return;
+
+    do {
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+
+        char iniPath[MAX_PATH];
+        strcpy_s(iniPath, dirPath);
+        strcat_s(iniPath, fd.cFileName);
+
+        if (GetPrivateProfileIntA("CornerMessage", "bSuppressSound", 0, iniPath))
+            g_suppressSound = true;
+
+    } while (FindNextFileA(hFind, &fd));
+    FindClose(hFind);
 }
 
 bool Init(void* nvseInterface) {
@@ -125,6 +158,7 @@ bool Init(void* nvseInterface) {
     if (nvse->isEditor) return false;
 
     EnsureMetaLockInitialized();
+    LoadIntegrationINIs();
 
     //prologue: push ebp; mov ebp, esp; push -1 = 5 bytes
     if (!s_detour.WriteRelJump(kAddr_HUDMainMenu_ShowNotify, Hook_HUDMainMenu_ShowNotify, 5))
