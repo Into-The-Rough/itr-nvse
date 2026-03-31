@@ -347,7 +347,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				}
 				break;
 
-		case kMessage_ReloadConfig:
+			case kMessage_ReloadConfig:
 				if (msg->data && msg->dataLen > 0)
 				{
 					const char* pluginName = (const char*)msg->data;
@@ -357,6 +357,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 						bool oldSuppressObjectives = Settings::bSuppressObjectives != 0;
 						bool oldSuppressReputation = Settings::bSuppressReputation != 0;
 						Settings::Load();
+						DialogueCameraHandler::SetEnabled(Settings::bDialogueCamera != 0);
 
 						LocationVisitPopup::UpdateSettings(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
 

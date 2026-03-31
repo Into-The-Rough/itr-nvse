@@ -391,22 +391,15 @@
 			"pageTitle": "Visuals",
 			"columns": 1,
 			"enable": 1,
-			"options": {
-				"1": {
-					"title": "Dialogue Camera",
-					"type": 5,
-					"enable": 1,
-					"mouse": "Cinematic camera angles during dialogue (requires JohnnyGuitar.dll)",
-					"vars": [{ "configINI": "Tweaks:bDialogueCamera", "default": 0 }]
-				},
-				"2": {
-					"title": "No Door Fade",
-					"type": 5,
-					"enable": 1,
-					"mouse": "Skip actor fade-out when entering doors",
-					"vars": [{ "configINI": "Tweaks:bNoDoorFade", "default": 0 }]
+				"options": {
+					"1": {
+						"title": "No Door Fade",
+						"type": 5,
+						"enable": 1,
+						"mouse": "Skip actor fade-out when entering doors",
+						"vars": [{ "configINI": "Tweaks:bNoDoorFade", "default": 0 }]
+					}
 				}
-			}
 		},
 		"5": {
 			"listTitle": "QoL",

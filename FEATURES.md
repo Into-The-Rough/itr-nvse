@@ -25,6 +25,17 @@
 
 **Camera**
 - SetCameraAngle - direct camera transform control
+- Dialogue camera support is intended for scripted dependent mods and is not exposed through itr-nvse INI/MCM
+- Enabling dialogue camera alone uses the built-in automatic angle cycling
+- For script-driven control, set fixed mode or manual mode after enabling
+- SetDialogueCameraEnabled - runtime toggle for dialogue camera
+- SetDialogueCameraMode - auto angle mode: cycle, fixed, random, manual
+- SetDialogueCameraFixedAngle - fixed angle used by fixed mode
+- SetDialogueCameraAngle - immediate exact or random angle switch
+- SetDialogueCameraDolly - dialogue camera dolly effect
+- SetDialogueCameraShake - dialogue camera shake override
+- Modes: 0=cycle, 1=fixed, 2=random, 3=manual
+- Angle IDs: 0=Vanilla, 1=OverShoulder, 2=NPCCloseup, 3=TwoShot, 4=NPCFace, 5=LowAngle, 6=HighAngle, 7=PlayerFace, 8=WideShot, 9=NPCProfile, 10=PlayerProfile, 11=Overhead
 
 **Weapon Switch**
 - SetPreventWeaponSwitch - prevent NPC weapon switching

@@ -55,8 +55,12 @@
 // 0x405F  SetOnContactWatch
 // 0x4060  GetOnContactWatch
 // 0x4061  ForceCombatTarget
+// 0x4062  SetDialogueCameraEnabled
+// 0x4063  SetDialogueCameraMode
+// 0x4064  SetDialogueCameraFixedAngle
+// 0x4065  SetDialogueCameraAngle
 // gaps in itr-nvse itself: 0x4033, 0x403D-0x404F
-// next free itr-nvse-local slot: 0x4062
+// next free itr-nvse-local slot: 0x4066
 // shared suite occupancy for borrowed opcodes is tracked in /mnt/d/plugins/opcodes.txt
 
 void RegisterAllCommands(void* nvse);
