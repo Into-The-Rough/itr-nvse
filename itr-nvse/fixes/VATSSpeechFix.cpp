@@ -79,6 +79,46 @@ namespace VATSSpeechFix
 	static UInt32 s_timescalePatchAddr = 0xAEDFBD; //for inline asm
 	static Detours::JumpDetour s_timescaleDetour;
 
+	static constexpr UInt8 kVanillaTimescalePatch[] = {
+		0x83, 0xEC, 0x08, 0xDD, 0x1C, 0x24, 0xE8,
+		0x16, 0x8D, 0x3D, 0x00, 0x83, 0xC4, 0x08
+	};
+
+	static constexpr UInt8 kStewieTimescalePatch[] = {
+		0xD9, 0xE1, 0x66, 0x66, 0x66, 0x66, 0x0F,
+		0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00
+	};
+
+	enum class TimescalePatchOwner {
+		Vanilla,
+		Stewie,
+		Other,
+	};
+
+	static TimescalePatchOwner s_timescalePatchOwner = TimescalePatchOwner::Other;
+
+	static TimescalePatchOwner GetTimescalePatchOwner()
+	{
+		auto* bytes = reinterpret_cast<const UInt8*>(s_timescalePatchAddr);
+		if (memcmp(bytes, kVanillaTimescalePatch, sizeof(kVanillaTimescalePatch)) == 0)
+			return TimescalePatchOwner::Vanilla;
+		if (memcmp(bytes, kStewieTimescalePatch, sizeof(kStewieTimescalePatch)) == 0)
+			return TimescalePatchOwner::Stewie;
+		return TimescalePatchOwner::Other;
+	}
+
+	static bool WriteTimescaleBytes(const UInt8* bytes)
+	{
+		DWORD oldProtect;
+		if (!VirtualProtect((void*)s_timescalePatchAddr, sizeof(kVanillaTimescalePatch), PAGE_EXECUTE_READWRITE, &oldProtect))
+			return false;
+
+		memcpy((void*)s_timescalePatchAddr, bytes, sizeof(kVanillaTimescalePatch));
+		VirtualProtect((void*)s_timescalePatchAddr, sizeof(kVanillaTimescalePatch), oldProtect, &oldProtect);
+		FlushInstructionCache(GetCurrentProcess(), (void*)s_timescalePatchAddr, sizeof(kVanillaTimescalePatch));
+		return true;
+	}
+
 	__declspec(naked) void HookedTimescaleNaked()
 	{
 		__asm {
@@ -142,6 +182,20 @@ namespace VATSSpeechFix
 
 	void SetEnabled(bool enabled)
 	{
+		if (s_timescalePatchOwner == TimescalePatchOwner::Stewie)
+		{
+			if (enabled)
+			{
+				if (!WriteTimescaleBytes(kStewieTimescalePatch))
+					Log("VATSSpeechFix: failed to restore Stewie audio inline at 0x%X", s_timescalePatchAddr);
+			}
+			else
+			{
+				if (!WriteTimescaleBytes(kVanillaTimescalePatch))
+					Log("VATSSpeechFix: failed to restore vanilla bytes at 0x%X", s_timescalePatchAddr);
+			}
+		}
+
 		g_enabled = enabled;
 	}
 
@@ -155,10 +209,39 @@ namespace VATSSpeechFix
 		OriginalFunc10 = *(BSWin32GameSound_Func10_t*)GameAddr::BSWin32GameSound_Vtbl_Func10;
 		SafeWrite32(GameAddr::BSWin32GameSound_Vtbl_Func10, (UInt32)HookedFunc10);
 
-		//timescale hook - checks flag 0x200000 and skips timescale application if set
-		//prologue: 14 bytes
-		if (s_timescaleDetour.WriteRelJump(s_timescalePatchAddr, HookedTimescaleNaked, 14))
-			s_trampolineTimescale = (UInt8*)s_timescaleDetour.GetOverwrittenAddr();
+		s_timescalePatchOwner = GetTimescalePatchOwner();
+
+		switch (s_timescalePatchOwner)
+		{
+		case TimescalePatchOwner::Vanilla:
+			if (s_timescaleDetour.WriteRelJump(s_timescalePatchAddr, HookedTimescaleNaked, sizeof(kVanillaTimescalePatch)))
+			{
+				s_trampolineTimescale = (UInt8*)s_timescaleDetour.GetOverwrittenAddr();
+				Log("VATSSpeechFix: installed inline timescale detour");
+			}
+			else
+			{
+				Log("VATSSpeechFix: failed to install inline timescale detour");
+			}
+			break;
+		case TimescalePatchOwner::Stewie:
+			if (enabled)
+			{
+				Log("VATSSpeechFix: using Stewie audio inline at 0x%X", s_timescalePatchAddr);
+			}
+			else if (WriteTimescaleBytes(kVanillaTimescalePatch))
+			{
+				Log("VATSSpeechFix: restored vanilla bytes at 0x%X while disabled", s_timescalePatchAddr);
+			}
+			else
+			{
+				Log("VATSSpeechFix: failed to restore vanilla bytes at 0x%X while disabled", s_timescalePatchAddr);
+			}
+			break;
+		case TimescalePatchOwner::Other:
+			Log("VATSSpeechFix: skipping 0x%X, inline site already owned by another patch", s_timescalePatchAddr);
+			break;
+		}
 
 		g_enabled = enabled;
 	}
