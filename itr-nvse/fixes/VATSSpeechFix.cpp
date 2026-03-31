@@ -143,7 +143,6 @@ namespace VATSSpeechFix
 	void SetEnabled(bool enabled)
 	{
 		g_enabled = enabled;
-		Log("VATSSpeechFix %s", enabled ? "enabled" : "disabled");
 	}
 
 	void Init(bool enabled)
@@ -162,7 +161,6 @@ namespace VATSSpeechFix
 			s_trampolineTimescale = (UInt8*)s_timescaleDetour.GetOverwrittenAddr();
 
 		g_enabled = enabled;
-		Log("VATSSpeechFix initialized (enabled=%d)", enabled);
 	}
 }
 

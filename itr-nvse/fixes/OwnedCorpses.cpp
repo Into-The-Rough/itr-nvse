@@ -131,7 +131,6 @@ namespace OwnedCorpses
 	void SetEnabled(bool enabled)
 	{
 		g_enabled = enabled;
-		Log("OwnedCorpses %s", enabled ? "enabled" : "disabled");
 	}
 
 	void Init(bool enabled)
@@ -152,7 +151,6 @@ namespace OwnedCorpses
 		}
 
 		g_enabled = enabled;
-		Log("OwnedCorpses initialized (enabled=%d)", enabled);
 	}
 }
 

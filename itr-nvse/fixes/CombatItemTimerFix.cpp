@@ -57,7 +57,6 @@ namespace CombatItemTimerFix
 	void Init()
 	{
 		SafeWrite::WriteRelCall(0x9DAB61, (UInt32)Hook_ResetCombatItemTimer);
-		Log("CombatItemTimerFix installed");
 	}
 }
 

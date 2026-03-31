@@ -83,7 +83,6 @@ namespace VATSProjectileFix
 		SInt32 currentDisp = *(SInt32*)(kAddr_HookSite + 1);
 		s_originalVATSMenuUpdate = kAddr_HookSite + 5 + currentDisp;
 		SafeWrite::Write32(kAddr_HookSite + 1, (UInt32)VATSMenuUpdate_Hook - kAddr_HookSite - 5);
-		Log("VATSProjectileFix installed");
 	}
 }
 

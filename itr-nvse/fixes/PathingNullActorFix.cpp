@@ -30,7 +30,6 @@ namespace PathingNullActorFix
 	void Init()
 	{
 		SafeWrite::WriteRelJump(0x9E57C6, (UInt32)Hook);
-		Log("PathingNullActorFix installed at 0x9E57C6");
 	}
 }
 

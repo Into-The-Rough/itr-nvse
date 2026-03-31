@@ -1,5 +1,4 @@
-//owner name info handler - shows owner name on crosshair prompt
-//modifies HUD tile text each frame after game updates it
+//Rewrites the crosshair prompt with owner information after the HUD updates it.
 
 #include <cstdint>
 #include <cstring>
@@ -18,7 +17,6 @@ constexpr UInt32 kOffset_TESForm_TypeID = 0x04;
 typedef bool (__thiscall* _IsCrime)(void* refr);
 static const _IsCrime IsCrime = (_IsCrime)0x579690;
 
-//settings
 static bool g_bOwnerNameInfo = false;
 static bool g_bCompatMode = true;
 static bool g_bShowFactionName = true;
@@ -26,7 +24,6 @@ static bool g_bShowNameOnlyCrime = true;
 
 static void* g_lastRef = nullptr;
 
-//BSExtraData traversal
 static void* GetExtraDataByType(void* extraDataList, UInt8 type)
 {
 	if (!extraDataList) return nullptr;
@@ -43,7 +40,6 @@ static void* GetExtraDataByType(void* extraDataList, UInt8 type)
 	return nullptr;
 }
 
-//get owner from extra data list
 static void* GetOwnerFromExtraList(void* extraDataList)
 {
 	void* xOwnership = GetExtraDataByType(extraDataList, 0x21); //ExtraOwnership
@@ -52,7 +48,6 @@ static void* GetOwnerFromExtraList(void* extraDataList)
 	return nullptr;
 }
 
-//get owner of reference (checks ref then cell)
 static void* GetRefOwner(void* ref, bool* outIsFaction)
 {
 	if (!ref) return nullptr;
@@ -80,14 +75,12 @@ static void* GetRefOwner(void* ref, bool* outIsFaction)
 	return owner;
 }
 
-//get faction name - TESFaction::TESFullName at 0x18, String.data at +0x04
 static const char* GetFactionName(void* faction)
 {
 	if (!faction) return nullptr;
 	return *(const char**)((UInt8*)faction + 0x1C);
 }
 
-//get owner's name
 static const char* GetOwnerName(void* owner)
 {
 	if (!owner) return nullptr;
@@ -101,7 +94,6 @@ static const char* GetOwnerName(void* owner)
 	return nullptr;
 }
 
-//string utilities
 static bool EndsWithS(const char* str)
 {
 	size_t len = strlen(str);
@@ -120,7 +112,6 @@ static bool StartsWithCaseInsensitive(const char* str, const char* prefix)
 	return true;
 }
 
-//clean up faction name (remove NV/DLC prefixes, add spaces to camelCase)
 static void CleanFactionName(const char* input, char* output, size_t outputSize)
 {
 	if (!input || !output || outputSize == 0)
@@ -155,7 +146,6 @@ static void CleanFactionName(const char* input, char* output, size_t outputSize)
 		len -= 2;
 	}
 
-	//add spaces before uppercase in camelCase
 	char result[256];
 	size_t ri = 0;
 	bool afterSpace = true;
@@ -212,14 +202,12 @@ void Update()
 
 	UInt8 refType = *(UInt8*)((UInt8*)ref + kOffset_TESForm_TypeID);
 
-	//skip actors
 	if (refType == 0x3B) //Actor
 	{
 		g_lastRef = ref;
 		return;
 	}
 
-	//get owner
 	bool isFaction = false;
 	void* owner = GetRefOwner(ref, &isFaction);
 	if (!owner)
@@ -235,7 +223,6 @@ void Update()
 		return;
 	}
 
-	//skip if owner is player (player NPC base form = 0x7)
 	UInt32 ownerRefID = *(UInt32*)((UInt8*)owner + 0x0C); //TESForm::refID
 	if (ownerRefID == 0x7)
 	{
@@ -243,7 +230,6 @@ void Update()
 		return;
 	}
 
-	//skip if only showing for crimes and this isn't a crime
 	if (g_bShowNameOnlyCrime && !IsCrime(ref))
 	{
 		g_lastRef = ref;

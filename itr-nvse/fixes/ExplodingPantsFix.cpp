@@ -31,7 +31,6 @@ namespace ExplodingPantsFix
 
 	void Init() {
 		SafeWrite::WriteRelJump(0x9C3204, (UInt32)Hook_IsAltTrigger_Wrapper);
-		Log("ExplodingPantsFix installed");
 	}
 }
 

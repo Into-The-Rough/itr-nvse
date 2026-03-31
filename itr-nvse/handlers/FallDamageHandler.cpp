@@ -18,8 +18,7 @@ static UInt32 s_getMultOpcode = 0;
 
 #include "internal/globals.h"
 
-//get multiplier for actor (checks per-actor map, falls back to global)
-//returns in st(0) for asm hook
+//Returns the effective multiplier in st(0) for the asm hook.
 static float __cdecl GetFallDamageMultForActor(UInt32 refID)
 {
 	InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
@@ -33,9 +32,6 @@ static float __cdecl GetFallDamageMultForActor(UInt32 refID)
 	return g_globalFallDamageMult;
 }
 
-//hook at 0x8A63EC - after damage calculation, before comparison to 0
-//[ebp-0x28] = calculated damage
-//[ebp-0x54] = actor
 namespace FallDamageHook
 {
 	static const UInt32 kHookAddr = 0x8A63EC;
@@ -54,7 +50,6 @@ namespace FallDamageHook
 			push ecx
 			push edx
 
-			//get actor refID safely
 			mov eax, [ebp-0x54]
 			test eax, eax
 			jz use_global
@@ -72,11 +67,9 @@ namespace FallDamageHook
 			pop edx
 			pop ecx
 
-			//st(0) = multiplier, multiply by damage
 			fmul dword ptr [ebp-0x28]
 			fstp dword ptr [ebp-0x28]
 
-			//replicate original instructions
 			fld dword ptr [ebp-0x28]
 			fcomp qword ptr ds:[0x01012060]
 			jmp kRetnAddr
@@ -89,7 +82,6 @@ namespace FallDamageHook
 	}
 }
 
-//helper to check if a ref is an actor (ACHR = character ref, ACRE = creature ref)
 static Actor* RefToActor(TESObjectREFR* ref)
 {
 	if (ref)
@@ -101,8 +93,6 @@ static Actor* RefToActor(TESObjectREFR* ref)
 	return nullptr;
 }
 
-//SetFallDamageMult multiplier [actorRef]
-//if no actor and no thisObj, sets global. otherwise sets per-actor override
 static ParamInfo kParams_SetFallDamageMult[2] = {
 	{ "multiplier", kParamType_Float, 0 },
 	{ "actorRef", kParamType_Actor, 1 },
@@ -119,7 +109,6 @@ bool Cmd_SetFallDamageMult_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &mult, &actor))
 		return true;
 
-	//use thisObj if no explicit actor
 	if (!actor)
 		actor = RefToActor(thisObj);
 
@@ -158,8 +147,6 @@ bool Cmd_SetFallDamageMult_Execute(COMMAND_ARGS)
 	return true;
 }
 
-//GetFallDamageMult [actorRef]
-//if no actor and no thisObj, returns global. otherwise returns effective mult for that actor
 static ParamInfo kParams_GetFallDamageMult[1] = {
 	{ "actorRef", kParamType_Actor, 1 },
 };
@@ -173,7 +160,6 @@ bool Cmd_GetFallDamageMult_Execute(COMMAND_ARGS)
 	if (!actor)
 		actor = RefToActor(thisObj);
 
-	//GetFallDamageMultForActor already locks
 	*result = GetFallDamageMultForActor(actor ? actor->refID : 0);
 
 	if (IsConsoleMode())
@@ -187,8 +173,6 @@ bool Cmd_GetFallDamageMult_Execute(COMMAND_ARGS)
 	return true;
 }
 
-//ClearFallDamageMult [actorRef]
-//clears per-actor override. if no actor/thisObj, clears all overrides + global
 static ParamInfo kParams_ClearFallDamageMult[1] = {
 	{ "actorRef", kParamType_Actor, 1 },
 };
@@ -202,7 +186,6 @@ bool Cmd_ClearFallDamageMult_Execute(COMMAND_ARGS)
 
 	ExtractArgs(EXTRACT_ARGS, &actor);
 
-	//use thisObj if no explicit actor
 	if (!actor)
 		actor = RefToActor(thisObj);
 

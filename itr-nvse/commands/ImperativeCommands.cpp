@@ -670,15 +670,12 @@ bool Cmd_DumpCombatTarget_Execute(COMMAND_ARGS)
 
 	Actor* target = nullptr;
 
-	Log("DumpCombatTarget: ExtractArgs...");
 	if (!ExtractArgs(EXTRACT_ARGS, &target))
 	{
-		Log("DumpCombatTarget: ExtractArgs failed");
 		Console_Print("DumpCombatTarget >> ExtractArgs failed");
 		return true;
 	}
 
-	Log("DumpCombatTarget: thisObj=%08X target=%08X", thisObj, target);
 	if (!thisObj || !target || !IsActorRef(thisObj))
 	{
 		Console_Print("DumpCombatTarget >> Call on actor ref with target as param");
@@ -686,12 +683,9 @@ bool Cmd_DumpCombatTarget_Execute(COMMAND_ARGS)
 	}
 
 	Actor* observer = (Actor*)thisObj;
-	Log("DumpCombatTarget: observer refID=%08X", observer->refID);
 
 	//get combat controller via direct function call
 	void* combatController = GetCombatController(observer);
-	Log("DumpCombatTarget: combatController=%08X", combatController);
-
 	if (!combatController)
 	{
 		Console_Print("DumpCombatTarget >> Observer has no combat controller");
@@ -700,7 +694,6 @@ bool Cmd_DumpCombatTarget_Execute(COMMAND_ARGS)
 
 	//combatGroup is at offset 0x80 in CombatController
 	void* combatGroup = *(void**)((UInt8*)combatController + 0x80);
-	Log("DumpCombatTarget: combatGroup=%08X", combatGroup);
 	if (!combatGroup)
 	{
 		Console_Print("DumpCombatTarget >> No combat group");
@@ -708,7 +701,6 @@ bool Cmd_DumpCombatTarget_Execute(COMMAND_ARGS)
 	}
 
 	void* combatTarget = GetCombatTargetForActor(combatGroup, target);
-	Log("DumpCombatTarget: combatTarget=%08X", combatTarget);
 	if (!combatTarget)
 	{
 		Console_Print("DumpCombatTarget >> No CombatTarget for target actor");
@@ -717,20 +709,8 @@ bool Cmd_DumpCombatTarget_Execute(COMMAND_ARGS)
 
 	Console_Print("DumpCombatTarget >> CombatTarget at %08X", combatTarget);
 
-	//dump raw bytes
-	UInt8* bytes = (UInt8*)combatTarget;
-	Log("CombatTarget dump at %08X:", combatTarget);
-	for (int i = 0; i < 0x68; i += 16)
-	{
-		Log("  +%02X: %02X %02X %02X %02X %02X %02X %02X %02X  %02X %02X %02X %02X %02X %02X %02X %02X",
-			i,
-			bytes[i+0], bytes[i+1], bytes[i+2], bytes[i+3],
-			bytes[i+4], bytes[i+5], bytes[i+6], bytes[i+7],
-			bytes[i+8], bytes[i+9], bytes[i+10], bytes[i+11],
-			bytes[i+12], bytes[i+13], bytes[i+14], bytes[i+15]);
-	}
-
 	//try to interpret known fields
+	UInt8* bytes = (UInt8*)combatTarget;
 	Actor** pTarget = (Actor**)bytes;
 	Console_Print("  +00 pTarget: %08X (expected %08X)", *pTarget, target);
 
@@ -1747,37 +1727,6 @@ static void RestoreInventorySnapshot(Actor* actor, ResurrectActorExInventorySnap
 	snapshot.entries.clear();
 }
 
-static void LogResurrectActorExState(const char* stage, Actor* actor, UInt32 flags, ExtraContainerChanges* savedChanges = nullptr)
-{
-	if (!actor)
-	{
-		Log("ResurrectActorEx <null actor> stage=%s flags=%u", stage, flags);
-		return;
-	}
-
-	auto* currentChanges = static_cast<ExtraContainerChanges*>(BaseExtraList_GetByTypeLocal(&actor->extraDataList, kExtraData_ContainerChanges));
-	auto* node3D = TESObjectREFR_Get3D(actor);
-	auto* renderNode = actor->renderState ? actor->renderState->niNode : nullptr;
-	auto* process = actor->baseProcess;
-	SInt32 processLevel = process ? static_cast<SInt32>(process->processLevel) : -1;
-
-	Log(
-		"ResurrectActorEx[%08X] %s flags=%u lifeState=%u pos=(%.2f, %.2f, %.2f) process=%p level=%d renderNode=%p get3D=%p currentXChanges=%p savedXChanges=%p",
-		actor->refID,
-		stage,
-		flags,
-		actor->lifeState,
-		actor->posX,
-		actor->posY,
-		actor->posZ,
-		process,
-		processLevel,
-		renderNode,
-		node3D,
-		currentChanges,
-		savedChanges);
-}
-
 void ImperativeCommands::Update()
 {
 	for (size_t i = 0; i < s_resurrectActorExTraces.size();)
@@ -1786,15 +1735,11 @@ void ImperativeCommands::Update()
 		auto* form = static_cast<TESForm*>(Engine::LookupFormByID(trace.refID));
 		if (!form || !IsActorRef(reinterpret_cast<TESObjectREFR*>(form)))
 		{
-			Log("ResurrectActorEx[%08X] trace actor missing at frame %u", trace.refID, trace.frameIndex);
 			s_resurrectActorExTraces.erase(s_resurrectActorExTraces.begin() + i);
 			continue;
 		}
 
 		auto* actor = static_cast<Actor*>(form);
-		float deltaZ = actor->posZ - trace.lastPosZ;
-		LogResurrectActorExState("trace", actor, trace.flags);
-		Log("ResurrectActorEx[%08X] trace frame=%u deltaZ=%.2f", trace.refID, trace.frameIndex, deltaZ);
 		trace.lastPosZ = actor->posZ;
 		trace.frameIndex++;
 
@@ -1958,37 +1903,25 @@ bool Cmd_ResurrectActorEx_Execute(COMMAND_ARGS)
 	const bool resetInventory = (normalizedFlags & kResurrectActorEx_ResetInventory) != 0;
 	const bool has3D = TESObjectREFR_Get3D(thisObj) != nullptr;
 	ResurrectActorExInventorySnapshot inventorySnapshot;
-	LogResurrectActorExState("start", actor, normalizedFlags);
-
-	if (flags != normalizedFlags)
-		Log("ResurrectActorEx[%08X] ignoring unsupported flags 0x%X", actor->refID, flags & ~kResurrectActorEx_ResetInventory);
 
 	if (!resetInventory)
 	{
 		inventorySnapshot = CaptureInventorySnapshot(actor);
-		Log(
-			"ResurrectActorEx[%08X] captured snapshot entries=%u has3D=%d",
-			actor->refID,
-			static_cast<UInt32>(inventorySnapshot.entries.size()),
-			has3D ? 1 : 0);
 	}
 
 	if (has3D)
 	{
 		TESObjectREFR_Set3D(thisObj, nullptr, true);
-		LogResurrectActorExState("after_unload3d", actor, normalizedFlags);
 	}
 
 	{
 		BSSpinLockScope actorLock(g_processListsActorLock);
 		ActorResurrect(actor, true, has3D, false);
 	}
-	LogResurrectActorExState("post_resurrect", actor, normalizedFlags);
 
 	if (!resetInventory)
 	{
 		RestoreInventorySnapshot(actor, inventorySnapshot);
-		LogResurrectActorExState("post_restore_snapshot", actor, normalizedFlags);
 	}
 	else
 	{
@@ -1997,7 +1930,6 @@ bool Cmd_ResurrectActorEx_Execute(COMMAND_ARGS)
 
 	if (*g_modelLoader)
 		ModelLoader_QueueReference(*g_modelLoader, thisObj, 1, false);
-	LogResurrectActorExState("queued_model_reload", actor, normalizedFlags);
 
 	s_resurrectActorExTraces.erase(
 		std::remove_if(
@@ -2076,8 +2008,6 @@ bool Cmd_SetRaceAlt_Execute(COMMAND_ARGS)
 		targetNPC = (TESNPC*)cloneForm;
 		thisObj->baseForm = cloneForm;
 
-		Log("SetRaceAlt: cloned %08X -> %08X for ref %08X",
-			origNPC->refID, cloneForm->refID, thisObj->refID);
 	}
 
 	targetNPC->race.race = newRace;

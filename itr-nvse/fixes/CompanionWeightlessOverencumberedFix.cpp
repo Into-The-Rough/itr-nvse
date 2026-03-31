@@ -54,7 +54,6 @@ namespace CompanionWeightlessOverencumberedFix
 	{
 		if (!g_initialized) return;
 		g_enabled = enabled;
-		Log("CompanionWeightlessOverencumberedFix %s", enabled ? "enabled" : "disabled");
 	}
 
 	void Init(bool enabled)
@@ -73,6 +72,5 @@ namespace CompanionWeightlessOverencumberedFix
 		}
 
 		g_enabled = enabled;
-		Log("CompanionWeightlessOverencumberedFix initialized (enabled=%d)", enabled);
 	}
 }

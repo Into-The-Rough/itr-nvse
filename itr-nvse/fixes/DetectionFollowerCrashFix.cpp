@@ -32,7 +32,6 @@ namespace DetectionFollowerCrashFix
 		SafeWrite::WriteRelJump(0x9736AF, (UInt32)Hook);
 		SafeWrite::Write8(0x9736B4, 0x90);
 		SafeWrite::Write8(0x9736B5, 0x90);
-		Log("DetectionFollowerCrashFix installed at 0x9736AF");
 	}
 }
 

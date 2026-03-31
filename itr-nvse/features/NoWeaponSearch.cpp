@@ -120,7 +120,6 @@ namespace NoWeaponSearch
 	{
 		EnsureLockInit();
 		SafeWrite::WriteRelCall(0x998D50, (UInt32)Hook);
-		Log("NoWeaponSearch: Hook installed at 0x998D50");
 	}
 }
 

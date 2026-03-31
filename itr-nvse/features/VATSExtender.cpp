@@ -1,5 +1,4 @@
-//extends VATS target highlighting beyond vanilla limit
-//NOT hot-reloadable - requires game restart
+//Extends VATS target highlighting beyond the vanilla limit.
 
 #include "VATSExtender.h"
 #include "nvse/GameForms.h"
@@ -145,8 +144,6 @@ namespace VATSExtender
 
 		if (*(UInt8*)0x801993 == 0xE8)
 			SafeWrite::WriteRelCall(0x801993, (UInt32)Hook_RenderScene);
-
-		Log("VATSExtender installed");
 	}
 }
 

@@ -42,7 +42,6 @@ namespace ReversePickpocketNoKarmaFix
 	void SetEnabled(bool enabled)
 	{
 		g_enabled = enabled;
-		Log("ReversePickpocketNoKarmaFix %s", enabled ? "enabled" : "disabled");
 	}
 
 	void Init(bool enabled)
@@ -50,7 +49,6 @@ namespace ReversePickpocketNoKarmaFix
 		SafeWrite::WriteRelCall(0x75DBDA, (UInt32)Hook_TryPickpocket);
 		SafeWrite::WriteRelCall(0x75DFA7, (UInt32)Hook_TryPickpocket);
 		g_enabled = enabled;
-		Log("ReversePickpocketNoKarmaFix initialized (enabled=%d)", enabled);
 	}
 }
 

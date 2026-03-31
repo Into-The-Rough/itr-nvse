@@ -181,8 +181,8 @@ namespace ELMO
 
 	void Init(bool suppressObjectives, bool suppressReputation)
 	{
-		if (suppressObjectives && InstallObjectiveHooks())
-			Log("ELMO: Objectives popup suppressed via call-site hooks");
+		if (suppressObjectives)
+			InstallObjectiveHooks();
 
 		if (suppressReputation) {
 			SafeWrite::WriteRelJump(0x6155F0, (UInt32)ReputationPopup_Hook);
@@ -190,7 +190,6 @@ namespace ELMO
 			SafeWrite::WriteRelJump(0x61598B, (UInt32)ReputationCornerMessage_Hook_AddRepExact);
 			SafeWrite::WriteRelJump(0x615C43, (UInt32)ReputationCornerMessage_Hook_RemRepExact);
 			SafeWrite::WriteRelJump(0x616242, (UInt32)ReputationCornerMessage_Hook_RemRep);
-			Log("ELMO: Reputation popup suppressed");
 		}
 	}
 }

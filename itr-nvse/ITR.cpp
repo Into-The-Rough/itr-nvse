@@ -175,7 +175,6 @@ static void ResetMusicStateForLoad()
 
 static FILE* g_logFile = nullptr;
 static bool g_vatsSpeechFixInitialized = false;
-static bool g_vatsSpeechFixDisabledByStewie = false;
 
 void Log(const char* fmt, ...)
 {
@@ -188,53 +187,14 @@ void Log(const char* fmt, ...)
 	va_end(args);
 }
 
-static bool IsStewieAudioInlineActive()
+static void InitVATSSpeechFix()
 {
-	if (!GetModuleHandleA("nvse_stewie_tweaks.dll"))
-		return false;
-
-	static const UInt8 kStewieTimescalePatch[] = {
-		0xD9, 0xE1, 0x66, 0x66, 0x66, 0x66, 0x0F,
-		0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00
-	};
-
-	if (memcmp((void*)0xAEDFBD, kStewieTimescalePatch, sizeof(kStewieTimescalePatch)) == 0)
-		return true;
-
-	char gameDir[MAX_PATH];
-	GetModuleFileNameA(nullptr, gameDir, MAX_PATH);
-	char* lastSlash = strrchr(gameDir, '\\');
-	if (!lastSlash)
-		return true;
-	*lastSlash = '\0';
-
-	char stewieIniPath[MAX_PATH];
-	sprintf_s(stewieIniPath, "%s\\Data\\NVSE\\Plugins\\nvse_stewie_tweaks.ini", gameDir);
-	return GetPrivateProfileIntA("Inlines", "bAudio", 1, stewieIniPath) != 0;
-}
-
-static void InitVATSSpeechFixWithCompatibility()
-{
-	g_vatsSpeechFixDisabledByStewie = IsStewieAudioInlineActive();
-	if (g_vatsSpeechFixDisabledByStewie)
-	{
-		Log("VATSSpeechFix disabled: Stewie Tweaks Inlines.bAudio owns audio hooks");
-		return;
-	}
-
 	VATSSpeechFix::Init(Settings::bVATSSpeechFix != 0);
 	g_vatsSpeechFixInitialized = true;
 }
 
 static void ApplyVATSSpeechFixSetting()
 {
-	if (g_vatsSpeechFixDisabledByStewie)
-	{
-		if (Settings::bVATSSpeechFix)
-			Log("VATSSpeechFix remains disabled: Stewie Tweaks Inlines.bAudio owns audio hooks");
-		return;
-	}
-
 	if (g_vatsSpeechFixInitialized)
 		VATSSpeechFix::SetEnabled(Settings::bVATSSpeechFix != 0);
 }
@@ -318,7 +278,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 			case NVSEMessagingInterface::kMessage_PostPostLoad:
 				DialogueCameraHandler::InstallCameraHooks(); //always install - hooks check bDialogueCamera at runtime
-				InitVATSSpeechFixWithCompatibility();
+				InitVATSSpeechFix();
 				AshPileNames::Init();
 				if (Settings::bVATSExtender)
 					VATSExtender::Init();
@@ -331,7 +291,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (msg->type == NVSEMessagingInterface::kMessage_PostLoadGame && Settings::bMusicResetOnLoad)
 				{
 					ResetMusicStateForLoad();
-					Log("Music state reset for post-load");
 				}
 					WeaponEmissiveCommands::ClearState();
 					GroundCommands::ClearState();
@@ -343,7 +302,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				{
 					*(UInt8*)0x11E07BA = 1;
 					g_godModeExecuted = true;
-					Log("AutoGodMode: Enabled god mode");
 				}
 				break;
 
@@ -395,11 +353,9 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 						if ((Settings::bSuppressObjectives != 0) != oldSuppressObjectives ||
 							(Settings::bSuppressReputation != 0) != oldSuppressReputation)
 						{
-							Log("Config reload changed objective/reputation popup suppression; restart required");
 							Console_Print("itr-nvse: Suppress Objectives/Reputation changes require restart");
 						}
 
-						Log("Config reloaded via ReloadPluginConfig");
 						Console_Print("itr-nvse: Config reloaded");
 					}
 				}
@@ -442,46 +398,6 @@ static void InitLog()
 	g_logFile = fopen(logPath, "w");
 }
 
-static void LogSettings()
-{
-	Log("Settings loaded:");
-	Log("  bAutoGodMode: %d", Settings::bAutoGodMode);
-	Log("  bAutoQuickLoad: %d", Settings::bAutoQuickLoad);
-	Log("  bMessageBoxQuickClose: %d", Settings::bMessageBoxQuickClose);
-	Log("  bConsoleLogCleaner: %d", Settings::bConsoleLogCleaner);
-	Log("  bAltTabMute: %d", Settings::bAltTabMute);
-	Log("  bQuickDrop: %d", Settings::bQuickDrop);
-	Log("  bQuick180: %d", Settings::bQuick180);
-	Log("  bSlowMotionPhysicsFix: %d", Settings::bSlowMotionPhysicsFix);
-	Log("  bExplodingPantsFix: %d", Settings::bExplodingPantsFix);
-	Log("  bKillActorXPFix: %d", Settings::bKillActorXPFix);
-	Log("  bReversePickpocketNoKarma: %d", Settings::bReversePickpocketNoKarma);
-	Log("  bOwnerNameInfo: %d", Settings::bOwnerNameInfo);
-	Log("  bDialogueCamera: %d", Settings::bDialogueCamera);
-	Log("  bVATSProjectileFix: %d", Settings::bVATSProjectileFix);
-	Log("  bVATSLimbFix: %d", Settings::bVATSLimbFix);
-	Log("  bOwnedBeds: %d", Settings::bOwnedBeds);
-	Log("  bAshPileNames: %d", Settings::bAshPileNames);
-	Log("  bLocationVisitPopup: %d", Settings::bLocationVisitPopup);
-	Log("  bVATSExtender: %d", Settings::bVATSExtender);
-	Log("  bSuppressObjectives: %d", Settings::bSuppressObjectives);
-	Log("  bSuppressReputation: %d", Settings::bSuppressReputation);
-	Log("  bNoDoorFade: %d", Settings::bNoDoorFade);
-	Log("  bQuickReadNote: %d", Settings::bQuickReadNote);
-	Log("  bDoorPackageOwnershipFix: %d", Settings::bDoorPackageOwnershipFix);
-	Log("  iNPCDoorUnlockBlock: %d", Settings::iNPCDoorUnlockBlock);
-	Log("  bVATSSpeechFix: %d", Settings::bVATSSpeechFix);
-	Log("  bCombatItemTimerFix: %d", Settings::bCombatItemTimerFix);
-	Log("  bNPCAntidoteUse: %d", Settings::bNPCAntidoteUse);
-	Log("  bNPCDoctorsBagUse: %d", Settings::bNPCDoctorsBagUse);
-	Log("  bCompanionNoInfamy: %d", Settings::bCompanionNoInfamy);
-	Log("  bOwnedCorpses: %d", Settings::bOwnedCorpses);
-	Log("  bCompanionWeightlessOverencumberedFix: %d", Settings::bCompanionWeightlessOverencumberedFix);
-	if (Settings::bQuickDrop) Log("QuickDrop enabled (modifier=%d, control=%d)", Settings::iQuickDropModifierKey, Settings::iQuickDropControlID);
-	if (Settings::bQuick180) Log("Quick180 enabled (modifier=%d, control=%d)", Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
-	if (Settings::bNPCAntidoteUse) Log("NPCAntidoteUse enabled (timer=%.1f, healthThreshold=%.1f)", Settings::fCombatItemCureTimer, Settings::fCureHealthThreshold);
-	if (Settings::bNPCDoctorsBagUse) Log("NPCDoctorsBagUse enabled (timer=%.1f)", Settings::fDoctorsBagUseTimer);
-}
 
 static void RegisterHandlers(NVSEInterface* nvse)
 {
@@ -504,26 +420,14 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	logInit("OnSoundPlayedHandler", OnSoundPlayedHandler::Init((void*)nvse));
 	logInit("OnJumpLandHandler", OnJumpLandHandler::Init((void*)nvse));
 	logInit("OnContactHandler", OnContactHandler::Init((void*)nvse));
-
-	if (FallDamageHandler::Init((void*)nvse))
-		Log("FallDamageHandler initialized (SetMult=0x%04X, GetMult=0x%04X)", FallDamageHandler::GetSetMultOpcode(), FallDamageHandler::GetGetMultOpcode());
-	else
-		Log("FallDamageHandler failed to initialize");
-
+	logInit("FallDamageHandler", FallDamageHandler::Init((void*)nvse));
 	if (Settings::bDialogueCamera)
 		logInit("DialogueCameraHandler", DialogueCameraHandler::Init((void*)nvse));
-
 	logInit("FakeHitHandler", FakeHitHandler::Init((void*)nvse));
-
 	if (Settings::bOwnerNameInfo)
 		logInit("OwnerNameInfoHandler", OwnerNameInfoHandler::Init());
-
 	logInit("OnMenuFilterChangeHandler", OnMenuFilterChangeHandler::Init((void*)nvse));
 	logInit("OnMenuSideChangeHandler", OnMenuSideChangeHandler::Init((void*)nvse));
-
-	if (Settings::bSaveFileSize)
-		Log("SaveFileSizeHandler will initialize in PostLoad");
-
 	NoWeaponSearch::Init();
 	PreventWeaponSwitch::Init();
 }
@@ -537,7 +441,6 @@ namespace ITR
 		g_pluginHandle = nvse->GetPluginHandle();
 
 		InitLog();
-		Log("itr-nvse v1.0.0 loading...");
 
 		g_msgInterface = (NVSEMessagingInterface*)nvse->QueryInterface(kInterface_Messaging);
 		g_consoleInterface = (NVSEConsoleInterface*)nvse->QueryInterface(kInterface_Console);
@@ -545,28 +448,18 @@ namespace ITR
 		g_cmdTableInterface = (NVSECommandTableInterface*)nvse->QueryInterface(kInterface_CommandTable);
 
 		if (!g_msgInterface || !g_arrInterface)
-		{
-			Log("Failed to get required interfaces");
 			return false;
-		}
 
 		Settings::Load();
-		LogSettings();
 
 		if (Settings::bAutoQuickLoad)
 			AutoQuickLoad::InstallHook();
 
 		if (Settings::bConsoleLogCleaner)
-		{
 			DeleteConsoleLog();
-			Log("ConsoleLogCleaner: Deleted console log");
-		}
 
 		if (Settings::bMessageBoxQuickClose)
-		{
 			MessageBoxQuickClose::Init();
-			Log("MessageBoxQuickClose enabled");
-		}
 
 		g_msgInterface->RegisterListener(g_pluginHandle, "NVSE", MessageHandler);
 
@@ -576,7 +469,6 @@ namespace ITR
 		RadioCommands::Init((void*)nvse);
 		RegisterHandlers(nvse);
 
-		Log("itr-nvse loaded successfully");
 		return true;
 	}
 }

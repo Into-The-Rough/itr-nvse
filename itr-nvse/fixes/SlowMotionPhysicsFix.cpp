@@ -43,7 +43,6 @@ namespace SlowMotionPhysicsFix
 		SafeWrite::Write32(kAddr_SetFrameTimeMarkerCall + 1, (UInt32)Hook_SetFrameTimeMarker - kAddr_SetFrameTimeMarkerCall - 5);
 		originalStepDeltaTime = SafeWrite::GetRelJumpTarget(kAddr_StepDeltaTimeCall);
 		SafeWrite::Write32(kAddr_StepDeltaTimeCall + 1, (UInt32)Hook_StepDeltaTime - kAddr_StepDeltaTimeCall - 5);
-		Log("SlowMotionPhysicsFix installed");
 	}
 }
 

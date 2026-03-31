@@ -33,7 +33,6 @@ namespace AutoQuickLoad
 				auto input = *(UInt8**)0x11F35CC;
 				if (input) input[0x18F8 + 0x43] = 0x80;
 				g_done = true;
-				Log("AutoQuickLoad: injected F9 (after %dms)", GetTickCount() - g_startTime);
 			}
 		}
 	}
@@ -41,7 +40,6 @@ namespace AutoQuickLoad
 	void InstallHook()
 	{
 		SafeWrite::WriteRelCall(0x86E88C, (UInt32)PollControlsHook);
-		Log("AutoQuickLoad: hooked PollControls, delay=%dms", Settings::iAutoQuickLoadDelayMs);
 	}
 
 	void Update()
@@ -51,7 +49,6 @@ namespace AutoQuickLoad
 		if (g_MenuVisibilityArray[kMenuType_Start])
 		{
 			g_startTime = GetTickCount();
-			Log("AutoQuickLoad: start menu detected, loading in %dms", Settings::iAutoQuickLoadDelayMs);
 		}
 	}
 }

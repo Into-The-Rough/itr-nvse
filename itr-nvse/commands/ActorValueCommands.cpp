@@ -26,14 +26,8 @@ bool Cmd_DamageActorValueAlt_Execute(COMMAND_ARGS)
 
 	if (!ExtractArgs(EXTRACT_ARGS, &avCode, &amount, &attackerRef))
 	{
-		Log("DamageActorValueAlt: ExtractArgs failed");
 		return true;
 	}
-
-	Log("DamageActorValueAlt: target=%08X av=%d amount=%.1f attacker=%08X",
-		thisObj ? *(UInt32*)((UInt8*)thisObj + 0x0C) : 0,
-		avCode, amount,
-		attackerRef ? *(UInt32*)((UInt8*)attackerRef + 0x0C) : 0);
 
 	//increment fPlayerDamageDealt (process+0xAC) BEFORE damage so Actor::Kill sees it for XP
 	if (avCode == 0x10 && amount > 0.0f && attackerRef) {

@@ -44,7 +44,6 @@ namespace KillActorXPFix
 
 	void SetEnabled(bool enabled) {
 		g_enabled = enabled;
-		Log("KillActorXPFix %s", enabled ? "enabled" : "disabled");
 	}
 
 	void Init(bool enabled)
@@ -54,7 +53,6 @@ namespace KillActorXPFix
 		SafeWrite::Write8(kAddr_XPBlockStart + 6, 0x90);
 		SafeWrite::Write8(kAddr_XPBlockStart + 7, 0x90);
 		g_enabled = enabled;
-		Log("KillActorXPFix initialized (enabled=%d)", enabled);
 	}
 }
 

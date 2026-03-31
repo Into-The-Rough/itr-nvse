@@ -97,7 +97,6 @@ namespace PlayerUpdateHook
 		g_quick180ControlID = quick180ControlID;
 		g_originalCallTarget = SafeWrite::GetRelJumpTarget(kAddr_PlayerUpdateCall);
 		SafeWrite::Write32(kAddr_PlayerUpdateCall + 1, (UInt32)PlayerUpdate_Hook - kAddr_PlayerUpdateCall - 5);
-		Log("PlayerUpdateHook installed (chaining to 0x%08X)", g_originalCallTarget);
 	}
 
 	void UpdateSettings(int quickDropModKey, int quickDropControlID,

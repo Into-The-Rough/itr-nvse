@@ -171,7 +171,6 @@ bool Cmd_ForceSay_Execute(COMMAND_ARGS)
 
 	if (!response)
 	{
-		Log("ForceSay: no response found for topic %08X", topic->refID);
 		ThisCall(0x83C670, item);
 		GameHeapFree(item);
 		*lipDist = oldLipDist;
@@ -188,7 +187,6 @@ bool Cmd_ForceSay_Execute(COMMAND_ARGS)
 
 	if (!voicePath || !voicePath[0])
 	{
-		Log("ForceSay: empty voice path, aborting");
 		ThisCall(0x83C670, item);
 		GameHeapFree(item);
 		*lipDist = oldLipDist;
@@ -199,12 +197,7 @@ bool Cmd_ForceSay_Execute(COMMAND_ARGS)
 	char fixedPath[512];
 	char* finalPath = voicePath;
 	if (FixVoicePath(voicePath, fixedPath, sizeof(fixedPath)))
-	{
-		Log("ForceSay: redirected %s -> %s", voicePath, fixedPath);
 		finalPath = fixedPath;
-	}
-
-	Log("ForceSay: playing %s", finalPath);
 
 	BSSoundHandle soundHandle;
 	double delay = ThisCall<double>(0x8A20D0, speaker,
@@ -212,8 +205,6 @@ bool Cmd_ForceSay_Execute(COMMAND_ARGS)
 		emotionType, emotionValue, (UInt32)textLen,
 		speakerAnim, listenerAnim, target,
 		true, false, false, true, true); //abQueue=false for sync lip load
-
-	Log("ForceSay: delay=%.2f soundID=%u", delay, soundHandle.uiSoundID);
 
 	ThisCall(0x57AD20, speaker, topic);     //SetSayToTopic
 	ThisCall(0x57ACE0, speaker, topicInfo); //SetSayToTopicInfo
@@ -232,7 +223,6 @@ bool Cmd_ForceSay_Execute(COMMAND_ARGS)
 	ThisCall(0x83C670, item);
 	GameHeapFree(item);
 
-	Log("ForceSay: %08X saying topic %08X (info %08X)", speaker->refID, topic->refID, topicInfo->refID);
 	*result = 1;
 	return true;
 }

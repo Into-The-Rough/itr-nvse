@@ -12,10 +12,8 @@ void InitEventManager(void* nvseInterface)
 	g_eventManagerInterface = reinterpret_cast<NVSEEventManagerInterface*>(
 		nvse->QueryInterface(kInterface_EventManager));
 
-	if (g_eventManagerInterface)
-		Log("EventManager interface acquired");
-	else
-		Log("EventManager interface not available (kNVSE not installed?)");
+	if (!g_eventManagerInterface)
+		return;
 }
 
 void RegisterEvents()
@@ -77,7 +75,6 @@ void RegisterEvents()
 	static P contactParams[] = { P::eParamType_AnyForm, P::eParamType_Int };
 	g_eventManagerInterface->RegisterEvent("ITR:OnContactBegin", 2, contactParams, F::kFlag_FlushOnLoad);
 	g_eventManagerInterface->RegisterEvent("ITR:OnContactEnd", 2, contactParams, F::kFlag_FlushOnLoad);
-
-	Log("ITR events registered with EventManager");
 }
+
 }

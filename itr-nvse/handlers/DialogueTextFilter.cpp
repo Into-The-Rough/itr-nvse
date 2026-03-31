@@ -256,10 +256,8 @@ void Suppress(bool suppress) {
 }
 }
 
-//check if this RunResult call is a false positive from a script chain during greeting evaluation.
-//when ProcessGreet is active, HighProcess+0x3E4 (pQueuedGreetTopic) holds the REAL DialogueItem.
-//any RunResult for a DIFFERENT topicInfo is a side effect — skip it.
-//however, if SpeakSound has already confirmed this line is playing, it's real regardless.
+//RunResult can fire for script-chain side effects during greeting evaluation.
+//Ignore topicInfo mismatches unless SpeakSound already confirmed the line.
 static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt32 speakerRefID) {
 	void* baseProcess = *(void**)((UInt8*)speaker + 0x68); //MobileObject+0x68
 	if (!baseProcess) return false;
@@ -269,8 +267,6 @@ static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt3
 
 	void* queuedGreet = *(void**)((UInt8*)baseProcess + 0x3E4); //HighProcess+0x3E4 = pQueuedGreetTopic (DialogueItem*)
 	if (!queuedGreet) {
-		Log("DTF: speaker=0x%08X no pQueuedGreetTopic (non-greeting path), topicInfo=0x%08X -> ALLOW",
-			speakerRefID, topicInfoRefID);
 		return false;
 	}
 
@@ -278,24 +274,17 @@ static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt3
 	UInt32 activeInfoRefID = activeTopicInfo ? ReadRefID(activeTopicInfo) : 0;
 
 	if (activeInfoRefID && activeInfoRefID != topicInfoRefID) {
-		//before rejecting, check if the active greet has already been spoken.
-		//if so, pQueuedGreetTopic is stale and this is a new legitimate line.
+		//A spoken queued greet means pQueuedGreetTopic is stale, not conflicting.
 		UInt32 activeBaseFormID = activeInfoRefID & 0x00FFFFFF;
 		EnsureStateLockInitialized();
 		ScopedLock lock(&g_dtfStateLock);
 		auto it = DialogueTextFilter::g_spokenGreets.find(speakerRefID);
 		if (it != DialogueTextFilter::g_spokenGreets.end() && it->second == activeBaseFormID) {
-			Log("DTF: greet STALE topicInfo=0x%08X (active greet=0x%08X already spoken) speaker=0x%08X",
-				topicInfoRefID, activeInfoRefID, speakerRefID);
 			return false;
 		}
-		Log("DTF: SKIP false positive topicInfo=0x%08X (active greet=0x%08X) speaker=0x%08X",
-			topicInfoRefID, activeInfoRefID, speakerRefID);
 		return true;
 	}
 
-	Log("DTF: greet validation PASS topicInfo=0x%08X == active=0x%08X speaker=0x%08X",
-		topicInfoRefID, activeInfoRefID, speakerRefID);
 	return false;
 }
 
@@ -307,15 +296,12 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 	UInt32 speakerRefID = ReadRefID(speaker);
 	UInt32 topicInfoRefID = ReadRefID(topicInfo);
 
-	Log("DTF: RunResult fired for topicInfo=0x%08X speaker=0x%08X", topicInfoRefID, speakerRefID);
-
 	if (IsGreetingFalsePositive(speaker, topicInfoRefID, speakerRefID))
 		return;
 
 	TESTopicInfoResponse** ppResponse = ThisCall<TESTopicInfoResponse**>(
 		kAddr_GetResponses, topicInfo, nullptr);
 	if (!ppResponse || !*ppResponse) {
-		Log("DTF: no responses for topicInfo=0x%08X, skipping", topicInfoRefID);
 		return;
 	}
 
@@ -365,13 +351,9 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 			strncpy_s(evt.text, sizeof(evt.text), text, _TRUNCATE);
 			DialogueTextFilter::g_pendingEvents.push_back(evt);
 			++queuedCount;
-
-			Log("DTF: queued resp#%u text=\"%.60s\" dur=%.1f topicInfo=0x%08X speaker=0x%08X",
-				responseNum, text, duration, topicInfoRefID, speakerRefID);
 		}
 	}
 
-	Log("DTF: queued %u total lines for topicInfo=0x%08X speaker=0x%08X", queuedCount, topicInfoRefID, speakerRefID);
 }
 
 static auto g_hookCallback = &HookCallback;
@@ -438,8 +420,6 @@ static void __cdecl OnSpeakConfirm(Actor* speaker, const char* voicePath) {
 			rs.baseFormID == baseFormID &&
 			rs.responseNum == respNum &&
 			(now - rs.timestamp) < 2000) {
-			Log("DTF: SPEAK dedup speaker=0x%08X formID=0x%06X resp#%u",
-				speakerRefID, baseFormID, respNum);
 			return;
 		}
 	}
@@ -456,9 +436,6 @@ static void __cdecl OnSpeakConfirm(Actor* speaker, const char* voicePath) {
 	strncpy_s(cs.voicePath, sizeof(cs.voicePath), voicePath, _TRUNCATE);
 	DialogueTextFilter::g_confirmedSpeaks.push_back(cs);
 	DialogueTextFilter::g_spokenGreets[speakerRefID] = baseFormID;
-
-	Log("DTF: SPEAK confirmed speaker=0x%08X formID=0x%06X resp#%u path=\"%.80s\"",
-		speakerRefID, baseFormID, respNum, voicePath);
 }
 
 static auto g_speakCallback = &OnSpeakConfirm;
@@ -548,8 +525,6 @@ void Update()
 		TESTopic* topic = reinterpret_cast<TESTopic*>(Engine::LookupFormByID(evt.topicRefID));
 
 		if (!speaker || !topicInfo || !topic) {
-			Log("DTF: DROP resp#%u topicInfo=0x%08X speaker=0x%08X (form lookup failed)",
-				evt.responseNum, evt.topicInfoRefID, evt.speakerRefID);
 			continue;
 		}
 
@@ -557,16 +532,12 @@ void Update()
 		bool hasVoice = BuildVoicePath(voicePath, sizeof(voicePath), topicInfo, speaker, evt.responseNum);
 
 		if (!hasVoice) {
-			//narrator or unvoiced line - dispatch without confirmation
-			Log("DTF: DISPATCH (narrator) resp#%u topicInfo=0x%08X speaker=0x%08X text=\"%.80s\"",
-				evt.responseNum, evt.topicInfoRefID, evt.speakerRefID, evt.text);
 			g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
 				reinterpret_cast<TESObjectREFR*>(speaker),
 				speaker, topic, topicInfo, evt.text, "");
 			continue;
 		}
 
-		//voiced line - require SpeakSoundFunction confirmation
 		UInt32 baseFormID = evt.topicInfoRefID & 0x00FFFFFF;
 		bool confirmed = false;
 		for (auto cit = confirmedSpeaks.begin(); cit != confirmedSpeaks.end(); ++cit) {
@@ -580,7 +551,6 @@ void Update()
 		}
 
 		if (confirmed) {
-			//skip if already fallback-dispatched (post-reload re-evaluation)
 			bool alreadyFallback = false;
 			for (auto it = DialogueTextFilter::g_recentFallbacks.begin();
 				 it != DialogueTextFilter::g_recentFallbacks.end(); ++it) {
@@ -593,31 +563,23 @@ void Update()
 				}
 			}
 			if (alreadyFallback) {
-				Log("DTF: SKIP (already fallback-dispatched) resp#%u topicInfo=0x%08X speaker=0x%08X",
-					evt.responseNum, evt.topicInfoRefID, evt.speakerRefID);
 				continue;
 			}
-			Log("DTF: DISPATCH resp#%u topicInfo=0x%08X speaker=0x%08X voice=\"%s\" text=\"%.80s\"",
-				evt.responseNum, evt.topicInfoRefID, evt.speakerRefID, voicePath, evt.text);
 			g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
 				reinterpret_cast<TESObjectREFR*>(speaker),
 				speaker, topic, topicInfo, evt.text, voicePath);
 		} else if (nowTick - evt.dispatchAfterTick > 30000) {
-			Log("DTF: TIMEOUT resp#%u topicInfo=0x%08X speaker=0x%08X (no confirmation after 30s)",
-				evt.responseNum, evt.topicInfoRefID, evt.speakerRefID);
 		} else {
 			deferredEvents.push_back(evt);
 		}
 	}
 
-	//fallback: SPEAK with no RunResult (fire-and-forget barks after reload etc)
+	//Some lines confirm through SpeakSound after reload without a matching RunResult.
 	for (auto cit = confirmedSpeaks.begin(); cit != confirmedSpeaks.end(); ) {
 		if (nowTick - cit->timestamp < 500) { ++cit; continue; }
 
 		UInt8 modIndex = FindModIndex(cit->modName);
 		if (modIndex == 0xFF) {
-			Log("DTF: FALLBACK DROP speaker=0x%08X formID=0x%06X (mod '%s' not found)",
-				cit->speakerRefID, cit->baseFormID, cit->modName);
 			cit = confirmedSpeaks.erase(cit);
 			continue;
 		}
@@ -626,8 +588,6 @@ void Update()
 		TESTopicInfo* info = reinterpret_cast<TESTopicInfo*>(Engine::LookupFormByID(fullFormID));
 		Actor* speaker = reinterpret_cast<Actor*>(Engine::LookupFormByID(cit->speakerRefID));
 		if (!info || !speaker) {
-			Log("DTF: FALLBACK DROP speaker=0x%08X formID=0x%08X (lookup failed)",
-				cit->speakerRefID, fullFormID);
 			cit = confirmedSpeaks.erase(cit);
 			continue;
 		}
@@ -643,16 +603,12 @@ void Update()
 		}
 
 		if (!text || !*text) {
-			Log("DTF: FALLBACK DROP speaker=0x%08X formID=0x%08X resp#%u (no text)",
-				cit->speakerRefID, fullFormID, cit->responseNum);
 			cit = confirmedSpeaks.erase(cit);
 			continue;
 		}
 
 		TESTopic* topic = *reinterpret_cast<TESTopic**>((UInt8*)info + 0x50);
 
-		Log("DTF: FALLBACK DISPATCH speaker=0x%08X formID=0x%08X resp#%u text=\"%.80s\"",
-			cit->speakerRefID, fullFormID, cit->responseNum, text);
 		g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
 			reinterpret_cast<TESObjectREFR*>(speaker),
 			speaker, topic, info, text, cit->voicePath);
@@ -673,7 +629,6 @@ void Update()
 			if (DialogueTextFilter::g_pendingEvents.size() > kMaxQueuedDialogueEvents)
 				DialogueTextFilter::g_pendingEvents.resize(kMaxQueuedDialogueEvents);
 		}
-		//preserve unconsumed confirmations for next frame
 		if (!confirmedSpeaks.empty()) {
 			DialogueTextFilter::g_confirmedSpeaks.insert(
 				DialogueTextFilter::g_confirmedSpeaks.end(),
@@ -694,7 +649,6 @@ bool Init(void* nvseInterface) {
 	EnsureStateLockInitialized();
 	DialogueTextFilter::g_mainThreadId = 0;
 
-	//RunResult hook - queues candidate events
 	UInt8 firstByte = *(UInt8*)kAddr_RunResult;
 	if (firstByte == 0xE9)
 		g_chainAddr = SafeWrite::GetRelJumpTarget(kAddr_RunResult);
@@ -704,7 +658,6 @@ bool Init(void* nvseInterface) {
 	SafeWrite::WriteRelJump(kAddr_RunResult, (UInt32)DialogueTextHook);
 	SafeWrite::Write8(kAddr_RunResult + 5, 0x90);
 
-	//SpeakSoundFunction hook - confirms which line actually plays
 	UInt8 speakFirstByte = *(UInt8*)kAddr_SpeakSound;
 	if (speakFirstByte == 0xE9)
 		g_speakChainAddr = SafeWrite::GetRelJumpTarget(kAddr_SpeakSound);
