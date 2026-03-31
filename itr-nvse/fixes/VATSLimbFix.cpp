@@ -117,8 +117,7 @@ namespace VATSLimbFix
 	//prologue: push ebp (1) + mov ebp,esp (2) + sub esp,8 (3) = 6 bytes
 	void Init()
 	{
-		if (s_detour.WriteRelJump(0x5E4810, SetPartitionVisible_Hook, 6))
-			Log("VATSLimbFix installed");
+		s_detour.WriteRelJump(0x5E4810, SetPartitionVisible_Hook, 6);
 	}
 }
 

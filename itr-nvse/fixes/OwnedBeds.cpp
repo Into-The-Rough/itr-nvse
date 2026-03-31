@@ -79,14 +79,12 @@ namespace OwnedBeds
 
 	void SetEnabled(bool enabled) {
 		g_enabled = enabled;
-		Log("OwnedBeds %s", enabled ? "enabled" : "disabled");
 	}
 
 	void Init(bool enabled)
 	{
 		SafeWrite::WriteRelCall(0x509679, (UInt32)IsAnOwnerHook);
 		g_enabled = enabled;
-		Log("OwnedBeds initialized (enabled=%d)", enabled);
 	}
 }
 

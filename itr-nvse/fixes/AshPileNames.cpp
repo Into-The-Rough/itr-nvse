@@ -103,7 +103,6 @@ namespace AshPileNames
 
 		SafeWrite::WriteRelCall(kAddr_HookSite, (UInt32)Hook_GetBaseFullName);
 		s_hookInstalled = true;
-		Log("AshPileNames installed at call-site 0x%08X (original=0x%08X)", kAddr_HookSite, s_originalCallTarget);
 	}
 
 	void Update()

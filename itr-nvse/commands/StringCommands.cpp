@@ -115,14 +115,12 @@ bool Init(void* nvsePtr)
 	g_strInterface = (NVSEStringVarInterface*)nvse->QueryInterface(kInterface_StringVar);
 	if (!g_strInterface)
 	{
-		Log("StringCommands: Failed to get string interface");
 		return false;
 	}
 
 	NVSEScriptInterface* scriptInterface = (NVSEScriptInterface*)nvse->QueryInterface(kInterface_Script);
 	if (!scriptInterface)
 	{
-		Log("StringCommands: Failed to get script interface");
 		return false;
 	}
 

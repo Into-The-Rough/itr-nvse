@@ -33,7 +33,6 @@ namespace NavMeshInfoCrashFix
 	void Init()
 	{
 		SafeWrite::WriteRelJump(0x68F320, (UInt32)Hook); //NavMeshInfo::GetFlag10
-		Log("NavMeshInfoCrashFix: replaced GetFlag10 at 0x68F320");
 	}
 }
 

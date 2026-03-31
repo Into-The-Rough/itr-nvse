@@ -1,4 +1,4 @@
-//NOT hot-reloadable - requires game restart
+//Requires restart after hook install.
 
 #include <Windows.h>
 
@@ -94,7 +94,6 @@ bool __fastcall MessageMenu_HandleSpecialKeyInput_Hook(MessageMenu* menu, void* 
 	return OriginalHandleSpecialKeyInput ? OriginalHandleSpecialKeyInput(menu, code, keyState) : false;
 }
 
-//fix controller always clicking first button instead of selected button
 void __fastcall MessageMenu_HandleClick_Hook(MessageMenu* menu, void* edx, SInt32 tileID, Tile* clickedTile)
 {
 	using namespace MessageBoxQuickClose;
