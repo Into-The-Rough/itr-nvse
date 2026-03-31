@@ -8,6 +8,7 @@
 #include "internal/settings.h"
 #include "PerlinNoise.hpp"
 #include <cmath>
+#include <cstdlib>
 
 //camera hooks - intercept game's own camera update calls
 namespace CameraHooks {
@@ -287,6 +288,13 @@ enum CameraAngle {
 	kAngle_Count
 };
 
+enum CameraAngleMode {
+	kAngleMode_Cycle,
+	kAngleMode_Fixed,
+	kAngleMode_Random,
+	kAngleMode_Manual
+};
+
 static PlayerCharacter** g_thePlayer = (PlayerCharacter**)0x11DEA3C;
 
 struct InterfaceManager {
@@ -312,7 +320,9 @@ static constexpr UInt32 kMenuType_Dialogue = 1009;
 
 static bool g_inDialogue = false;
 static TESObjectREFR* g_dialogueTarget = nullptr;
-static CameraAngle g_currentAngle = kAngle_OverShoulder;
+static CameraAngle g_currentAngle = kAngle_Vanilla;
+static CameraAngleMode g_angleMode = kAngleMode_Cycle;
+static CameraAngle g_fixedAngle = kAngle_Vanilla;
 static bool g_cameraActive = false;
 static bool g_wasFirstPerson = false;
 static int g_dialogueLineCount = 0;
@@ -329,6 +339,13 @@ static float g_transToLookX = 0, g_transToLookY = 0, g_transToLookZ = 0;
 static float g_transProgress = 1.0f; //1.0 = no transition active
 static float g_transSpeed = 1.5f; //progress per second (~0.7s transition)
 static bool g_patchesInstalled = false;
+float g_dollySpeed = 0.0f;
+float g_dollyMaxDist = 0.0f;
+int g_dollyRunOnce = 1;
+static float g_dollyProgress = 0.0f;
+static bool g_dollyFirstDone = false;
+float g_shakeAmplitude = -1.0f; //-1 = use default
+static bool g_rngSeeded = false;
 
 static const siv::PerlinNoise g_perlinPitch{ 4 };
 static const siv::PerlinNoise g_perlinYaw{ 5 };
@@ -528,6 +545,85 @@ static bool GetHeadPos(TESObjectREFR* ref, float& outX, float& outY, float& outZ
 	return true;
 }
 
+static void ApplyCameraAngle(CameraAngle angle);
+
+static bool IsValidCameraAngle(int angle)
+{
+	return angle >= 0 && angle < kAngle_Count;
+}
+
+static const char* GetCameraAngleName(CameraAngle angle)
+{
+	switch (angle) {
+		case kAngle_Vanilla: return "Vanilla";
+		case kAngle_OverShoulder: return "OverShoulder";
+		case kAngle_NPCCloseup: return "NPCCloseup";
+		case kAngle_TwoShot: return "TwoShot";
+		case kAngle_NPCFace: return "NPCFace";
+		case kAngle_LowAngle: return "LowAngle";
+		case kAngle_HighAngle: return "HighAngle";
+		case kAngle_PlayerFace: return "PlayerFace";
+		case kAngle_WideShot: return "WideShot";
+		case kAngle_NPCProfile: return "NPCProfile";
+		case kAngle_PlayerProfile: return "PlayerProfile";
+		case kAngle_Overhead: return "Overhead";
+		default: return "Unknown";
+	}
+}
+
+static const char* GetCameraModeName(CameraAngleMode mode)
+{
+	switch (mode) {
+		case kAngleMode_Cycle: return "Cycle";
+		case kAngleMode_Fixed: return "Fixed";
+		case kAngleMode_Random: return "Random";
+		case kAngleMode_Manual: return "Manual";
+		default: return "Unknown";
+	}
+}
+
+static CameraAngle GetRandomCameraAngle(CameraAngle exclude = kAngle_Count)
+{
+	if (!g_rngSeeded) {
+		srand(GetTickCount());
+		g_rngSeeded = true;
+	}
+
+	int choice = rand() % kAngle_Count;
+	if (exclude < kAngle_Count && kAngle_Count > 1) {
+		for (int i = 0; i < 4 && choice == exclude; i++)
+			choice = rand() % kAngle_Count;
+		if (choice == exclude)
+			choice = (choice + 1) % kAngle_Count;
+	}
+
+	return (CameraAngle)choice;
+}
+
+static CameraAngle SelectDialogueAngle(bool dialogueStart)
+{
+	switch (g_angleMode) {
+		case kAngleMode_Cycle:
+			return dialogueStart ? kAngle_Vanilla : (CameraAngle)(g_dialogueLineCount % kAngle_Count);
+		case kAngleMode_Fixed:
+			return g_fixedAngle;
+		case kAngleMode_Random:
+			return GetRandomCameraAngle(dialogueStart ? kAngle_Count : g_currentAngle);
+		case kAngleMode_Manual:
+			return g_currentAngle;
+		default:
+			return kAngle_Vanilla;
+	}
+}
+
+static void ApplySelectedAngle(CameraAngle angle, bool forceDollyReset = false)
+{
+	g_currentAngle = angle;
+	if (forceDollyReset || !g_dollyRunOnce || !g_dollyFirstDone)
+		g_dollyProgress = 0.0f;
+	ApplyCameraAngle(g_currentAngle);
+}
+
 static void ApplyCameraAngle(CameraAngle angle) {
 	PlayerCharacter* player = *g_thePlayer;
 	if (!player || !g_dialogueTarget) return;
@@ -695,13 +791,6 @@ static void ApplyCameraAngle(CameraAngle angle) {
 	}
 }
 
-float g_dollySpeed = 0.0f;
-float g_dollyMaxDist = 0.0f;
-int g_dollyRunOnce = 1;
-static float g_dollyProgress = 0.0f;
-static bool g_dollyFirstDone = false;
-float g_shakeAmplitude = -1.0f; //-1 = use default
-
 static void ApplyCameraNoise() {
 	float rotAmp = (g_shakeAmplitude >= 0.0f) ? g_shakeAmplitude : (float)Settings::iShakeAmplitude;
 	if (rotAmp > 15.0f) rotAmp = 15.0f;
@@ -786,7 +875,6 @@ static void OnDialogueStart() {
 		SetFirstPerson(player, false);
 	}
 
-	g_currentAngle = kAngle_Vanilla;
 	g_dialogueLineCount = 0;
 	g_lastTopicInfoID = 0;
 	g_dollyProgress = 0.0f;
@@ -796,7 +884,8 @@ static void OnDialogueStart() {
 	g_baseLookX = g_baseLookY = g_baseLookZ = 0;
 	g_cameraActive = true;
 
-	ApplyCameraAngle(g_currentAngle);
+	g_currentAngle = SelectDialogueAngle(true);
+	ApplySelectedAngle(g_currentAngle, true);
 }
 
 static void OnDialogueEnd() {
@@ -836,10 +925,8 @@ void Update() {
 		if (currentInfoAddr != 0 && currentInfoAddr != g_lastTopicInfoID) {
 			g_lastTopicInfoID = currentInfoAddr;
 			g_dialogueLineCount++;
-			g_currentAngle = (CameraAngle)(g_dialogueLineCount % kAngle_Count);
-			if (!g_dollyRunOnce || !g_dollyFirstDone)
-				g_dollyProgress = 0.0f;
-			ApplyCameraAngle(g_currentAngle);
+			if (g_angleMode != kAngleMode_Manual)
+				ApplySelectedAngle(SelectDialogueAngle(false));
 		}
 	}
 
@@ -872,6 +959,14 @@ bool Init(void*) {
 	return true;
 }
 
+void SetEnabled(bool enabled) {
+	Settings::bDialogueCamera = enabled ? 1 : 0;
+	if (!enabled) {
+		OnDialogueEnd();
+		g_inDialogue = false;
+	}
+}
+
 void SetExternalRotation(const Mat3& rot) {
 	CameraHooks::SetExternalRotation(rot);
 }
@@ -879,6 +974,118 @@ void SetExternalRotation(const Mat3& rot) {
 void ClearExternalRotation() {
 	CameraHooks::ClearExternalRotation();
 }
+}
+
+static ParamInfo kParams_SetDialogueCameraEnabled[1] = {
+	{"enable", kParamType_Integer, 0},
+};
+
+DEFINE_COMMAND_PLUGIN(SetDialogueCameraEnabled, "Enable or disable dialogue camera at runtime", 0, 1, kParams_SetDialogueCameraEnabled);
+
+bool Cmd_SetDialogueCameraEnabled_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	UInt32 enable = 0;
+	if (!ExtractArgs(EXTRACT_ARGS, &enable))
+		return true;
+
+	DialogueCameraHandler::SetEnabled(enable != 0);
+	*result = 1;
+
+	if (IsConsoleMode())
+		Console_Print("DialogueCamera >> %s", enable ? "enabled" : "disabled");
+	return true;
+}
+
+static ParamInfo kParams_SetDialogueCameraMode[1] = {
+	{"mode", kParamType_Integer, 0},
+};
+
+DEFINE_COMMAND_PLUGIN(SetDialogueCameraMode, "Set auto angle mode: 0=cycle, 1=fixed, 2=random, 3=manual", 0, 1, kParams_SetDialogueCameraMode);
+
+bool Cmd_SetDialogueCameraMode_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	UInt32 mode = 0;
+	if (!ExtractArgs(EXTRACT_ARGS, &mode))
+		return true;
+	if (mode > DialogueCameraHandler::kAngleMode_Manual)
+		return true;
+
+	DialogueCameraHandler::g_angleMode = (DialogueCameraHandler::CameraAngleMode)mode;
+	if (DialogueCameraHandler::g_cameraActive && DialogueCameraHandler::g_dialogueTarget &&
+		DialogueCameraHandler::g_angleMode == DialogueCameraHandler::kAngleMode_Fixed)
+		DialogueCameraHandler::ApplySelectedAngle(DialogueCameraHandler::g_fixedAngle, true);
+
+	*result = 1;
+
+	if (IsConsoleMode())
+		Console_Print("DialogueCameraMode >> %s", DialogueCameraHandler::GetCameraModeName(DialogueCameraHandler::g_angleMode));
+	return true;
+}
+
+static ParamInfo kParams_SetDialogueCameraFixedAngle[1] = {
+	{"angle", kParamType_Integer, 0},
+};
+
+DEFINE_COMMAND_PLUGIN(SetDialogueCameraFixedAngle, "Set fixed dialogue camera angle (0-11) used by mode 1", 0, 1, kParams_SetDialogueCameraFixedAngle);
+
+bool Cmd_SetDialogueCameraFixedAngle_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	int angle = 0;
+	if (!ExtractArgs(EXTRACT_ARGS, &angle))
+		return true;
+	if (!DialogueCameraHandler::IsValidCameraAngle(angle))
+		return true;
+
+	DialogueCameraHandler::g_fixedAngle = (DialogueCameraHandler::CameraAngle)angle;
+	if (DialogueCameraHandler::g_cameraActive && DialogueCameraHandler::g_dialogueTarget &&
+		DialogueCameraHandler::g_angleMode == DialogueCameraHandler::kAngleMode_Fixed)
+		DialogueCameraHandler::ApplySelectedAngle(DialogueCameraHandler::g_fixedAngle, true);
+
+	*result = (float)DialogueCameraHandler::g_fixedAngle;
+
+	if (IsConsoleMode())
+		Console_Print("DialogueCameraFixedAngle >> %d (%s)", angle, DialogueCameraHandler::GetCameraAngleName(DialogueCameraHandler::g_fixedAngle));
+	return true;
+}
+
+static ParamInfo kParams_SetDialogueCameraAngle[1] = {
+	{"angle", kParamType_Integer, 0},
+};
+
+DEFINE_COMMAND_PLUGIN(SetDialogueCameraAngle, "Switch dialogue camera immediately. Pass -1 for random, 0-11 for exact", 0, 1, kParams_SetDialogueCameraAngle);
+
+bool Cmd_SetDialogueCameraAngle_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	int angle = 0;
+	if (!ExtractArgs(EXTRACT_ARGS, &angle))
+		return true;
+
+	DialogueCameraHandler::CameraAngle chosenAngle;
+	if (angle < 0)
+		chosenAngle = DialogueCameraHandler::GetRandomCameraAngle(DialogueCameraHandler::g_currentAngle);
+	else {
+		if (!DialogueCameraHandler::IsValidCameraAngle(angle))
+			return true;
+		chosenAngle = (DialogueCameraHandler::CameraAngle)angle;
+	}
+
+	if (DialogueCameraHandler::g_angleMode == DialogueCameraHandler::kAngleMode_Fixed)
+		DialogueCameraHandler::g_fixedAngle = chosenAngle;
+
+	if (DialogueCameraHandler::g_cameraActive && DialogueCameraHandler::g_dialogueTarget)
+		DialogueCameraHandler::ApplySelectedAngle(chosenAngle, true);
+	else
+		DialogueCameraHandler::g_currentAngle = chosenAngle;
+
+	*result = (float)chosenAngle;
+
+	if (IsConsoleMode())
+		Console_Print("DialogueCameraAngle >> %d (%s)", (int)chosenAngle, DialogueCameraHandler::GetCameraAngleName(chosenAngle));
+	return true;
 }
 
 static ParamInfo kParams_SetDialogueCameraDolly[3] = {
@@ -946,5 +1153,14 @@ void RegisterCommands(void* nvsePtr)
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_SetDialogueCameraDolly);
 	nvse->RegisterCommand(&kCommandInfo_SetDialogueCameraShake);
+}
+
+void RegisterCommands2(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_SetDialogueCameraEnabled);
+	nvse->RegisterCommand(&kCommandInfo_SetDialogueCameraMode);
+	nvse->RegisterCommand(&kCommandInfo_SetDialogueCameraFixedAngle);
+	nvse->RegisterCommand(&kCommandInfo_SetDialogueCameraAngle);
 }
 }

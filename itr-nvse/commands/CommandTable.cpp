@@ -111,5 +111,8 @@ void RegisterAllCommands(void* nvsePtr)
 	/*4061*/ nvse->SetOpcodeBase(0x4061);
 	ImperativeCommands::RegisterCommands9(nvse);                     //ForceCombatTarget
 
-	Log("All commands registered (0x4008-0x4061)");
+	/*4062*/ nvse->SetOpcodeBase(0x4062);
+	DialogueCameraHandler::RegisterCommands2(nvse);                  //SetDialogueCameraEnabled, SetDialogueCameraMode, SetDialogueCameraFixedAngle, SetDialogueCameraAngle
+
+	Log("All commands registered (0x4008-0x4065)");
 }
