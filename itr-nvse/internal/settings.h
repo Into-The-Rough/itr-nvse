@@ -18,11 +18,11 @@ namespace Settings
 	inline int iQuick180ControlID = 5; //run
 
 	inline int bSlowMotionPhysicsFix = 1;
-	inline int bExplodingPantsFix = 1;
+	inline int bExplodingPantsFix = 0;
 	inline int bKillActorXPFix = 1;
-	inline int bReversePickpocketNoKarma = 1;
+	inline int bReversePickpocketNoKarma = 0;
 	inline int bSaveFileSize = 1;
-	inline int bOwnerNameInfo = 1;
+	inline int bOwnerNameInfo = 0;
 	inline int bDialogueCamera = 0;
 	inline int bSmoothCameraAngleInterp = 0;
 	inline int iShakeAmplitude = 3;
@@ -31,18 +31,18 @@ namespace Settings
 	inline int bOwnedBeds = 0;
 	inline int bAshPileNames = 0;
 
-	inline int bLocationVisitPopup = 1;
+	inline int bLocationVisitPopup = 0;
 	inline int iLocationVisitCooldownSeconds = 300;
 	inline int bLocationVisitDisableSound = 0;
 
-	inline int bVATSExtender = 1;
-	inline int bSuppressObjectives = 1;
-	inline int bSuppressReputation = 1;
+	inline int bVATSExtender = 0;
+	inline int bSuppressObjectives = 0;
+	inline int bSuppressReputation = 0;
 	inline int bFriendlyFire = 0;
 	inline int bNoDoorFade = 0;
 	inline int bArmorDTDRFix = 1;
 
-	inline int bQuickReadNote = 1;
+	inline int bQuickReadNote = 0;
 	inline int iQuickReadNoteTimeoutMs = 5000;
 	inline int iQuickReadNoteControlID = 6; //aim/block
 	inline int iQuickReadNoteMaxLines = 0; //0 = auto from screen height
@@ -52,18 +52,18 @@ namespace Settings
 	//0 = vanilla, 1 = only direct door owners bypass locks, 2 = must use key/lockpicks
 	inline int iNPCDoorUnlockBlock = 0;
 
-	inline int bVATSSpeechFix = 1;
+	inline int bVATSSpeechFix = 0;
 	inline int bCombatItemTimerFix = 1;
 
-	inline int bNPCAntidoteUse = 1;
+	inline int bNPCAntidoteUse = 0;
 	inline float fCombatItemCureTimer = 10.0f;
 	inline float fCureHealthThreshold = 25.0f; //below this, prioritize stimpak over cure
 
-	inline int bNPCDoctorsBagUse = 1;
+	inline int bNPCDoctorsBagUse = 0;
 	inline float fDoctorsBagUseTimer = 15.0f;
 
-	inline int bCompanionNoInfamy = 1;
-	inline int bCompanionWeightlessOverencumberedFix = 1;
+	inline int bCompanionNoInfamy = 0;
+	inline int bCompanionWeightlessOverencumberedFix = 0;
 	inline int bPathingNullActorFix = 1;
 	inline int bNavMeshInfoCrashFix = 1;
 	inline int bInitHavokCrashFix = 1;
@@ -100,11 +100,11 @@ namespace Settings
 		iQuick180ControlID = GetINIInt("Quick180", "iControlID", 5);
 
 		bSlowMotionPhysicsFix = GetINIInt("Tweaks", "bSlowMotionPhysicsFix", 1);
-		bExplodingPantsFix = GetINIInt("Tweaks", "bExplodingPantsFix", 1);
+		bExplodingPantsFix = GetINIInt("Tweaks", "bExplodingPantsFix", 0);
 		bKillActorXPFix = GetINIInt("Tweaks", "bKillActorXPFix", 1);
-		bReversePickpocketNoKarma = GetINIInt("Tweaks", "bReversePickpocketNoKarma", 1);
+		bReversePickpocketNoKarma = GetINIInt("Tweaks", "bReversePickpocketNoKarma", 0);
 		bSaveFileSize = GetINIInt("Tweaks", "bSaveFileSize", 1);
-		bOwnerNameInfo = GetINIInt("Tweaks", "bOwnerNameInfo", 1);
+		bOwnerNameInfo = GetINIInt("Tweaks", "bOwnerNameInfo", 0);
 		bDialogueCamera = GetINIInt("Tweaks", "bDialogueCamera", 0);
 		bSmoothCameraAngleInterp = GetINIInt("DialogueCamera", "bSmoothCameraAngleInterp", 0);
 		iShakeAmplitude = GetINIInt("DialogueCamera", "iShakeAmplitude", 3);
@@ -112,34 +112,34 @@ namespace Settings
 		bVATSLimbFix = GetINIInt("Tweaks", "bVATSLimbFix", 0);
 		bOwnedBeds = GetINIInt("Tweaks", "bOwnedBeds", 0);
 		bAshPileNames = GetINIInt("Tweaks", "bAshPileNames", 0);
-		bLocationVisitPopup = GetINIInt("Tweaks", "bLocationVisitPopup", 1);
+		bLocationVisitPopup = GetINIInt("Tweaks", "bLocationVisitPopup", 0);
 		iLocationVisitCooldownSeconds = GetINIInt("LocationVisitPopup", "iCooldownSeconds", 300);
 		bLocationVisitDisableSound = GetINIInt("LocationVisitPopup", "bDisableSound", 0);
-		bVATSExtender = GetINIInt("Tweaks", "bVATSExtender", 1);
-		bSuppressObjectives = GetINIInt("Tweaks", "bSuppressObjectives", 1);
-		bSuppressReputation = GetINIInt("Tweaks", "bSuppressReputation", 1);
+		bVATSExtender = GetINIInt("Tweaks", "bVATSExtender", 0);
+		bSuppressObjectives = GetINIInt("Tweaks", "bSuppressObjectives", 0);
+		bSuppressReputation = GetINIInt("Tweaks", "bSuppressReputation", 0);
 		bFriendlyFire = GetINIInt("Tweaks", "bFriendlyFire", 0);
 		bNoDoorFade = GetINIInt("Tweaks", "bNoDoorFade", 0);
 		bArmorDTDRFix = GetINIInt("Tweaks", "bArmorDTDRFix", 1);
-		bQuickReadNote = GetINIInt("Tweaks", "bQuickReadNote", 1);
+		bQuickReadNote = GetINIInt("Tweaks", "bQuickReadNote", 0);
 		iQuickReadNoteTimeoutMs = GetINIInt("QuickReadNote", "iTimeoutMs", 5000);
 		iQuickReadNoteControlID = GetINIInt("QuickReadNote", "iControlID", 6);
 		iQuickReadNoteMaxLines = GetINIInt("QuickReadNote", "iMaxLines", 0);
 
 		bDoorPackageOwnershipFix = GetINIInt("Tweaks", "bDoorPackageOwnershipFix", 1);
 		iNPCDoorUnlockBlock = GetINIInt("Tweaks", "iNPCDoorUnlockBlock", 0);
-		bVATSSpeechFix = GetINIInt("Tweaks", "bVATSSpeechFix", 1);
+		bVATSSpeechFix = GetINIInt("Tweaks", "bVATSSpeechFix", 0);
 		bCombatItemTimerFix = GetINIInt("Tweaks", "bCombatItemTimerFix", 1);
 
-		bNPCAntidoteUse = GetINIInt("Tweaks", "bNPCAntidoteUse", 1);
+		bNPCAntidoteUse = GetINIInt("Tweaks", "bNPCAntidoteUse", 0);
 		fCombatItemCureTimer = (float)GetINIInt("NPCAntidoteUse", "iCureTimer", 10);
 		fCureHealthThreshold = (float)GetINIInt("NPCAntidoteUse", "iHealthThreshold", 25);
 
-		bNPCDoctorsBagUse = GetINIInt("Tweaks", "bNPCDoctorsBagUse", 1);
+		bNPCDoctorsBagUse = GetINIInt("Tweaks", "bNPCDoctorsBagUse", 0);
 		fDoctorsBagUseTimer = (float)GetINIInt("NPCDoctorsBagUse", "iUseTimer", 15);
 
-		bCompanionNoInfamy = GetINIInt("Tweaks", "bCompanionNoInfamy", 1);
-		bCompanionWeightlessOverencumberedFix = GetINIInt("Tweaks", "bCompanionWeightlessOverencumberedFix", 1);
+		bCompanionNoInfamy = GetINIInt("Tweaks", "bCompanionNoInfamy", 0);
+		bCompanionWeightlessOverencumberedFix = GetINIInt("Tweaks", "bCompanionWeightlessOverencumberedFix", 0);
 
 		bPathingNullActorFix = GetINIInt("Tweaks", "bPathingNullActorFix", 1);
 		bNavMeshInfoCrashFix = GetINIInt("Tweaks", "bNavMeshInfoCrashFix", 1);

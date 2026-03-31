@@ -1,4 +1,4 @@
-//allows friendly fire - player can damage allies, allies can damage player
+//allows NPCs to hurt each other with non-explosive weapons
 
 #include "FriendlyFire.h"
 #include <Windows.h>
