@@ -13,4 +13,5 @@ namespace ImperativeCommands {
 	void RegisterCommands7(void* nvse);  //0x405B: ForceCrouch, DisableCrouching
 	void RegisterCommands8(void* nvse);  //0x405F: SetOnContactWatch, GetOnContactWatch
 	void RegisterCommands9(void* nvse);  //0x4061: ForceCombatTarget
+	void RegisterCommands10(void* nvse); //0x4066: RefillAmmo
 }
