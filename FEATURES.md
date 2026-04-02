@@ -11,6 +11,20 @@
 - GetRefsSortedByDistance - refs sorted by distance with filters
 - Duplicate - duplicate a form
 - GetAvailableRecipes - get available crafting recipes
+- ModChallenge - modify challenge progress
+- DamageActorValueAlt - extended actor value damage
+
+**Actor**
+- ResurrectActorEx - resurrect with options
+- ResurrectAll - resurrect all dead actors in area
+- SetCreatureCombatSkill - set creature combat skill
+- SetRaceAlt - set actor race at runtime
+- UseAidItem - force actor to use an aid item
+- ForceCrouch - force actor into crouch
+- DisableCrouching - prevent actor from crouching
+- ForceCombatTarget - force actor combat target
+- ForceSay - force actor dialogue speech
+- IsSaying - check if actor is speaking
 
 **Fall Damage**
 - SetFallDamageMult - set fall damage multiplier per actor
@@ -22,12 +36,15 @@
 - FakeHitEx - simulate hit with extended params
 - SetNoWeaponSearch - disable weapon search for actor
 - GetNoWeaponSearch - get weapon search state
+- SetPreventWeaponSwitch - prevent NPC weapon switching
+- GetPreventWeaponSwitch - get weapon switch prevention state
+- ForceReload - force weapon reload
+- RefillAmmo - add ammo to actor inventory and fill clip
+- SetOnContactWatch - enable physics contact tracking for actor
+- GetOnContactWatch - get contact watch state
 
 **Camera**
 - SetCameraAngle - direct camera transform control
-- Dialogue camera support is intended for scripted dependent mods and is not exposed through itr-nvse INI/MCM
-- Enabling dialogue camera alone uses the built-in automatic angle cycling
-- For script-driven control, set fixed mode or manual mode after enabling
 - SetDialogueCameraEnabled - runtime toggle for dialogue camera
 - SetDialogueCameraMode - auto angle mode: cycle, fixed, random, manual
 - SetDialogueCameraFixedAngle - fixed angle used by fixed mode
@@ -37,12 +54,11 @@
 - Modes: 0=cycle, 1=fixed, 2=random, 3=manual
 - Angle IDs: 0=Vanilla, 1=OverShoulder, 2=NPCCloseup, 3=TwoShot, 4=NPCFace, 5=LowAngle, 6=HighAngle, 7=PlayerFace, 8=WideShot, 9=NPCProfile, 10=PlayerProfile, 11=Overhead
 
-**Weapon Switch**
-- SetPreventWeaponSwitch - prevent NPC weapon switching
-- GetPreventWeaponSwitch - get weapon switch prevention state
+**Weapon Visuals**
+- SetWeaponEmissiveColor - set weapon emissive color
+- ClearWeaponEmissiveColor - clear weapon emissive color
 
 **Radio**
-- ChangeRadioTrack - force active radio station to advance to next track
 - IsRadioPlaying - returns 1 if pip-boy or ambient radio is currently playing
 - GetPlayingRadioTrack - returns TESSound or TESTopicInfo for playing radio track
 - GetPlayingRadioTrackFileName - returns file path of playing radio track
@@ -53,69 +69,105 @@
 - SetDialogueInfoFlags - set combined flags for a TESTopicInfo (runtime)
 - GetDisplayedDialogueInfos - get array of topic infos shown in dialogue menu
 
+**UI**
+- SetUIAlphaMap - UI alpha modification
+
 **Input**
-- RegisterKeyHeld - register key held callback
-- RegisterControlHeld - register control held callback
-- UnregisterKeyHeld - unregister key held callback
-- UnregisterControlHeld - unregister control held callback
-- RegisterKeyDoubleTap - register double tap callback
-- RegisterControlDoubleTap - register control double tap callback
-- UnregisterKeyDoubleTap - unregister double tap callback
-- UnregisterControlDoubleTap - unregister control double tap callback
 - DisableKeyEx - disable key with handler
 - EnableKeyEx - enable key with handler
 
+**Ground/Terrain**
+- MoveToTerrain - move reference to terrain height
+- GetDistanceToTerrain - get distance to terrain
+- MoveToGround - move reference to ground
+- GetDistanceToGround - get distance to ground
+
 ## Event Handlers
 
-- SetOnStealEventHandler - fires when items stolen
-- SetOnWeaponJamEventHandler - fires when weapon jams
-- SetOnWeaponDropEventHandler - fires when actor drops weapon
-- SetOnFrenzyEventHandler - fires when actor frenzied
-- SetOnConsoleOpenEventHandler - fires on console open
-- SetOnConsoleCloseEventHandler - fires on console close
-- SetOnCombatProcedureStartEventHandler - fires on combat AI change
-- SetOnEntryPointEventHandler - fires when perk entry points execute
-- SetOnSoundPlayedEventHandler - fires on any sound playback
-- SetOnSoundCompletedEventHandler - fires when tracked voice sounds complete
-- SetOnActorLandedEventHandler - fires when actor lands, with last sampled airborne fall time (approximate on short falls)
-- SetOnJumpStartEventHandler - fires when actor jump starts
-- SetCornerMessageHandler - fires on HUD corner message
-- SetOnDialogueTextEventHandler - fires on dialogue text display
-- SetOnKeyDisabledEventHandler - fires when key disabled
-- SetOnKeyEnabledEventHandler - fires when key enabled
+- ITR:OnSteal - fires when items stolen (thief, target, item, owner, quantity)
+- ITR:OnWeaponJam - fires when weapon jams (actor, weapon)
+- ITR:OnWeaponDrop - fires when actor attempts weapon drop (actor, weapon)
+- ITR:OnFrenzy - fires when actor enters frenzy (actor)
+- ITR:OnCornerMessage - fires on HUD corner message (text, emotion, icon, sound, time, metaType)
+- ITR:OnDialogueText - fires on dialogue text display (speaker, topic, response, text, responseText)
+- ITR:OnDoubleTap - fires on double-tap key press (keyCode)
+- ITR:OnKeyHeld - fires while key held past threshold (keyCode, heldSeconds)
+- ITR:OnCombatProcedure - fires on combat AI procedure change (actor, newProc, oldProc)
+- ITR:OnEntryPoint - fires when perk entry points execute (actor, perk, entryPoint, filterForm)
+- ITR:OnActorLanded - fires when actor lands (actor, fallTime)
+- ITR:OnJumpStart - fires when actor starts jumping (actor)
+- ITR:OnConsoleOpen - fires on console open
+- ITR:OnConsoleClose - fires on console close
+- ITR:OnKeyDisabled - fires when key disabled (keyCode, controlID)
+- ITR:OnKeyEnabled - fires when key enabled (keyCode, controlID)
+- ITR:OnMenuFilterChange - fires on menu filter tab change (menuID, oldFilter, newFilter, filterCount)
+- ITR:OnMenuSideChange - fires on menu side change (menuID, oldSide, newSide)
+- ITR:OnSoundPlayed - fires on sound playback (filePath, flags, sourceForm)
+- ITR:OnSoundCompleted - fires when tracked voice sound completes (filePath, flags, sourceForm)
+- ITR:OnContactBegin - fires when physics contact begins on watched actor (actor, contactType)
+- ITR:OnContactEnd - fires when physics contact ends on watched actor (actor, contactType)
 
 ## Features
 
-- ELMO - objective/reputation popups as corner messages
-- LocationVisitPopup - notification on revisiting locations
-- MessageBoxQuickClose - quick close message boxes
-- QuickDrop - drop weapon with hotkey
+- QuickDrop - drop weapon with hotkey combo
 - Quick180 - rotate player 180 degrees instantly
-- QuickReadNote - view notes on pickup without pip-boy
-- PreventWeaponSwitch - stop NPCs switching weapons mid-combat
+- QuickReadNote - view notes on pickup without pip-boy, play holotapes inline
+- LocationVisitPopup - notification popup when revisiting discovered locations
 - VATSExtender - more VATS targets beyond vanilla limit
-- CameraOverride - direct camera transform control
-- AltTabMute - mute audio when alt-tabbed
-- AutoGodMode - god mode on game start
+- CameraOverride - direct camera transform control via script
+- DialogueCamera - script-driven camera angles during dialogue with cycling, shake, dolly
+- PreventWeaponSwitch - stop NPCs switching weapons mid-combat (per-actor)
+- NoWeaponSearch - disable weapon search for specific actors (per-actor)
+- NPCAntidoteUse - NPCs use antidotes when poisoned in combat (configurable cooldown)
+- NPCDoctorsBagUse - NPCs use doctor's bags when crippled in combat (configurable cooldown)
+- ELMO - convert quest objectives and reputation popups to corner messages
+- MessageBoxQuickClose - quick close message boxes with Enter/Space
+- OwnerNameInfo - show item owner on crosshair prompt
+- SaveFileSize - show save file size in save/load menu
 - AutoQuickLoad - auto-load quicksave on main menu
-- OwnerNameInfo - show item owner on crosshair
-- SaveFileSize - show save file size in menu
+- AutoGodMode - god mode on game start
+- AltTabMute - mute audio when alt-tabbed
+- PlayerUpdateHook - host for QuickDrop and Quick180 input detection
 
 ## Fixes
 
-- ArmorDTDRFix - NPC armor DT/DR cache update
-- AshPileNames - show NPC name on ash piles
-- ExplodingPantsFix - no explosions from worn projectiles
-- FriendlyFire - player/ally friendly fire
-- KillActorXPFix - no XP for kill command on dead
-- NoDoorFade - no actor fade on door enter
-- OwnedBeds - sleep in owned beds with consequences
-- ReversePickpocketNoKarmaFix - no karma loss for reverse pickpocket
-- CompanionWeightlessOverencumberedFix - allow weightless transfers to overencumbered companions
-- SlowMotionPhysicsFix - stable ragdoll physics in VATS
-- VATSLimbFix - hide dismembered limbs in VATS
-- VATSProjectileFix - fix projectile hit chance in VATS
+- SlowMotionPhysicsFix - clamp physics timestep to prevent ragdoll energy gain during extreme slowmo
+- ExplodingPantsFix - prevent explosions from worn projectile items
+- VATSProjectileFix - fix projectile hit chance in VATS by correcting visibility
+- VATSLimbFix - hide dismembered limbs from VATS targeting
+- VATSSpeechFix - prevent voice/dialogue from slowing during VATS timescale
+- KillActorXPFix - prevent XP from kill command on already-dead actors
+- ArmorDTDRFix - force NPC armor DT/DR cache update on equipment change
+- CombatItemTimerFix - fix stimpak timer using wrong game setting
+- FriendlyFire - enable player and ally friendly fire damage
+- OwnedBeds - allow sleeping in owned beds with assault alarm consequences
+- OwnedCorpses - looting owned corpses counts as stealing
+- NoDoorFade - skip actor fade animation on door entry
+- AshPileNames - show original NPC name for ash piles
+- ReversePickpocketNoKarmaFix - no karma loss on reverse pickpocket of non-explosives
+- CompanionNoInfamy - companion kills don't give player faction infamy
+- CompanionWeightlessOverencumberedFix - allow giving zero-weight items to overencumbered companions
+- DoorPackageOwnershipFix - fix NPCs with lock/unlock packages locking doors in cells they don't own
+- NPCDoorUnlockBlock - configurable NPC door unlock restrictions (vanilla/strict/full)
+- MusicResetOnLoad - reset music state when loading a save to fix stuck or missing music
+- PathingNullActorFix - fix crash from null actor in pathing code
+- NavMeshInfoCrashFix - fix crash in NavMesh info processing
+- InitHavokCrashFix - fix crash during Havok physics initialization
+- DetectionFollowerCrashFix - fix null dereference in BuildFollowerListRecursive during cell transitions
+- ConsoleLogCleaner - delete console log on startup
 
 ## Configuration
 
-INI at `Data/config/itr-nvse.ini`, reload with `ReloadPluginConfig` console command.
+INI at `Data/config/itr-nvse.ini`, reload with `ReloadPluginConfig itr-nvse` console command.
+
+MCM support via MCM Extender.
+
+## Integration
+
+Other mods can opt into itr-nvse features by placing INI files in `Data/config/itr/`.
+
+Supported keys:
+
+| Section | Key | Effect |
+|---------|-----|--------|
+| CornerMessage | bSuppressSound | Strip sound from vanilla ShowNotify, let event handler play it at display time |
