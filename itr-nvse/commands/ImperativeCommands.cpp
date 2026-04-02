@@ -2331,4 +2331,96 @@ void RegisterCommands9(void* nvsePtr)
 	nvse->RegisterCommand(&kCommandInfo_ForceCombatTarget);
 }
 
+//RefillAmmo - adds ammo to actor's inventory and fills their clip
+//ported from ShowOff-NVSE RefillPlayerAmmo, generalized for any actor
+typedef double (__thiscall *_GetRegenRate)(void*, bool);
+static const _GetRegenRate GetWeaponRegenRate = (_GetRegenRate)0x709430;
+
+typedef SInt32 (__thiscall *_GetClipSize)(void*, bool);
+static const _GetClipSize GetClipSize = (_GetClipSize)0x4FE160;
+
+typedef void* (__thiscall *_GetDefaultAmmo)(void*);
+static const _GetDefaultAmmo GetDefaultAmmo = (_GetDefaultAmmo)0x474920;
+
+static ParamInfo kParams_RefillAmmo[1] = {
+	{ "count", kParamType_Integer, 0 },
+};
+
+DEFINE_COMMAND_PLUGIN(RefillAmmo, "Adds ammo and fills clip for calling ref", 1, 1, kParams_RefillAmmo);
+
+bool Cmd_RefillAmmo_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	SInt32 count = 0;
+	if (!ExtractArgs(EXTRACT_ARGS, &count)) return true;
+	if (!thisObj || !IsActorRef(thisObj)) return true;
+
+	Actor* actor = (Actor*)thisObj;
+	if (ActorIsDead(actor, false)) return true;
+
+	UInt32 pProcess = *(UInt32*)((UInt8*)actor + 0x68);
+	if (!pProcess) return true;
+	if (*(UInt32*)(pProcess + 0x28) != 0) return true; //must be HighProcess
+
+	UInt32 vtable = *(UInt32*)pProcess;
+	if (!vtable) return true;
+
+	//vtable[82] = GetCurrentWeapon
+	typedef UInt32 (__thiscall *GetCurrentWeapon_t)(UInt32);
+	UInt32 weaponInfo = ((GetCurrentWeapon_t)(*(UInt32*)(vtable + 82 * 4)))(pProcess);
+	if (!weaponInfo) return true;
+
+	void* weapon = *(void**)(weaponInfo + 0x08);
+	if (!weapon) return true;
+
+	//reject regen weapons
+	bool hasRegen = ItemChangeHasWeaponMod((void*)weaponInfo, 6); //kWeaponModEffect_RegenerateAmmo
+	if (hasRegen && GetWeaponRegenRate(weapon, true) > 0.0)
+		return true;
+
+	bool hasExtendedClip = ItemChangeHasWeaponMod((void*)weaponInfo, 2); //kWeaponModEffect_IncreaseClipCapacity
+
+	//vtable[83] = GetAmmoInfo
+	typedef UInt32 (__thiscall *GetAmmoInfo_t)(UInt32);
+	UInt32 ammoInfo = ((GetAmmoInfo_t)(*(UInt32*)(vtable + 83 * 4)))(pProcess);
+
+	if (ammoInfo)
+	{
+		void* ammoForm = *(void**)(ammoInfo + 0x08);
+		if (!ammoForm) return true;
+
+		//AddItem via vtable[0x64]
+		typedef void (__thiscall *AddItem_t)(void*, void*, void*, UInt32);
+		((AddItem_t)(*(UInt32*)(*(UInt32*)actor + 0x64 * 4)))(actor, ammoForm, nullptr, count);
+
+		SInt32 clipMax = GetClipSize(weapon, hasExtendedClip);
+		SInt32 currentCount = *(SInt32*)(ammoInfo + 0x04);
+		SInt32 toAdd = clipMax - currentCount;
+		if (toAdd > count) toAdd = count;
+		if (toAdd > 0) *(SInt32*)(ammoInfo + 0x04) = currentCount + toAdd;
+	}
+	else
+	{
+		//no ammo loaded, find default ammo from weapon form
+		//BGSAmmoForm at TESObjectWEAP+0xA4
+		void* defaultAmmo = GetDefaultAmmo((char*)weapon + 0xA4);
+		if (!defaultAmmo) return true;
+
+		typedef void (__thiscall *AddItem_t)(void*, void*, void*, UInt32);
+		((AddItem_t)(*(UInt32*)(*(UInt32*)actor + 0x64 * 4)))(actor, defaultAmmo, nullptr, count);
+
+		//force reload since weapon was empty
+		ActorReload(actor, (TESObjectWEAP*)weapon, 2, hasExtendedClip);
+	}
+
+	*result = 1;
+	return true;
+}
+
+void RegisterCommands10(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_RefillAmmo);
+}
+
 }

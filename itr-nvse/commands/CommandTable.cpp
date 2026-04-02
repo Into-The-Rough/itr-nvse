@@ -113,4 +113,7 @@ void RegisterAllCommands(void* nvsePtr)
 
 	/*4062*/ nvse->SetOpcodeBase(0x4062);
 	DialogueCameraHandler::RegisterCommands2(nvse);                  //SetDialogueCameraEnabled, SetDialogueCameraMode, SetDialogueCameraFixedAngle, SetDialogueCameraAngle
+
+	/*4066*/ nvse->SetOpcodeBase(0x4066);
+	ImperativeCommands::RegisterCommands10(nvse);                    //RefillAmmo
 }
