@@ -64,6 +64,7 @@
 #include "features/PreventWeaponSwitch.h"
 #include "features/ELMO.h"
 #include "commands/GroundCommands.h"
+#include "commands/GestureCommand.h"
 #include "features/LocationVisitPopup.h"
 #include "features/QuickReadNote.h"
 #include "features/VATSExtender.h"
@@ -294,6 +295,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				}
 					WeaponEmissiveCommands::ClearState();
 					GroundCommands::ClearState();
+					GestureCommand::Reset();
 					ImperativeCommands::ClearState();
 					OnContactHandler::ClearState();
 
@@ -385,6 +387,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 						AltTabMute::Update();
 					GroundCommands::Update();
 					ImperativeCommands::Update();
+					GestureCommand::Update();
 					break;
 	}
 }

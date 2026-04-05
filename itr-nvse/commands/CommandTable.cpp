@@ -23,6 +23,7 @@
 #include "features/PreventWeaponSwitch.h"
 #include "handlers/DialogueCameraHandler.h"
 #include "commands/GroundCommands.h"
+#include "commands/GestureCommand.h"
 
 extern void Log(const char* fmt, ...);
 
@@ -116,4 +117,7 @@ void RegisterAllCommands(void* nvsePtr)
 
 	/*4066*/ nvse->SetOpcodeBase(0x4066);
 	ImperativeCommands::RegisterCommands10(nvse);                    //RefillAmmo
+
+	/*410E*/ nvse->SetOpcodeBase(0x410E);
+	GestureCommand::RegisterCommands(nvse);                          //Gesture
 }
