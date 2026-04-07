@@ -2353,6 +2353,7 @@ bool Cmd_RefillAmmo_Execute(COMMAND_ARGS)
 	*result = 0;
 	SInt32 count = 0;
 	if (!ExtractArgs(EXTRACT_ARGS, &count)) return true;
+	if (count <= 0) return true;
 	if (!thisObj || !IsActorRef(thisObj)) return true;
 
 	Actor* actor = (Actor*)thisObj;
