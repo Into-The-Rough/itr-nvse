@@ -287,7 +287,9 @@ namespace QuickReadNote
 					} while (currentItem->NextResponse());
 				}
 			}
+			ThisCall<void>(0x83B900, pConversation); //~Conversation
 			GameHeapFree(pConversation);
+			ThisCall<void>(0x8D2060, character); //~Character
 			GameHeapFree(character);
 		}
 

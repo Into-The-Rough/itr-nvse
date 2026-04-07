@@ -110,6 +110,7 @@ namespace DoorPackageOwnershipFix
 		VirtualProtect((void*)addr, size, PAGE_EXECUTE_READWRITE, &oldProtect);
 		memcpy((void*)addr, data, size);
 		VirtualProtect((void*)addr, size, oldProtect, &oldProtect);
+		FlushInstructionCache(GetCurrentProcess(), (void*)addr, size);
 	}
 
 	void ReplaceCall(UInt32 callAddr, UInt32 newFunc)
