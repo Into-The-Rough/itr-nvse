@@ -44,6 +44,7 @@
     <ClCompile Include="test_refidset.cpp" />
     <ClCompile Include="test_stringmatch.cpp" />
     <ClCompile Include="test_cooldowntracker.cpp" />
+    <ClCompile Include="test_gesturemath.cpp" />
     <ClCompile Include="test_safewrite.cpp" />
     <ClCompile Include="test_hooklogic.cpp" />
   </ItemGroup>
@@ -53,6 +54,7 @@
     <ClInclude Include="..\internal\RefIdSet.h" />
     <ClInclude Include="..\internal\StringMatch.h" />
     <ClInclude Include="..\internal\CooldownTracker.h" />
+    <ClInclude Include="..\internal\GestureMath.h" />
     <ClInclude Include="..\internal\SafeWrite.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
