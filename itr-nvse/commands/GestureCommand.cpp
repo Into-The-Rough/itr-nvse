@@ -5,17 +5,17 @@
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/GameObjects.h"
+#include "internal/GestureMath.h"
 #include "internal/EngineFunctions.h"
 #include "internal/CallTemplates.h"
-#include "internal/Mat3.h"
 #include "internal/globals.h"
+#include <cstring>
 
 extern const _ExtractArgs ExtractArgs;
 
 namespace GestureCommand
 {
-	static constexpr float kPi = 3.14159265f;
-	static constexpr float kDegToRad = kPi / 180.0f;
+	static constexpr float kDegToRad = GestureMath::kPi / 180.0f;
 	static constexpr int MAX_GESTURES = 32;
 
 	struct Gesture
@@ -26,6 +26,9 @@ namespace GestureCommand
 		DWORD duration = 0;
 		float amplitude = 0.0f;
 		float cycleTime = 0.4f;
+		float baseRot[9] = {};
+		void* headBone = nullptr;
+		bool hasBaseRot = false;
 	};
 
 	static Gesture g_gestures[MAX_GESTURES] = {};
@@ -38,39 +41,6 @@ namespace GestureCommand
 		void* renderData = *(void**)((UInt8*)ref + 0x64);
 		if (!renderData) return nullptr;
 		return *(void**)((UInt8*)renderData + 0x14);
-	}
-
-	static void ApplyLocalPitch(float* m, float rad)
-	{
-		float c = cosf(rad), s = sinf(rad);
-		for (int i = 0; i < 3; i++)
-		{
-			float y = m[i * 3 + 1], z = m[i * 3 + 2];
-			m[i * 3 + 1] = y * c + z * s;
-			m[i * 3 + 2] = -y * s + z * c;
-		}
-	}
-
-	static void ApplyLocalRoll(float* m, float rad)
-	{
-		float c = cosf(rad), s = sinf(rad);
-		for (int i = 0; i < 3; i++)
-		{
-			float x = m[i * 3 + 0], z = m[i * 3 + 2];
-			m[i * 3 + 0] = x * c - z * s;
-			m[i * 3 + 2] = x * s + z * c;
-		}
-	}
-
-	static void ApplyLocalYaw(float* m, float rad)
-	{
-		float c = cosf(rad), s = sinf(rad);
-		for (int i = 0; i < 3; i++)
-		{
-			float x = m[i * 3 + 0], y = m[i * 3 + 1];
-			m[i * 3 + 0] = x * c + y * s;
-			m[i * 3 + 1] = -x * s + y * c;
-		}
 	}
 
 	static void MatMul33(float* out, const float* a, const float* b)
@@ -120,16 +90,53 @@ namespace GestureCommand
 		}
 	}
 
-	static float Smoothstep(float t)
+	static void* FindHeadBone(TESObjectREFR* ref)
 	{
-		return t * t * (3.0f - 2.0f * t);
+		void* root = GetRootNode(ref);
+		if (!root)
+			return nullptr;
+
+		return GetObjectByName(root, "Bip01 Head");
+	}
+
+	static void ClearGesture(Gesture& g)
+	{
+		memset(&g, 0, sizeof(g));
+	}
+
+	static void RestoreGesturePose(Gesture& g)
+	{
+		if (!g.hasBaseRot)
+			return;
+
+		auto* form = reinterpret_cast<TESObjectREFR*>(Engine::LookupFormByID(g.refID));
+		if (!form)
+			return;
+
+		void* headBone = FindHeadBone(form);
+		if (!headBone)
+			return;
+
+		float* localRot = reinterpret_cast<float*>(reinterpret_cast<UInt8*>(headBone) + 0x34);
+		GestureMath::CopyMat3(localRot, g.baseRot);
+		PropagateTransforms(headBone);
+	}
+
+	static void StopGesture(Gesture& g)
+	{
+		RestoreGesturePose(g);
+		ClearGesture(g);
 	}
 
 	void Init() {}
 
 	void Reset()
 	{
-		memset(g_gestures, 0, sizeof(g_gestures));
+		for (auto& g : g_gestures)
+		{
+			if (g.type)
+				StopGesture(g);
+		}
 	}
 
 	void Update()
@@ -144,52 +151,30 @@ namespace GestureCommand
 			if (!g.type) continue;
 
 			auto* form = (TESObjectREFR*)Engine::LookupFormByID(g.refID);
-			if (!form) { g.type = 0; continue; }
+			if (!form) { ClearGesture(g); continue; }
 
-			void* root = GetRootNode(form);
-			if (!root) { g.type = 0; continue; }
+			void* headBone = FindHeadBone(form);
+			if (!headBone) { ClearGesture(g); continue; }
 
-			void* headBone = GetObjectByName(root, "Bip01 Head");
-			if (!headBone) { g.type = 0; continue; }
-
-			if (!g.start) g.start = now;
-			DWORD elapsed = now - g.start;
-			if (elapsed >= g.duration) { g.type = 0; continue; }
-
-			//smoothstep envelope
-			float blendMs = (g.type == 3) ? g.cycleTime * 1000.0f : 200.0f;
-			float dur = (float)g.duration;
-			if (blendMs > dur * 0.4f) blendMs = dur * 0.4f;
-			float env = 1.0f;
-			if ((float)elapsed < blendMs)
-				env = Smoothstep((float)elapsed / blendMs);
-			float remaining = dur - (float)elapsed;
-			if (remaining < blendMs)
-				env = Smoothstep(remaining / blendMs);
-
-			float angle;
-			if (g.type == 3)
+			if (g.headBone != headBone)
 			{
-				angle = g.amplitude * env;
-			}
-			else
-			{
-				float cycleMs = g.cycleTime * 1000.0f;
-				if (cycleMs < 50.0f) cycleMs = 50.0f;
-				float phase = fmodf((float)elapsed, cycleMs) / cycleMs;
-				if (g.type == 2)
-					angle = g.amplitude * env * sinf(2.0f * kPi * phase);
-				else
-					angle = g.amplitude * env * sinf(kPi * phase);
+				g.headBone = headBone;
+				g.hasBaseRot = false;
 			}
 
 			float* localRot = (float*)((UInt8*)headBone + 0x34);
-			if (g.type == 1)
-				ApplyLocalYaw(localRot, angle);
-			else if (g.type == 2)
-				ApplyLocalPitch(localRot, angle);
-			else
-				ApplyLocalRoll(localRot, angle);
+			if (!g.hasBaseRot)
+			{
+				GestureMath::CopyMat3(g.baseRot, localRot);
+				g.hasBaseRot = true;
+			}
+
+			if (!g.start) g.start = now;
+			DWORD elapsed = now - g.start;
+			if (elapsed >= g.duration) { StopGesture(g); continue; }
+
+			float angle = GestureMath::ComputeAngleRadians(g.type, elapsed, g.duration, g.amplitude, g.cycleTime);
+			GestureMath::ComposePoseFromBase(g.baseRot, g.type, angle, localRot);
 
 			PropagateTransforms(headBone);
 		}
@@ -207,10 +192,20 @@ namespace GestureCommand
 		if (slot < 0) return false;
 
 		auto& g = g_gestures[slot];
+		if (g.refID != refID)
+			ClearGesture(g);
+
+		if (duration <= 0.0f)
+			return false;
+		if (speed <= 0.0f)
+			speed = 0.4f;
+
 		g.refID = refID;
 		g.type = type;
 		g.start = 0;
 		g.duration = (DWORD)(duration * 1000.0f);
+		if (!g.duration)
+			g.duration = 1;
 		g.amplitude = amplitude * kDegToRad;
 		g.cycleTime = speed;
 		return true;
