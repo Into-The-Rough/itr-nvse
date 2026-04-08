@@ -44,7 +44,6 @@ ReloadPluginConfig itr-nvse
 ## Documentation
 
 - [FEATURES.md](FEATURES.md): features, commands, and event handlers
-- [nexus_description.bbcode](nexus_description.bbcode): Nexus description source
 - [THIRD_PARTY.md](THIRD_PARTY.md): bundled third-party code notes
 - [LICENSE](LICENSE): project license
 
