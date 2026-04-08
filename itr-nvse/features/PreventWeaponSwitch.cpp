@@ -110,6 +110,24 @@ void Init()
 		Log("ERROR: PreventWeaponSwitch hook failed");
 }
 
+void Set(Actor* actor, bool block)
+{
+	if (!actor)
+		return;
+
+	UInt32 refID = *(UInt32*)((char*)actor + 0x0C);
+	SetBlocked(refID, block);
+}
+
+bool Get(Actor* actor)
+{
+	if (!actor)
+		return false;
+
+	UInt32 refID = *(UInt32*)((char*)actor + 0x0C);
+	return IsBlocked(refID);
+}
+
 //vtable index 0x100
 inline bool IsActorRef(TESObjectREFR* ref) {
 	if (!ref) return false;
@@ -127,8 +145,7 @@ static bool Cmd_SetPreventWeaponSwitch_Execute(COMMAND_ARGS)
 
 	if (IsActorRef(thisObj))
 	{
-		UInt32 refID = *(UInt32*)((char*)thisObj + 0x0C);
-		SetBlocked(refID, block != 0);
+		Set((Actor*)thisObj, block != 0);
 		*result = 1;
 	}
 	return true;
@@ -139,8 +156,7 @@ static bool Cmd_GetPreventWeaponSwitch_Execute(COMMAND_ARGS)
 	*result = 0;
 	if (IsActorRef(thisObj))
 	{
-		UInt32 refID = *(UInt32*)((char*)thisObj + 0x0C);
-		*result = IsBlocked(refID) ? 1 : 0;
+		*result = Get((Actor*)thisObj) ? 1 : 0;
 	}
 	return true;
 }
