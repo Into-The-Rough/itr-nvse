@@ -967,6 +967,83 @@ void SetEnabled(bool enabled) {
 	}
 }
 
+bool IsEnabled() {
+	return Settings::bDialogueCamera != 0;
+}
+
+bool SetAngleMode(int mode) {
+	if (mode < 0 || mode > kAngleMode_Manual)
+		return false;
+
+	g_angleMode = (CameraAngleMode)mode;
+	if (g_cameraActive && g_dialogueTarget && g_angleMode == kAngleMode_Fixed)
+		ApplySelectedAngle(g_fixedAngle, true);
+	return true;
+}
+
+bool SetFixedAngle(int angle) {
+	if (!IsValidCameraAngle(angle))
+		return false;
+
+	g_fixedAngle = (CameraAngle)angle;
+	if (g_cameraActive && g_dialogueTarget && g_angleMode == kAngleMode_Fixed)
+		ApplySelectedAngle(g_fixedAngle, true);
+	return true;
+}
+
+int SetCurrentAngle(int angle) {
+	CameraAngle chosenAngle;
+	if (angle < 0)
+		chosenAngle = GetRandomCameraAngle(g_currentAngle);
+	else {
+		if (!IsValidCameraAngle(angle))
+			return -1;
+		chosenAngle = (CameraAngle)angle;
+	}
+
+	if (g_angleMode == kAngleMode_Fixed)
+		g_fixedAngle = chosenAngle;
+
+	if (g_cameraActive && g_dialogueTarget)
+		ApplySelectedAngle(chosenAngle, true);
+	else
+		g_currentAngle = chosenAngle;
+
+	return (int)chosenAngle;
+}
+
+void SetDolly(float speed, float maxDist, int runOnce) {
+	g_dollySpeed = speed;
+	g_dollyMaxDist = maxDist;
+	g_dollyRunOnce = runOnce;
+}
+
+void SetShakeAmplitude(float amplitude) {
+	g_shakeAmplitude = amplitude;
+}
+
+DebugState GetDebugState() {
+	return {
+		IsEnabled(),
+		(int)g_angleMode,
+		(int)g_fixedAngle,
+		(int)g_currentAngle,
+		g_dollySpeed,
+		g_dollyMaxDist,
+		g_dollyRunOnce,
+		g_shakeAmplitude
+	};
+}
+
+void RestoreDebugState(const DebugState& state) {
+	SetEnabled(state.enabled);
+	g_currentAngle = IsValidCameraAngle(state.currentAngle) ? (CameraAngle)state.currentAngle : kAngle_Vanilla;
+	SetAngleMode(state.angleMode);
+	SetFixedAngle(state.fixedAngle);
+	SetDolly(state.dollySpeed, state.dollyMaxDist, state.dollyRunOnce);
+	SetShakeAmplitude(state.shakeAmplitude);
+}
+
 void SetExternalRotation(const Mat3& rot) {
 	CameraHooks::SetExternalRotation(rot);
 }
@@ -1009,13 +1086,8 @@ bool Cmd_SetDialogueCameraMode_Execute(COMMAND_ARGS)
 	UInt32 mode = 0;
 	if (!ExtractArgs(EXTRACT_ARGS, &mode))
 		return true;
-	if (mode > DialogueCameraHandler::kAngleMode_Manual)
+	if (!DialogueCameraHandler::SetAngleMode((int)mode))
 		return true;
-
-	DialogueCameraHandler::g_angleMode = (DialogueCameraHandler::CameraAngleMode)mode;
-	if (DialogueCameraHandler::g_cameraActive && DialogueCameraHandler::g_dialogueTarget &&
-		DialogueCameraHandler::g_angleMode == DialogueCameraHandler::kAngleMode_Fixed)
-		DialogueCameraHandler::ApplySelectedAngle(DialogueCameraHandler::g_fixedAngle, true);
 
 	*result = 1;
 
@@ -1036,13 +1108,8 @@ bool Cmd_SetDialogueCameraFixedAngle_Execute(COMMAND_ARGS)
 	int angle = 0;
 	if (!ExtractArgs(EXTRACT_ARGS, &angle))
 		return true;
-	if (!DialogueCameraHandler::IsValidCameraAngle(angle))
+	if (!DialogueCameraHandler::SetFixedAngle(angle))
 		return true;
-
-	DialogueCameraHandler::g_fixedAngle = (DialogueCameraHandler::CameraAngle)angle;
-	if (DialogueCameraHandler::g_cameraActive && DialogueCameraHandler::g_dialogueTarget &&
-		DialogueCameraHandler::g_angleMode == DialogueCameraHandler::kAngleMode_Fixed)
-		DialogueCameraHandler::ApplySelectedAngle(DialogueCameraHandler::g_fixedAngle, true);
 
 	*result = (float)DialogueCameraHandler::g_fixedAngle;
 
@@ -1064,27 +1131,14 @@ bool Cmd_SetDialogueCameraAngle_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &angle))
 		return true;
 
-	DialogueCameraHandler::CameraAngle chosenAngle;
-	if (angle < 0)
-		chosenAngle = DialogueCameraHandler::GetRandomCameraAngle(DialogueCameraHandler::g_currentAngle);
-	else {
-		if (!DialogueCameraHandler::IsValidCameraAngle(angle))
-			return true;
-		chosenAngle = (DialogueCameraHandler::CameraAngle)angle;
-	}
-
-	if (DialogueCameraHandler::g_angleMode == DialogueCameraHandler::kAngleMode_Fixed)
-		DialogueCameraHandler::g_fixedAngle = chosenAngle;
-
-	if (DialogueCameraHandler::g_cameraActive && DialogueCameraHandler::g_dialogueTarget)
-		DialogueCameraHandler::ApplySelectedAngle(chosenAngle, true);
-	else
-		DialogueCameraHandler::g_currentAngle = chosenAngle;
+	int chosenAngle = DialogueCameraHandler::SetCurrentAngle(angle);
+	if (chosenAngle < 0)
+		return true;
 
 	*result = (float)chosenAngle;
 
 	if (IsConsoleMode())
-		Console_Print("DialogueCameraAngle >> %d (%s)", (int)chosenAngle, DialogueCameraHandler::GetCameraAngleName(chosenAngle));
+		Console_Print("DialogueCameraAngle >> %d (%s)", chosenAngle, DialogueCameraHandler::GetCameraAngleName((DialogueCameraHandler::CameraAngle)chosenAngle));
 	return true;
 }
 
@@ -1104,9 +1158,7 @@ bool Cmd_SetDialogueCameraDolly_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &speed, &maxDist, &runOnce))
 		return true;
 
-	DialogueCameraHandler::g_dollySpeed = speed;
-	DialogueCameraHandler::g_dollyMaxDist = maxDist;
-	DialogueCameraHandler::g_dollyRunOnce = runOnce;
+	DialogueCameraHandler::SetDolly(speed, maxDist, runOnce);
 	*result = 1;
 
 	if (IsConsoleMode())
@@ -1132,7 +1184,7 @@ bool Cmd_SetDialogueCameraShake_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &amplitude))
 		return true;
 
-	DialogueCameraHandler::g_shakeAmplitude = amplitude;
+	DialogueCameraHandler::SetShakeAmplitude(amplitude);
 	*result = 1;
 
 	if (IsConsoleMode())
