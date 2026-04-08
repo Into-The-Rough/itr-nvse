@@ -18,6 +18,7 @@
 #include "commands/WeaponEmissiveCommands.h"
 #include "commands/UICommands.h"
 #include "commands/ActorValueCommands.h"
+#include "commands/CommandBoundsCommand.h"
 #include "features/CameraOverride.h"
 #include "features/NoWeaponSearch.h"
 #include "features/PreventWeaponSwitch.h"
@@ -117,6 +118,11 @@ void RegisterAllCommands(void* nvsePtr)
 
 	/*4066*/ nvse->SetOpcodeBase(0x4066);
 	ImperativeCommands::RegisterCommands10(nvse);                    //RefillAmmo
+
+#ifdef _DEBUG
+	/*4067*/ nvse->SetOpcodeBase(0x4067);
+	CommandBoundsCommand::RegisterCommands(nvse);                    //RunITRCommandBounds
+#endif
 
 	/*410E*/ nvse->SetOpcodeBase(0x410E);
 	GestureCommand::RegisterCommands(nvse);                          //Gesture
