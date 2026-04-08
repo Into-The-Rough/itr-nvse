@@ -112,35 +112,20 @@ bool Cmd_SetFallDamageMult_Execute(COMMAND_ARGS)
 	if (!actor)
 		actor = RefToActor(thisObj);
 
-	if (mult < 0.0f) mult = 0.0f;
-
-	{
-		InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
-		ScopedLock lock(&g_fdhLock);
-		if (actor)
-		{
-			if (mult == 1.0f)
-				g_actorFallDamageMults.erase(actor->refID);
-			else
-				g_actorFallDamageMults[actor->refID] = mult;
-		}
-		else
-		{
-			g_globalFallDamageMult = mult;
-		}
-	}
+	FallDamageHandler::SetMultiplier(mult, actor);
 
 	if (IsConsoleMode())
 	{
+		float effectiveMult = FallDamageHandler::GetMultiplier(actor);
 		if (actor)
 		{
-			if (mult == 1.0f)
+			if (!FallDamageHandler::HasOverride(actor))
 				Console_Print("SetFallDamageMult >> Cleared override for %08X (using global %.2f)", actor->refID, g_globalFallDamageMult);
 			else
-				Console_Print("SetFallDamageMult >> Set %08X to %.2f", actor->refID, mult);
+				Console_Print("SetFallDamageMult >> Set %08X to %.2f", actor->refID, effectiveMult);
 		}
 		else
-			Console_Print("SetFallDamageMult >> Set global to %.2f", mult);
+			Console_Print("SetFallDamageMult >> Set global to %.2f", effectiveMult);
 	}
 
 	*result = 1;
@@ -160,7 +145,7 @@ bool Cmd_GetFallDamageMult_Execute(COMMAND_ARGS)
 	if (!actor)
 		actor = RefToActor(thisObj);
 
-	*result = GetFallDamageMultForActor(actor ? actor->refID : 0);
+	*result = FallDamageHandler::GetMultiplier(actor);
 
 	if (IsConsoleMode())
 	{
@@ -190,20 +175,13 @@ bool Cmd_ClearFallDamageMult_Execute(COMMAND_ARGS)
 		actor = RefToActor(thisObj);
 
 	size_t count = 0;
+	if (!actor)
 	{
 		InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
 		ScopedLock lock(&g_fdhLock);
-		if (actor)
-		{
-			g_actorFallDamageMults.erase(actor->refID);
-		}
-		else
-		{
-			count = g_actorFallDamageMults.size();
-			g_actorFallDamageMults.clear();
-			g_globalFallDamageMult = 1.0f;
-		}
+		count = g_actorFallDamageMults.size();
 	}
+	FallDamageHandler::ClearMultiplier(actor);
 
 	if (IsConsoleMode())
 	{
@@ -224,6 +202,56 @@ bool Init(void* nvse)
 	s_setMultOpcode = 0x4017;
 	s_getMultOpcode = 0x4018;
 	return true;
+}
+
+bool HasOverride(Actor* actor)
+{
+	if (!actor)
+		return false;
+
+	InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
+	ScopedLock lock(&g_fdhLock);
+	return g_actorFallDamageMults.find(actor->refID) != g_actorFallDamageMults.end();
+}
+
+void SetMultiplier(float mult, Actor* actor)
+{
+	if (mult < 0.0f)
+		mult = 0.0f;
+
+	InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
+	ScopedLock lock(&g_fdhLock);
+	if (actor)
+	{
+		if (mult == 1.0f)
+			g_actorFallDamageMults.erase(actor->refID);
+		else
+			g_actorFallDamageMults[actor->refID] = mult;
+	}
+	else
+	{
+		g_globalFallDamageMult = mult;
+	}
+}
+
+float GetMultiplier(Actor* actor)
+{
+	return GetFallDamageMultForActor(actor ? actor->refID : 0);
+}
+
+void ClearMultiplier(Actor* actor)
+{
+	InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
+	ScopedLock lock(&g_fdhLock);
+	if (actor)
+	{
+		g_actorFallDamageMults.erase(actor->refID);
+	}
+	else
+	{
+		g_actorFallDamageMults.clear();
+		g_globalFallDamageMult = 1.0f;
+	}
 }
 
 void RegisterCommands(void* nvsePtr)
