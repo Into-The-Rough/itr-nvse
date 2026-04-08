@@ -59,8 +59,10 @@
 // 0x4063  SetDialogueCameraMode
 // 0x4064  SetDialogueCameraFixedAngle
 // 0x4065  SetDialogueCameraAngle
+// 0x4066  RefillAmmo
+// 0x4067  RunITRCommandBounds (Debug only)
 // gaps in itr-nvse itself: 0x4033, 0x403D-0x404F
-// next free itr-nvse-local slot: 0x4066
+// next free itr-nvse-local slot: 0x4068
 // shared suite occupancy for borrowed opcodes is tracked in /mnt/d/plugins/opcodes.txt
 
 void RegisterAllCommands(void* nvse);
