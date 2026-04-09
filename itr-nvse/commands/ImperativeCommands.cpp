@@ -28,7 +28,21 @@ extern NVSEArrayVarInterface* g_arrInterface;
 
 using namespace FormUtils;
 
+static CRITICAL_SECTION g_crouchLock;
+static volatile LONG g_crouchLockInit = 0;
 static std::set<UInt32> g_crouchDisabledActors;
+
+static void EnsureCrouchLock() {
+	InitCriticalSectionOnce(&g_crouchLockInit, &g_crouchLock);
+}
+
+static bool IsCrouchDisabled(UInt32 refID) {
+	if (!refID || g_crouchLockInit != 2)
+		return false;
+
+	ScopedLock lock(&g_crouchLock);
+	return g_crouchDisabledActors.count(refID) != 0;
+}
 
 namespace
 {
@@ -1757,7 +1771,10 @@ void ImperativeCommands::Update()
 void ImperativeCommands::ClearState()
 {
 	s_resurrectActorExTraces.clear();
-	g_crouchDisabledActors.clear();
+	if (g_crouchLockInit == 2) {
+		ScopedLock lock(&g_crouchLock);
+		g_crouchDisabledActors.clear();
+	}
 	if (g_forceCombatTargetLockInit == 2)
 	{
 		ScopedLock lock(&g_forceCombatTargetLock);
@@ -2096,67 +2113,62 @@ void RegisterCommands5(void* nvsePtr)
 
 //--- ForceCrouch / DisableCrouching ---
 //
-//three hook sites block all paths that set sneak on NPCs:
-//  0x88977A - Actor::Update follower sneak matching (OR's 0x400 for player followers)
-//  0x998681 - CombatState::UpdateDetection (sets bShouldSneak to match target)
-//  0x9986D2 - CombatState::UpdateDetection (clears bShouldSneak when out of range)
+//hooks Actor::SetMovementFlag (0x8B39F0) and CombatController::SetShouldSneak
+//(0x981520) at function level to cover all callers
 
 typedef void (__thiscall *_SetShouldSneak)(void*, bool);
 typedef void (__thiscall *_SetMovementFlag)(Actor*, UInt32);
-static const _SetShouldSneak SetShouldSneak = (_SetShouldSneak)0x981520;
-static const _SetMovementFlag OrigSetMovementFlag = (_SetMovementFlag)0x8B39F0;
+static _SetShouldSneak OrigSetShouldSneak = nullptr;
+static _SetMovementFlag OrigSetMovementFlag = nullptr;
 
-//hook for Actor::Update follower sneak matching at 0x88977A
-//original: call Actor::SetMovementFlag with flags | 0x400
-static void __fastcall Hook_FollowerSetMovementFlag(Actor* actor, void* edx, UInt32 flags) {
-	if (g_crouchDisabledActors.count(actor->refID))
-		flags &= ~0x400; //strip sneak
+//trampoline for Actor::SetMovementFlag - strips 0x400 for disabled actors
+static void __fastcall Hook_SetMovementFlag(Actor* actor, void* edx, UInt32 flags) {
+	if ((flags & 0x400) && IsCrouchDisabled(actor->refID))
+		flags &= ~0x400;
 	OrigSetMovementFlag(actor, flags);
 }
 
-//hook for CombatState::UpdateDetection SetShouldSneak calls
-//call original with false instead of just zeroing the byte - original also
-//pushes movement flags via SetMovementFlags to keep mover state consistent
+//trampoline for CombatController::SetShouldSneak - forces false for disabled actors
 static void __fastcall Hook_SetShouldSneak(void* cc, void* edx, bool shouldSneak) {
-	Actor* owner = *(Actor**)((UInt8*)cc + 0xBC);
-	if (owner && g_crouchDisabledActors.count(owner->refID)) {
-		SetShouldSneak(cc, false);
-		return;
+	if (shouldSneak) {
+		Actor* owner = *(Actor**)((UInt8*)cc + 0xBC);
+		if (owner && IsCrouchDisabled(owner->refID))
+			shouldSneak = false;
 	}
-	SetShouldSneak(cc, shouldSneak);
+	OrigSetShouldSneak(cc, shouldSneak);
+}
+
+static UInt8 g_moveFlagTrampoline[12];
+static UInt8 g_sneakTrampoline[12];
+
+//both targets have 7-byte prologues: push ebp; mov ebp,esp; push ecx; mov [ebp-4],ecx
+static bool WriteTrampoline(UInt32 target, void* hook, UInt8* trampBuf, void** origOut) {
+	const UInt32 stolen = 7;
+	memcpy(trampBuf, (void*)target, stolen);
+	trampBuf[stolen] = 0xE9;
+	*(UInt32*)(trampBuf + stolen + 1) = (target + stolen) - ((UInt32)trampBuf + stolen + 5);
+	DWORD old;
+	VirtualProtect(trampBuf, stolen + 5, PAGE_EXECUTE_READWRITE, &old);
+	*origOut = trampBuf;
+	VirtualProtect((void*)target, stolen, PAGE_EXECUTE_READWRITE, &old);
+	*(UInt8*)target = 0xE9;
+	*(UInt32*)(target + 1) = (UInt32)hook - target - 5;
+	*(UInt8*)(target + 5) = 0x90;
+	*(UInt8*)(target + 6) = 0x90;
+	VirtualProtect((void*)target, stolen, old, &old);
+	FlushInstructionCache(GetCurrentProcess(), (void*)target, stolen);
+	return true;
 }
 
 static bool g_crouchHookInstalled = false;
 static bool InstallCrouchHooks() {
 	if (g_crouchHookInstalled) return true;
+	EnsureCrouchLock();
 
-	//validate all sites before patching any
-	if (*(UInt8*)0x88977A != 0xE8) {
-		Log("DisableCrouching: site 0x88977A expected CALL, found 0x%02X", *(UInt8*)0x88977A);
+	if (!WriteTrampoline(0x8B39F0, Hook_SetMovementFlag, g_moveFlagTrampoline, (void**)&OrigSetMovementFlag))
 		return false;
-	}
-	if (*(UInt8*)0x998681 != 0xE8 || *(UInt8*)0x9986D2 != 0xE8) {
-		Log("DisableCrouching: unexpected bytes at combat hook sites");
+	if (!WriteTrampoline(0x981520, Hook_SetShouldSneak, g_sneakTrampoline, (void**)&OrigSetShouldSneak))
 		return false;
-	}
-
-	//follower path: Actor::Update at 0x88977A
-	DWORD oldProtect;
-	VirtualProtect((void*)0x88977A, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-	*(UInt32*)(0x88977A + 1) = (UInt32)Hook_FollowerSetMovementFlag - 0x88977A - 5;
-	VirtualProtect((void*)0x88977A, 5, oldProtect, &oldProtect);
-	FlushInstructionCache(GetCurrentProcess(), (void*)0x88977A, 5);
-
-	//combat path: two call sites in UpdateDetection
-	VirtualProtect((void*)0x998681, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-	*(UInt32*)(0x998681 + 1) = (UInt32)Hook_SetShouldSneak - 0x998681 - 5;
-	VirtualProtect((void*)0x998681, 5, oldProtect, &oldProtect);
-	FlushInstructionCache(GetCurrentProcess(), (void*)0x998681, 5);
-
-	VirtualProtect((void*)0x9986D2, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-	*(UInt32*)(0x9986D2 + 1) = (UInt32)Hook_SetShouldSneak - 0x9986D2 - 5;
-	VirtualProtect((void*)0x9986D2, 5, oldProtect, &oldProtect);
-	FlushInstructionCache(GetCurrentProcess(), (void*)0x9986D2, 5);
 
 	g_crouchHookInstalled = true;
 	return true;
@@ -2178,9 +2190,13 @@ bool Cmd_ForceCrouch_Execute(COMMAND_ARGS)
 	typedef UInt32 (__thiscall *_GetFlags)(Actor*);
 	auto GetMoveFlags = (_GetFlags)0x8846E0;
 
+	if (!InstallCrouchHooks()) return true;
+
 	void* cc = GetCombatController(actor);
-	if (cc)
-		SetShouldSneak(cc, (bool)crouch);
+	if (cc) {
+		auto SetSneak = OrigSetShouldSneak ? OrigSetShouldSneak : (_SetShouldSneak)0x981520;
+		SetSneak(cc, (bool)crouch);
+	}
 	*(UInt8*)((UInt8*)actor + 0x125) = crouch ? 1 : 0; //bForceSneak
 	//read-modify-write to preserve other movement bits
 	UInt32 flags = GetMoveFlags(actor);
@@ -2188,7 +2204,8 @@ bool Cmd_ForceCrouch_Execute(COMMAND_ARGS)
 		flags |= 0x400;
 	else
 		flags &= ~0x400;
-	OrigSetMovementFlag(actor, flags);
+	auto SetMoveFlag = OrigSetMovementFlag ? OrigSetMovementFlag : (_SetMovementFlag)0x8B39F0;
+	SetMoveFlag(actor, flags);
 
 	*result = 1;
 	if (IsConsoleMode())
@@ -2212,15 +2229,19 @@ bool Cmd_DisableCrouching_Execute(COMMAND_ARGS)
 
 	auto* actor = (Actor*)thisObj;
 	if (disable) {
-		g_crouchDisabledActors.insert(actor->refID);
-		//force stand immediately - SetShouldSneak clears bShouldSneak AND
-		//updates movement flags via SetMovementFlags. don't pre-zero 0xC7
-		//or the early-out check (bShouldSneak != a2) skips the flag update.
+		{
+			ScopedLock lock(&g_crouchLock);
+			g_crouchDisabledActors.insert(actor->refID);
+		}
+		//force stand immediately
 		void* cc = GetCombatController(actor);
-		if (cc)
-			SetShouldSneak(cc, false);
+		if (cc) {
+			auto SetSneak = OrigSetShouldSneak ? OrigSetShouldSneak : (_SetShouldSneak)0x981520;
+			SetSneak(cc, false);
+		}
 		*(UInt8*)((UInt8*)actor + 0x125) = 0;
 	} else {
+		ScopedLock lock(&g_crouchLock);
 		g_crouchDisabledActors.erase(actor->refID);
 	}
 
