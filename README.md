@@ -4,8 +4,6 @@
 fixes, gameplay tweaks, small UI and quality-of-life features, and a scripting
 API for modders.
 
-No ESP is required.
-
 ## Highlights
 
 - Engine fixes such as `SlowMotionPhysicsFix`, `VATSProjectileFix`,
