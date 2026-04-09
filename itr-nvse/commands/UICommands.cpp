@@ -38,8 +38,12 @@ namespace
 
 	static void* CreateNiSourceTexture(const char* path)
 	{
+		//engine expects full path from Data\ e.g. "Textures\Interface\HUD\foo.dds"
+		char fullPath[520];
+		_snprintf_s(fullPath, _TRUNCATE, "Textures\\%s", path);
+
 		void* fixedStr = nullptr;
-		ThisCall<void*>(0x438170, &fixedStr, path);
+		ThisCall<void*>(0x438170, &fixedStr, fullPath);
 		auto tex = CdeclCall<void*>(0xA5FD70, &fixedStr, (void*)0x11A9598, true, false);
 		CdeclCall(0x4381D0, &fixedStr);
 		return tex;
