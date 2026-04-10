@@ -21,3 +21,6 @@ Release/
 *.VC.db
 *.VC.opendb
 ipch/
+
+# Local docs export
+/wiki_pages/
