@@ -46,7 +46,7 @@ static bool IsCrouchDisabled(UInt32 refID) {
 
 namespace
 {
-	//kNVSE EventManager - not in older NVSE headers
+	//xNVSE EventManager - not in older NVSE headers
 	constexpr UInt32 kInterface_EventManager_v2 = 8;
 
 	struct EventManagerInterfaceEx {

@@ -1,4 +1,4 @@
-//kNVSE event registration for ITR events
+//xNVSE event registration for ITR events
 #pragma once
 
 struct NVSEEventManagerInterface;
