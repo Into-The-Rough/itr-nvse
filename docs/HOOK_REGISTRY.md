@@ -1,18 +1,36 @@
 # itr-nvse Hook Registry
 
-Central documentation of all memory patches and hooks in the plugin.
+Concise registry of the runtime memory patches and hook sites in the current tree.
+Source is ground truth if this file drifts.
 
 ## Legend
-- **Type**: `call` = WriteRelCall, `jump` = WriteRelJump, `patch` = direct write
-- **Size**: bytes overwritten at hook site
-- **Chain**: whether hook calls original function
-
----
+- **Type**: `call` = `WriteRelCall`, `jump` = `WriteRelJump`, `patch` = direct code/data write, `vtable patch` = direct function pointer swap
+- **Size**: bytes overwritten at the patch site
+- **Chain**: whether the hook reaches original code
 
 ## Fixes
 
+### AshPileNames
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x776F66 | call | 5 | continues | yes | Hook_GetBaseFullName |
+
+Call-site replacement in `SetHUDCrosshairStrings`, not a global `GetBaseFullName` detour.
+
+### ArmorDTDRFix
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x8D4E80 | jump | 7 | trampoline | yes | Hook_ResetArmorRating |
+
+### CombatItemTimerFix
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x9DAB61 | call | 5 | continues | yes | Hook_ResetCombatItemTimer |
+
 ### CompanionNoInfamy
-Prevents infamy when companion kills faction members.
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
@@ -20,94 +38,136 @@ Prevents infamy when companion kills faction members.
 | 0x8C0930 | call | 5 | normal | conditional | AttackAlarmReputationHook_Wrapper |
 | 0x89F3DF | call | 5 | normal | conditional | ActorKillReputationHook_Wrapper |
 
-Stack: wrappers load the extra condition into `EDX` (`[ebp-0x15]`, `[ebp+8]`, `[ebx+8]`) and tail-jump to typed `__fastcall` replacements. The replacements either return normally or call the original reputation handlers, so the compiler owns the `retn 8` cleanup path.
+Wrappers load extra context into `EDX` and tail-jump to typed `__fastcall` replacements so the compiler owns cleanup.
+
+### CompanionWeightlessOverencumberedFix
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x75DE01 | call | 5 | normal | typed replacement | Hook_GetMaxCarryWeightPerkModified_Wrapper |
+
+### DetectionFollowerCrashFix
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x9736AF | jump | 7 | 0x9736B6 / 0x9736F7 | no | Hook |
+
+### DoorPackageOwnershipFix
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x90D528 | call | 5 | continues | yes | IsAnOwner_Hook |
+| 0x90D5DE | call | 5 | continues | yes | IsAnOwner_Hook |
 
 ### ExplodingPantsFix
-Fixes explosive pants bug with alt trigger weapons.
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
 | 0x9C3204 | jump | 5 | 0x9C3209 | yes | Hook_IsAltTrigger_Wrapper |
 
-Stack: ECX=weapon, hook preserves and chains.
-
-### KillActorXPFix
-Fixes XP calculation on actor kill.
+### FriendlyFire
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
-| 0x8BC43F | jump | 5 | 0x8BC446 | yes | Hook_XPBlockStart |
+| 0x9C314E | patch | 5 | continues | n/a | Projectile hostile-target check bypass |
+| 0x899D5A | patch | 1 | continues | n/a | Actor combat-target branch bypass |
 
-Stack: preserves all, uses pushad/popad.
+### InitHavokCrashFix
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x576AB3 | jump | 6 | 0x576AB9 / 0x576AD5 | no | Hook |
+
+### KillActorXPFix
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x5BE379 | jump | 8 | 0x5BE381 / 0x5BE3FA | conditional | Hook_XPBlockStart |
+
+### NavMeshInfoCrashFix
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x68F320 | jump | 5 | retn | no | Hook |
+
+### NPCDoorUnlockBlock
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x518F00 | jump | 5 | trampoline | yes | CanActorIgnoreLock_Hook |
+
+### NoDoorFade
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x51895B | call | 5 | continues | yes | Hook_FadeOut |
 
 ### OwnedBeds
-Allows sleeping in owned beds when no owner present.
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
 | 0x509679 | call | 5 | continues | yes | IsAnOwnerHook |
 
-Stack: __fastcall, ECX=owner, EDX=cell.
+### OwnedCorpses
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x567790 | jump | 6 | trampoline | yes | GetOwnerRawFormHook |
+| 0x8BFBB3 | jump | 11 | 0x8BFC52 / 0x8BFBBE | conditional | StealAlarmWitnessHook |
+
+### PathingNullActorFix
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x9E57C6 | jump | 5 | 0x9E57CB / 0x9E5A49 | no | Hook |
 
 ### ReversePickpocketNoKarmaFix
-Prevents karma loss when reverse pickpocketing non-grenades.
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
 | 0x75DBDA | call | 5 | continues | conditional | Hook_TryPickpocket |
 | 0x75DFA7 | call | 5 | continues | conditional | Hook_TryPickpocket |
 
-Stack: `HandlePickpocket(0x75E0B0)` is `__thiscall` and ends in `retn 8`. The hook is now a typed `__fastcall` replacement with `ECX=menu` and stack args `actor`, `count`, so the compiler owns cleanup.
-
-### CompanionWeightlessOverencumberedFix
-Allows giving zero-weight items to overencumbered companions.
-
-| Hook Site | Type | Size | Return | Chain | Function |
-|-----------|------|------|--------|-------|----------|
-| 0x75DE01 | call | 5 | normal | typed replacement | Hook_GetMaxCarryWeightPerkModified_Wrapper |
-
-Stack: wrapper loads `ContainerMenu::TransferItem`'s `arg_0` item count from `[ebp+8]` into `EDX` and tail-jumps to a typed `__fastcall` replacement. The replacement calls `Actor::GetMaxCarryWeightPerkModified(0x8A0C20)` and only overrides the immediate compare when the selected item adds non-positive weight.
-
 ### SlowMotionPhysicsFix
-Prevents physics explosion during extreme slowmo.
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
 | 0xC6AF85 | patch | 4 | continues | yes | Hook_SetFrameTimeMarker |
 | 0xC6AFF9 | patch | 4 | continues | yes | Hook_StepDeltaTime |
 
-Stack: __thiscall, ECX=bhkWorld. Clamps timestep to minimum.
-
 ### VATSLimbFix
-Hides dismembered limbs in VATS targeting.
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
 | 0x5E4810 | jump | 6 | trampoline | yes | SetPartitionVisible_Hook |
 
-Trampoline: 6 bytes (push ebp; mov ebp,esp; sub esp,8). Uses __fastcall.
-
 ### VATSProjectileFix
-Fixes VATS projectile display issues.
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
 | 0x7ED349 | patch | 4 | continues | yes | VATSMenuUpdate_Hook |
 
-Stack: __thiscall, chains to original VATSMenu::Update.
+Only the 4-byte call displacement is rewritten; the `E8` opcode stays in place.
 
 ### VATSSpeechFix
-Fixes timescale during VATS speech.
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
-| (see file) | - | - | - | - | HookedTimescaleNaked |
+| 0x10A3C18 | vtable patch | 4 | n/a | yes | HookedFunc09 |
+| 0x10A3C1C | vtable patch | 4 | n/a | yes | HookedFunc10 |
+| 0xAEDFBD | jump | 14 | trampoline | conditional | HookedTimescaleNaked |
 
----
+The inline detour at `0xAEDFBD` is only installed when the site still matches the known vanilla bytes.
 
 ## Features
 
-### ELMO (objectives/reputation to corner messages)
+### AutoQuickLoad
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x86E88C | call | 5 | continues | yes | PollControlsHook |
+
+### ELMO
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
@@ -120,23 +180,32 @@ Fixes timescale during VATS speech.
 | 0x615C43 | jump | 5 | 0x615C6A | no | ReputationCornerMessage_Hook_RemRepExact |
 | 0x616242 | jump | 5 | 0x616269 | no | ReputationCornerMessage_Hook_RemRep |
 
-Stack: objective popup detours replace the three SetQuestUpdateText call sites. Reputation hooks use pushad/popfd pattern, call FormatReputationMessage and QueueUIMsg.
-
 ### LocationVisitPopup
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
-| 0x7795DD | jump | 5 | 0x7795E4 | no | CheckDiscoveredMarkerHook |
+| 0x7795DD | jump | 7 | 0x7795E4 | no | CheckDiscoveredMarkerHook |
 
-Stack: ESI=marker data, EBX=refID. Uses pushad/popad.
+### MessageBoxQuickClose
 
-### PlayerUpdateHook (QuickDrop/Quick180)
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x107566C + 0x38 | vtable patch | 4 | n/a | yes | MessageMenu_HandleSpecialKeyInput_Hook |
+| 0x107566C + 0x0C | vtable patch | 4 | n/a | yes | MessageMenu_HandleClick_Hook |
+
+### PlayerUpdateHook
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
 | 0x940C78 | patch | 4 | continues | yes | PlayerUpdate_Hook |
 
-Stack: __fastcall replacement for player update. ECX=player, arg1=timeDelta.
+Only the original call displacement is rewritten.
+
+### PreventWeaponSwitch
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x9DA7C0 | jump | 6 | trampoline | yes | Hook_SwitchWeaponUpdate |
 
 ### QuickReadNote
 
@@ -144,8 +213,7 @@ Stack: __fastcall replacement for player update. ECX=player, arg1=timeDelta.
 |-----------|------|------|--------|-------|----------|
 | 0x966B0A | call | 5 | continues | yes | OnNoteAddedHook |
 | 0x966B53 | call | 5 | continues | yes | OnQueueUIMessageHook |
-
-Stack: naked hooks, save context with pushad.
+| 0x107566C + 0x0C | vtable patch | 4 | n/a | yes | MessageMenu_HandleClick_Hook |
 
 ### VATSExtender
 
@@ -154,22 +222,39 @@ Stack: naked hooks, save context with pushad.
 | 0x800DA4 | jump | 5 | varies | yes | Hook_OnLimitReached |
 | 0x801993 | call | 5 | continues | yes | Hook_RenderScene |
 
----
-
 ## Handlers
+
+### CornerMessageHandler
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x775380 | jump | 5 | trampoline | yes | Hook_HUDMainMenu_ShowNotify |
 
 ### DialogueCameraHandler
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
-| 0x953124 | nop | 5 | - | - | (disabled code) |
-| 0x761DEF | nop | 5 | - | - | (disabled code) |
-| 0x953ABF | jump | 5 | 0x953AF5 | no | (skip code) |
-| 0x762E55 | jump | 5 | 0x762E72 | no | (skip code) |
-| 0x9533BE | jump | 5 | 0x953562 | no | (skip zoom) |
-| 0x953BBA | patch | 1 | - | - | 0xEB (jmp) |
+| 0x953124 | call | 5 | continues | conditional | Hook_Show1stPerson |
+| 0x761DEF | call | 5 | continues | conditional | Hook_Show1stPerson |
+| 0x953ABF | jump | 8 | 0x953AF5 | no | Hook_ForceThirdPerson_Branch1 |
+| 0x762E55 | jump | 7 | 0x762E72 | no | Hook_ForceThirdPerson_Branch2 |
+| 0x9533BE | jump | 6 | 0x953562 | no | Hook_DisableDialogueZoom |
+| 0x953BB4 | jump | 8 | branch | no | Hook_SkipFallbackFOV |
+| 0x953B2F | call | 5 | continues | conditional | Hook_SkipPickAnimations |
+| 0x953AC7 | call | 5 | continues | conditional | Hook_SkipSetFirstPerson |
+| 0x94AD8A | call | 5 | continues | yes | TranslateHook1 |
+| 0x94AD9D | call | 5 | continues | yes | RotateHook1 |
+| 0x94BDC2 | call | 5 | continues | yes | TranslateHook2 |
+| 0x94BDD5 | call | 5 | continues | yes | RotateHook2 |
 
-Plus camera hooks installed via CameraHooks::InstallHooks().
+The first eight sites control dialogue flow; the last four are the `CameraHooks::InstallHooks()` call-site replacements for flycam and update-camera transforms.
+
+### DialogueTextFilter
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x61F170 | jump | 6 | 0x61F176 / chained | conditional | DialogueTextHook |
+| 0x8A20D0 | jump | 5 | 0x8A20D5 / chained | conditional | SpeakSoundHook |
 
 ### FallDamageHandler
 
@@ -177,7 +262,36 @@ Plus camera hooks installed via CameraHooks::InstallHooks().
 |-----------|------|------|--------|-------|----------|
 | 0x8A63EC | jump | 5 | 0x8A63F5 | no | Hook |
 
-Stack: [ebp-0x54]=actor, [ebp-0x28]=damage. Applies multiplier via GetFallDamageMultForActor.
+### OnCombatProcedureHandler
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x980110 | jump | 6 | trampoline | yes | Hook_SetActionProcedure |
+| 0x9801B0 | jump | 6 | trampoline | yes | Hook_SetMovementProcedure |
+
+### OnContactHandler
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x623CB0 | jump | 6 | trampoline | yes | Hook_ContactPointAdded |
+| 0xCAD480 | jump | 10 | trampoline | yes | Hook_CharProxyContactAdded |
+| 0xCAD4C0 | jump | 10 | trampoline | yes | Hook_CharProxyContactRemoved |
+| 0xD1F690 | jump | 5 | trampoline | yes | Hook_SimpleAdd |
+| 0xD1F5A0 | jump | 8 | trampoline | yes | Hook_SimpleRemove |
+| 0xD4CF10 | jump | 6 | trampoline | yes | Hook_CachingAdd |
+| 0xD4CCA0 | jump | 7 | trampoline | yes | Hook_CachingRemove |
+
+### OnEntryPointHandler
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x5E5AB9 | jump | 5 | 0x5E5ABE | yes | Hook_ExecuteFunctionCall |
+
+### OnFrenzyHandler
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x8B9240 | jump | 9 | trampoline | yes | Hook_LimbCondition_HandleChange |
 
 ### OnJumpLandHandler
 
@@ -186,30 +300,11 @@ Stack: [ebp-0x54]=actor, [ebp-0x28]=damage. Applies multiplier via GetFallDamage
 | 0x10CB398 + (8*4) | vtable patch | 4 | n/a | yes | Hook_bhkCharacterStateJumping_UpdateVelocity |
 | 0x10CB36C + (8*4) | vtable patch | 4 | n/a | yes | Hook_bhkCharacterStateInAir_UpdateVelocity |
 
-Captures jump start and landing transitions. Landing queues pre-clear `fallTimeElapsed`.
-
-### OnCombatProcedureHandler
+### OnSoundPlayedHandler
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
-| (see file) | - | - | - | - | Hook_SetActionProcedure |
-| (see file) | - | - | - | - | Hook_SetMovementProcedure |
-
-### OnEntryPointHandler
-
-| Hook Site | Type | Size | Return | Chain | Function |
-|-----------|------|------|--------|-------|----------|
-| 0x5E5AB9 | jump | 5 | 0x5E5ABE | yes | Hook_ExecuteFunctionCall |
-
-Stack: inline detour over the original `call BGSEntryPointFunction::ExecuteFunction`. The hook calls `0x5E5B40` itself, then jumps to `0x5E5ABE` so the caller's `add esp, 18h` still runs.
-
-### OnFastTravelHandler
-
-| Hook Site | Type | Size | Return | Chain | Function |
-|-----------|------|------|--------|-------|----------|
-| 0x93BF22 | call | 5 | continues | yes | FastTravelHook |
-
-Stack: naked hook, chains to original via saved target.
+| 0xAE5A50 | jump | 5 | trampoline | yes | HookedGetSoundHandle |
 
 ### OnStealHandler
 
@@ -217,13 +312,11 @@ Stack: naked hook, chains to original via saved target.
 |-----------|------|------|--------|-------|----------|
 | 0x8BFA40 | jump | 5 | 0x8BFA45 | yes | StealAlarmHook |
 
-Stack: ECX=thief, [esp+4..14]=args. Prologue: push ebp; mov ebp,esp; push -1 (5 bytes).
-
 ### OnWeaponDropHandler
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
-| (see file) | - | - | - | - | TryDropWeaponHook |
+| 0x89F580 | jump | 6 | 0x89F586 | yes | TryDropWeaponHook |
 
 ### OnWeaponJamHandler
 
@@ -231,35 +324,42 @@ Stack: ECX=thief, [esp+4..14]=args. Prologue: push ebp; mov ebp,esp; push -1 (5 
 |-----------|------|------|--------|-------|----------|
 | 0x894081 | call | 5 | continues | yes | Hook_SetAnimAction_Jam |
 
-Stack: ECX=actor, args follow. Dispatches jam event, then tail-jumps the original callee `Actor::SetAnimAction(0x8A73E0)`.
-
 ### SaveFileSizeHandler
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
-| 0x7D6806 | nop | 6 | - | - | (JNZ patch) |
+| 0x7D6806 | patch | 6 | continues | n/a | save/load JNZ skip removal |
 | 0x7D6931 | call | 5 | continues | yes | Hook |
 
-Stack: ECX=tile, [ebp+C]=entry. Calls `OnSetupTile`, then tail-jumps the original callee `Tile::PropagateIntValue`.
+## Commands
 
----
+### DisableCrouching
 
-## NoWeaponSearch (ITR.cpp)
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x8B39F0 | jump | 7 | trampoline | yes | Hook_SetMovementFlag |
+| 0x981520 | jump | 7 | trampoline | yes | Hook_SetShouldSneak |
+
+Custom trampolines on `Actor::SetMovementFlag` and `CombatController::SetShouldSneak` keep disabled actors standing across all callers.
+
+### ForceCombatTarget
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x986C60 | jump | 10 | trampoline | yes | Hook_EvalueCombatTargets |
+| 0x8B0670 | jump | 6 | trampoline | yes | Hook_CanAttackActor |
+
+### NoWeaponSearch
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
 | 0x998D50 | call | 5 | continues | yes | Hook |
 
-Disables weapon search for specific actors.
-
----
-
 ## Safety Checklist
 
 When adding new hooks:
-1. Verify instruction boundary (disassemble target)
-2. Document bytes overwritten
-3. If using trampoline, copy exact prologue
-4. If using pushad/popad, ensure stack alignment
-5. If chaining, verify calling convention matches
-6. Add entry to this registry
+1. Verify instruction boundaries in IDA before choosing a stolen-byte size.
+2. Document every extra NOP or byte patch, not just the initial `E8`/`E9`.
+3. If a wrapper tail-jumps, make sure the hook site is a jump path too.
+4. If a hook can run off the main thread, document how state access is synchronized.
+5. Keep call-site/vtable ownership notes current when multiple features layer on the same menu or engine path.
