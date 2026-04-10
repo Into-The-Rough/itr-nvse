@@ -43,6 +43,10 @@
 - Gesture - procedural head gestures (nod/shake/tilt) with smoothstep blending
 - SetOnContactWatch - enable physics contact tracking for actor
 - GetOnContactWatch - get contact watch state
+- GetTargetLastSeenLocation - array [x,y,z] of where observer last saw target
+- GetTargetDetectedLocation - array [x,y,z] of where observer detected target by sound/event
+- GetTargetLastFullyVisibleLocation - array [x,y,z] of where observer last had full LOS to target
+- GetTargetInitialLocation - array [x,y,z] of where observer first spotted target
 
 **Camera**
 - SetCameraAngle - direct camera transform control
@@ -64,6 +68,7 @@
 - GetPlayingRadioTrack - returns TESSound or TESTopicInfo for playing radio track
 - GetPlayingRadioTrackFileName - returns file path of playing radio track
 - GetPlayingRadioText - returns dialogue text of playing radio voice line
+- ChangeRadioTrack - advances active radio station to next track
 
 **Dialogue**
 - GetDialogueInfoFlags - get combined flags for a TESTopicInfo
