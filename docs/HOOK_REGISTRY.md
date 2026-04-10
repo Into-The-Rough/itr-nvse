@@ -1,7 +1,6 @@
 # itr-nvse Hook Registry
 
-Concise registry of the runtime memory patches and hook sites in the current tree.
-Source is ground truth if this file drifts.
+Registry of the runtime memory patches and hook sites in the current tree.
 
 ## Legend
 - **Type**: `call` = `WriteRelCall`, `jump` = `WriteRelJump`, `patch` = direct code/data write, `vtable patch` = direct function pointer swap
