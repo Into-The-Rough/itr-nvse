@@ -146,27 +146,27 @@ void Update()
 static __declspec(naked) void Hook_SetActionProcedure()
 {
     __asm {
-        mov eax, [esp+4]
+        mov eax, [esp+4]                                                   //procType arg (before any push)
         pushad
         pushfd
-        push 1
-        push eax
-        push ecx
+        push 1                                                             //isActionProcedure = true
+        push eax                                                           //procType
+        push ecx                                                           //actor (thiscall this)
         call QueueCombatProcedureEvent
-        add esp, 12
+        add esp, 12                                                        //cdecl cleanup 3 dwords
         popfd
         popad
-        jmp dword ptr [OnCombatProcedureHandler::s_trampolineActionAddr]
+        jmp dword ptr [OnCombatProcedureHandler::s_trampolineActionAddr]   //tail into trampoline replaying stolen prologue
     }
 }
 
 static __declspec(naked) void Hook_SetMovementProcedure()
 {
     __asm {
-        mov eax, [esp+4]
+        mov eax, [esp+4]                                                     //procType arg
         pushad
         pushfd
-        push 0
+        push 0                                                               //isActionProcedure = false
         push eax
         push ecx
         call QueueCombatProcedureEvent

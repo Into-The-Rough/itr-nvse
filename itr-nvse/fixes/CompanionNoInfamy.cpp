@@ -34,8 +34,8 @@ namespace CompanionNoInfamy
 	{
 		__asm
 		{
-			movzx edx, byte ptr [ebp-0x15]
-			jmp Hook_MurderAlarmReputation
+			movzx edx, byte ptr [ebp-0x15]     //bIsTeammate local -> fastcall arg2; ecx has actor already
+			jmp Hook_MurderAlarmReputation     //tail-jmp; typed Hook owns stack cleanup
 		}
 	}
 
@@ -51,7 +51,7 @@ namespace CompanionNoInfamy
 	{
 		__asm
 		{
-			mov edx, [ebp+8]
+			mov edx, [ebp+8]                   //attacker = caller arg0 -> fastcall arg2
 			jmp Hook_AttackAlarmReputation
 		}
 	}
@@ -68,7 +68,7 @@ namespace CompanionNoInfamy
 	{
 		__asm
 		{
-			mov edx, [ebx+8]
+			mov edx, [ebx+8]                   //attacker lives in an ebx-based struct here, not ebp
 			jmp Hook_ActorKillReputation
 		}
 	}

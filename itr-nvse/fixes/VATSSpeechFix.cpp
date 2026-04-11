@@ -122,23 +122,22 @@ namespace VATSSpeechFix
 	__declspec(naked) void HookedTimescaleNaked()
 	{
 		__asm {
-			//check if enabled
 			cmp g_enabled, 0
 			je skip_to_original
 
-			test dword ptr [esi+0x08], 0x200000
+			test dword ptr [esi+0x08], 0x200000    //esi = sound object; bit 0x200000 = VATS speech tag
 			jnz skip_timescale
 
 		skip_to_original:
-			jmp s_trampolineTimescale
+			jmp s_trampolineTimescale              //non-VATS sound: replay stolen bytes via trampoline
 
 		skip_timescale:
-			fabs
-			push eax
+			fabs                                   //already-loaded timescale on fpu top, undo slowmo multiply
+			push eax                               //stash eax so we can build return address
 			mov eax, s_timescalePatchAddr
-			add eax, 14
-			xchg eax, [esp]
-			ret
+			add eax, 14                            //skip past the 14-byte stolen region
+			xchg eax, [esp]                        //swap return target into [esp], restore eax
+			ret                                    //jump-by-ret to post-patch site
 		}
 	}
 
