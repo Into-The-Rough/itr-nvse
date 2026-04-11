@@ -24,47 +24,13 @@ static bool g_bShowNameOnlyCrime = true;
 
 static void* g_lastRef = nullptr;
 
-static void* GetExtraDataByType(void* extraDataList, UInt8 type)
-{
-	if (!extraDataList) return nullptr;
-	void* data = *(void**)((UInt8*)extraDataList + 0x04); //BaseExtraList::data
-	int count = 0;
-	while (data && count < 100)
-	{
-		UInt8 dataType = *(UInt8*)((UInt8*)data + 0x04); //BSExtraData::type
-		if (dataType == type)
-			return data;
-		data = *(void**)((UInt8*)data + 0x08); //BSExtraData::next
-		count++;
-	}
-	return nullptr;
-}
-
-static void* GetOwnerFromExtraList(void* extraDataList)
-{
-	void* xOwnership = GetExtraDataByType(extraDataList, 0x21); //ExtraOwnership
-	if (xOwnership)
-		return *(void**)((UInt8*)xOwnership + 0x0C); //ExtraOwnership::owner
-	return nullptr;
-}
-
 static void* GetRefOwner(void* ref, bool* outIsFaction)
 {
 	if (!ref) return nullptr;
 	*outIsFaction = false;
 
-	void* extraDataList = (void*)((UInt8*)ref + 0x44); //TESObjectREFR::extraDataList
-	void* owner = GetOwnerFromExtraList(extraDataList);
-
-	if (!owner)
-	{
-		void* cell = *(void**)((UInt8*)ref + 0x40); //TESObjectREFR::parentCell
-		if (cell)
-		{
-			void* cellExtraList = (void*)((UInt8*)cell + 0x28); //TESObjectCELL::extraDataList
-			owner = GetOwnerFromExtraList(cellExtraList);
-		}
-	}
+	// Keep prompt ownership aligned with the engine's crime/ownership logic.
+	void* owner = Engine::TESObjectREFR_GetOwnerRawForm(ref);
 
 	if (owner)
 	{
@@ -75,10 +41,23 @@ static void* GetRefOwner(void* ref, bool* outIsFaction)
 	return owner;
 }
 
+static const char* GetFormEditorID(void* form)
+{
+	if (!form) return nullptr;
+	void** vtable = *(void***)form;
+	if (!vtable) return nullptr;
+	typedef const char* (__thiscall* GetEditorIDFn)(void*);
+	auto fn = (GetEditorIDFn)vtable[0x4C];
+	return fn ? fn(form) : nullptr;
+}
+
 static const char* GetFactionName(void* faction)
 {
 	if (!faction) return nullptr;
-	return *(const char**)((UInt8*)faction + 0x1C);
+	const char* name = *(const char**)((UInt8*)faction + 0x1C);
+	if (name && *name)
+		return name;
+	return GetFormEditorID(faction);
 }
 
 static const char* GetOwnerName(void* owner)
@@ -89,7 +68,12 @@ static const char* GetOwnerName(void* owner)
 	if (typeID == kFormType_Faction)
 		return GetFactionName(owner);
 	else if (typeID == 0x2A) //NPC
-		return *(const char**)((UInt8*)owner + 0xD4); //TESActorBase::TESFullName at 0xD0, String.data at +0x04
+	{
+		const char* name = *(const char**)((UInt8*)owner + 0xD4); //TESActorBase::TESFullName at 0xD0, String.data at +0x04
+		if (name && *name)
+			return name;
+		return GetFormEditorID(owner);
+	}
 
 	return nullptr;
 }
