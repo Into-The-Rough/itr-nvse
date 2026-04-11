@@ -47,38 +47,39 @@ namespace FallDamageHook
 	{
 		__asm
 		{
-			push ecx
+			push ecx                            //caller-saved, cdecl call below clobbers them
 			push edx
 
-			mov eax, [ebp-0x54]
+			mov eax, [ebp-0x54]                 //fall-damage target actor local
 			test eax, eax
 			jz use_global
-			mov eax, [eax+0x0C]  //refID at offset 0x0C
+			mov eax, [eax+0x0C]                 //TESObjectREFR::refID at +0x0C
 			jmp do_call
 
 		use_global:
-			xor eax, eax
+			xor eax, eax                        //no actor -> fall back to global multiplier
 
 		do_call:
-			push eax  //refID arg
+			push eax                            //cdecl arg: refID (or 0)
 			call GetFallDamageMultForActor
 			add esp, 4
 
 			pop edx
 			pop ecx
 
-			fmul dword ptr [ebp-0x28]
+			fmul dword ptr [ebp-0x28]           //replay stolen bytes: scale the damage float
 			fstp dword ptr [ebp-0x28]
 
 			fld dword ptr [ebp-0x28]
-			fcomp qword ptr ds:[0x01012060]
-			jmp kRetnAddr
+			fcomp qword ptr ds:[0x01012060]     //hardcoded kFallDamageThreshold double literal
+			jmp kRetnAddr                       //resume past the 9-byte stolen region
 		}
 	}
 
 	void Init()
 	{
 		SafeWrite::WriteRelJump(kHookAddr, (UInt32)Hook);
+		SafeWrite::WriteNop(kHookAddr + 5, 4);
 	}
 }
 

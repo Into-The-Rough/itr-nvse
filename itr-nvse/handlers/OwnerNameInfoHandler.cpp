@@ -29,7 +29,7 @@ static void* GetRefOwner(void* ref, bool* outIsFaction)
 	if (!ref) return nullptr;
 	*outIsFaction = false;
 
-	// Keep prompt ownership aligned with the engine's crime/ownership logic.
+	//keep prompt ownership aligned with the engine's crime/ownership logic
 	void* owner = Engine::TESObjectREFR_GetOwnerRawForm(ref);
 
 	if (owner)

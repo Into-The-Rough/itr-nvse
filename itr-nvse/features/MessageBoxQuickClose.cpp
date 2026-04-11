@@ -1,8 +1,7 @@
 //Requires restart after hook install.
 
-#include <Windows.h>
-
 #include "MessageBoxQuickClose.h"
+#include "internal/SafeWrite.h"
 #include "internal/UIMinimal.h"
 
 using UIMinimal::MessageMenu;
@@ -19,14 +18,8 @@ namespace MessageBoxQuickClose
 
 	_MessageMenu_HandleSpecialKeyInput OriginalHandleSpecialKeyInput = nullptr;
 	_MessageMenu_HandleClick OriginalHandleClick = nullptr;
-}
-
-static void __stdcall SafeWrite32(UInt32 addr, UInt32 data)
-{
-	DWORD oldProtect;
-	VirtualProtect(reinterpret_cast<void*>(addr), 4, PAGE_EXECUTE_READWRITE, &oldProtect);
-	*reinterpret_cast<UInt32*>(addr) = data;
-	VirtualProtect(reinterpret_cast<void*>(addr), 4, oldProtect, &oldProtect);
+	MessageMenuHandleClickObserver HandleClickObserver = nullptr;
+	bool HooksInstalled = false;
 }
 
 static Tile::Value* GetTileValue(const Tile* tile, UInt32 typeID)
@@ -71,6 +64,14 @@ static void DispatchHandleClick(UIMinimal::MessageMenu* menu, SInt32 tileID, UIM
 	handleClick(menu, tileID, clickedTile);
 }
 
+static void NotifyHandleClickObserver(MessageMenu* menu, SInt32 tileID, Tile* clickedTile)
+{
+	using namespace MessageBoxQuickClose;
+
+	if (HandleClickObserver)
+		HandleClickObserver(menu, tileID, clickedTile);
+}
+
 bool __fastcall MessageMenu_HandleSpecialKeyInput_Hook(MessageMenu* menu, void* edx, int code, float keyState)
 {
 	using namespace MessageBoxQuickClose;
@@ -112,24 +113,40 @@ void __fastcall MessageMenu_HandleClick_Hook(MessageMenu* menu, void* edx, SInt3
 		UInt32 selectedID = static_cast<UInt32>(GetTileValueFloat(selectedTile, kTileValue_id));
 		if (OriginalHandleClick)
 			OriginalHandleClick(menu, selectedID, selectedTile);
+		NotifyHandleClickObserver(menu, selectedID, selectedTile);
 		return;
 	}
 
 	if (OriginalHandleClick)
 		OriginalHandleClick(menu, tileID, clickedTile);
+	NotifyHandleClickObserver(menu, tileID, clickedTile);
 }
 
 namespace MessageBoxQuickClose {
 bool Init()
 {
+	if (HooksInstalled)
+		return true;
+
 	UInt32* vtbl = reinterpret_cast<UInt32*>(kVtbl_MessageMenu);
 
 	OriginalHandleSpecialKeyInput = reinterpret_cast<_MessageMenu_HandleSpecialKeyInput>(vtbl[kOffset_HandleSpecialKeyInput / 4]);
 	OriginalHandleClick = reinterpret_cast<_MessageMenu_HandleClick>(vtbl[kOffset_HandleClick / 4]);
 
-	SafeWrite32(kVtbl_MessageMenu + kOffset_HandleSpecialKeyInput, reinterpret_cast<UInt32>(MessageMenu_HandleSpecialKeyInput_Hook));
-	SafeWrite32(kVtbl_MessageMenu + kOffset_HandleClick, reinterpret_cast<UInt32>(MessageMenu_HandleClick_Hook));
+	SafeWrite::Write32(kVtbl_MessageMenu + kOffset_HandleSpecialKeyInput, reinterpret_cast<UInt32>(MessageMenu_HandleSpecialKeyInput_Hook));
+	SafeWrite::Write32(kVtbl_MessageMenu + kOffset_HandleClick, reinterpret_cast<UInt32>(MessageMenu_HandleClick_Hook));
+	HooksInstalled = true;
 
 	return true;
+}
+
+bool IsInstalled()
+{
+	return HooksInstalled;
+}
+
+void SetHandleClickObserver(MessageMenuHandleClickObserver observer)
+{
+	HandleClickObserver = observer;
 }
 }

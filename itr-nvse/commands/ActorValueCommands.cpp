@@ -36,7 +36,7 @@ bool Cmd_DamageActorValueAlt_Execute(COMMAND_ARGS)
 			*(float*)((UInt8*)process + 0xAC) += amount;
 	}
 
-	//0x3AC = Actor::DamageActorValue(avCode, damage, attacker)
+	//0x3AC takes a signed delta; negative health deltas apply damage.
 	typedef void (__thiscall *DamageAV_t)(void*, UInt32, float, void*);
 	(*(DamageAV_t**)thisObj)[0x3AC / 4](thisObj, avCode, -amount, attackerRef);
 

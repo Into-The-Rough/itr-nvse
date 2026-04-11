@@ -53,7 +53,7 @@ namespace NPCDoorUnlockBlock
 		g_blockLevel = level;
 	}
 
-	//prologue: push ebp; mov ebp, esp = 5 bytes
+	//verified in IDA: 5 bytes are stolen from the CanActorIgnoreLock prologue
 	void Init(int level)
 	{
 		if (!s_detour.WriteRelJump(0x518F00, CanActorIgnoreLock_Hook, 5)) //CanActorIgnoreLock

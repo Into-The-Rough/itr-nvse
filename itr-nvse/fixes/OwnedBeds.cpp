@@ -72,7 +72,6 @@ namespace OwnedBeds
 			if (owner) {
 				SendAssaultAlarmToBedOwner(bedRef, owner);
 			}
-			return true;
 		}
 		return true;
 	}

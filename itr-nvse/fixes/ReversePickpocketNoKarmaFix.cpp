@@ -10,7 +10,7 @@ namespace ReversePickpocketNoKarmaFix
 {
 	static bool g_enabled = false;
 
-	constexpr UInt32 kAddr_TryPickpocket = 0x75E0B0; //used in naked asm
+	constexpr UInt32 kAddr_TryPickpocket = 0x75E0B0;
 
 	typedef bool (__thiscall *_IsLiveGrenade)(void*, void*, void*, void*);
 

@@ -641,13 +641,6 @@ bool Cmd_GetAvailableRecipes_Execute(COMMAND_ARGS)
 	return true;
 }
 
-//debug command to dump CombatTarget memory for offset verification
-static ParamInfo kParams_DumpCombatTarget[1] = {
-	{ "target", kParamType_Actor, 0 },
-};
-
-DEFINE_COMMAND_PLUGIN(DumpCombatTarget, "Dumps CombatTarget structure for offset verification", 1, 1, kParams_DumpCombatTarget);
-
 typedef void* (__thiscall *_GetCombatController)(Actor*);
 typedef void* (__thiscall *_GetCombatTargetForActor)(void* combatGroup, Actor* target);
 typedef bool (__thiscall *_CombatGroupCanAddTarget)(void* combatGroup, Actor* target);
@@ -677,6 +670,14 @@ static const _ProcessComputeLastTimeProcessed ProcessComputeLastTimeProcessed = 
 static const _ProcessSavePackageToExtraData ProcessSavePackageToExtraData = (_ProcessSavePackageToExtraData)0x9130F0;
 static const _CombatControllerSetByte0C4 CombatControllerSetByte0C4 = (_CombatControllerSetByte0C4)0x8A0250;
 static void** g_combatManager = reinterpret_cast<void**>(0x11F1958);
+
+#ifdef _DEBUG
+//debug command to dump CombatTarget memory for offset verification
+static ParamInfo kParams_DumpCombatTarget[1] = {
+	{ "target", kParamType_Actor, 0 },
+};
+
+DEFINE_COMMAND_PLUGIN(DumpCombatTarget, "Dumps CombatTarget structure for offset verification", 1, 1, kParams_DumpCombatTarget);
 
 bool Cmd_DumpCombatTarget_Execute(COMMAND_ARGS)
 {
@@ -721,12 +722,12 @@ bool Cmd_DumpCombatTarget_Execute(COMMAND_ARGS)
 		return true;
 	}
 
-	Console_Print("DumpCombatTarget >> CombatTarget at %08X", combatTarget);
+	Console_Print("DumpCombatTarget >> CombatTarget at %p", combatTarget);
 
 	//try to interpret known fields
 	UInt8* bytes = (UInt8*)combatTarget;
 	Actor** pTarget = (Actor**)bytes;
-	Console_Print("  +00 pTarget: %08X (expected %08X)", *pTarget, target);
+	Console_Print("  +00 pTarget: %p (expected %p)", *pTarget, target);
 
 	SInt32 detectionLevel = *(SInt32*)(bytes + 0x04);
 	Console_Print("  +04 detectionLevel: %d", detectionLevel);
@@ -766,6 +767,7 @@ bool Cmd_DumpCombatTarget_Execute(COMMAND_ARGS)
 	*result = 1;
 	return true;
 }
+#endif
 
 //helper to get CombatTarget for observer/target pair
 static void* GetCombatTargetData(Actor* observer, Actor* target)
@@ -910,7 +912,7 @@ namespace
 		if (IsForcedCombatTargetPair(actor, target))
 			return true;
 		if (!s_canAttackActorOriginal)
-			return false;
+			return true;
 		return s_canAttackActorOriginal(actor, target);
 	}
 
@@ -1282,14 +1284,12 @@ bool Cmd_IsRadioPlaying_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 
-	// Pip-boy radio song playback path.
-	if (g_currentSongPath && g_currentSongPath[0])
+	if (g_currentSongPath[0])
 	{
 		*result = 1;
 		return true;
 	}
 
-	//pip-boy radio voice queue
 	if (g_radioEnabled && *g_radioEnabled && g_currentRadio && *g_currentRadio)
 	{
 		if ((*g_currentRadio)->data.soundTimeRemaining)
@@ -1299,7 +1299,6 @@ bool Cmd_IsRadioPlaying_Execute(COMMAND_ARGS)
 		}
 	}
 
-	// Ambient/dynamic radio path.
 	if (!g_dynamicRadios)
 		return true;
 
@@ -2078,7 +2077,9 @@ void RegisterCommands2(void* nvsePtr)
 	nvse->RegisterTypedCommand(&kCommandInfo_Duplicate, kRetnType_Form);
 	nvse->RegisterTypedCommand(&kCommandInfo_GetAvailableRecipes, kRetnType_Array);
 	nvse->RegisterCommand(&kCommandInfo_ChangeRadioTrack);
+#ifdef _DEBUG
 	nvse->RegisterCommand(&kCommandInfo_DumpCombatTarget);
+#endif
 	nvse->RegisterTypedCommand(&kCommandInfo_GetTargetLastSeenLocation, kRetnType_Array);
 	nvse->RegisterTypedCommand(&kCommandInfo_GetTargetDetectedLocation, kRetnType_Array);
 	nvse->RegisterTypedCommand(&kCommandInfo_GetTargetLastFullyVisibleLocation, kRetnType_Array);
@@ -2141,7 +2142,7 @@ static void __fastcall Hook_SetShouldSneak(void* cc, void* edx, bool shouldSneak
 static UInt8 g_moveFlagTrampoline[12];
 static UInt8 g_sneakTrampoline[12];
 
-//both targets have 7-byte prologues: push ebp; mov ebp,esp; push ecx; mov [ebp-4],ecx
+//verified in IDA: both targets start with the same 7-byte prologue
 static bool WriteTrampoline(UInt32 target, void* hook, UInt8* trampBuf, void** origOut) {
 	const UInt32 stolen = 7;
 	memcpy(trampBuf, (void*)target, stolen);

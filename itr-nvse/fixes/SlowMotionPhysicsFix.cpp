@@ -4,6 +4,7 @@
 #include "SlowMotionPhysicsFix.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/CallTemplates.h"
+#include "internal/SafeWrite.h"
 
 #include "internal/globals.h"
 
@@ -40,9 +41,9 @@ namespace SlowMotionPhysicsFix
 
 	void Init() {
 		originalSetFrameTimeMarker = SafeWrite::GetRelJumpTarget(kAddr_SetFrameTimeMarkerCall);
-		SafeWrite::Write32(kAddr_SetFrameTimeMarkerCall + 1, (UInt32)Hook_SetFrameTimeMarker - kAddr_SetFrameTimeMarkerCall - 5);
+		SafeWrite::WriteRelCall(kAddr_SetFrameTimeMarkerCall, (UInt32)Hook_SetFrameTimeMarker);
 		originalStepDeltaTime = SafeWrite::GetRelJumpTarget(kAddr_StepDeltaTimeCall);
-		SafeWrite::Write32(kAddr_StepDeltaTimeCall + 1, (UInt32)Hook_StepDeltaTime - kAddr_StepDeltaTimeCall - 5);
+		SafeWrite::WriteRelCall(kAddr_StepDeltaTimeCall, (UInt32)Hook_StepDeltaTime);
 	}
 }
 

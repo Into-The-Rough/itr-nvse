@@ -10,17 +10,11 @@
 
 #include "internal/globals.h"
 #include "internal/CallTemplates.h"
+#include "MessageBoxQuickClose.h"
 #include "handlers/DialogueTextFilter.h"
 
 class BGSNote;
 class Tile;
-
-static void QRN_SafeWrite32(UInt32 addr, UInt32 data) {
-	DWORD oldProtect;
-	VirtualProtect(reinterpret_cast<void*>(addr), 4, PAGE_EXECUTE_READWRITE, &oldProtect);
-	*reinterpret_cast<UInt32*>(addr) = data;
-	VirtualProtect(reinterpret_cast<void*>(addr), 4, oldProtect, &oldProtect);
-}
 
 namespace QuickReadNote
 {
@@ -481,15 +475,13 @@ namespace QuickReadNote
 	typedef void(__thiscall* _MessageMenu_HandleClick)(void* menu, SInt32 tileID, Tile* clickedTile);
 	static _MessageMenu_HandleClick ChainedHandleClick = nullptr;
 
-	void __fastcall MessageMenu_HandleClick_Hook(void* menu, void* edx, SInt32 tileID, Tile* clickedTile) {
+	static void HandleTruncatedMessageClick() {
 		bool wasOurMessage = g_noteWasTruncated && g_truncatedNote;
 		BGSNote* noteToOpen = wasOurMessage ? g_truncatedNote : nullptr;
 		if (wasOurMessage) {
 			g_noteWasTruncated = false;
 			g_truncatedNote = nullptr;
 		}
-		if (ChainedHandleClick)
-			ChainedHandleClick(menu, tileID, clickedTile);
 		if (wasOurMessage) {
 			void* im = InterfaceManager_Singleton;
 			if (im) {
@@ -500,6 +492,20 @@ namespace QuickReadNote
 				}
 			}
 		}
+	}
+
+	void __fastcall MessageMenu_HandleClick_Hook(void* menu, void* edx, SInt32 tileID, Tile* clickedTile) {
+		if (ChainedHandleClick)
+			ChainedHandleClick(menu, tileID, clickedTile);
+		HandleTruncatedMessageClick();
+	}
+
+	static void OnMessageMenuHandleClick(UIMinimal::MessageMenu* menu, SInt32 tileID, Tile* clickedTile)
+	{
+		(void)menu;
+		(void)tileID;
+		(void)clickedTile;
+		HandleTruncatedMessageClick();
 	}
 
 	void __cdecl OnNoteAddedCallback(BGSNote* note) {
@@ -520,8 +526,8 @@ namespace QuickReadNote
 
 	__declspec(naked) void OnNoteAddedHook() {
 		__asm {
-			mov edx, [ebp+8]
-			jmp ProcessNoteAdded
+			mov edx, [ebp+8]       //BGSNote* arg from caller frame -> fastcall arg2
+			jmp ProcessNoteAdded   //ecx (setting) already loaded by original call site
 		}
 	}
 
@@ -568,9 +574,13 @@ namespace QuickReadNote
 		s_originalQueueUIMessage = SafeWrite::GetRelJumpTarget(0x966B53);
 		SafeWrite::WriteRelCall(0x966B53, (UInt32)OnQueueUIMessageHook);
 
-		UInt32* vtbl = reinterpret_cast<UInt32*>(kVtbl_MessageMenu);
-		ChainedHandleClick = reinterpret_cast<_MessageMenu_HandleClick>(vtbl[kOffset_HandleClick / 4]);
-		QRN_SafeWrite32(kVtbl_MessageMenu + kOffset_HandleClick, reinterpret_cast<UInt32>(MessageMenu_HandleClick_Hook));
+		if (MessageBoxQuickClose::IsInstalled()) {
+			MessageBoxQuickClose::SetHandleClickObserver(OnMessageMenuHandleClick);
+		} else {
+			UInt32* vtbl = reinterpret_cast<UInt32*>(kVtbl_MessageMenu);
+			ChainedHandleClick = reinterpret_cast<_MessageMenu_HandleClick>(vtbl[kOffset_HandleClick / 4]);
+			SafeWrite::Write32(kVtbl_MessageMenu + kOffset_HandleClick, reinterpret_cast<UInt32>(MessageMenu_HandleClick_Hook));
+		}
 	}
 
 	void Update() {
