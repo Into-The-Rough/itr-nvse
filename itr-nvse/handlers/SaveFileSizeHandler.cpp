@@ -51,14 +51,6 @@ namespace SaveFileSizeHandler
 		return addr + 5 + *(SInt32*)(addr + 1);
 	}
 
-	static void SafeWriteBuf(UInt32 addr, const void* data, size_t len)
-	{
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, len, PAGE_EXECUTE_READWRITE, &oldProtect);
-		memcpy((void*)addr, data, len);
-		VirtualProtect((void*)addr, len, oldProtect, &oldProtect);
-	}
-
 	static const UInt32 kAddr_HookSite = 0x7D6931;
 	static const UInt32 kAddr_JnzPatch = 0x7D6806;
 
@@ -99,17 +91,17 @@ namespace SaveFileSizeHandler
 	{
 		__asm
 		{
-			mov g_savedTile, ecx
-			mov eax, [ebp+0xC]
+			mov g_savedTile, ecx           //ecx = tile (thiscall this), stash for the cdecl helper
+			mov eax, [ebp+0xC]             //arg2 of caller's frame = BGSSaveLoadFileEntry*
 			mov g_savedEntry, eax
 
 			pushad
 			pushfd
-			call CallOnSetupTile
+			call CallOnSetupTile           //reads the globals, fills size suffix into the tile
 			popfd
 			popad
 
-			mov eax, g_chainTarget
+			mov eax, g_chainTarget         //chain into whatever the original E8 at kAddr_HookSite pointed at
 			jmp eax
 		}
 	}
@@ -120,7 +112,7 @@ namespace SaveFileSizeHandler
 		if (g_chainTarget == 0)
 			return;
 
-		SafeWriteBuf(kAddr_JnzPatch, "\x90\x90\x90\x90\x90\x90", 6);
+		SafeWrite::WriteNop(kAddr_JnzPatch, 6);
 		SafeWrite::WriteRelCall(kAddr_HookSite, (UInt32)Hook);
 	}
 

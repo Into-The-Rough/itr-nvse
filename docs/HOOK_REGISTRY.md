@@ -131,8 +131,8 @@ Wrappers load extra context into `EDX` and tail-jump to typed `__fastcall` repla
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
-| 0xC6AF85 | patch | 4 | continues | yes | Hook_SetFrameTimeMarker |
-| 0xC6AFF9 | patch | 4 | continues | yes | Hook_StepDeltaTime |
+| 0xC6AFC5 | call | 5 | continues | yes | Hook_SetFrameTimeMarker |
+| 0xC6AFF9 | call | 5 | continues | yes | Hook_StepDeltaTime |
 
 ### VATSLimbFix
 
@@ -192,13 +192,13 @@ The inline detour at `0xAEDFBD` is only installed when the site still matches th
 | 0x107566C + 0x38 | vtable patch | 4 | n/a | yes | MessageMenu_HandleSpecialKeyInput_Hook |
 | 0x107566C + 0x0C | vtable patch | 4 | n/a | yes | MessageMenu_HandleClick_Hook |
 
+When `QuickReadNote` is also enabled, it chains after `MessageBoxQuickClose` through a post-click observer instead of patching the same slot again.
+
 ### PlayerUpdateHook
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
-| 0x940C78 | patch | 4 | continues | yes | PlayerUpdate_Hook |
-
-Only the original call displacement is rewritten.
+| 0x940C78 | call | 5 | continues | yes | PlayerUpdate_Hook |
 
 ### PreventWeaponSwitch
 
@@ -212,7 +212,9 @@ Only the original call displacement is rewritten.
 |-----------|------|------|--------|-------|----------|
 | 0x966B0A | call | 5 | continues | yes | OnNoteAddedHook |
 | 0x966B53 | call | 5 | continues | yes | OnQueueUIMessageHook |
-| 0x107566C + 0x0C | vtable patch | 4 | n/a | yes | MessageMenu_HandleClick_Hook |
+| 0x107566C + 0x0C | vtable patch | 4 | n/a | conditional | MessageMenu_HandleClick_Hook |
+
+If `MessageBoxQuickClose` owns `MessageMenu::HandleClick`, `QuickReadNote` registers a post-click observer instead of taking the vtable slot.
 
 ### VATSExtender
 
@@ -259,7 +261,7 @@ The first eight sites control dialogue flow; the last four are the `CameraHooks:
 
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
-| 0x8A63EC | jump | 5 | 0x8A63F5 | no | Hook |
+| 0x8A63EC | jump | 9 | 0x8A63F5 | no | Hook |
 
 ### OnCombatProcedureHandler
 
@@ -294,10 +296,7 @@ The first eight sites control dialogue flow; the last four are the `CameraHooks:
 
 ### OnJumpLandHandler
 
-| Hook Site | Type | Size | Return | Chain | Function |
-|-----------|------|------|--------|-------|----------|
-| 0x10CB398 + (8*4) | vtable patch | 4 | n/a | yes | Hook_bhkCharacterStateJumping_UpdateVelocity |
-| 0x10CB36C + (8*4) | vtable patch | 4 | n/a | yes | Hook_bhkCharacterStateInAir_UpdateVelocity |
+No inline or vtable hooks. This handler polls from `kMessage_MainGameLoop`.
 
 ### OnSoundPlayedHandler
 

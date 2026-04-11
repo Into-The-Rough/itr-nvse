@@ -277,118 +277,118 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			}
 			break;
 
-			case NVSEMessagingInterface::kMessage_PostPostLoad:
-				DialogueCameraHandler::InstallCameraHooks(); //always install - hooks check bDialogueCamera at runtime
-				InitVATSSpeechFix();
-				AshPileNames::Init();
-				if (Settings::bVATSExtender)
-					VATSExtender::Init();
-				if (Settings::bSuppressObjectives || Settings::bSuppressReputation)
-					ELMO::Init(Settings::bSuppressObjectives != 0, Settings::bSuppressReputation != 0);
-				break;
+		case NVSEMessagingInterface::kMessage_PostPostLoad:
+			DialogueCameraHandler::InstallCameraHooks(); //always install - hooks check bDialogueCamera at runtime
+			InitVATSSpeechFix();
+			AshPileNames::Init();
+			if (Settings::bVATSExtender)
+				VATSExtender::Init();
+			if (Settings::bSuppressObjectives || Settings::bSuppressReputation)
+				ELMO::Init(Settings::bSuppressObjectives != 0, Settings::bSuppressReputation != 0);
+			break;
 
-			case NVSEMessagingInterface::kMessage_NewGame:
-			case NVSEMessagingInterface::kMessage_PostLoadGame:
-				if (msg->type == NVSEMessagingInterface::kMessage_PostLoadGame && Settings::bMusicResetOnLoad)
-				{
-					ResetMusicStateForLoad();
-				}
-					WeaponEmissiveCommands::ClearState();
-					GroundCommands::ClearState();
-					GestureCommand::Reset();
-					ImperativeCommands::ClearState();
-					OnContactHandler::ClearState();
+		case NVSEMessagingInterface::kMessage_NewGame:
+		case NVSEMessagingInterface::kMessage_PostLoadGame:
+			if (msg->type == NVSEMessagingInterface::kMessage_PostLoadGame && Settings::bMusicResetOnLoad)
+			{
+				ResetMusicStateForLoad();
+			}
+			WeaponEmissiveCommands::ClearState();
+			GroundCommands::ClearState();
+			GestureCommand::Reset();
+			ImperativeCommands::ClearState();
+			OnContactHandler::ClearState();
 
-				OnEntryPointHandler::BuildEntryMap();
-				if (Settings::bAutoGodMode && !g_godModeExecuted)
-				{
-					*(UInt8*)0x11E07BA = 1;
-					g_godModeExecuted = true;
-				}
-				break;
+			OnEntryPointHandler::BuildEntryMap();
+			if (Settings::bAutoGodMode && !g_godModeExecuted)
+			{
+				*(UInt8*)0x11E07BA = 1;
+				g_godModeExecuted = true;
+			}
+			break;
 
-			case kMessage_ReloadConfig:
-				if (msg->data && msg->dataLen > 0)
+		case kMessage_ReloadConfig:
+			if (msg->data && msg->dataLen > 0)
+			{
+				const char* pluginName = (const char*)msg->data;
+				if (_stricmp(pluginName, "itr-nvse") == 0)
 				{
-					const char* pluginName = (const char*)msg->data;
-					if (_stricmp(pluginName, "itr-nvse") == 0)
+					bool oldGodMode = Settings::bAutoGodMode;
+					bool oldSuppressObjectives = Settings::bSuppressObjectives != 0;
+					bool oldSuppressReputation = Settings::bSuppressReputation != 0;
+					Settings::Load();
+					DialogueCameraHandler::SetEnabled(Settings::bDialogueCamera != 0);
+
+					LocationVisitPopup::UpdateSettings(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
+
+					if (Settings::bQuickDrop || Settings::bQuick180)
+						PlayerUpdateHook::UpdateSettings(Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
+						                                 Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
+
+					OwnerNameInfoHandler::UpdateSettings();
+
+					if (Settings::bQuickReadNote)
+						QuickReadNote::UpdateSettings(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
+
+					FriendlyFire::SetEnabled(Settings::bFriendlyFire != 0);
+					OwnedBeds::SetEnabled(Settings::bOwnedBeds != 0);
+					OwnedCorpses::SetEnabled(Settings::bOwnedCorpses != 0);
+					KillActorXPFix::SetEnabled(Settings::bKillActorXPFix != 0);
+					NoDoorFade::SetEnabled(Settings::bNoDoorFade != 0);
+					ApplyVATSSpeechFixSetting();
+					ReversePickpocketNoKarmaFix::SetEnabled(Settings::bReversePickpocketNoKarma != 0);
+					CompanionNoInfamy::SetEnabled(Settings::bCompanionNoInfamy != 0);
+					CompanionWeightlessOverencumberedFix::SetEnabled(Settings::bCompanionWeightlessOverencumberedFix != 0);
+					NPCDoorUnlockBlock::SetLevel(Settings::iNPCDoorUnlockBlock);
+
+					if (Settings::bAutoGodMode && !oldGodMode)
 					{
-						bool oldGodMode = Settings::bAutoGodMode;
-						bool oldSuppressObjectives = Settings::bSuppressObjectives != 0;
-						bool oldSuppressReputation = Settings::bSuppressReputation != 0;
-						Settings::Load();
-						DialogueCameraHandler::SetEnabled(Settings::bDialogueCamera != 0);
-
-						LocationVisitPopup::UpdateSettings(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
-
-						if (Settings::bQuickDrop || Settings::bQuick180)
-							PlayerUpdateHook::UpdateSettings(Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
-							                                 Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
-
-						OwnerNameInfoHandler::UpdateSettings();
-
-						if (Settings::bQuickReadNote)
-							QuickReadNote::UpdateSettings(Settings::iQuickReadNoteTimeoutMs, Settings::iQuickReadNoteControlID, Settings::iQuickReadNoteMaxLines);
-
-						FriendlyFire::SetEnabled(Settings::bFriendlyFire != 0);
-						OwnedBeds::SetEnabled(Settings::bOwnedBeds != 0);
-						OwnedCorpses::SetEnabled(Settings::bOwnedCorpses != 0);
-						KillActorXPFix::SetEnabled(Settings::bKillActorXPFix != 0);
-						NoDoorFade::SetEnabled(Settings::bNoDoorFade != 0);
-						ApplyVATSSpeechFixSetting();
-						ReversePickpocketNoKarmaFix::SetEnabled(Settings::bReversePickpocketNoKarma != 0);
-						CompanionNoInfamy::SetEnabled(Settings::bCompanionNoInfamy != 0);
-						CompanionWeightlessOverencumberedFix::SetEnabled(Settings::bCompanionWeightlessOverencumberedFix != 0);
-						NPCDoorUnlockBlock::SetLevel(Settings::iNPCDoorUnlockBlock);
-
-						if (Settings::bAutoGodMode && !oldGodMode)
-						{
-							*(UInt8*)0x11E07BA = 1;
-							Console_Print("itr-nvse: God mode enabled");
-						}
-						else if (!Settings::bAutoGodMode && oldGodMode)
-						{
-							*(UInt8*)0x11E07BA = 0;
-							Console_Print("itr-nvse: God mode disabled");
-						}
-
-						if ((Settings::bSuppressObjectives != 0) != oldSuppressObjectives ||
-							(Settings::bSuppressReputation != 0) != oldSuppressReputation)
-						{
-							Console_Print("itr-nvse: Suppress Objectives/Reputation changes require restart");
-						}
-
-						Console_Print("itr-nvse: Config reloaded");
+						*(UInt8*)0x11E07BA = 1;
+						Console_Print("itr-nvse: God mode enabled");
 					}
+					else if (!Settings::bAutoGodMode && oldGodMode)
+					{
+						*(UInt8*)0x11E07BA = 0;
+						Console_Print("itr-nvse: God mode disabled");
+					}
+
+					if ((Settings::bSuppressObjectives != 0) != oldSuppressObjectives ||
+						(Settings::bSuppressReputation != 0) != oldSuppressReputation)
+					{
+						Console_Print("itr-nvse: Suppress Objectives/Reputation changes require restart");
+					}
+
+					Console_Print("itr-nvse: Config reloaded");
 				}
-				break;
+			}
+			break;
 
 		case kMessage_MainGameLoop:
-				AshPileNames::Update();
-				OnConsoleHandler::Update();
-				DialogueTextFilter::Update();
-				if (Settings::bLocationVisitPopup)
-					LocationVisitPopup::Update();
-				OwnerNameInfoHandler::Update();
-				KeyHeldHandler::Update();
-				DoubleTapHandler::Update();
-				OnSoundPlayedHandler::Update();
-				OnJumpLandHandler::Update();
-				OnCombatProcedureHandler::Update();
-				OnContactHandler::Update();
-				OnMenuFilterChangeHandler::Update();
-				OnMenuSideChangeHandler::Update();
-				if (Settings::bQuickReadNote)
-					QuickReadNote::Update();
-				if (Settings::bDialogueCamera)
-					DialogueCameraHandler::Update();
-				AutoQuickLoad::Update();
-					if (Settings::bAltTabMute)
-						AltTabMute::Update();
-					GroundCommands::Update();
-					ImperativeCommands::Update();
-					GestureCommand::Update();
-					break;
+			AshPileNames::Update();
+			OnConsoleHandler::Update();
+			DialogueTextFilter::Update();
+			if (Settings::bLocationVisitPopup)
+				LocationVisitPopup::Update();
+			OwnerNameInfoHandler::Update();
+			KeyHeldHandler::Update();
+			DoubleTapHandler::Update();
+			OnSoundPlayedHandler::Update();
+			OnJumpLandHandler::Update();
+			OnCombatProcedureHandler::Update();
+			OnContactHandler::Update();
+			OnMenuFilterChangeHandler::Update();
+			OnMenuSideChangeHandler::Update();
+			if (Settings::bQuickReadNote)
+				QuickReadNote::Update();
+			if (Settings::bDialogueCamera)
+				DialogueCameraHandler::Update();
+			AutoQuickLoad::Update();
+			if (Settings::bAltTabMute)
+				AltTabMute::Update();
+			GroundCommands::Update();
+			ImperativeCommands::Update();
+			GestureCommand::Update();
+			break;
 	}
 }
 

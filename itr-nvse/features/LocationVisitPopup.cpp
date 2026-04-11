@@ -109,6 +109,11 @@ namespace LocationVisitPopup
 		if (!name || !name[0])
 			return;
 
+		char nameCopy[260];
+		strncpy_s(nameCopy, sizeof(nameCopy), name, _TRUNCATE);
+		if (!nameCopy[0])
+			return;
+
 		{
 			ScopedLock lock(&s_stateLock);
 			UpdateCooldowns();
@@ -119,35 +124,35 @@ namespace LocationVisitPopup
 
 		//can run on AI worker threads, defer UI to main thread
 		if (GetCurrentThreadId() == g_mainThreadId)
-			ShowPopup(name);
+			ShowPopup(nameCopy);
 		else
-			QueuePopup(name);
+			QueuePopup(nameCopy);
 	}
 
 	__declspec(naked) void CheckDiscoveredMarkerHook() {
 		static const UInt32 kRetnAddr = 0x7795E4;
 		__asm {
-			movzx edx, byte ptr[ebp - 0x90]
+			movzx edx, byte ptr[ebp - 0x90]      //replay stolen byte read (flag) so the return path is consistent
 			test edx, edx
 			jz skipCheck
-			mov eax, [ebp - 0x8C]
+			mov eax, [ebp - 0x8C]                //caller's marker entry pointer
 			test eax, eax
 			jz skipCheck
-			mov ecx, [eax]
+			mov ecx, [eax]                       //ecx = refID at +0x00
 			test ecx, ecx
 			jz skipCheck
-			mov eax, [eax + 4]
+			mov eax, [eax + 4]                   //eax = linked data struct at +0x04
 			test eax, eax
 			jz skipCheck
 			pushad
 			pushfd
-			push ecx
-			push dword ptr[eax + 0x0C]
+			push ecx                             //cdecl arg2 (markerDataPtr) = struct with name ptr at +4
+			push dword ptr[eax + 0x0C]           //cdecl arg1 (markerRefID) from linked struct
 			call OnInDiscoveredMarkerRadius
-			add esp, 8
+			add esp, 8                           //cdecl caller cleans 2 dwords
 			popfd
 			popad
-			movzx edx, byte ptr[ebp - 0x90]
+			movzx edx, byte ptr[ebp - 0x90]      //re-load edx for the fallthrough; pop clobbered it
 		skipCheck:
 			jmp kRetnAddr
 		}

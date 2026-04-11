@@ -5,7 +5,7 @@
 
 #include "DoorPackageOwnershipFix.h"
 #include "internal/EngineFunctions.h"
-#include <Windows.h>
+#include "internal/SafeWrite.h"
 #include <cstdint>
 
 namespace DoorPackageOwnershipFix
@@ -104,27 +104,10 @@ namespace DoorPackageOwnershipFix
 		return ActorOwnsCell(actor, cellOwner);
 	}
 
-	void PatchMemory(UInt32 addr, const void* data, UInt32 size)
-	{
-		DWORD oldProtect;
-		VirtualProtect((void*)addr, size, PAGE_EXECUTE_READWRITE, &oldProtect);
-		memcpy((void*)addr, data, size);
-		VirtualProtect((void*)addr, size, oldProtect, &oldProtect);
-		FlushInstructionCache(GetCurrentProcess(), (void*)addr, size);
-	}
-
-	void ReplaceCall(UInt32 callAddr, UInt32 newFunc)
-	{
-		UInt32 relOffset = newFunc - callAddr - 5;
-		UInt8 patch[5] = { 0xE8 }; //CALL opcode
-		*(UInt32*)(patch + 1) = relOffset;
-		PatchMemory(callAddr, patch, 5);
-	}
-
 	void Init()
 	{
-		ReplaceCall(0x90D528, (UInt32)IsAnOwner_Hook);  //LockDoorsAtLocation
-		ReplaceCall(0x90D5DE, (UInt32)IsAnOwner_Hook);  //UnlockDoorsAtLocation
+		SafeWrite::WriteRelCall(0x90D528, (UInt32)IsAnOwner_Hook);  //LockDoorsAtLocation
+		SafeWrite::WriteRelCall(0x90D5DE, (UInt32)IsAnOwner_Hook);  //UnlockDoorsAtLocation
 	}
 }
 

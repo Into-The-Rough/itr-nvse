@@ -3,58 +3,46 @@
 #include "OnStealHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/EventDispatch.h"
+#include "internal/SafeWrite.h"
 
 namespace OnStealHandler {
     bool g_hookInstalled = false;
-
-    static Actor* s_thief = nullptr;
-    static TESObjectREFR* s_target = nullptr;
-    static TESForm* s_item = nullptr;
-    static SInt32 s_quantity = 0;
-    static SInt32 s_value = 0;
-    static TESObjectREFR* s_owner = nullptr;
 }
 
 constexpr UInt32 kAddr_StealAlarm = 0x8BFA40;
 constexpr UInt32 kAddr_StealAlarmBody = 0x8BFA45;
 
-static void DispatchStealEvent()
+static void __fastcall DispatchStealEvent(Actor* thief, TESObjectREFR* target, TESForm* item, SInt32 quantity, TESObjectREFR* owner)
 {
     if (g_eventManagerInterface)
         g_eventManagerInterface->DispatchEvent("ITR:OnSteal",
-            reinterpret_cast<TESObjectREFR*>(OnStealHandler::s_thief),
-            OnStealHandler::s_thief, OnStealHandler::s_target,
-            OnStealHandler::s_item, OnStealHandler::s_owner,
-            OnStealHandler::s_quantity);
+            reinterpret_cast<TESObjectREFR*>(thief),
+            thief, target, item, owner, quantity);
 }
 
 static __declspec(naked) void StealAlarmHook()
 {
     __asm
     {
-        mov     OnStealHandler::s_thief, ecx
-        mov     eax, [esp+4]
-        mov     OnStealHandler::s_target, eax
-        mov     eax, [esp+8]
-        mov     OnStealHandler::s_item, eax
-        mov     eax, [esp+0Ch]
-        mov     OnStealHandler::s_quantity, eax
-        mov     eax, [esp+10h]
-        mov     OnStealHandler::s_value, eax
-        mov     eax, [esp+14h]
-        mov     OnStealHandler::s_owner, eax
+        pushfd                          //save flags
+        pushad                          //save all regs (32 bytes, pushad frame starts at esp)
+        mov     ecx, [esp+18h]          //thief = saved ecx slot in pushad frame (thiscall this)
+        mov     edx, [esp+28h]          //target = stack arg1, past pushad(32)+pushfd(4)+retaddr(4)
+        mov     eax, [esp+2Ch]          //item = stack arg2
+        mov     ebx, [esp+30h]          //quantity = stack arg3
+        mov     esi, [esp+38h]          //owner = stack arg5 (arg4 at +34h is unused)
+        push    esi                     //owner  (fastcall stack[2])
+        push    ebx                     //quantity  (fastcall stack[1])
+        push    eax                     //item  (fastcall stack[0])
+        call    DispatchStealEvent      //ecx=thief, edx=target already loaded
+        popad                           //restore regs (fastcall callee popped stack args)
+        popfd                           //restore flags
 
-        pushad
-        pushfd
-        call    DispatchStealEvent
-        popfd
-        popad
-
-        push    ebp
+        push    ebp                     //replay stolen prologue bytes
         mov     ebp, esp
-        push    0FFFFFFFFh
+        push    0FFFFFFFFh              //SEH sentinel
         mov     eax, kAddr_StealAlarmBody
-        jmp     eax
+        jmp     eax                     //resume real StealAlarm past the 5-byte jmp patch
     }
 }
 

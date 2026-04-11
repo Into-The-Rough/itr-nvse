@@ -98,8 +98,8 @@
 - ITR:OnDialogueText - fires on dialogue text display (speaker, topic, response, text, responseText)
 - ITR:OnDoubleTap - fires on double-tap key press (keyCode)
 - ITR:OnKeyHeld - fires while key held past threshold (keyCode, heldSeconds)
-- ITR:OnCombatProcedure - fires on combat AI procedure change (actor, newProc, oldProc)
-- ITR:OnEntryPoint - fires when perk entry points execute (actor, perk, entryPoint, filterForm)
+- ITR:OnCombatProcedure - fires on combat AI procedure change (actor, procType, isAction)
+- ITR:OnEntryPoint - fires when perk entry points execute (perk, entryPoint, actor, filterForm)
 - ITR:OnActorLanded - fires when actor lands (actor, fallTime)
 - ITR:OnJumpStart - fires when actor starts jumping (actor)
 - ITR:OnConsoleOpen - fires on console open

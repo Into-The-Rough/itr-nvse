@@ -81,17 +81,8 @@ namespace CameraHooks {
 			return false;
 		}
 
-		orig = (T)(*(UInt32*)(src + 1) + src + 5);
-		DWORD oldProtect;
-		if (!VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect)) {
-			Log("DialogueCameraHandler: VirtualProtect failed for %s at 0x%08X", name, src);
-			return false;
-		}
-
-		*(UInt8*)src = 0xE8;
-		*(UInt32*)(src + 1) = dst - src - 5;
-		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
-		FlushInstructionCache(GetCurrentProcess(), (void*)src, 5);
+		orig = reinterpret_cast<T>(SafeWrite::GetRelJumpTarget(src));
+		SafeWrite::WriteRelCall(src, dst);
 		return true;
 	}
 

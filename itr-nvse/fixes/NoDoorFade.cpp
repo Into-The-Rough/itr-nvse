@@ -3,9 +3,9 @@
 //so the fade completes instantly without visual effect
 
 #include "NoDoorFade.h"
-#include <Windows.h>
 #include <cstdint>
 
+#include "internal/SafeWrite.h"
 #include "internal/globals.h"
 
 namespace NoDoorFade
@@ -28,14 +28,6 @@ namespace NoDoorFade
 		}
 	}
 
-	void PatchCall(uint32_t src, uint32_t dst)
-	{
-		DWORD oldProtect;
-		VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
-		*(uint32_t*)(src + 1) = dst - src - 5;
-		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
-	}
-
 	void SetEnabled(bool enabled)
 	{
 		g_enabled = enabled;
@@ -43,7 +35,7 @@ namespace NoDoorFade
 
 	void Init(bool enabled)
 	{
-		PatchCall(0x51895B, (uint32_t)Hook_FadeOut);
+		SafeWrite::WriteRelCall(0x51895B, (UInt32)Hook_FadeOut);
 		g_enabled = enabled;
 	}
 }
