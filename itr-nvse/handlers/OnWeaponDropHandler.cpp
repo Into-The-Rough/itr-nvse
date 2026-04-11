@@ -52,11 +52,11 @@ static __declspec(naked) void TryDropWeaponHook()
 {
     __asm
     {
-        push    ecx
-        push    ecx
+        push    ecx                             //stash thiscall this (actor)
+        push    ecx                             //cdecl arg for SaveDropActor
         call    SaveDropActor
         add     esp, 4
-        pop     ecx
+        pop     ecx                             //restore actor for the stolen prologue below
 
         pushad
         pushfd
@@ -64,11 +64,11 @@ static __declspec(naked) void TryDropWeaponHook()
         popfd
         popad
 
-        push    ebp
+        push    ebp                             //replay stolen prologue of TryDropWeapon
         mov     ebp, esp
         sub     esp, 3Ch
         mov     eax, kAddr_TryDropWeaponBody
-        jmp     eax
+        jmp     eax                             //resume real function past the 6-byte jmp patch
     }
 }
 

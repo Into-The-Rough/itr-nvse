@@ -50,17 +50,17 @@ static UInt32 s_SetAnimActionAddr = 0x8A73E0;
 static __declspec(naked) void Hook_SetAnimAction_Jam()
 {
     __asm {
-        push ecx
-        push ecx
+        push ecx                              //stash thiscall this (actor) for restore
+        push ecx                              //cdecl arg for SaveJamActor
         call SaveJamActor
-        add esp, 4
-        pop ecx
+        add esp, 4                            //cdecl cleanup of pushed arg
+        pop ecx                               //restore actor for downstream SetAnimAction
         pushad
         pushfd
-        call DispatchWeaponJamEvent
+        call DispatchWeaponJamEvent           //fires event via the stashed g_jamActor
         popfd
         popad
-        jmp dword ptr [s_SetAnimActionAddr]
+        jmp dword ptr [s_SetAnimActionAddr]   //tail into real SetAnimAction, ecx already set
     }
 }
 

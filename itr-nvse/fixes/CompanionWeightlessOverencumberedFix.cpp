@@ -45,7 +45,7 @@ namespace CompanionWeightlessOverencumberedFix
 	{
 		__asm
 		{
-			mov edx, [ebp+8]
+			mov edx, [ebp+8]                           //itemCount local from caller frame -> fastcall arg2
 			jmp Hook_GetMaxCarryWeightPerkModified
 		}
 	}

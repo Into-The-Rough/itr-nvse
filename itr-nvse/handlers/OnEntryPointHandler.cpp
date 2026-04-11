@@ -157,19 +157,19 @@ static UInt32 s_ExecuteFunctionReturnAddr = 0x5E5ABE;
 static __declspec(naked) void Hook_ExecuteFunctionCall()
 {
     __asm {
-        push [ebp-0x74]
-        push [ebp+0x10]
-        push [ebp+0x0C]
-        movzx eax, byte ptr [ebp+0x08]
+        push [ebp-0x74]                           //cdecl arg4: perkEntry local
+        push [ebp+0x10]                           //cdecl arg3: filterForm1
+        push [ebp+0x0C]                           //cdecl arg2: actor
+        movzx eax, byte ptr [ebp+0x08]            //cdecl arg1: entryPoint (1-byte id -> UInt32)
         push eax
-        call PushContext
-        add esp, 16
+        call PushContext                          //record ctx before the engine fn runs
+        add esp, 16                               //cdecl cleanup 4 dwords
 
-        call dword ptr [s_ExecuteFunctionAddr]
+        call dword ptr [s_ExecuteFunctionAddr]    //ExecuteFunction(perkEntry,...) runs here
 
         pushad
         pushfd
-        call DoDispatchAndPop
+        call DoDispatchAndPop                     //fire event with ctx snapshot, then pop
         popfd
         popad
 

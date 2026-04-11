@@ -91,13 +91,13 @@ namespace VATSExtender
 		{
 			pushad
 			pushfd
-			mov eax, [ebp+8]
+			mov eax, [ebp+8]        //refr arg on the patched caller's frame
 			push eax
-			call CaptureOverflowRef
+			call CaptureOverflowRef //cdecl, caller cleans
 			add esp, 4
 			popfd
 			popad
-			push 0x800E45
+			push 0x800E45           //tail into the overflow-reject path
 			ret
 		}
 	}

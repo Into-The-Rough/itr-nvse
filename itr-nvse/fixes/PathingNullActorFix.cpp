@@ -17,10 +17,10 @@ namespace PathingNullActorFix
 	{
 		__asm
 		{
-			mov edx, [ebp - 0x78]
+			mov edx, [ebp - 0x78]    //ActorArray[i] local
 			test edx, edx
-			jz skip
-			mov eax, [edx]
+			jz skip                  //null entry -> skip this iteration instead of deref
+			mov eax, [edx]           //replay stolen vtable load
 			jmp kReturnAddr
 		skip:
 			jmp kSkipAddr
