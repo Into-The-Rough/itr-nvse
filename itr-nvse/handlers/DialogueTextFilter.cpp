@@ -361,15 +361,15 @@ static UInt32 g_chainAddr = 0;
 
 static __declspec(naked) void DialogueTextHook() {
 	__asm {
-		cmp     dword ptr [esp+4], 0
-		jnz     skip_filter
+		cmp     dword ptr [esp+4], 0               //first arg: response index; 0 = main line, >0 = chunks
+		jnz     skip_filter                        //only filter on the main line
 
 		pushad
 		pushfd
 
-		//speaker at [esp+8] before pushad(0x20)+pushfd(0x4)
-		push    dword ptr [esp+0x2C]
-		push    ecx
+		//speaker at [esp+8] before pushad(0x20)+pushfd(0x4) = [esp+0x2C]
+		push    dword ptr [esp+0x2C]               //cdecl arg2: speaker
+		push    ecx                                //cdecl arg1: InfoItem (thiscall this)
 		call    [g_hookCallback]
 		add     esp, 8
 
@@ -377,18 +377,18 @@ static __declspec(naked) void DialogueTextHook() {
 		popad
 
 	skip_filter:
-		mov     eax, [g_chainAddr]
+		mov     eax, [g_chainAddr]                 //another plugin already chained here?
 		test    eax, eax
 		jnz     chain_to_previous
 
-		push    ebp
+		push    ebp                                //replay stolen prologue
 		mov     ebp, esp
 		sub     esp, 0Ch
 		mov     eax, kAddr_RunResultBody
 		jmp     eax
 
 	chain_to_previous:
-		jmp     eax
+		jmp     eax                                //defer to previous chain owner
 	}
 }
 
@@ -446,19 +446,19 @@ static __declspec(naked) void SpeakSoundHook() {
 		pushfd
 
 		//voicePath at [esp+4] before pushad(0x20)+pushfd(0x04) = [esp+0x28]
-		push    dword ptr [esp+0x28]
-		push    ecx
+		push    dword ptr [esp+0x28]          //cdecl arg2: voicePath
+		push    ecx                           //cdecl arg1: speaker (thiscall this)
 		call    [g_speakCallback]
 		add     esp, 8
 
 		popfd
 		popad
 
-		mov     eax, [g_speakChainAddr]
+		mov     eax, [g_speakChainAddr]       //previous chain owner if any
 		test    eax, eax
 		jnz     chain_speak
 
-		push    ebp
+		push    ebp                           //replay stolen prologue (with SEH sentinel)
 		mov     ebp, esp
 		push    0FFFFFFFFh
 		mov     eax, kAddr_SpeakSoundBody

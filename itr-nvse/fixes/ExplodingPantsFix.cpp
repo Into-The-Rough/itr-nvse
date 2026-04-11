@@ -23,9 +23,9 @@ namespace ExplodingPantsFix
 
 	__declspec(naked) void Hook_IsAltTrigger_Wrapper() {
 		__asm {
-			mov edx, [ebp-0A0h]
+			mov edx, [ebp-0A0h]         //projectileRef local -> fastcall arg2; ecx already has projBase
 			call Hook_IsAltTrigger
-			jmp g_retAddr
+			jmp g_retAddr               //hook returns bool in al, resume after the 5-byte jmp patch
 		}
 	}
 

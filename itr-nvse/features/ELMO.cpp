@@ -79,7 +79,7 @@ namespace ELMO
 		}
 	}
 
-	// Hook direct callers so other plugins can still patch SetQuestUpdateText itself.
+	//hook direct callers so other plugins can still patch SetQuestUpdateText itself
 	bool InstallObjectiveHooks()
 	{
 		if (s_objectiveHooksInstalled)
@@ -122,12 +122,12 @@ namespace ELMO
 		__asm {
 			pushad
 			pushfd
-			push dword ptr [ebp - 0x128]
+			push dword ptr [ebp - 0x128]                    //Reputation* local in the caller's frame
 			call ShowReputationThresholdAsCornerMessage
-			add esp, 4
+			add esp, 4                                      //cdecl cleanup
 			popfd
 			popad
-			jmp returnAddr
+			jmp returnAddr                                  //skip the vanilla popup path
 		}
 	}
 
@@ -138,7 +138,7 @@ namespace ELMO
 		__asm {
 			pushad
 			pushfd
-			push dword ptr [ebp - 0x110]
+			push dword ptr [ebp - 0x110]                    //Reputation* local (different frame layout)
 			call ShowReputationThresholdAsCornerMessage
 			add esp, 4
 			popfd
@@ -154,7 +154,7 @@ namespace ELMO
 		__asm {
 			pushad
 			pushfd
-			push dword ptr [ebp - 0x110]
+			push dword ptr [ebp - 0x110]                    //shares layout with AddRepExact
 			call ShowReputationThresholdAsCornerMessage
 			add esp, 4
 			popfd
@@ -170,7 +170,7 @@ namespace ELMO
 		__asm {
 			pushad
 			pushfd
-			push dword ptr [ebp - 0x128]
+			push dword ptr [ebp - 0x128]                    //shares layout with AddRep
 			call ShowReputationThresholdAsCornerMessage
 			add esp, 4
 			popfd
@@ -193,4 +193,3 @@ namespace ELMO
 		}
 	}
 }
-
