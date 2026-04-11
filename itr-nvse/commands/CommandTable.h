@@ -18,7 +18,7 @@
 // 0x4022  Duplicate
 // 0x4023  GetAvailableRecipes
 // 0x4024  ChangeRadioTrack
-// 0x4025  DumpCombatTarget
+// 0x4025  DumpCombatTarget (_DEBUG only)
 // 0x4026  GetTargetLastSeenLocation
 // 0x4027  GetTargetDetectedLocation
 // 0x4028  GetTargetLastFullyVisibleLocation

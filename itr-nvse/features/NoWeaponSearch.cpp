@@ -28,6 +28,7 @@ namespace NoWeaponSearch
 	static const int MAX_DISABLED = 64;
 	static UInt32 g_disabled[MAX_DISABLED] = {0};
 	static int g_count = 0;
+	static thread_local bool g_inCombatItemSearch = false;
 	static CRITICAL_SECTION g_lock;
 	static volatile LONG g_lockInit = 0;
 
@@ -55,15 +56,28 @@ namespace NoWeaponSearch
 
 	bool __fastcall Hook(void* combatState, void* edx)
 	{
-		if (IsGameLoading())
+		if (g_inCombatItemSearch)
 			return Original(combatState);
+
+		g_inCombatItemSearch = true;
+		if (IsGameLoading())
+		{
+			g_inCombatItemSearch = false;
+			return Original(combatState);
+		}
 
 		void* controller = *(void**)((char*)combatState + 0x1C4);
 		if (!controller)
+		{
+			g_inCombatItemSearch = false;
 			return Original(combatState);
+		}
 		Actor* actor = (Actor*)Engine::CombatController_GetPackageOwner(controller);
 		if (!actor || !*(void**)((char*)actor + 0x68) || !*(void**)((char*)actor + 0x64))
+		{
+			g_inCombatItemSearch = false;
 			return Original(combatState);
+		}
 
 		if (Settings::bNPCAntidoteUse)
 			NPCAntidoteUse::Check(combatState);
@@ -78,9 +92,14 @@ namespace NoWeaponSearch
 		}
 
 		if (isDisabled)
+		{
+			g_inCombatItemSearch = false;
 			return false;
+		}
 
-		return Original(combatState);
+		bool result = Original(combatState);
+		g_inCombatItemSearch = false;
+		return result;
 	}
 
 	void Set(Actor* actor, bool disable)

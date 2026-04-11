@@ -114,7 +114,7 @@
 					"title": "Enable",
 					"type": 5,
 					"enable": 1,
-					"mouse": "Quick view notes and play holotapes on pickup",
+					"mouse": "Quick view notes and play holotapes on pickup. Enabling after startup requires restart.",
 					"vars": [{ "configINI": "Tweaks:bQuickReadNote", "default": 0 }]
 				},
 				"13": {
@@ -250,7 +250,7 @@
 					"title": "Message Box Quick Close",
 					"type": 5,
 					"enable": 1,
-					"mouse": "Quick close message boxes with Enter/Space key",
+					"mouse": "Quick close message boxes with Enter/Space key. Enabling after startup requires restart.",
 					"vars": [{ "configINI": "Tweaks:bMessageBoxQuickClose", "default": 1 }]
 				},
 				"3": {
@@ -553,7 +553,7 @@
 					"title": "Auto Quick Load",
 					"type": 5,
 					"enable": 1,
-					"mouse": "Auto-load quicksave when reaching start menu",
+					"mouse": "Auto-load quicksave when reaching start menu. Enabling after startup requires restart.",
 					"vars": [{ "configINI": "Tweaks:bAutoQuickLoad", "default": 0 }]
 				},
 				"4": {

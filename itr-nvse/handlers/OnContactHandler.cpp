@@ -130,14 +130,16 @@ static void QueueEvent(UInt32 watchedRefID, UInt32 otherRefID, UInt8 channel, bo
 	g_pendingEvents.push_back({watchedRefID, otherRefID, channel, isBegin});
 }
 
+static UInt32 LookupMappedRefID(const std::unordered_map<void*, UInt32>& refMap, void* key) {
+	auto it = refMap.find(key);
+	return it != refMap.end() ? it->second : 0;
+}
+
 static Detours::JumpDetour s_rigidBodyDetour;
 typedef void (__thiscall *_FOCollisionListener_contactPointAdded)(void*, void*);
 
 static void __fastcall Hook_ContactPointAdded(void* listener, void* edx, void* event) {
 	s_rigidBodyDetour.GetTrampoline<_FOCollisionListener_contactPointAdded>()(listener, event);
-
-	ScopedLock lock(&g_contactLock);
-	if (g_watchedSnapshot.empty()) return;
 
 	//hkpContactPointAddedEvent: m_bodyA at +0x00, m_bodyB at +0x04
 	void* bodyA = *(void**)((UInt8*)event + 0x00);
@@ -146,6 +148,8 @@ static void __fastcall Hook_ContactPointAdded(void* listener, void* edx, void* e
 	UInt32 refA = ResolveCollidableToRefID(bodyA);
 	UInt32 refB = ResolveCollidableToRefID(bodyB);
 
+	ScopedLock lock(&g_contactLock);
+	if (g_watchedSnapshot.empty()) return;
 	if (refA == refB) return;
 	if (refA && g_watchedSnapshot.count(refA))
 		QueueEvent(refA, refB, kChannel_RigidBody, true);
@@ -353,15 +357,21 @@ typedef void (__thiscall *_fireContact)(void*, void*);
 static void __fastcall Hook_CharProxyContactAdded(void* proxy, void* edx, void* point) {
 	s_charAddedDetour.GetTrampoline<_fireContact>()(proxy, point);
 
-	ScopedLock lock(&g_contactLock);
-	auto it = g_proxyToRefID.find(proxy);
-	if (it == g_proxyToRefID.end()) return;
+	UInt32 actorRefID = 0;
+	{
+		ScopedLock lock(&g_contactLock);
+		if (g_watchedSnapshot.empty()) return;
+		actorRefID = LookupMappedRefID(g_proxyToRefID, proxy);
+		if (!actorRefID) return;
+	}
 
-	UInt32 actorRefID = it->second;
 	//hkpRootCdPoint: m_rootCollidableB at +0x48 (verified from bhkCharacterListener disasm)
 	void* otherCollidable = *(void**)((UInt8*)point + 0x48);
 	UInt32 otherRefID = ResolveCollidableToRefID(otherCollidable);
 
+	ScopedLock lock(&g_contactLock);
+	if (g_watchedSnapshot.empty()) return;
+	if (!g_watchedSnapshot.count(actorRefID)) return;
 	if (otherRefID == actorRefID) return;
 	QueueEvent(actorRefID, otherRefID, kChannel_CharProxy, true);
 }
@@ -378,28 +388,29 @@ static Detours::JumpDetour s_cachingRemoveDetour;
 
 typedef void (__thiscall *_phantomOverlap)(void*, void*);
 
-static UInt32 ResolvePhantomOrCollidable(void* havokObj) {
-	if (!havokObj) return 0;
-	auto it = g_phantomToRefID.find(havokObj);
-	if (it != g_phantomToRefID.end()) return it->second;
-	return ResolveWorldObjToRefID(havokObj);
-}
-
 static void PhantomOverlapCommon(void* phantom, void* cdBody, bool isAdd) {
-	ScopedLock lock(&g_contactLock);
-	if (g_watchedSnapshot.empty()) return;
-
-	UInt32 phantomRefID = ResolvePhantomOrCollidable(phantom);
-
 	void* rootCollidable = cdBody ? getRoot(cdBody) : nullptr;
+	void* bodyWorldObj = rootCollidable ? (void*)((UInt8*)rootCollidable - 0x10) : nullptr;
+	UInt32 mappedPhantomRefID = 0;
+	UInt32 mappedBodyRefID = 0;
+
+	{
+		ScopedLock lock(&g_contactLock);
+		if (g_watchedSnapshot.empty()) return;
+		mappedPhantomRefID = LookupMappedRefID(g_phantomToRefID, phantom);
+		mappedBodyRefID = LookupMappedRefID(g_phantomToRefID, bodyWorldObj);
+	}
+
+	UInt32 phantomRefID = mappedPhantomRefID ? mappedPhantomRefID : ResolveWorldObjToRefID(phantom);
 	UInt32 bodyRefID = 0;
-	if (rootCollidable) {
-		void* bodyWorldObj = (void*)((UInt8*)rootCollidable - 0x10);
-		bodyRefID = ResolvePhantomOrCollidable(bodyWorldObj);
+	if (bodyWorldObj) {
+		bodyRefID = mappedBodyRefID ? mappedBodyRefID : ResolveWorldObjToRefID(bodyWorldObj);
 		if (!bodyRefID)
 			bodyRefID = ResolveCollidableToRefID(rootCollidable);
 	}
 
+	ScopedLock lock(&g_contactLock);
+	if (g_watchedSnapshot.empty()) return;
 	if (phantomRefID == bodyRefID) return;
 	if (phantomRefID && g_watchedSnapshot.count(phantomRefID))
 		QueueEvent(phantomRefID, bodyRefID, kChannel_Phantom, isAdd);

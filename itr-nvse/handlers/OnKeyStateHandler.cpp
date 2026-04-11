@@ -1,13 +1,55 @@
 //provides DisableKeyEx/EnableKeyEx wrapper commands that fire events
 
-#include <cstdio>
-#include <Windows.h>
-
 #include "OnKeyStateHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/EventDispatch.h"
 
-static NVSEConsoleInterface* g_okshConsole = nullptr;
+namespace
+{
+	enum {
+		kNVSEData_DIHookControl = 1,
+		kMacro_MouseButtonOffset = 256,
+		kMacro_MouseWheelOffset = kMacro_MouseButtonOffset + 8,
+		kMaxMacros = kMacro_MouseWheelOffset + 2,
+	};
+
+	class DIHookControl {
+	public:
+		enum {
+			kDisable_User = 1 << 0,
+			kDisable_Script = 1 << 1,
+			kDisable_All = kDisable_User | kDisable_Script,
+		};
+
+	private:
+		struct KeyInfo {
+			bool rawState;
+			bool gameState;
+			bool insertedState;
+			bool hold;
+			bool tap;
+			bool userDisable;
+			bool scriptDisable;
+		};
+
+		void* vtable;
+		KeyInfo m_keys[kMaxMacros];
+
+	public:
+		void SetKeyDisableState(UInt32 keycode, bool disable, UInt32 mask = 0) {
+			if (!mask)
+				mask = kDisable_All;
+			if (keycode >= kMaxMacros)
+				return;
+			if (mask & kDisable_User)
+				m_keys[keycode].userDisable = disable;
+			if (mask & kDisable_Script)
+				m_keys[keycode].scriptDisable = disable;
+		}
+	};
+}
+
+static DIHookControl* g_diHookControl = nullptr;
 static bool (*g_ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, ...) = nullptr;
 
 static void DispatchKeyDisabledEvent(UInt32 keycode, UInt32 mask)
@@ -43,14 +85,7 @@ bool Cmd_DisableKeyEx_Execute(COMMAND_ARGS)
 			&keycode, &mask))
 		return true;
 
-	char cmd[64];
-	if (mask)
-		sprintf_s(cmd, "DisableKey %d %d", keycode, mask);
-	else
-		sprintf_s(cmd, "DisableKey %d", keycode);
-
-	if (g_okshConsole)
-		g_okshConsole->RunScriptLine(cmd, nullptr);
+	g_diHookControl->SetKeyDisableState(keycode, true, mask ? mask : DIHookControl::kDisable_All);
 
 	DispatchKeyDisabledEvent(keycode, mask);
 	*result = 1;
@@ -73,14 +108,7 @@ bool Cmd_EnableKeyEx_Execute(COMMAND_ARGS)
 			&keycode, &mask))
 		return true;
 
-	char cmd[64];
-	if (mask)
-		sprintf_s(cmd, "EnableKey %d %d", keycode, mask);
-	else
-		sprintf_s(cmd, "EnableKey %d", keycode);
-
-	if (g_okshConsole)
-		g_okshConsole->RunScriptLine(cmd, nullptr);
+	g_diHookControl->SetKeyDisableState(keycode, false, mask ? mask : DIHookControl::kDisable_All);
 
 	DispatchKeyEnabledEvent(keycode, mask);
 	*result = 1;
@@ -97,8 +125,11 @@ bool Init(void* nvseInterface)
 	if (!script) return false;
 	g_ExtractArgsEx = script->ExtractArgsEx;
 
-	g_okshConsole = (NVSEConsoleInterface*)nvse->QueryInterface(kInterface_Console);
-	if (!g_okshConsole) return false;
+	auto* dataInterface = reinterpret_cast<NVSEDataInterface*>(nvse->QueryInterface(kInterface_Data));
+	if (!dataInterface) return false;
+
+	g_diHookControl = reinterpret_cast<DIHookControl*>(dataInterface->GetSingleton(kNVSEData_DIHookControl));
+	if (!g_diHookControl) return false;
 
 	return true;
 }

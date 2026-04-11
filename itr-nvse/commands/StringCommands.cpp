@@ -7,6 +7,7 @@
 #include <cstring>
 #include <string>
 #include <algorithm>
+#include <vector>
 
 #include "internal/globals.h"
 extern NVSEArrayVarInterface* g_arrInterface;
@@ -63,8 +64,8 @@ bool Cmd_Sv_Join_Execute(COMMAND_ARGS)
 		return true;
 	}
 
-	NVSEArrayVarInterface::Element* elements = new NVSEArrayVarInterface::Element[size];
-	g_arrInterface->GetElements(arr, elements, nullptr);
+	std::vector<NVSEArrayVarInterface::Element> elements(size);
+	g_arrInterface->GetElements(arr, elements.data(), nullptr);
 
 	std::string joined;
 	for (UInt32 i = 0; i < size; i++)
@@ -78,7 +79,6 @@ bool Cmd_Sv_Join_Execute(COMMAND_ARGS)
 			joined += std::to_string(elements[i].Number());
 	}
 
-	delete[] elements;
 	g_strInterface->Assign(PASS_COMMAND_ARGS, joined.c_str());
 	return true;
 }
