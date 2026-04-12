@@ -101,7 +101,7 @@ namespace SaveFileSizeHandler
 			popfd
 			popad
 
-			mov eax, g_chainTarget         //chain into whatever the original E8 at kAddr_HookSite pointed at
+			mov eax, g_chainTarget         //jump to the original callee for the overwritten call at kAddr_HookSite
 			jmp eax
 		}
 	}

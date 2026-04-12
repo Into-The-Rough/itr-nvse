@@ -30,7 +30,7 @@ static __declspec(naked) void StealAlarmHook()
         mov     edx, [esp+28h]          //target = stack arg1, past pushad(32)+pushfd(4)+retaddr(4)
         mov     eax, [esp+2Ch]          //item = stack arg2
         mov     ebx, [esp+30h]          //quantity = stack arg3
-        mov     esi, [esp+38h]          //owner = stack arg5 (arg4 at +34h is unused)
+        mov     esi, [esp+38h]          //owner = stack arg5 (arg4 at +34h is not forwarded by this hook)
         push    esi                     //owner  (fastcall stack[2])
         push    ebx                     //quantity  (fastcall stack[1])
         push    eax                     //item  (fastcall stack[0])
