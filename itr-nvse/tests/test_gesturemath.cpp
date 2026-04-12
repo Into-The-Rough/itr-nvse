@@ -39,31 +39,31 @@ TEST(GestureMath_AngleZeroAtStartAndEnd)
 	return true;
 }
 
-TEST(GestureMath_NodUsesPitchAxis)
+TEST(GestureMath_NodUsesSemanticAxis)
 {
 	float pose[9];
 	SetIdentity(pose);
 	GestureMath::ComposePoseFromBase(pose, GestureMath::kGesture_Nod, 0.5f, pose);
-
-	ASSERT_NEAR(pose[0], 1.0f, 0.0001f);
-	ASSERT_NEAR(std::fabs(pose[5]), std::sin(0.5f), 0.0001f);
-	ASSERT_NEAR(std::fabs(pose[7]), std::sin(0.5f), 0.0001f);
-	ASSERT_NEAR(pose[1], 0.0f, 0.0001f);
-	ASSERT_NEAR(pose[3], 0.0f, 0.0001f);
-	return true;
-}
-
-TEST(GestureMath_ShakeUsesYawAxis)
-{
-	float pose[9];
-	SetIdentity(pose);
-	GestureMath::ComposePoseFromBase(pose, GestureMath::kGesture_Shake, 0.5f, pose);
 
 	ASSERT_NEAR(pose[8], 1.0f, 0.0001f);
 	ASSERT_NEAR(std::fabs(pose[1]), std::sin(0.5f), 0.0001f);
 	ASSERT_NEAR(std::fabs(pose[3]), std::sin(0.5f), 0.0001f);
 	ASSERT_NEAR(pose[2], 0.0f, 0.0001f);
 	ASSERT_NEAR(pose[6], 0.0f, 0.0001f);
+	return true;
+}
+
+TEST(GestureMath_ShakeUsesSemanticAxis)
+{
+	float pose[9];
+	SetIdentity(pose);
+	GestureMath::ComposePoseFromBase(pose, GestureMath::kGesture_Shake, 0.5f, pose);
+
+	ASSERT_NEAR(pose[0], 1.0f, 0.0001f);
+	ASSERT_NEAR(std::fabs(pose[5]), std::sin(0.5f), 0.0001f);
+	ASSERT_NEAR(std::fabs(pose[7]), std::sin(0.5f), 0.0001f);
+	ASSERT_NEAR(pose[1], 0.0f, 0.0001f);
+	ASSERT_NEAR(pose[3], 0.0f, 0.0001f);
 	return true;
 }
 
