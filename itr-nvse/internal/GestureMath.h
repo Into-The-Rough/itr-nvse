@@ -117,10 +117,11 @@ inline void ComposePoseFromBase(const float* base, uint8_t type, float angleRad,
 {
 	CopyMat3(out, base);
 
+	// FNV's head-bone local basis makes semantic nod/shake line up opposite to the naive pitch/yaw labels here.
 	if (type == kGesture_Nod)
-		ApplyLocalPitch(out, angleRad);
-	else if (type == kGesture_Shake)
 		ApplyLocalYaw(out, angleRad);
+	else if (type == kGesture_Shake)
+		ApplyLocalPitch(out, angleRad);
 	else if (type == kGesture_Tilt)
 		ApplyLocalRoll(out, angleRad);
 }

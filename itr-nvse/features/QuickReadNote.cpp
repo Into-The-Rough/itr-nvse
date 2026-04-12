@@ -500,7 +500,7 @@ namespace QuickReadNote
 		HandleTruncatedMessageClick();
 	}
 
-	static void OnMessageMenuHandleClick(UIMinimal::MessageMenu* menu, SInt32 tileID, Tile* clickedTile)
+	static void OnMessageMenuHandleClick(UIMinimal::MessageMenu* menu, SInt32 tileID, UIMinimal::Tile* clickedTile)
 	{
 		(void)menu;
 		(void)tileID;
