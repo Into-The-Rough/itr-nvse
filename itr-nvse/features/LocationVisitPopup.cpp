@@ -135,19 +135,19 @@ namespace LocationVisitPopup
 			movzx edx, byte ptr[ebp - 0x90]      //replay stolen byte read (flag) so the return path is consistent
 			test edx, edx
 			jz skipCheck
-			mov eax, [ebp - 0x8C]                //caller's marker entry pointer
+			mov eax, [ebp - 0x8C]                //caller's marker entry pair
 			test eax, eax
 			jz skipCheck
-			mov ecx, [eax]                       //ecx = refID at +0x00
+			mov ecx, [eax]                       //ecx = markerDataPtr at +0x00
 			test ecx, ecx
 			jz skipCheck
-			mov eax, [eax + 4]                   //eax = linked data struct at +0x04
+			mov eax, [eax + 4]                   //eax = marker ref pointer at +0x04
 			test eax, eax
 			jz skipCheck
 			pushad
 			pushfd
-			push ecx                             //cdecl arg2 (markerDataPtr) = struct with name ptr at +4
-			push dword ptr[eax + 0x0C]           //cdecl arg1 (markerRefID) from linked struct
+			push ecx                             //cdecl arg2: markerDataPtr (name ptr lives at +4)
+			push dword ptr[eax + 0x0C]           //cdecl arg1: markerRefID from TESObjectREFR::refID
 			call OnInDiscoveredMarkerRadius
 			add esp, 8                           //cdecl caller cleans 2 dwords
 			popfd
