@@ -223,6 +223,17 @@ If `MessageBoxQuickClose` owns `MessageMenu::HandleClick`, `QuickReadNote` regis
 | 0x800DA4 | jump | 5 | varies | yes | Hook_OnLimitReached |
 | 0x801993 | call | 5 | continues | yes | Hook_RenderScene |
 
+## Commands
+
+### ToggleAllPrimitives
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x56B4DC | call | 5 | continues | yes | Load3D_PrimitiveCullHook |
+| 0x56BAC8 | call | 5 | continues | yes | Load3D_DoorTravelCullHook |
+
+Both are call-site replacements inside `TESObjectREFR::Load3D` so newly loaded primitive refs, door markers, and travel markers honor the current visibility state instead of being force-culled.
+
 ## Handlers
 
 ### CornerMessageHandler

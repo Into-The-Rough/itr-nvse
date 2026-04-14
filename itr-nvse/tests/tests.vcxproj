@@ -47,6 +47,7 @@
     <ClCompile Include="test_gesturemath.cpp" />
     <ClCompile Include="test_safewrite.cpp" />
     <ClCompile Include="test_hooklogic.cpp" />
+    <ClCompile Include="test_detours.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="test.h" />
@@ -56,6 +57,7 @@
     <ClInclude Include="..\internal\CooldownTracker.h" />
     <ClInclude Include="..\internal\GestureMath.h" />
     <ClInclude Include="..\internal\SafeWrite.h" />
+    <ClInclude Include="..\internal\Detours.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

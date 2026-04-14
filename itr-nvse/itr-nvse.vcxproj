@@ -192,6 +192,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="commands\CommandTable.cpp" />
     <ClCompile Include="commands\ChallengeCommands.cpp" />
     <ClCompile Include="commands\CommandBoundsCommand.cpp" />
+    <ClCompile Include="commands\ToggleAllPrimitives.cpp" />
     <ClCompile Include="commands\DialogueCommands.cpp" />
     <ClCompile Include="commands\ForceSayCommand.cpp" />
     <ClCompile Include="commands\IsSayingCommand.cpp" />
@@ -211,6 +212,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="internal\UIMinimal.h" />
     <ClInclude Include="internal\CooldownTracker.h" />
     <ClInclude Include="commands\CommandBoundsCommand.h" />
+    <ClInclude Include="commands\ToggleAllPrimitives.h" />
     <ClInclude Include="internal\BSSpinLock.h" />
     <ClInclude Include="internal\EventDispatch.h" />
     <ClInclude Include="internal\EngineFunctions.h" />
