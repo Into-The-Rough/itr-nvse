@@ -10,7 +10,8 @@
 
 namespace VATSSpeechFix
 {
-	static bool g_enabled = false;
+	static volatile LONG g_enabled = FALSE;
+	static bool g_hooksInstalled = false;
 
 	namespace GameAddr {
 		constexpr UInt32 BSWin32GameSound_Vtbl_Func09 = 0x10A3C18;
@@ -107,18 +108,6 @@ namespace VATSSpeechFix
 		return TimescalePatchOwner::Other;
 	}
 
-	static bool WriteTimescaleBytes(const UInt8* bytes)
-	{
-		DWORD oldProtect;
-		if (!VirtualProtect((void*)s_timescalePatchAddr, sizeof(kVanillaTimescalePatch), PAGE_EXECUTE_READWRITE, &oldProtect))
-			return false;
-
-		memcpy((void*)s_timescalePatchAddr, bytes, sizeof(kVanillaTimescalePatch));
-		VirtualProtect((void*)s_timescalePatchAddr, sizeof(kVanillaTimescalePatch), oldProtect, &oldProtect);
-		FlushInstructionCache(GetCurrentProcess(), (void*)s_timescalePatchAddr, sizeof(kVanillaTimescalePatch));
-		return true;
-	}
-
 	__declspec(naked) void HookedTimescaleNaked()
 	{
 		__asm {
@@ -151,11 +140,16 @@ namespace VATSSpeechFix
 		return true;
 	}
 
+	static void StoreEnabled(bool enabled)
+	{
+		InterlockedExchange(&g_enabled, enabled ? TRUE : FALSE);
+	}
+
 	void __fastcall HookedFunc09(BSWin32GameSound* thisPtr, void* edx)
 	{
 		OriginalFunc09(thisPtr);
 
-		if (g_enabled && thisPtr)
+		if (g_enabled != FALSE && thisPtr)
 		{
 			bool isVoice = (thisPtr->soundFlags & 0x4) != 0;
 			if (!isVoice && thisPtr->filePath[0] != '\0')
@@ -167,7 +161,7 @@ namespace VATSSpeechFix
 
 	char __fastcall HookedFunc10(BSWin32GameSound* thisPtr, void* edx)
 	{
-		if (g_enabled && thisPtr)
+		if (g_enabled != FALSE && thisPtr)
 		{
 			bool isVoice = (thisPtr->soundFlags & 0x4) != 0;
 			if (!isVoice && thisPtr->filePath[0] != '\0')
@@ -179,70 +173,76 @@ namespace VATSSpeechFix
 		return OriginalFunc10(thisPtr);
 	}
 
-	void SetEnabled(bool enabled)
+	static bool InstallHooks()
 	{
-		if (s_timescalePatchOwner == TimescalePatchOwner::Stewie)
+		if (g_hooksInstalled)
+			return true;
+
+		s_timescalePatchOwner = GetTimescalePatchOwner();
+		if (s_timescalePatchOwner == TimescalePatchOwner::Other)
 		{
-			if (enabled)
-			{
-				if (!WriteTimescaleBytes(kStewieTimescalePatch))
-					Log("VATSSpeechFix: failed to restore Stewie audio inline at 0x%X", s_timescalePatchAddr);
-			}
-			else
-			{
-				if (!WriteTimescaleBytes(kVanillaTimescalePatch))
-					Log("VATSSpeechFix: failed to restore vanilla bytes at 0x%X", s_timescalePatchAddr);
-			}
+			Log("VATSSpeechFix: skipping 0x%X, inline site already owned by another patch", s_timescalePatchAddr);
+			return false;
 		}
 
-		g_enabled = enabled;
-	}
-
-	void Init(bool enabled)
-	{
 		//hook vtable Func09 (sound initialization)
 		OriginalFunc09 = *(BSWin32GameSound_Func09_t*)GameAddr::BSWin32GameSound_Vtbl_Func09;
-		SafeWrite32(GameAddr::BSWin32GameSound_Vtbl_Func09, (UInt32)HookedFunc09);
+		if (!SafeWrite32(GameAddr::BSWin32GameSound_Vtbl_Func09, (UInt32)HookedFunc09))
+		{
+			Log("VATSSpeechFix: failed to hook Func09");
+			return false;
+		}
 
 		//hook vtable Func10 (sound playback)
 		OriginalFunc10 = *(BSWin32GameSound_Func10_t*)GameAddr::BSWin32GameSound_Vtbl_Func10;
-		SafeWrite32(GameAddr::BSWin32GameSound_Vtbl_Func10, (UInt32)HookedFunc10);
-
-		s_timescalePatchOwner = GetTimescalePatchOwner();
+		if (!SafeWrite32(GameAddr::BSWin32GameSound_Vtbl_Func10, (UInt32)HookedFunc10))
+		{
+			Log("VATSSpeechFix: failed to hook Func10");
+			return false;
+		}
 
 		switch (s_timescalePatchOwner)
 		{
 		case TimescalePatchOwner::Vanilla:
-			if (s_timescaleDetour.WriteRelJump(s_timescalePatchAddr, HookedTimescaleNaked, sizeof(kVanillaTimescalePatch)))
+			if (s_timescaleDetour.WriteRelJump(s_timescalePatchAddr, HookedTimescaleNaked, sizeof(kVanillaTimescalePatch), &s_trampolineTimescale))
 			{
-				s_trampolineTimescale = (UInt8*)s_timescaleDetour.GetOverwrittenAddr();
 				Log("VATSSpeechFix: installed inline timescale detour");
 			}
 			else
 			{
 				Log("VATSSpeechFix: failed to install inline timescale detour");
+				return false;
 			}
 			break;
 		case TimescalePatchOwner::Stewie:
-			if (enabled)
-			{
-				Log("VATSSpeechFix: using Stewie audio inline at 0x%X", s_timescalePatchAddr);
-			}
-			else if (WriteTimescaleBytes(kVanillaTimescalePatch))
-			{
-				Log("VATSSpeechFix: restored vanilla bytes at 0x%X while disabled", s_timescalePatchAddr);
-			}
-			else
-			{
-				Log("VATSSpeechFix: failed to restore vanilla bytes at 0x%X while disabled", s_timescalePatchAddr);
-			}
-			break;
-		case TimescalePatchOwner::Other:
-			Log("VATSSpeechFix: skipping 0x%X, inline site already owned by another patch", s_timescalePatchAddr);
+			Log("VATSSpeechFix: using Stewie audio inline at 0x%X", s_timescalePatchAddr);
 			break;
 		}
 
-		g_enabled = enabled;
+		g_hooksInstalled = true;
+		return true;
+	}
+
+	void SetEnabled(bool enabled)
+	{
+		if (enabled && !InstallHooks())
+		{
+			StoreEnabled(false);
+			return;
+		}
+
+		StoreEnabled(enabled);
+	}
+
+	void Init(bool enabled)
+	{
+		if (enabled && !InstallHooks())
+		{
+			StoreEnabled(false);
+			return;
+		}
+
+		StoreEnabled(enabled);
 	}
 }
 

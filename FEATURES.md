@@ -13,6 +13,7 @@
 - GetAvailableRecipes - get available crafting recipes
 - ModChallenge - modify challenge progress
 - DamageActorValueAlt - extended actor value damage
+- ToggleAllPrimitives (TAP) - toggle primitive refs plus regular marker refs with fixed load-time behavior
 
 **Actor**
 - ResurrectActorEx - resurrect with options

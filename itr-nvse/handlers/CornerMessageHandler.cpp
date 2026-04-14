@@ -11,6 +11,7 @@
 #include "internal/ScopedLock.h"
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
+#include "internal/settings.h"
 
 enum eEmotion : UInt32 {
     kEmotion_Neutral = 0,
@@ -148,6 +149,10 @@ static void LoadIntegrationINIs()
 
         if (GetPrivateProfileIntA("CornerMessage", "bSuppressSound", 0, iniPath))
             g_suppressSound = true;
+        if (GetPrivateProfileIntA("CornerMessage", "bSuppressObjectives", 0, iniPath))
+            Settings::bSuppressObjectives = 1;
+        if (GetPrivateProfileIntA("CornerMessage", "bSuppressReputation", 0, iniPath))
+            Settings::bSuppressReputation = 1;
 
     } while (FindNextFileA(hFind, &fd));
     FindClose(hFind);

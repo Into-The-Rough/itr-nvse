@@ -19,6 +19,7 @@
 #include "commands/UICommands.h"
 #include "commands/ActorValueCommands.h"
 #include "commands/CommandBoundsCommand.h"
+#include "commands/ToggleAllPrimitives.h"
 #include "features/CameraOverride.h"
 #include "features/NoWeaponSearch.h"
 #include "features/PreventWeaponSwitch.h"
@@ -118,6 +119,9 @@ void RegisterAllCommands(void* nvsePtr)
 
 	/*4066*/ nvse->SetOpcodeBase(0x4066);
 	ImperativeCommands::RegisterCommands10(nvse);                    //RefillAmmo
+
+	/*4068*/ nvse->SetOpcodeBase(0x4068);
+	ToggleAllPrimitives::RegisterCommands(nvse);                    //ToggleAllPrimitives
 
 #ifdef _DEBUG
 	/*4067*/ nvse->SetOpcodeBase(0x4067);
