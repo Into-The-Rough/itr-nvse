@@ -65,6 +65,7 @@
 #include "features/ELMO.h"
 #include "commands/GroundCommands.h"
 #include "commands/GestureCommand.h"
+#include "commands/ToggleAllPrimitives.h"
 #include "features/LocationVisitPopup.h"
 #include "features/QuickReadNote.h"
 #include "features/VATSExtender.h"
@@ -176,6 +177,7 @@ static void ResetMusicStateForLoad()
 
 static FILE* g_logFile = nullptr;
 static bool g_vatsSpeechFixInitialized = false;
+static bool g_vatsSpeechFixDisabledByStewie = false;
 
 void Log(const char* fmt, ...)
 {
@@ -190,12 +192,57 @@ void Log(const char* fmt, ...)
 
 static void InitVATSSpeechFix()
 {
+	g_vatsSpeechFixDisabledByStewie = false;
+	if (GetModuleHandleA("nvse_stewie_tweaks.dll"))
+	{
+		static const UInt8 kStewieTimescalePatch[] = {
+			0xD9, 0xE1, 0x66, 0x66, 0x66, 0x66, 0x0F,
+			0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00
+		};
+
+		if (memcmp((void*)0xAEDFBD, kStewieTimescalePatch, sizeof(kStewieTimescalePatch)) == 0)
+		{
+			g_vatsSpeechFixDisabledByStewie = true;
+		}
+		else
+		{
+			char gameDir[MAX_PATH];
+			GetModuleFileNameA(nullptr, gameDir, MAX_PATH);
+			char* lastSlash = strrchr(gameDir, '\\');
+			if (!lastSlash)
+			{
+				g_vatsSpeechFixDisabledByStewie = true;
+			}
+			else
+			{
+				*lastSlash = '\0';
+
+				char stewieIniPath[MAX_PATH];
+				sprintf_s(stewieIniPath, "%s\\Data\\NVSE\\Plugins\\nvse_stewie_tweaks.ini", gameDir);
+				g_vatsSpeechFixDisabledByStewie = GetPrivateProfileIntA("Inlines", "bAudio", 1, stewieIniPath) != 0;
+			}
+		}
+	}
+
+	if (g_vatsSpeechFixDisabledByStewie)
+	{
+		Log("VATSSpeechFix disabled: Stewie Tweaks Inlines.bAudio owns audio hooks");
+		return;
+	}
+
 	VATSSpeechFix::Init(Settings::bVATSSpeechFix != 0);
 	g_vatsSpeechFixInitialized = true;
 }
 
 static void ApplyVATSSpeechFixSetting()
 {
+	if (g_vatsSpeechFixDisabledByStewie)
+	{
+		if (Settings::bVATSSpeechFix)
+			Log("VATSSpeechFix remains disabled: Stewie Tweaks Inlines.bAudio owns audio hooks");
+		return;
+	}
+
 	if (g_vatsSpeechFixInitialized)
 		VATSSpeechFix::SetEnabled(Settings::bVATSSpeechFix != 0);
 }
@@ -298,6 +345,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			GestureCommand::Reset();
 			ImperativeCommands::ClearState();
 			OnContactHandler::ClearState();
+			ToggleAllPrimitives::Reset();
 
 			OnEntryPointHandler::BuildEntryMap();
 			if (Settings::bAutoGodMode && !g_godModeExecuted)
@@ -388,6 +436,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			GroundCommands::Update();
 			ImperativeCommands::Update();
 			GestureCommand::Update();
+			ToggleAllPrimitives::Update();
 			break;
 	}
 }
