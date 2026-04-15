@@ -121,20 +121,9 @@ namespace
 		std::vector<PathPoint3> nodes;
 	};
 
-	struct CachedPathResult
-	{
-		bool hasValue = false;
-		UInt32 actorRefID = 0;
-		UInt32 targetRefID = 0;
-		DWORD tick = 0;
-		PathResult path;
-	};
-
 	constexpr UInt32 kMaxPathNodes = 1024;
-	constexpr DWORD kCacheTtlMs = 100;
 
 	DWORD s_mainThreadId = 0;
-	CachedPathResult s_cachedPath;
 
 	bool IsActorRef(TESObjectREFR* ref)
 	{
@@ -145,11 +134,6 @@ namespace
 	bool IsMainThread()
 	{
 		return !s_mainThreadId || GetCurrentThreadId() == s_mainThreadId;
-	}
-
-	UInt32 GetRefKey(TESObjectREFR* ref)
-	{
-		return ref->refID ? ref->refID : reinterpret_cast<UInt32>(ref);
 	}
 
 	float Distance(const PathPoint3& a, const PathPoint3& b)
@@ -223,27 +207,7 @@ namespace
 		if (!IsMainThread() || !actorRef || !target || !IsActorRef(actorRef))
 			return false;
 
-		const DWORD now = GetTickCount();
-		const UInt32 actorKey = GetRefKey(actorRef);
-		const UInt32 targetKey = GetRefKey(target);
-
-		if (s_cachedPath.hasValue &&
-			s_cachedPath.actorRefID == actorKey &&
-			s_cachedPath.targetRefID == targetKey &&
-			now - s_cachedPath.tick <= kCacheTtlMs)
-		{
-			out = s_cachedPath.path;
-			return out.complete;
-		}
-
-		s_cachedPath.hasValue = true;
-		s_cachedPath.actorRefID = actorKey;
-		s_cachedPath.targetRefID = targetKey;
-		s_cachedPath.tick = now;
-		s_cachedPath.path = PathResult();
-
-		BuildPath(static_cast<Actor*>(actorRef), target, s_cachedPath.path);
-		out = s_cachedPath.path;
+		BuildPath(static_cast<Actor*>(actorRef), target, out);
 		return out.complete;
 	}
 
@@ -282,7 +246,7 @@ bool Cmd_CanPathToRef_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 
-	Actor* target = nullptr;
+	TESObjectREFR* target = nullptr;
 	if (!ExtractArgs(EXTRACT_ARGS, &target))
 		return true;
 
@@ -297,7 +261,7 @@ bool Cmd_GetPathDistanceToRef_Execute(COMMAND_ARGS)
 {
 	*result = -1.0;
 
-	Actor* target = nullptr;
+	TESObjectREFR* target = nullptr;
 	if (!ExtractArgs(EXTRACT_ARGS, &target))
 		return true;
 
@@ -312,7 +276,7 @@ bool Cmd_GetPathNodeCount_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 
-	Actor* target = nullptr;
+	TESObjectREFR* target = nullptr;
 	if (!ExtractArgs(EXTRACT_ARGS, &target))
 		return true;
 
@@ -327,7 +291,7 @@ bool Cmd_GetNthPathNode_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 
-	Actor* target = nullptr;
+	TESObjectREFR* target = nullptr;
 	UInt32 index = 0;
 	auto* arr = CreateArray(scriptObj);
 
@@ -346,7 +310,7 @@ bool Cmd_GetPathToRef_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 
-	Actor* target = nullptr;
+	TESObjectREFR* target = nullptr;
 	auto* arr = CreateArray(scriptObj);
 
 	if (ExtractArgs(EXTRACT_ARGS, &target))
@@ -364,11 +328,11 @@ bool Cmd_GetPathToRef_Execute(COMMAND_ARGS)
 }
 
 static ParamInfo kParams_OneTargetRef[1] = {
-	{ "target", kParamType_Actor, 0 },
+	{ "target", kParamType_ObjectRef, 0 },
 };
 
 static ParamInfo kParams_TargetRef_OneIndex[2] = {
-	{ "target", kParamType_Actor, 0 },
+	{ "target", kParamType_ObjectRef, 0 },
 	{ "index", kParamType_Integer, 0 },
 };
 
