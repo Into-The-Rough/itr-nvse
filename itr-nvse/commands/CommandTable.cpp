@@ -20,6 +20,7 @@
 #include "commands/ActorValueCommands.h"
 #include "commands/CommandBoundsCommand.h"
 #include "commands/ToggleAllPrimitives.h"
+#include "commands/PathingCommands.h"
 #include "features/CameraOverride.h"
 #include "features/NoWeaponSearch.h"
 #include "features/PreventWeaponSwitch.h"
@@ -122,6 +123,9 @@ void RegisterAllCommands(void* nvsePtr)
 
 	/*4068*/ nvse->SetOpcodeBase(0x4068);
 	ToggleAllPrimitives::RegisterCommands(nvse);                    //ToggleAllPrimitives
+
+	/*40A0*/ nvse->SetOpcodeBase(0x40A0);
+	PathingCommands::RegisterCommands(nvse);                        //CanPathToRef..GetPathToRef
 
 #ifdef _DEBUG
 	/*4067*/ nvse->SetOpcodeBase(0x4067);
