@@ -200,6 +200,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="commands\UICommands.cpp" />
     <ClCompile Include="commands\ActorValueCommands.cpp" />
     <ClCompile Include="commands\GroundCommands.cpp" />
+    <ClCompile Include="commands\PathingCommands.cpp" />
     <ClCompile Include="commands\GestureCommand.cpp" />
     <ClCompile Include="internal\EventDispatch.cpp" />
   </ItemGroup>
@@ -281,6 +282,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="commands\UICommands.h" />
     <ClInclude Include="commands\ActorValueCommands.h" />
     <ClInclude Include="commands\GroundCommands.h" />
+    <ClInclude Include="commands\PathingCommands.h" />
     <ClInclude Include="commands\GestureCommand.h" />
   </ItemGroup>
   <ItemGroup>
