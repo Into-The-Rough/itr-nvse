@@ -259,6 +259,12 @@ void Suppress(bool suppress) {
 //RunResult can fire for script-chain side effects during greeting evaluation.
 //Ignore topicInfo mismatches unless SpeakSound already confirmed the line.
 static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt32 speakerRefID) {
+	//talking activators reach this hook too - skip non-actors before walking MobileObject
+	void* baseForm = *(void**)((UInt8*)speaker + 0x20);
+	if (!baseForm) return false;
+	UInt8 baseType = *(UInt8*)((UInt8*)baseForm + 0x04);
+	if (baseType != 0x2A && baseType != 0x2B) return false; //NPC / Creature
+
 	void* baseProcess = *(void**)((UInt8*)speaker + 0x68); //MobileObject+0x68
 	if (!baseProcess) return false;
 
