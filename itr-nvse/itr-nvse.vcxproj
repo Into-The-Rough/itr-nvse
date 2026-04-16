@@ -202,7 +202,9 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="commands\GroundCommands.cpp" />
     <ClCompile Include="commands\PathingCommands.cpp" />
     <ClCompile Include="commands\GestureCommand.cpp" />
+    <ClCompile Include="handlers\OnWitnessedHandler.cpp" />
     <ClCompile Include="internal\EventDispatch.cpp" />
+    <ClCompile Include="internal\WitnessScan.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ITR.h" />
@@ -284,6 +286,8 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="commands\GroundCommands.h" />
     <ClInclude Include="commands\PathingCommands.h" />
     <ClInclude Include="commands\GestureCommand.h" />
+    <ClInclude Include="handlers\OnWitnessedHandler.h" />
+    <ClInclude Include="internal\WitnessScan.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="exports.def" />

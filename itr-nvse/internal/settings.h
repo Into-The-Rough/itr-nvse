@@ -71,6 +71,9 @@ namespace Settings
 	inline int bOwnedCorpses = 0;
 	inline int bDetectionFollowerCrashFix = 1;
 
+	inline int iWitnessDetectionThreshold = 25;
+	inline float fWitnessSearchRadius = 2048.0f;
+
 	inline char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -148,6 +151,9 @@ namespace Settings
 		bMusicResetOnLoad = GetINIInt("Tweaks", "bMusicResetOnLoad", 1);
 		bOwnedCorpses = GetINIInt("Tweaks", "bOwnedCorpses", 0);
 		bDetectionFollowerCrashFix = GetINIInt("Tweaks", "bDetectionFollowerCrashFix", 1);
+
+		iWitnessDetectionThreshold = GetINIInt("OnWitnessed", "iDetectionThreshold", 25);
+		fWitnessSearchRadius = (float)GetINIInt("OnWitnessed", "iSearchRadius", 2048);
 
 	}
 }
