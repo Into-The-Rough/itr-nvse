@@ -321,6 +321,15 @@ No inline or vtable hooks. This handler polls from `kMessage_MainGameLoop`.
 |-----------|------|------|--------|-------|----------|
 | 0x8BFA40 | jump | 5 | 0x8BFA45 | yes | StealAlarmHook |
 
+### OnWitnessedHandler
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x9EB9C0 | jump | 7 | trampoline | yes | Hook_AddKnow |
+| 0x8C0EC0 | jump | 9 | trampoline | yes | Hook_Trespass |
+
+`Crime::AddtoActorKnowList` is the common choke point for steal / pickpocket / attack / murder — engine calls it once per unique witness during each `Actor::*Alarm` iteration. `Actor::TrespassAlarm` bypasses `Crime` entirely and is hooked separately; the trespass wrapper runs its own witness scan and dispatches `ITR:OnWitnessed` before chaining. Both dispatchers gate on `g_isLoadingSave` to avoid firing when `ExtraDataList::InitLoadGameBGS` rebuilds saved crime state.
+
 ### OnWeaponDropHandler
 
 | Hook Site | Type | Size | Return | Chain | Function |
