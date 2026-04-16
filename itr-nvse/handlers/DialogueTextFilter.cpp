@@ -294,17 +294,10 @@ static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt3
 	return false;
 }
 
-static bool IsActorRef(void* form) {
-	if (!form) return false;
-	UInt8 typeID = *(UInt8*)((UInt8*)form + 0x04);
-	return typeID == 0x44 || typeID == 0x45; //Character / Creature
-}
-
 static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 	if (DialogueTextFilter::g_suppressed) return;
 	if (!topicInfo || !speaker)
 		return;
-	if (!IsActorRef(speaker)) return;
 
 	UInt32 speakerRefID = ReadRefID(speaker);
 	UInt32 topicInfoRefID = ReadRefID(topicInfo);
@@ -413,7 +406,6 @@ static UInt32 g_speakChainAddr = 0;
 
 static void __cdecl OnSpeakConfirm(Actor* speaker, const char* voicePath) {
 	if (!speaker || !voicePath || !*voicePath) return;
-	if (!IsActorRef(speaker)) return;
 
 	UInt32 speakerRefID = ReadRefID(speaker);
 	if (!speakerRefID) return;
@@ -538,7 +530,7 @@ void Update()
 		TESTopicInfo* topicInfo = reinterpret_cast<TESTopicInfo*>(Engine::LookupFormByID(evt.topicInfoRefID));
 		TESTopic* topic = reinterpret_cast<TESTopic*>(Engine::LookupFormByID(evt.topicRefID));
 
-		if (!speaker || !topicInfo || !topic || !IsActorRef(speaker)) {
+		if (!speaker || !topicInfo || !topic) {
 			continue;
 		}
 
@@ -601,7 +593,7 @@ void Update()
 		UInt32 fullFormID = ((UInt32)modIndex << 24) | cit->baseFormID;
 		TESTopicInfo* info = reinterpret_cast<TESTopicInfo*>(Engine::LookupFormByID(fullFormID));
 		Actor* speaker = reinterpret_cast<Actor*>(Engine::LookupFormByID(cit->speakerRefID));
-		if (!info || !speaker || !IsActorRef(speaker)) {
+		if (!info || !speaker) {
 			cit = confirmedSpeaks.erase(cit);
 			continue;
 		}
