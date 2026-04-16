@@ -113,6 +113,7 @@
 - ITR:OnSoundCompleted - fires when tracked voice sound completes (filePath, flags, sourceForm)
 - ITR:OnContactBegin - fires when physics contact begins on watched actor (actor, contactType)
 - ITR:OnContactEnd - fires when physics contact ends on watched actor (actor, contactType)
+- ITR:OnWitnessed - fires per witness per crime (witness, perpetrator, crimeType, victim, detectionValue). Filterable on witness/perpetrator/victim refs/formlists/factions and on crimeType equality.
 
 ## Features
 

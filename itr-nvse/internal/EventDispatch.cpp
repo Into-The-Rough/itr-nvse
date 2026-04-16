@@ -33,6 +33,15 @@ void RegisterEvents()
 	g_eventManagerInterface->RegisterEvent("ITR:OnFrenzy", 1, oneForm, F::kFlag_FlushOnLoad);
 	g_eventManagerInterface->RegisterEvent("ITR:OnSteal", 5, stealParams, F::kFlag_FlushOnLoad);
 
+	static P witnessedParams[] = {
+		P::eParamType_AnyForm,  //witness
+		P::eParamType_AnyForm,  //perpetrator
+		P::eParamType_Int,      //crimeType
+		P::eParamType_AnyForm,  //victim / target
+		P::eParamType_Int,      //detectionValue
+	};
+	g_eventManagerInterface->RegisterEvent("ITR:OnWitnessed", 5, witnessedParams, F::kFlag_FlushOnLoad);
+
 	static P cornerParams[] = { P::eParamType_String, P::eParamType_Int, P::eParamType_String, P::eParamType_String, P::eParamType_Float, P::eParamType_Int };
 	g_eventManagerInterface->RegisterEvent("ITR:OnCornerMessage", 6, cornerParams, F::kFlag_FlushOnLoad);
 

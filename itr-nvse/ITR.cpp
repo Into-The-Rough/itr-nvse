@@ -37,6 +37,7 @@
 #include "handlers/OwnerNameInfoHandler.h"
 #include "handlers/OnMenuFilterChangeHandler.h"
 #include "handlers/OnMenuSideChangeHandler.h"
+#include "handlers/OnWitnessedHandler.h"
 
 #include "fixes/SlowMotionPhysicsFix.h"
 #include "fixes/VATSProjectileFix.h"
@@ -158,6 +159,7 @@ NVSECommandTableInterface* g_cmdTableInterface = nullptr;
 static PlayerCharacter** g_thePlayer = (PlayerCharacter**)0x011DEA3C;
 
 static bool g_godModeExecuted = false;
+bool g_isLoadingSave = false;
 
 void Log(const char* fmt, ...); //forward decl
 
@@ -334,8 +336,13 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				ELMO::Init(Settings::bSuppressObjectives != 0, Settings::bSuppressReputation != 0);
 			break;
 
+		case NVSEMessagingInterface::kMessage_PreLoadGame:
+			g_isLoadingSave = true;
+			break;
+
 		case NVSEMessagingInterface::kMessage_NewGame:
 		case NVSEMessagingInterface::kMessage_PostLoadGame:
+			g_isLoadingSave = false;
 			if (msg->type == NVSEMessagingInterface::kMessage_PostLoadGame && Settings::bMusicResetOnLoad)
 			{
 				ResetMusicStateForLoad();
@@ -480,6 +487,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 		logInit("OwnerNameInfoHandler", OwnerNameInfoHandler::Init());
 	logInit("OnMenuFilterChangeHandler", OnMenuFilterChangeHandler::Init((void*)nvse));
 	logInit("OnMenuSideChangeHandler", OnMenuSideChangeHandler::Init((void*)nvse));
+	logInit("OnWitnessedHandler", OnWitnessedHandler::Init((void*)nvse));
 	NoWeaponSearch::Init();
 	PreventWeaponSwitch::Init();
 }
