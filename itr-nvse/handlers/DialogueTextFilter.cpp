@@ -143,6 +143,10 @@ static void* GetActorVoiceType(Actor* actor) {
 	void* baseForm = *(void**)((UInt8*)actor + 0x20);
 	if (!baseForm) return nullptr;
 
+	//offsets are TESNPC-specific; TESCreature has different layout
+	UInt8 baseType = *(UInt8*)((UInt8*)baseForm + 0x04);
+	if (baseType != 0x2A) return nullptr;
+
 	void* voiceType = *(void**)((UInt8*)baseForm + 0x50);
 	if (voiceType) {
 		UInt8 vtTypeID = *(UInt8*)((UInt8*)voiceType + 0x04);
