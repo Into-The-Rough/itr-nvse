@@ -10,10 +10,6 @@ typedef unsigned short UInt16;
 typedef unsigned char UInt8;
 typedef signed int SInt32;
 
-//============================================================
-// FormatFileSize (from SaveFileSizeHandler.cpp)
-//============================================================
-
 static void FormatFileSize(unsigned long long bytes, char* out, size_t outSize)
 {
 	if (bytes >= 1048576ULL)
@@ -96,10 +92,6 @@ TEST(FormatFileSize_Megabytes_Fractional)
 	return true;
 }
 
-//============================================================
-// FormatReputationMessage (from ELMO.cpp)
-//============================================================
-
 static char g_msgBuffer[512];
 
 static const char* FormatReputationMessage(const char* factionName, const char* repTitle, const char* repDesc)
@@ -121,10 +113,6 @@ TEST(FormatReputationMessage_EmptyDesc)
 	ASSERT_STREQ(result, "Legion - Vilified. ");
 	return true;
 }
-
-//============================================================
-// GetFallDamageMultForActor (from FallDamageHandler.cpp)
-//============================================================
 
 static float g_globalFallDamageMult = 1.0f;
 static std::unordered_map<UInt32, float> g_actorFallDamageMults;
@@ -189,10 +177,6 @@ TEST(FallDamageMult_ZeroRefID)
 	g_actorFallDamageMults.clear();
 	return true;
 }
-
-//============================================================
-// GetExtraDataByType (from VATSLimbFix.cpp)
-//============================================================
 
 struct BSExtraData {
 	void** vtbl;

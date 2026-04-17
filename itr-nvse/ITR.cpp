@@ -178,12 +178,16 @@ static void ResetMusicStateForLoad()
 }
 
 static FILE* g_logFile = nullptr;
+static CRITICAL_SECTION g_logLock;
+static volatile LONG g_logLockInit = 0;
 static bool g_vatsSpeechFixInitialized = false;
 static bool g_vatsSpeechFixDisabledByStewie = false;
 
 void Log(const char* fmt, ...)
 {
 	if (!g_logFile) return;
+	InitCriticalSectionOnce(&g_logLockInit, &g_logLock);
+	ScopedLock lock(&g_logLock);
 	va_list args;
 	va_start(args, fmt);
 	vfprintf(g_logFile, fmt, args);
@@ -396,15 +400,18 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					CompanionWeightlessOverencumberedFix::SetEnabled(Settings::bCompanionWeightlessOverencumberedFix != 0);
 					NPCDoorUnlockBlock::SetLevel(Settings::iNPCDoorUnlockBlock);
 
-					if (Settings::bAutoGodMode && !oldGodMode)
+					if (*g_thePlayer)
 					{
-						*(UInt8*)0x11E07BA = 1;
-						Console_Print("itr-nvse: God mode enabled");
-					}
-					else if (!Settings::bAutoGodMode && oldGodMode)
-					{
-						*(UInt8*)0x11E07BA = 0;
-						Console_Print("itr-nvse: God mode disabled");
+						if (Settings::bAutoGodMode && !oldGodMode)
+						{
+							*(UInt8*)0x11E07BA = 1;
+							Console_Print("itr-nvse: God mode enabled");
+						}
+						else if (!Settings::bAutoGodMode && oldGodMode)
+						{
+							*(UInt8*)0x11E07BA = 0;
+							Console_Print("itr-nvse: God mode disabled");
+						}
 					}
 
 					if ((Settings::bSuppressObjectives != 0) != oldSuppressObjectives ||

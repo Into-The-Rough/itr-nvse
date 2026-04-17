@@ -76,10 +76,6 @@ static void QueueSoundEvent(const char* filePath, UInt32 flags, UInt32 soundForm
     if (OnSoundPlayedHandler::g_stateLockInit != 2) return;
 
     constexpr size_t kMaxQueueSize = 256;
-    {
-        ScopedLock lock(&OnSoundPlayedHandler::g_stateLock);
-        if (OnSoundPlayedHandler::g_pendingEvents.size() >= kMaxQueueSize) return;
-    }
 
     QueuedSoundEvent evt;
     if (filePath && filePath[0])
@@ -89,10 +85,9 @@ static void QueueSoundEvent(const char* filePath, UInt32 flags, UInt32 soundForm
     evt.soundFlags = flags;
     evt.soundFormID = soundFormID;
 
-    {
-        ScopedLock lock(&OnSoundPlayedHandler::g_stateLock);
-        OnSoundPlayedHandler::g_pendingEvents.push_back(evt);
-    }
+    ScopedLock lock(&OnSoundPlayedHandler::g_stateLock);
+    if (OnSoundPlayedHandler::g_pendingEvents.size() >= kMaxQueueSize) return;
+    OnSoundPlayedHandler::g_pendingEvents.push_back(evt);
 }
 
 static void QueueVoiceTracking(UInt32 soundID, const char* filePath, UInt32 flags, UInt32 soundFormID, const BSSoundHandle* handle)
@@ -101,10 +96,6 @@ static void QueueVoiceTracking(UInt32 soundID, const char* filePath, UInt32 flag
     if (soundID == 0 || soundID == 0xFFFFFFFF) return;
 
     constexpr size_t kMaxTrackedSounds = 64;
-    {
-        ScopedLock lock(&OnSoundPlayedHandler::g_stateLock);
-        if (OnSoundPlayedHandler::g_trackedSounds.size() >= kMaxTrackedSounds) return;
-    }
 
     TrackedVoiceSound tracked;
     tracked.soundID = soundID;
@@ -127,10 +118,9 @@ static void QueueVoiceTracking(UInt32 soundID, const char* filePath, UInt32 flag
     else
         tracked.filePath[0] = '\0';
 
-    {
-        ScopedLock lock(&OnSoundPlayedHandler::g_stateLock);
-        OnSoundPlayedHandler::g_trackedSounds.push_back(tracked);
-    }
+    ScopedLock lock(&OnSoundPlayedHandler::g_stateLock);
+    if (OnSoundPlayedHandler::g_trackedSounds.size() >= kMaxTrackedSounds) return;
+    OnSoundPlayedHandler::g_trackedSounds.push_back(tracked);
 }
 
 enum { kSoundFlag_IsVoice = 0x4 };

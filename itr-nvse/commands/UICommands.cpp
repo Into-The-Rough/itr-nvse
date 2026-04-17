@@ -36,6 +36,11 @@ namespace
 		return ((fn)vtbl[8])(tile);
 	}
 
+	constexpr UInt32 kAddr_BSFixedString_Ctor = 0x438170;
+	constexpr UInt32 kAddr_BSFixedString_Dtor = 0x4381D0;
+	constexpr UInt32 kAddr_NiSourceTexture_Create = 0xA5FD70;
+	constexpr UInt32 kAddr_NiSourceTexture_Params = 0x11A9598;
+
 	static void* CreateNiSourceTexture(const char* path)
 	{
 		//engine expects full path from Data\ e.g. "Textures\Interface\HUD\foo.dds"
@@ -43,9 +48,9 @@ namespace
 		_snprintf_s(fullPath, _TRUNCATE, "Textures\\%s", path);
 
 		void* fixedStr = nullptr;
-		ThisCall<void*>(0x438170, &fixedStr, fullPath);
-		auto tex = CdeclCall<void*>(0xA5FD70, &fixedStr, (void*)0x11A9598, true, false);
-		CdeclCall(0x4381D0, &fixedStr);
+		ThisCall<void*>(kAddr_BSFixedString_Ctor, &fixedStr, fullPath);
+		auto tex = CdeclCall<void*>(kAddr_NiSourceTexture_Create, &fixedStr, (void*)kAddr_NiSourceTexture_Params, true, false);
+		CdeclCall(kAddr_BSFixedString_Dtor, &fixedStr);
 		return tex;
 	}
 
