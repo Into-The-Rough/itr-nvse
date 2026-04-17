@@ -80,8 +80,8 @@
       <Message>Copying DLL and PDB to mod folder...</Message>
       <Command>copy "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
 if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"
-copy "$(TargetPath)" "D:\Modding\The Best of Times\mods\itr\NVSE\Plugins\itr-nvse.dll"
-if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\The Best of Times\mods\itr\NVSE\Plugins\itr-nvse.pdb"</Command>
+copy "$(TargetPath)" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
+if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -112,8 +112,8 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
       <Message>Copying DLL and PDB to mod folder...</Message>
       <Command>copy "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
 if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"
-copy "$(TargetPath)" "D:\Modding\The Best of Times\mods\itr\NVSE\Plugins\itr-nvse.dll"
-if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\The Best of Times\mods\itr\NVSE\Plugins\itr-nvse.pdb"</Command>
+copy "$(TargetPath)" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
+if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
