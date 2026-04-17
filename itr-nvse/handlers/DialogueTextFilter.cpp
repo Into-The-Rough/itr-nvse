@@ -297,19 +297,25 @@ static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt3
 static bool IsActorRef(void* form) {
 	if (!form) return false;
 	UInt8 typeID = *(UInt8*)((UInt8*)form + 0x04);
-	return typeID == 0x44 || typeID == 0x45; //Character / Creature
+	return typeID == 0x3B || typeID == 0x3C; //ACHR / ACRE
+}
+
+static bool IsWorldRef(void* form) {
+	if (!form) return false;
+	UInt8 typeID = *(UInt8*)((UInt8*)form + 0x04);
+	return typeID >= 0x3A && typeID <= 0x3C; //TESObjectREFR / ACHR / ACRE
 }
 
 static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 	if (DialogueTextFilter::g_suppressed) return;
 	if (!topicInfo || !speaker)
 		return;
-	if (!IsActorRef(speaker)) return;
+	if (!IsWorldRef(speaker)) return;
 
 	UInt32 speakerRefID = ReadRefID(speaker);
 	UInt32 topicInfoRefID = ReadRefID(topicInfo);
 
-	if (IsGreetingFalsePositive(speaker, topicInfoRefID, speakerRefID))
+	if (IsActorRef(speaker) && IsGreetingFalsePositive(speaker, topicInfoRefID, speakerRefID))
 		return;
 
 	TESTopicInfoResponse** ppResponse = ThisCall<TESTopicInfoResponse**>(
@@ -413,7 +419,7 @@ static UInt32 g_speakChainAddr = 0;
 
 static void __cdecl OnSpeakConfirm(Actor* speaker, const char* voicePath) {
 	if (!speaker || !voicePath || !*voicePath) return;
-	if (!IsActorRef(speaker)) return;
+	if (!IsWorldRef(speaker)) return;
 
 	UInt32 speakerRefID = ReadRefID(speaker);
 	if (!speakerRefID) return;
@@ -538,12 +544,13 @@ void Update()
 		TESTopicInfo* topicInfo = reinterpret_cast<TESTopicInfo*>(Engine::LookupFormByID(evt.topicInfoRefID));
 		TESTopic* topic = reinterpret_cast<TESTopic*>(Engine::LookupFormByID(evt.topicRefID));
 
-		if (!speaker || !topicInfo || !topic || !IsActorRef(speaker)) {
+		if (!speaker || !topicInfo || !topic || !IsWorldRef(speaker)) {
 			continue;
 		}
 
 		char voicePath[512] = {0};
-		bool hasVoice = BuildVoicePath(voicePath, sizeof(voicePath), topicInfo, speaker, evt.responseNum);
+		bool hasVoice = IsActorRef(speaker) &&
+			BuildVoicePath(voicePath, sizeof(voicePath), topicInfo, speaker, evt.responseNum);
 
 		if (!hasVoice) {
 			g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
@@ -601,22 +608,30 @@ void Update()
 		UInt32 fullFormID = ((UInt32)modIndex << 24) | cit->baseFormID;
 		TESTopicInfo* info = reinterpret_cast<TESTopicInfo*>(Engine::LookupFormByID(fullFormID));
 		Actor* speaker = reinterpret_cast<Actor*>(Engine::LookupFormByID(cit->speakerRefID));
-		if (!info || !speaker || !IsActorRef(speaker)) {
+		if (!info || !speaker || !IsWorldRef(speaker)) {
 			cit = confirmedSpeaks.erase(cit);
 			continue;
 		}
 
 		TESTopicInfoResponse** ppResp = ThisCall<TESTopicInfoResponse**>(
 			kAddr_GetResponses, info, nullptr);
-		const char* text = nullptr;
+		char textBuf[1024] = {0};
+		bool gotText = false;
 		if (ppResp && *ppResp) {
 			UInt8 rn = 1;
 			for (auto* r = *ppResp; r; r = r->next, rn++) {
-				if (rn == cit->responseNum) { text = r->responseText.CStr(); break; }
+				if (rn == cit->responseNum) {
+					const char* src = r->responseText.CStr();
+					if (src && *src) {
+						strncpy_s(textBuf, sizeof(textBuf), src, _TRUNCATE);
+						gotText = true;
+					}
+					break;
+				}
 			}
 		}
 
-		if (!text || !*text) {
+		if (!gotText) {
 			cit = confirmedSpeaks.erase(cit);
 			continue;
 		}
@@ -625,7 +640,7 @@ void Update()
 
 		g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
 			reinterpret_cast<TESObjectREFR*>(speaker),
-			speaker, topic, info, text, cit->voicePath);
+			speaker, topic, info, textBuf, cit->voicePath);
 		DialogueTextFilter::g_recentFallbacks.push_back(
 			{cit->speakerRefID, cit->baseFormID, cit->responseNum, nowTick});
 
