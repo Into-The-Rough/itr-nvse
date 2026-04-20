@@ -114,6 +114,8 @@
 - ITR:OnContactBegin - fires when physics contact begins on watched actor (actor, contactType)
 - ITR:OnContactEnd - fires when physics contact ends on watched actor (actor, contactType)
 - ITR:OnWitnessed - fires per witness per crime (witness, perpetrator, crimeType, victim, detectionValue). Filterable on witness/perpetrator/victim refs/formlists/factions and on crimeType equality.
+- ITR:OnImpactDataSpawn - fires when a projectile resolves ImpactData on a non-actor hit (impactData, x, y, z, normalX, normalY, normalZ, projectile, target, weapon, material)
+- ITR:OnSprayDecal - fires per blood spray decal placement during limb sever/explode (impactData, x, y, z, normalX, normalY, normalZ)
 
 ## Features
 

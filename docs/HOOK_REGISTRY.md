@@ -305,6 +305,14 @@ The first eight sites control dialogue flow; the last four are the `CameraHooks:
 |-----------|------|------|--------|-------|----------|
 | 0x8B9240 | jump | 9 | trampoline | yes | Hook_LimbCondition_HandleChange |
 
+### OnImpactDataSpawnHandler
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x9C20E0 | jump | 10 | trampoline | yes | HookSpawnCollisionEffects |
+
+Wraps `Projectile::SpawnCollisionEffects` so the event fires after the engine resolves the per-material `BGSImpactData` via `TESObjectWEAP::GetImpactDataForMaterial` (0x522BA0). Actor targets are skipped because the inner decal/sound path is gated on `!a2 || !a2->IsActor()`.
+
 ### OnJumpLandHandler
 
 No inline or vtable hooks. This handler polls from `kMessage_MainGameLoop`.
@@ -314,6 +322,15 @@ No inline or vtable hooks. This handler polls from `kMessage_MainGameLoop`.
 | Hook Site | Type | Size | Return | Chain | Function |
 |-----------|------|------|--------|-------|----------|
 | 0xAE5A50 | jump | 5 | trampoline | yes | HookedGetSoundHandle |
+
+### OnSprayDecalHandler
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x4A2D50 | jump | 12 | trampoline | yes | HookEmitterUpdate |
+| 0x4A36FD | call | 5 | continues | yes | HookSprayAddDecal |
+
+`BGSDecalEmitter::Update` wrapper stores the active emitter in a static so the inner `TESObjectCELL::AddDecal` call-site replacement can read `pImpactData` when firing `ITR:OnSprayDecal`. Only the one call site inside the emitter's raycast loop is redirected; other `AddDecal` callers are unaffected.
 
 ### OnStealHandler
 
