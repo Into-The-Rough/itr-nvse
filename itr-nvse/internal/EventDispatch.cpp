@@ -84,6 +84,24 @@ void RegisterEvents()
 	static P contactParams[] = { P::eParamType_AnyForm, P::eParamType_Int };
 	g_eventManagerInterface->RegisterEvent("ITR:OnContactBegin", 2, contactParams, F::kFlag_FlushOnLoad);
 	g_eventManagerInterface->RegisterEvent("ITR:OnContactEnd", 2, contactParams, F::kFlag_FlushOnLoad);
+
+	//impactData, x, y, z, normalX, normalY, normalZ, projectile, target, weapon, material
+	static P impactSpawnParams[] = {
+		P::eParamType_AnyForm,
+		P::eParamType_Float, P::eParamType_Float, P::eParamType_Float,
+		P::eParamType_Float, P::eParamType_Float, P::eParamType_Float,
+		P::eParamType_AnyForm, P::eParamType_AnyForm, P::eParamType_AnyForm,
+		P::eParamType_Int,
+	};
+	g_eventManagerInterface->RegisterEvent("ITR:OnImpactDataSpawn", 11, impactSpawnParams, F::kFlag_FlushOnLoad);
+
+	//impactData, x, y, z, normalX, normalY, normalZ
+	static P sprayDecalParams[] = {
+		P::eParamType_AnyForm,
+		P::eParamType_Float, P::eParamType_Float, P::eParamType_Float,
+		P::eParamType_Float, P::eParamType_Float, P::eParamType_Float,
+	};
+	g_eventManagerInterface->RegisterEvent("ITR:OnSprayDecal", 7, sprayDecalParams, F::kFlag_FlushOnLoad);
 }
 
 }

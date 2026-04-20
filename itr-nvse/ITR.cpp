@@ -38,6 +38,8 @@
 #include "handlers/OnMenuFilterChangeHandler.h"
 #include "handlers/OnMenuSideChangeHandler.h"
 #include "handlers/OnWitnessedHandler.h"
+#include "handlers/OnImpactDataSpawnHandler.h"
+#include "handlers/OnSprayDecalHandler.h"
 
 #include "fixes/SlowMotionPhysicsFix.h"
 #include "fixes/VATSProjectileFix.h"
@@ -495,6 +497,8 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	logInit("OnMenuFilterChangeHandler", OnMenuFilterChangeHandler::Init((void*)nvse));
 	logInit("OnMenuSideChangeHandler", OnMenuSideChangeHandler::Init((void*)nvse));
 	logInit("OnWitnessedHandler", OnWitnessedHandler::Init((void*)nvse));
+	logInit("OnImpactDataSpawnHandler", OnImpactDataSpawnHandler::Init((void*)nvse));
+	logInit("OnSprayDecalHandler", OnSprayDecalHandler::Init((void*)nvse));
 	NoWeaponSearch::Init();
 	PreventWeaponSwitch::Init();
 }
