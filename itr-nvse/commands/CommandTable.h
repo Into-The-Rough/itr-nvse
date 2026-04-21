@@ -67,8 +67,12 @@
 // 0x40A2  GetPathNodeCount
 // 0x40A3  GetNthPathNode
 // 0x40A4  GetPathToRef
+// 0x40A5  SetHairColorAlt
+// 0x40A6  GetHairColorAlt
+// 0x40A7  SetCasinoBan
+// 0x40A8  GetCasinoBan
 // gaps in itr-nvse itself: 0x4033, 0x403D-0x404F
-// next free itr-nvse-local slot avoiding shared-suite reservations: 0x40A5
+// next free itr-nvse-local slot avoiding shared-suite reservations: 0x40A9
 // shared suite occupancy for borrowed opcodes is tracked in /mnt/d/plugins/opcodes.txt
 
 void RegisterAllCommands(void* nvse);

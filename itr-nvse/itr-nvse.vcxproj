@@ -201,6 +201,8 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="commands\ActorValueCommands.cpp" />
     <ClCompile Include="commands\GroundCommands.cpp" />
     <ClCompile Include="commands\PathingCommands.cpp" />
+    <ClCompile Include="commands\HairColorCommands.cpp" />
+    <ClCompile Include="commands\CasinoBanCommands.cpp" />
     <ClCompile Include="commands\GestureCommand.cpp" />
     <ClCompile Include="handlers\OnWitnessedHandler.cpp" />
     <ClCompile Include="handlers\OnImpactDataSpawnHandler.cpp" />
@@ -287,6 +289,8 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="commands\ActorValueCommands.h" />
     <ClInclude Include="commands\GroundCommands.h" />
     <ClInclude Include="commands\PathingCommands.h" />
+    <ClInclude Include="commands\HairColorCommands.h" />
+    <ClInclude Include="commands\CasinoBanCommands.h" />
     <ClInclude Include="commands\GestureCommand.h" />
     <ClInclude Include="handlers\OnWitnessedHandler.h" />
     <ClInclude Include="handlers\OnImpactDataSpawnHandler.h" />
