@@ -459,11 +459,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 static void InitLog()
 {
-	char logPath[MAX_PATH];
-	GetModuleFileNameA(GetModuleHandleA("itr-nvse.dll"), logPath, MAX_PATH);
-	char* lastSlash = strrchr(logPath, '\\');
-	if (lastSlash) strcpy_s(lastSlash + 1, MAX_PATH - (lastSlash + 1 - logPath), "itr-nvse.log");
-	g_logFile = fopen(logPath, "w");
+	CreateDirectoryA("logs", nullptr);
+	g_logFile = fopen("logs\\itr-nvse.log", "w");
 }
 
 
