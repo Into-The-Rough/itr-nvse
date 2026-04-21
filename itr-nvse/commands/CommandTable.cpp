@@ -21,6 +21,8 @@
 #include "commands/CommandBoundsCommand.h"
 #include "commands/ToggleAllPrimitives.h"
 #include "commands/PathingCommands.h"
+#include "commands/HairColorCommands.h"
+#include "commands/CasinoBanCommands.h"
 #include "features/CameraOverride.h"
 #include "features/NoWeaponSearch.h"
 #include "features/PreventWeaponSwitch.h"
@@ -126,6 +128,12 @@ void RegisterAllCommands(void* nvsePtr)
 
 	/*40A0*/ nvse->SetOpcodeBase(0x40A0);
 	PathingCommands::RegisterCommands(nvse);                        //CanPathToRef..GetPathToRef
+
+	/*40A5*/ nvse->SetOpcodeBase(0x40A5);
+	HairColorCommands::RegisterCommands(nvse);                      //SetHairColorAlt, GetHairColorAlt
+
+	/*40A7*/ nvse->SetOpcodeBase(0x40A7);
+	CasinoBanCommands::RegisterCommands(nvse);                      //SetCasinoBan, GetCasinoBan
 
 #ifdef _DEBUG
 	/*4067*/ nvse->SetOpcodeBase(0x4067);
