@@ -67,10 +67,9 @@ static CasinoStats* CreateEntry(SimpleListNode* list, UInt32 refID)
 	return entry;
 }
 
+//TESForm.uiFormID at +0x0C (matches vanilla "this_C" accessor)
 static UInt32 GetCasinoRefID(TESForm* casino) {
-	typedef UInt32 (__thiscall* _GetRefID)(void*);
-	auto fn = (_GetRefID)(*(void***)casino)[3];
-	return fn(casino);
+	return *(UInt32*)((UInt8*)casino + 0x0C);
 }
 
 static ParamInfo kParams_SetCasinoBan[2] = {
