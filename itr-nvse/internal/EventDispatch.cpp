@@ -102,6 +102,7 @@ void RegisterEvents()
 		P::eParamType_Float, P::eParamType_Float, P::eParamType_Float,
 	};
 	g_eventManagerInterface->RegisterEvent("ITR:OnSprayDecal", 7, sprayDecalParams, F::kFlag_FlushOnLoad);
+	g_eventManagerInterface->RegisterEvent("ITR:OnCasinoBan", 1, oneForm, F::kFlag_FlushOnLoad);
 }
 
 }
