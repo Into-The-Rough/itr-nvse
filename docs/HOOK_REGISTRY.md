@@ -39,12 +39,6 @@ Call-site replacement in `SetHUDCrosshairStrings`, not a global `GetBaseFullName
 
 Wrappers load extra context into `EDX` and tail-jump to typed `__fastcall` replacements so the compiler owns cleanup.
 
-### CompanionWeightlessOverencumberedFix
-
-| Hook Site | Type | Size | Return | Chain | Function |
-|-----------|------|------|--------|-------|----------|
-| 0x75DE01 | call | 5 | normal | typed replacement | Hook_GetMaxCarryWeightPerkModified_Wrapper |
-
 ### DetectionFollowerCrashFix
 
 | Hook Site | Type | Size | Return | Chain | Function |
