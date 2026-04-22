@@ -98,13 +98,6 @@
 					"mouse": "Companions killing faction members doesn't give player infamy",
 					"vars": [{ "configINI": "Tweaks:bCompanionNoInfamy", "default": 0 }]
 				},
-				"10": {
-					"title": "Companion Weightless Transfer Fix",
-					"type": 5,
-					"enable": 1,
-					"mouse": "Allow giving zero-weight items to overencumbered companions",
-					"vars": [{ "configINI": "Tweaks:bCompanionWeightlessOverencumberedFix", "default": 0 }]
-				},
 				"11": {
 					"title": "Quick Read Note",
 					"enable": 1,

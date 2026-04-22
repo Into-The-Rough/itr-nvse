@@ -57,7 +57,6 @@
 #include "fixes/VATSSpeechFix.h"
 #include "fixes/CombatItemTimerFix.h"
 #include "fixes/CompanionNoInfamy.h"
-#include "fixes/CompanionWeightlessOverencumberedFix.h"
 #include "fixes/PathingNullActorFix.h"
 #include "fixes/NavMeshInfoCrashFix.h"
 #include "fixes/InitHavokCrashFix.h"
@@ -318,7 +317,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bNPCDoctorsBagUse)
 					NPCDoctorsBagUse::Init(Settings::fDoctorsBagUseTimer);
 				CompanionNoInfamy::Init(Settings::bCompanionNoInfamy != 0);
-				CompanionWeightlessOverencumberedFix::Init(Settings::bCompanionWeightlessOverencumberedFix != 0);
 				if (Settings::bPathingNullActorFix)
 					PathingNullActorFix::Init();
 				if (Settings::bNavMeshInfoCrashFix)
@@ -399,7 +397,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					ApplyVATSSpeechFixSetting();
 					ReversePickpocketNoKarmaFix::SetEnabled(Settings::bReversePickpocketNoKarma != 0);
 					CompanionNoInfamy::SetEnabled(Settings::bCompanionNoInfamy != 0);
-					CompanionWeightlessOverencumberedFix::SetEnabled(Settings::bCompanionWeightlessOverencumberedFix != 0);
 					NPCDoorUnlockBlock::SetLevel(Settings::iNPCDoorUnlockBlock);
 
 					if (*g_thePlayer)

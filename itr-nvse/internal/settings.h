@@ -63,7 +63,6 @@ namespace Settings
 	inline float fDoctorsBagUseTimer = 15.0f;
 
 	inline int bCompanionNoInfamy = 0;
-	inline int bCompanionWeightlessOverencumberedFix = 0;
 	inline int bPathingNullActorFix = 1;
 	inline int bNavMeshInfoCrashFix = 1;
 	inline int bInitHavokCrashFix = 1;
@@ -142,7 +141,6 @@ namespace Settings
 		fDoctorsBagUseTimer = (float)GetINIInt("NPCDoctorsBagUse", "iUseTimer", 15);
 
 		bCompanionNoInfamy = GetINIInt("Tweaks", "bCompanionNoInfamy", 0);
-		bCompanionWeightlessOverencumberedFix = GetINIInt("Tweaks", "bCompanionWeightlessOverencumberedFix", 0);
 
 		bPathingNullActorFix = GetINIInt("Tweaks", "bPathingNullActorFix", 1);
 		bNavMeshInfoCrashFix = GetINIInt("Tweaks", "bNavMeshInfoCrashFix", 1);

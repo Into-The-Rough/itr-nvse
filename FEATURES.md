@@ -156,7 +156,6 @@
 - AshPileNames - show original NPC name for ash piles
 - ReversePickpocketNoKarmaFix - no karma loss on reverse pickpocket of non-explosives
 - CompanionNoInfamy - companion kills don't give player faction infamy
-- CompanionWeightlessOverencumberedFix - allow giving zero-weight items to overencumbered companions
 - DoorPackageOwnershipFix - fix NPCs with lock/unlock packages locking doors in cells they don't own
 - NPCDoorUnlockBlock - configurable NPC door unlock restrictions (vanilla/strict/full)
 - MusicResetOnLoad - reset music state when loading a save to fix stuck or missing music
