@@ -40,6 +40,7 @@
 #include "handlers/OnWitnessedHandler.h"
 #include "handlers/OnImpactDataSpawnHandler.h"
 #include "handlers/OnSprayDecalHandler.h"
+#include "handlers/OnCasinoBanHandler.h"
 
 #include "fixes/SlowMotionPhysicsFix.h"
 #include "fixes/VATSProjectileFix.h"
@@ -355,6 +356,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			GroundCommands::ClearState();
 			GestureCommand::Reset();
 			ImperativeCommands::ClearState();
+			OnCasinoBanHandler::ClearState();
 			OnContactHandler::ClearState();
 			ToggleAllPrimitives::Reset();
 
@@ -435,6 +437,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			DoubleTapHandler::Update();
 			OnSoundPlayedHandler::Update();
 			OnJumpLandHandler::Update();
+			OnCasinoBanHandler::Update();
 			OnCombatProcedureHandler::Update();
 			OnContactHandler::Update();
 			OnMenuFilterChangeHandler::Update();
@@ -493,6 +496,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	logInit("OnWitnessedHandler", OnWitnessedHandler::Init((void*)nvse));
 	logInit("OnImpactDataSpawnHandler", OnImpactDataSpawnHandler::Init((void*)nvse));
 	logInit("OnSprayDecalHandler", OnSprayDecalHandler::Init((void*)nvse));
+	logInit("OnCasinoBanHandler", OnCasinoBanHandler::Init((void*)nvse));
 	NoWeaponSearch::Init();
 	PreventWeaponSwitch::Init();
 }
