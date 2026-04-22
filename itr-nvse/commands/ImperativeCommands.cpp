@@ -1791,50 +1791,93 @@ static const _ActorReload ActorReload = (_ActorReload)0x8A8420;
 typedef bool (__thiscall *_ItemChangeHasWeaponMod)(void*, UInt32);
 static const _ItemChangeHasWeaponMod ItemChangeHasWeaponMod = (_ItemChangeHasWeaponMod)0x4BDA70;
 
+//Actor::Reload calls TESObjectWEAP::GetEquippedAmmo which returns HighProcess->pCurrentAmmo
+//if set, else the weapon's default Ammo (not the AmmoList). On save-load the actor's
+//pCurrentAmmo is null, so a reload fails when the only inventory ammo is an override from
+//the weapon's AmmoList (e.g. Max Charge packs). Pre-seed pCurrentAmmo with the correct
+//entry the same way InventoryChanges::GetAmmoForWeapon resolves it.
+typedef void* (__cdecl *_GetInventoryChanges)(TESObjectREFR*);
+static const _GetInventoryChanges GetInventoryChanges = (_GetInventoryChanges)0x4BF220;
+
+typedef TESForm* (__thiscall *_GetAmmoForWeapon)(void*, TESObjectWEAP*, bool*);
+static const _GetAmmoForWeapon GetAmmoForWeapon = (_GetAmmoForWeapon)0x4C7300;
+
+typedef void* (__thiscall *_GetInventoryItem)(void*, TESForm*, UInt32);
+static const _GetInventoryItem GetInventoryItem = (_GetInventoryItem)0x4D0650;
+
 DEFINE_COMMAND_PLUGIN(ForceReload, "Forces actor to reload their weapon", 1, 0, nullptr);
 
 bool Cmd_ForceReload_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 
-	if (!thisObj || !IsActorRef(thisObj)) return true;
+	if (!thisObj || !IsActorRef(thisObj)) { Log("[ForceReload] no thisObj or not actor"); return true; }
 
 	Actor* actor = (Actor*)thisObj;
-	if (ActorIsDead(actor, false)) return true;
+	if (ActorIsDead(actor, false)) { Log("[ForceReload] actor dead"); return true; }
 
 	UInt32 pProcess = *(UInt32*)((UInt8*)actor + 0x68);
-	if (!pProcess) return true;
+	if (!pProcess) { Log("[ForceReload] no pProcess"); return true; }
 
-	//processLevel at +0x28, must be 0 for HighProcess
 	UInt32 processLevel = *(UInt32*)(pProcess + 0x28);
-	if (processLevel != 0) return true;
+	if (processLevel != 0) { Log("[ForceReload] processLevel=%u (not HighProcess)", processLevel); return true; }
 
-	if (!thisObj->GetNiNode()) return true;
+	if (!thisObj->GetNiNode()) { Log("[ForceReload] no NiNode"); return true; }
 
 	UInt32 vtable = *(UInt32*)pProcess;
-	if (!vtable) return true;
+	if (!vtable) { Log("[ForceReload] no vtable"); return true; }
 
-	//vtable[82] = GetCurrentWeapon
 	typedef UInt32 (__thiscall *GetCurrentWeapon_t)(UInt32);
 	GetCurrentWeapon_t GetCurrentWeapon = (GetCurrentWeapon_t)(*(UInt32*)(vtable + 82 * 4));
 	UInt32 weaponInfo = GetCurrentWeapon(pProcess);
-	if (!weaponInfo) return true;
+	if (!weaponInfo) { Log("[ForceReload] no weaponInfo"); return true; }
 
 	TESObjectWEAP* weapon = (TESObjectWEAP*)(*(UInt32*)(weaponInfo + 0x08));
-	if (!weapon) return true;
+	if (!weapon) { Log("[ForceReload] no weapon form"); return true; }
 
-	//vtable[83] = GetAmmoInfo, returns AmmoInfo* with count at +0x04
 	typedef UInt32 (__thiscall *GetAmmoInfo_t)(UInt32);
 	GetAmmoInfo_t GetAmmoInfo = (GetAmmoInfo_t)(*(UInt32*)(vtable + 83 * 4));
 	UInt32 ammoInfo = GetAmmoInfo(pProcess);
 
-	//set current ammo count to 0 to bypass "clip is full" check in Actor::Reload
-	if (ammoInfo) {
+	void* invChanges = nullptr;
+	TESForm* correctAmmo = nullptr;
+	bool hasAmmo = false;
+	if (!ammoInfo) {
+		invChanges = GetInventoryChanges(thisObj);
+	}
+	if (invChanges) {
+		correctAmmo = GetAmmoForWeapon(invChanges, weapon, &hasAmmo);
+	}
+
+	TESForm* currentAmmoForm = ammoInfo ? *(TESForm**)(ammoInfo + 0x08) : nullptr;
+	UInt32 currCount = ammoInfo ? *(UInt32*)(ammoInfo + 0x04) : 0;
+	Log("[ForceReload] actor=%08X weapon=%08X invChg=%p ammoInfo=%08X currForm=%08X currCount=%u correctAmmo=%08X hasAmmo=%d",
+		thisObj->refID, weapon->refID,
+		invChanges, ammoInfo,
+		currentAmmoForm ? currentAmmoForm->refID : 0, currCount,
+		correctAmmo ? correctAmmo->refID : 0, hasAmmo);
+
+	if (!ammoInfo && correctAmmo && invChanges) {
+		void* newEntry = GetInventoryItem(invChanges, correctAmmo, 0);
+		Log("[ForceReload] preseed path, newEntry=%p", newEntry);
+		if (newEntry) {
+			typedef void (__thiscall *SetAmmoInfo_t)(UInt32, void*);
+			SetAmmoInfo_t SetAmmoInfo = (SetAmmoInfo_t)(*(UInt32*)(vtable + 90 * 4));
+			*(SInt32*)((UInt8*)newEntry + 0x04) = 0;
+			SetAmmoInfo(pProcess, newEntry);
+		}
+	}
+	else if (ammoInfo) {
+		Log("[ForceReload] zero-count path");
 		*(SInt32*)(ammoInfo + 0x04) = 0;
+	}
+	else {
+		Log("[ForceReload] no preseed, no ammoInfo");
 	}
 
 	bool hasExtendedMag = ItemChangeHasWeaponMod((void*)weaponInfo, 11);
 	char reloadResult = ActorReload(actor, weapon, 2, hasExtendedMag);
+	Log("[ForceReload] ActorReload returned %d", (int)reloadResult);
 	*result = reloadResult ? 1 : 0;
 
 	return true;
