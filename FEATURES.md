@@ -77,7 +77,8 @@
 - GetDisplayedDialogueInfos - get array of topic infos shown in dialogue menu
 
 **UI**
-- SetUIAlphaMap - UI alpha modification
+- SetUIAlphaMap - applies an alpha-map texture to a UI image tile
+- SetUITexOffset - scrolls a UI image tile's texture coordinates
 
 **Input**
 - DisableKeyEx - disable key with handler

@@ -71,8 +71,9 @@
 // 0x40A6  GetHairColorAlt
 // 0x40A7  SetCasinoBan
 // 0x40A8  GetCasinoBan
+// 0x40A9  SetUITexOffset
 // gaps in itr-nvse itself: 0x4033, 0x403D-0x404F
-// next free itr-nvse-local slot avoiding shared-suite reservations: 0x40A9
+// next free itr-nvse-local slot avoiding shared-suite reservations: 0x40AA
 // shared suite occupancy for borrowed opcodes is tracked in /mnt/d/plugins/opcodes.txt
 
 void RegisterAllCommands(void* nvse);
