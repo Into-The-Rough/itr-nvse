@@ -63,6 +63,7 @@
 #include "fixes/InitHavokCrashFix.h"
 #include "fixes/OwnedCorpses.h"
 #include "fixes/DetectionFollowerCrashFix.h"
+#include "fixes/InlineGlyphFix.h"
 #include "features/MessageBoxQuickClose.h"
 #include "features/PreventWeaponSwitch.h"
 #include "features/ELMO.h"
@@ -326,6 +327,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					InitHavokCrashFix::Init();
 				if (Settings::bDetectionFollowerCrashFix)
 					DetectionFollowerCrashFix::Init();
+				if (Settings::bInlineGlyphFix)
+					InlineGlyphFix::Init();
 				EventDispatch::RegisterEvents();
 				g_hooksInstalled = true;
 			}
@@ -400,6 +403,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					ReversePickpocketNoKarmaFix::SetEnabled(Settings::bReversePickpocketNoKarma != 0);
 					CompanionNoInfamy::SetEnabled(Settings::bCompanionNoInfamy != 0);
 					NPCDoorUnlockBlock::SetLevel(Settings::iNPCDoorUnlockBlock);
+					InlineGlyphFix::SetEnabled(Settings::bInlineGlyphFix != 0);
 
 					if (*g_thePlayer)
 					{
