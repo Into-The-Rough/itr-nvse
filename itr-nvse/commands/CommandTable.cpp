@@ -135,6 +135,9 @@ void RegisterAllCommands(void* nvsePtr)
 	/*40A7*/ nvse->SetOpcodeBase(0x40A7);
 	CasinoBanCommands::RegisterCommands(nvse);                      //SetCasinoBan, GetCasinoBan
 
+	/*40A9*/ nvse->SetOpcodeBase(0x40A9);
+	UICommands::RegisterCommands2(nvse);                            //SetUITexOffset
+
 #ifdef _DEBUG
 	/*4067*/ nvse->SetOpcodeBase(0x4067);
 	CommandBoundsCommand::RegisterCommands(nvse);                    //RunITRCommandBounds
