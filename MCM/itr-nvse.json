@@ -464,58 +464,79 @@
 					"vars": [{ "configINI": "Tweaks:bMusicResetOnLoad", "default": 1 }]
 				},
 				"8": {
+					"title": "Inline Glyph Fix",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Scale inline button glyphs to the tile's font and zoom (fixes oversized glyphs in ELMO, B42 Notify, etc)",
+					"vars": [{ "configINI": "Tweaks:bInlineGlyphFix", "default": 0 }]
+				},
+				"9": {
+					"title": "Inline Glyph Scale",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Visual size multiplier for inline button glyphs, as percent",
+					"vars": [{ "configINI": "Tweaks:iInlineGlyphVisualScalePercent", "default": 88 }],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 1,
+						"valueMin": 50,
+						"valueMax": 120,
+						"suffix": "%"
+					}
+				},
+				"10": {
 					"title": "VATS Fixes",
 					"enable": 1,
 					"type": 0
 				},
-				"9": {
+				"11": {
 					"title": "VATS Projectile Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix projectile hit chance in VATS",
 					"vars": [{ "configINI": "Tweaks:bVATSProjectileFix", "default": 1 }]
 				},
-				"10": {
+				"12": {
 					"title": "VATS Limb Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Hide dismembered limbs in VATS",
 					"vars": [{ "configINI": "Tweaks:bVATSLimbFix", "default": 0 }]
 				},
-				"11": {
+				"13": {
 					"title": "VATS Speech Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Prevent voice/dialogue from slowing down during VATS",
 					"vars": [{ "configINI": "Tweaks:bVATSSpeechFix", "default": 0 }]
 				},
-				"12": {
+				"14": {
 					"title": "Crash Fixes",
 					"enable": 1,
 					"type": 0
 				},
-				"13": {
+				"15": {
 					"title": "Detection Follower Crash Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix crash when GetDetectionState called during cell transitions",
 					"vars": [{ "configINI": "Tweaks:bDetectionFollowerCrashFix", "default": 1 }]
 				},
-				"14": {
+				"16": {
 					"title": "Pathing Null Actor Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix crash from null actor in pathing code",
 					"vars": [{ "configINI": "Tweaks:bPathingNullActorFix", "default": 1 }]
 				},
-				"15": {
+				"17": {
 					"title": "NavMesh Info Crash Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix crash in NavMesh info processing",
 					"vars": [{ "configINI": "Tweaks:bNavMeshInfoCrashFix", "default": 1 }]
 				},
-				"16": {
+				"18": {
 					"title": "Init Havok Crash Fix",
 					"type": 5,
 					"enable": 1,

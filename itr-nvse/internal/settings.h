@@ -69,6 +69,8 @@ namespace Settings
 	inline int bMusicResetOnLoad = 1;
 	inline int bOwnedCorpses = 0;
 	inline int bDetectionFollowerCrashFix = 1;
+	inline int bInlineGlyphFix = 0;
+	inline int iInlineGlyphVisualScalePercent = 88;
 
 	inline int iWitnessDetectionThreshold = 25;
 	inline float fWitnessSearchRadius = 2048.0f;
@@ -149,6 +151,8 @@ namespace Settings
 		bMusicResetOnLoad = GetINIInt("Tweaks", "bMusicResetOnLoad", 1);
 		bOwnedCorpses = GetINIInt("Tweaks", "bOwnedCorpses", 0);
 		bDetectionFollowerCrashFix = GetINIInt("Tweaks", "bDetectionFollowerCrashFix", 1);
+		bInlineGlyphFix = GetINIInt("Tweaks", "bInlineGlyphFix", 0);
+		iInlineGlyphVisualScalePercent = GetINIInt("Tweaks", "iInlineGlyphVisualScalePercent", 88);
 
 		iWitnessDetectionThreshold = GetINIInt("OnWitnessed", "iDetectionThreshold", 25);
 		fWitnessSearchRadius = (float)GetINIInt("OnWitnessed", "iSearchRadius", 2048);
