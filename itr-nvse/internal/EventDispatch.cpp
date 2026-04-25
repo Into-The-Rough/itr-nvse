@@ -102,6 +102,17 @@ void RegisterEvents()
 		P::eParamType_Float, P::eParamType_Float, P::eParamType_Float,
 	};
 	g_eventManagerInterface->RegisterEvent("ITR:OnSprayDecal", 7, sprayDecalParams, F::kFlag_FlushOnLoad);
+
+	//actor, impactData, x, y, z, dx, dy, dz, hitLocation, source, weapon
+	static P woundSprayParams[] = {
+		P::eParamType_AnyForm, P::eParamType_AnyForm,
+		P::eParamType_Float, P::eParamType_Float, P::eParamType_Float,
+		P::eParamType_Float, P::eParamType_Float, P::eParamType_Float,
+		P::eParamType_Int,
+		P::eParamType_AnyForm, P::eParamType_AnyForm,
+	};
+	g_eventManagerInterface->RegisterEvent("ITR:OnWoundSpray", 11, woundSprayParams, F::kFlag_FlushOnLoad);
+
 	g_eventManagerInterface->RegisterEvent("ITR:OnCasinoBan", 1, oneForm, F::kFlag_FlushOnLoad);
 }
 

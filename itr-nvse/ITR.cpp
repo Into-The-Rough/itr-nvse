@@ -40,6 +40,7 @@
 #include "handlers/OnWitnessedHandler.h"
 #include "handlers/OnImpactDataSpawnHandler.h"
 #include "handlers/OnSprayDecalHandler.h"
+#include "handlers/OnWoundSprayHandler.h"
 #include "handlers/OnCasinoBanHandler.h"
 
 #include "fixes/SlowMotionPhysicsFix.h"
@@ -500,6 +501,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	logInit("OnWitnessedHandler", OnWitnessedHandler::Init((void*)nvse));
 	logInit("OnImpactDataSpawnHandler", OnImpactDataSpawnHandler::Init((void*)nvse));
 	logInit("OnSprayDecalHandler", OnSprayDecalHandler::Init((void*)nvse));
+	logInit("OnWoundSprayHandler", OnWoundSprayHandler::Init((void*)nvse));
 	logInit("OnCasinoBanHandler", OnCasinoBanHandler::Init((void*)nvse));
 	NoWeaponSearch::Init();
 	PreventWeaponSwitch::Init();

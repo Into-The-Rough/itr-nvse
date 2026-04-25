@@ -207,6 +207,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="handlers\OnWitnessedHandler.cpp" />
     <ClCompile Include="handlers\OnImpactDataSpawnHandler.cpp" />
     <ClCompile Include="handlers\OnSprayDecalHandler.cpp" />
+    <ClCompile Include="handlers\OnWoundSprayHandler.cpp" />
     <ClCompile Include="handlers\OnCasinoBanHandler.cpp" />
     <ClCompile Include="internal\EventDispatch.cpp" />
     <ClCompile Include="internal\WitnessScan.cpp" />
@@ -296,6 +297,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="handlers\OnWitnessedHandler.h" />
     <ClInclude Include="handlers\OnImpactDataSpawnHandler.h" />
     <ClInclude Include="handlers\OnSprayDecalHandler.h" />
+    <ClInclude Include="handlers\OnWoundSprayHandler.h" />
     <ClInclude Include="handlers\OnCasinoBanHandler.h" />
     <ClInclude Include="internal\WitnessScan.h" />
   </ItemGroup>
