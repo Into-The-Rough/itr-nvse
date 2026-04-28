@@ -1,6 +1,6 @@
-//centralised command registration
+//centralised itr-nvse command registration
 //each *_Init still queries interfaces and registers commands sequentially,
-//but ALL SetOpcodeBase calls are here so the full map is visible
+//but ALL itr-nvse SetOpcodeBase calls are here so the plugin map is visible
 
 #include "CommandTable.h"
 #include "nvse/PluginAPI.h"
@@ -23,6 +23,8 @@
 #include "commands/PathingCommands.h"
 #include "commands/HairColorCommands.h"
 #include "commands/CasinoBanCommands.h"
+#include "commands/ExteriorDoorCommands.h"
+#include "commands/WorldspaceOffsetCommands.h"
 #include "features/CameraOverride.h"
 #include "features/NoWeaponSearch.h"
 #include "features/PreventWeaponSwitch.h"
@@ -125,6 +127,12 @@ void RegisterAllCommands(void* nvsePtr)
 
 	/*4068*/ nvse->SetOpcodeBase(0x4068);
 	ToggleAllPrimitives::RegisterCommands(nvse);                    //ToggleAllPrimitives
+
+	/*409C*/ nvse->SetOpcodeBase(0x409C);
+	ExteriorDoorCommands::RegisterCommands(nvse);                   //GetRefExteriorDoor
+
+	/*409D*/ nvse->SetOpcodeBase(0x409D);
+	WorldspaceOffsetCommands::RegisterCommands(nvse);               //GetWorldspaceOffsetX..GetWorldspaceOffsetScale
 
 	/*40A0*/ nvse->SetOpcodeBase(0x40A0);
 	PathingCommands::RegisterCommands(nvse);                        //CanPathToRef..GetPathToRef

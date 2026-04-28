@@ -1,6 +1,6 @@
 #pragma once
 
-//centralised command registration - all opcodes visible in one place
+//centralised itr-nvse command registration - all itr-nvse opcodes visible in one place
 //
 // 0x4008  DisableKeyEx
 // 0x4009  EnableKeyEx
@@ -48,10 +48,12 @@
 // 0x4054  IsSaying
 // 0x4055  SetDialogueCameraDolly
 // 0x4056  SetDialogueCameraShake
-//
+// 0x4057  MoveToTerrain
+// 0x4058  GetDistanceToTerrain
+// 0x4059  MoveToGround
+// 0x405A  GetDistanceToGround
 // 0x405B  ForceCrouch
 // 0x405C  DisableCrouching
-// 0x405D-0x405E  SoundFilteringSoftware (SetActorSoundFilter, GetActorSoundFilter)
 // 0x405F  SetOnContactWatch
 // 0x4060  GetOnContactWatch
 // 0x4061  ForceCombatTarget
@@ -62,6 +64,10 @@
 // 0x4066  RefillAmmo
 // 0x4067  RunITRCommandBounds (Debug only)
 // 0x4068  ToggleAllPrimitives (TAP)
+// 0x409C  GetRefExteriorDoor
+// 0x409D  GetWorldspaceOffsetX
+// 0x409E  GetWorldspaceOffsetY
+// 0x409F  GetWorldspaceOffsetScale
 // 0x40A0  CanPathToRef
 // 0x40A1  GetPathDistanceToRef
 // 0x40A2  GetPathNodeCount
@@ -72,8 +78,11 @@
 // 0x40A7  SetCasinoBan
 // 0x40A8  GetCasinoBan
 // 0x40A9  SetUITexOffset
-// gaps in itr-nvse itself: 0x4033, 0x403D-0x404F
-// next free itr-nvse-local slot avoiding shared-suite reservations: 0x40AA
-// shared suite occupancy for borrowed opcodes is tracked in /mnt/d/plugins/opcodes.txt
+// 0x410E  Gesture
+//
+// not registered by itr-nvse source: 0x4000-0x4007, 0x400A-0x4016, 0x4033,
+// 0x403D-0x404F, 0x405D-0x405E, 0x4069-0x409B, 0x40AA-0x410D, 0x410F
+// These are not automatically free; other local plugins use slots inside the
+// Into the Rough-owned blocks. Check /mnt/d/plugins/opcodes.txt before assigning.
 
 void RegisterAllCommands(void* nvse);
