@@ -1811,29 +1811,29 @@ bool Cmd_ForceReload_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 
-	if (!thisObj || !IsActorRef(thisObj)) { Log("[ForceReload] no thisObj or not actor"); return true; }
+	if (!thisObj || !IsActorRef(thisObj)) return true;
 
 	Actor* actor = (Actor*)thisObj;
-	if (ActorIsDead(actor, false)) { Log("[ForceReload] actor dead"); return true; }
+	if (ActorIsDead(actor, false)) return true;
 
 	UInt32 pProcess = *(UInt32*)((UInt8*)actor + 0x68);
-	if (!pProcess) { Log("[ForceReload] no pProcess"); return true; }
+	if (!pProcess) return true;
 
 	UInt32 processLevel = *(UInt32*)(pProcess + 0x28);
-	if (processLevel != 0) { Log("[ForceReload] processLevel=%u (not HighProcess)", processLevel); return true; }
+	if (processLevel != 0) return true;
 
-	if (!thisObj->GetNiNode()) { Log("[ForceReload] no NiNode"); return true; }
+	if (!thisObj->GetNiNode()) return true;
 
 	UInt32 vtable = *(UInt32*)pProcess;
-	if (!vtable) { Log("[ForceReload] no vtable"); return true; }
+	if (!vtable) return true;
 
 	typedef UInt32 (__thiscall *GetCurrentWeapon_t)(UInt32);
 	GetCurrentWeapon_t GetCurrentWeapon = (GetCurrentWeapon_t)(*(UInt32*)(vtable + 82 * 4));
 	UInt32 weaponInfo = GetCurrentWeapon(pProcess);
-	if (!weaponInfo) { Log("[ForceReload] no weaponInfo"); return true; }
+	if (!weaponInfo) return true;
 
 	TESObjectWEAP* weapon = (TESObjectWEAP*)(*(UInt32*)(weaponInfo + 0x08));
-	if (!weapon) { Log("[ForceReload] no weapon form"); return true; }
+	if (!weapon) return true;
 
 	typedef UInt32 (__thiscall *GetAmmoInfo_t)(UInt32);
 	GetAmmoInfo_t GetAmmoInfo = (GetAmmoInfo_t)(*(UInt32*)(vtable + 83 * 4));
@@ -1849,17 +1849,8 @@ bool Cmd_ForceReload_Execute(COMMAND_ARGS)
 		correctAmmo = GetAmmoForWeapon(invChanges, weapon, &hasAmmo);
 	}
 
-	TESForm* currentAmmoForm = ammoInfo ? *(TESForm**)(ammoInfo + 0x08) : nullptr;
-	UInt32 currCount = ammoInfo ? *(UInt32*)(ammoInfo + 0x04) : 0;
-	Log("[ForceReload] actor=%08X weapon=%08X invChg=%p ammoInfo=%08X currForm=%08X currCount=%u correctAmmo=%08X hasAmmo=%d",
-		thisObj->refID, weapon->refID,
-		invChanges, ammoInfo,
-		currentAmmoForm ? currentAmmoForm->refID : 0, currCount,
-		correctAmmo ? correctAmmo->refID : 0, hasAmmo);
-
 	if (!ammoInfo && correctAmmo && invChanges) {
 		void* newEntry = GetInventoryItem(invChanges, correctAmmo, 0);
-		Log("[ForceReload] preseed path, newEntry=%p", newEntry);
 		if (newEntry) {
 			typedef void (__thiscall *SetAmmoInfo_t)(UInt32, void*);
 			SetAmmoInfo_t SetAmmoInfo = (SetAmmoInfo_t)(*(UInt32*)(vtable + 90 * 4));
@@ -1868,16 +1859,11 @@ bool Cmd_ForceReload_Execute(COMMAND_ARGS)
 		}
 	}
 	else if (ammoInfo) {
-		Log("[ForceReload] zero-count path");
 		*(SInt32*)(ammoInfo + 0x04) = 0;
-	}
-	else {
-		Log("[ForceReload] no preseed, no ammoInfo");
 	}
 
 	bool hasExtendedMag = ItemChangeHasWeaponMod((void*)weaponInfo, 11);
 	char reloadResult = ActorReload(actor, weapon, 2, hasExtendedMag);
-	Log("[ForceReload] ActorReload returned %d", (int)reloadResult);
 	*result = reloadResult ? 1 : 0;
 
 	return true;
