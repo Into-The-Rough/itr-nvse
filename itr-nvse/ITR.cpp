@@ -41,6 +41,7 @@
 #include "handlers/OnImpactDataSpawnHandler.h"
 #include "handlers/OnSprayDecalHandler.h"
 #include "handlers/OnWoundSprayHandler.h"
+#include "handlers/OnVATSStateHandler.h"
 #include "handlers/OnCasinoBanHandler.h"
 
 #include "fixes/SlowMotionPhysicsFix.h"
@@ -362,6 +363,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			ImperativeCommands::ClearState();
 			OnCasinoBanHandler::ClearState();
 			OnContactHandler::ClearState();
+			OnVATSStateHandler::ClearState();
 			ToggleAllPrimitives::Reset();
 
 			OnEntryPointHandler::BuildEntryMap();
@@ -502,6 +504,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	logInit("OnImpactDataSpawnHandler", OnImpactDataSpawnHandler::Init((void*)nvse));
 	logInit("OnSprayDecalHandler", OnSprayDecalHandler::Init((void*)nvse));
 	logInit("OnWoundSprayHandler", OnWoundSprayHandler::Init((void*)nvse));
+	logInit("OnVATSStateHandler", OnVATSStateHandler::Init((void*)nvse));
 	logInit("OnCasinoBanHandler", OnCasinoBanHandler::Init((void*)nvse));
 	NoWeaponSearch::Init();
 	PreventWeaponSwitch::Init();

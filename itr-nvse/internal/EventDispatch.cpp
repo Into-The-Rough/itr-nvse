@@ -114,6 +114,11 @@ void RegisterEvents()
 	g_eventManagerInterface->RegisterEvent("ITR:OnWoundSpray", 11, woundSprayParams, F::kFlag_FlushOnLoad);
 
 	g_eventManagerInterface->RegisterEvent("ITR:OnCasinoBan", 1, oneForm, F::kFlag_FlushOnLoad);
+
+	g_eventManagerInterface->RegisterEvent("ITR:OnVATSEnter", 1, oneForm, F::kFlag_FlushOnLoad);
+	g_eventManagerInterface->RegisterEvent("ITR:OnVATSLeave", 1, oneInt, F::kFlag_FlushOnLoad);
+	g_eventManagerInterface->RegisterEvent("ITR:OnKillCamStart", 1, oneForm, F::kFlag_FlushOnLoad);
+	g_eventManagerInterface->RegisterEvent("ITR:OnKillCamEnd", 1, oneForm, F::kFlag_FlushOnLoad);
 }
 
 }
