@@ -42,8 +42,8 @@
 - ForceReload - force weapon reload
 - RefillAmmo - add ammo to actor inventory and fill clip
 - Gesture - procedural head gestures (nod/shake/tilt) with smoothstep blending
-- SetOnContactWatch - enable physics contact tracking for actor
-- GetOnContactWatch - get contact watch state
+- SetOnContactWatch - enable physics contact tracking for a ref, or for all refs using a base form
+- GetOnContactWatch - get ref or base form contact watch state
 - GetTargetLastSeenLocation - array [x,y,z] of where observer last saw target
 - GetTargetDetectedLocation - array [x,y,z] of where observer detected target by sound/event
 - GetTargetLastFullyVisibleLocation - array [x,y,z] of where observer last had full LOS to target

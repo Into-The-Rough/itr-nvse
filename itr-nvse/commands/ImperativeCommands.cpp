@@ -2296,36 +2296,77 @@ void RegisterCommands7(void* nvsePtr)
 
 namespace ImperativeCommands {
 
-static ParamInfo kParams_ContactWatch[1] = {
+static ParamInfo kParams_ContactWatch[2] = {
 	{"watch", kParamType_Integer, 0},
+	{"target", kParamType_AnyForm, 1},
 };
-DEFINE_COMMAND_PLUGIN(SetOnContactWatch, "Enable/disable contact event watching for a ref", 1, 1, kParams_ContactWatch);
+DEFINE_COMMAND_PLUGIN(SetOnContactWatch, "Enable/disable contact event watching for a ref or base form", 0, 2, kParams_ContactWatch);
 
 bool Cmd_SetOnContactWatch_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 	UInt32 watch = 0;
-	if (!ExtractArgs(EXTRACT_ARGS, &watch)) return true;
-	if (!thisObj) return true;
+	TESForm* target = nullptr;
+	if (!ExtractArgs(EXTRACT_ARGS, &watch, &target)) return true;
 
-	if (watch)
-		OnContactHandler::AddWatch(thisObj->refID);
-	else
-		OnContactHandler::RemoveWatch(thisObj->refID);
+	UInt32 formID = 0;
+	bool targetIsBaseForm = false;
+	if (target) {
+		if (target->IsReference())
+			formID = target->refID;
+		else {
+			formID = target->refID;
+			targetIsBaseForm = true;
+		}
+	} else {
+		if (!thisObj) return true;
+		formID = thisObj->refID;
+	}
+
+	if (!formID) return true;
+
+	if (targetIsBaseForm) {
+		if (watch)
+			OnContactHandler::AddBaseWatch(formID);
+		else
+			OnContactHandler::RemoveBaseWatch(formID);
+	} else {
+		if (watch)
+			OnContactHandler::AddWatch(formID);
+		else
+			OnContactHandler::RemoveWatch(formID);
+	}
 
 	*result = 1;
 	if (IsConsoleMode())
-		Console_Print("SetOnContactWatch >> %s (0x%08X)", watch ? "watching" : "unwatching", thisObj->refID);
+		Console_Print("SetOnContactWatch >> %s %s (0x%08X)",
+			watch ? "watching" : "unwatching",
+			targetIsBaseForm ? "base form" : "ref",
+			formID);
 	return true;
 }
 
-DEFINE_COMMAND_PLUGIN(GetOnContactWatch, "Check if a ref is being watched for contacts", 1, 0, nullptr);
+static ParamInfo kParams_GetContactWatch[1] = {
+	{"target", kParamType_AnyForm, 1},
+};
+DEFINE_COMMAND_PLUGIN(GetOnContactWatch, "Check if a ref or base form is being watched for contacts", 0, 1, kParams_GetContactWatch);
 
 bool Cmd_GetOnContactWatch_Execute(COMMAND_ARGS)
 {
 	*result = 0;
+	TESForm* target = nullptr;
+	if (!ExtractArgs(EXTRACT_ARGS, &target)) return true;
+
+	if (target) {
+		if (target->IsReference())
+			*result = OnContactHandler::IsRefWatched(target->refID) ? 1.0 : 0.0;
+		else
+			*result = OnContactHandler::IsBaseWatched(target->refID) ? 1.0 : 0.0;
+		return true;
+	}
+
 	if (!thisObj) return true;
-	*result = OnContactHandler::IsWatched(thisObj->refID) ? 1.0 : 0.0;
+	*result = OnContactHandler::IsRefWatched(thisObj->refID) ? 1.0 : 0.0;
 	return true;
 }
 

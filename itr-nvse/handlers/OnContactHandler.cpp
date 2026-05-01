@@ -55,8 +55,15 @@ struct DeadActorCandidate {
 	float posZ;
 };
 
+struct WatchedActorCandidate {
+	UInt32 refID;
+	TESObjectREFR* ref;
+};
+
 static std::unordered_set<UInt32> g_watchedRefIDs;         //main thread only (mutation)
+static std::unordered_set<UInt32> g_watchedBaseFormIDs;    //main thread only (mutation)
 static std::unordered_set<UInt32> g_watchedSnapshot;       //read by hooks under lock
+static std::unordered_set<UInt32> g_watchedBaseSnapshot;   //read by hooks under lock
 static std::unordered_map<ContactPair, int, ContactPairHash> g_activeContacts;
 static std::vector<QueuedContactEvent> g_pendingEvents;
 static CRITICAL_SECTION g_contactLock;
@@ -84,6 +91,9 @@ static const _FindReferenceFor3D FindReferenceFor3D = (_FindReferenceFor3D)0x56F
 
 typedef void* (__cdecl *_bhkNiCollisionObject_Getbhk)(void* worldObj);
 static const _bhkNiCollisionObject_Getbhk bhkNiCollisionObject_Getbhk = (_bhkNiCollisionObject_Getbhk)0x4B5A20;
+
+static bool HasAnyWatchSnapshot();
+static bool ShouldQueueCandidateLocked(UInt32 refID);
 
 static UInt32 ResolveCollidableToRefID(void* collidable) {
 	if (!collidable) return 0;
@@ -149,11 +159,11 @@ static void __fastcall Hook_ContactPointAdded(void* listener, void* edx, void* e
 	UInt32 refB = ResolveCollidableToRefID(bodyB);
 
 	ScopedLock lock(&g_contactLock);
-	if (g_watchedSnapshot.empty()) return;
+	if (!HasAnyWatchSnapshot()) return;
 	if (refA == refB) return;
-	if (refA && g_watchedSnapshot.count(refA))
+	if (ShouldQueueCandidateLocked(refA))
 		QueueEvent(refA, refB, kChannel_RigidBody, true);
-	if (refB && g_watchedSnapshot.count(refB))
+	if (ShouldQueueCandidateLocked(refB))
 		QueueEvent(refB, refA, kChannel_RigidBody, true);
 }
 
@@ -176,6 +186,40 @@ static float GetRefPosY(void* ref) { return *(float*)((UInt8*)ref + 0x34); }
 static float GetRefPosZ(void* ref) { return *(float*)((UInt8*)ref + 0x38); }
 static UInt32 GetRefID(void* ref) { return *(UInt32*)((UInt8*)ref + 0x0C); }
 
+static UInt32 GetBaseFormID(TESObjectREFR* ref) {
+	if (!ref) return 0;
+	void* baseForm = *(void**)((UInt8*)ref + 0x20);
+	return baseForm ? *(UInt32*)((UInt8*)baseForm + 0x0C) : 0;
+}
+
+static UInt32 GetBaseFormID(UInt32 refID) {
+	auto* ref = (TESObjectREFR*)Engine::LookupFormByID(refID);
+	return GetBaseFormID(ref);
+}
+
+static bool IsRefWatchedOnMain(UInt32 refID) {
+	if (!refID) return false;
+	if (g_watchedRefIDs.count(refID)) return true;
+	UInt32 baseFormID = GetBaseFormID(refID);
+	return baseFormID && g_watchedBaseFormIDs.count(baseFormID);
+}
+
+static bool IsRefWatchedOnMain(TESObjectREFR* ref) {
+	if (!ref) return false;
+	UInt32 refID = GetRefID(ref);
+	if (g_watchedRefIDs.count(refID)) return true;
+	UInt32 baseFormID = GetBaseFormID(ref);
+	return baseFormID && g_watchedBaseFormIDs.count(baseFormID);
+}
+
+static bool HasAnyWatchSnapshot() {
+	return !g_watchedSnapshot.empty() || !g_watchedBaseSnapshot.empty();
+}
+
+static bool ShouldQueueCandidateLocked(UInt32 refID) {
+	return refID && (g_watchedSnapshot.count(refID) || !g_watchedBaseSnapshot.empty());
+}
+
 static void* GetActorController(void* form) {
 	void* process = *(void**)((UInt8*)form + 0x68);
 	if (!process) return nullptr;
@@ -191,7 +235,7 @@ static bool HasRealContactPair(UInt32 watchedRefID, UInt32 otherRefID) {
 }
 
 static void DispatchContactEventDirect(UInt32 watchedRefID, UInt32 otherRefID, UInt8 channel, bool isBegin) {
-	if (!g_watchedRefIDs.count(watchedRefID)) return;
+	if (!IsRefWatchedOnMain(watchedRefID)) return;
 	auto* watched = (TESObjectREFR*)Engine::LookupFormByID(watchedRefID);
 	if (!watched) return;
 	auto* other = otherRefID ? (TESObjectREFR*)Engine::LookupFormByID(otherRefID) : nullptr;
@@ -233,6 +277,44 @@ static void CollectLoadedDeadActors(std::vector<DeadActorCandidate>& out) {
 	}
 }
 
+static void AddWatchedActorCandidate(TESObjectREFR* actor, std::unordered_set<UInt32>& seenRefIDs,
+	std::vector<WatchedActorCandidate>& out)
+{
+	if (!actor) return;
+	if (!IsActorTypeID(*(UInt8*)((UInt8*)actor + 0x04))) return;
+	UInt32 refID = GetRefID(actor);
+	if (!refID || !seenRefIDs.emplace(refID).second) return;
+	if (!IsRefWatchedOnMain(actor)) return;
+	out.push_back({refID, actor});
+}
+
+static void CollectLoadedWatchedActors(std::vector<WatchedActorCandidate>& out) {
+	std::unordered_set<UInt32> seenRefIDs;
+	seenRefIDs.reserve(g_watchedRefIDs.size() + 16);
+
+	for (auto refID : g_watchedRefIDs) {
+		auto* actor = (TESObjectREFR*)Engine::LookupFormByID(refID);
+		AddWatchedActorCandidate(actor, seenRefIDs, out);
+	}
+
+	auto* pm = reinterpret_cast<ProcessManagerLite*>(g_processManager);
+	if (pm && pm->objects.data) {
+		UInt32 upper = pm->objects.firstFreeEntry;
+		for (int bucket = 0; bucket < 2; bucket++) {
+			UInt32 begin = pm->beginOffsets[bucket];
+			UInt32 end = pm->endOffsets[bucket];
+			if (begin > upper) begin = upper;
+			if (end > upper) end = upper;
+			for (UInt32 i = begin; i < end; i++)
+				AddWatchedActorCandidate((TESObjectREFR*)pm->objects.data[i], seenRefIDs, out);
+		}
+	}
+
+	void** playerPtr = (void**)0x11DEA3C;
+	if (*playerPtr)
+		AddWatchedActorCandidate((TESObjectREFR*)*playerPtr, seenRefIDs, out);
+}
+
 static bool ShouldSynthesizeDeadActorContact(TESObjectREFR* watched, const DeadActorCandidate& deadActor) {
 	if (!watched || !deadActor.ref) return false;
 	if (GetRefID(watched) == deadActor.refID) return false;
@@ -251,23 +333,23 @@ static bool ShouldSynthesizeDeadActorContact(TESObjectREFR* watched, const DeadA
 }
 
 static void PollDeadActorProximityContacts() {
-	if (g_watchedRefIDs.empty()) return;
+	if (g_watchedRefIDs.empty() && g_watchedBaseFormIDs.empty()) return;
 
 	std::vector<DeadActorCandidate> deadActors;
 	CollectLoadedDeadActors(deadActors);
 	if (deadActors.empty()) return;
 
+	std::vector<WatchedActorCandidate> watchedActors;
+	CollectLoadedWatchedActors(watchedActors);
+	if (watchedActors.empty()) return;
+
 	std::unordered_set<ContactPair, ContactPairHash> currentPairs;
 	currentPairs.reserve(deadActors.size() * 2);
 
-	for (auto refID : g_watchedRefIDs) {
-		auto* watched = (TESObjectREFR*)Engine::LookupFormByID(refID);
-		if (!watched) continue;
-		if (!IsActorTypeID(*(UInt8*)((UInt8*)watched + 0x04))) continue;
-
+	for (const auto& watchedActor : watchedActors) {
 		for (const auto& deadActor : deadActors) {
-			if (ShouldSynthesizeDeadActorContact(watched, deadActor))
-				currentPairs.emplace(ContactPair{refID, deadActor.refID, kChannel_DeadActorProximity});
+			if (ShouldSynthesizeDeadActorContact(watchedActor.ref, deadActor))
+				currentPairs.emplace(ContactPair{watchedActor.refID, deadActor.refID, kChannel_DeadActorProximity});
 		}
 	}
 
@@ -291,7 +373,7 @@ static void PollDeadActorProximityContacts() {
 	}
 
 	for (const auto& pair : begins) {
-		if (!g_watchedRefIDs.count(pair.refA)) continue;
+		if (!IsRefWatchedOnMain(pair.refA)) continue;
 		g_activeContacts[pair] = 1;
 		DispatchContactEventDirect(pair.refA, pair.refB, pair.channel, true);
 	}
@@ -341,7 +423,7 @@ static void PollContactEnd() {
 
 	for (const auto& pair : stale) {
 		g_activeContacts.erase(pair);
-		if (!g_watchedRefIDs.count(pair.refA)) continue;
+		if (!IsRefWatchedOnMain(pair.refA)) continue;
 		auto* watched = (TESObjectREFR*)Engine::LookupFormByID(pair.refA);
 		auto* other = pair.refB ? (TESObjectREFR*)Engine::LookupFormByID(pair.refB) : nullptr;
 		if (watched && g_eventManagerInterface)
@@ -360,7 +442,7 @@ static void __fastcall Hook_CharProxyContactAdded(void* proxy, void* edx, void* 
 	UInt32 actorRefID = 0;
 	{
 		ScopedLock lock(&g_contactLock);
-		if (g_watchedSnapshot.empty()) return;
+		if (!HasAnyWatchSnapshot()) return;
 		actorRefID = LookupMappedRefID(g_proxyToRefID, proxy);
 		if (!actorRefID) return;
 	}
@@ -370,8 +452,8 @@ static void __fastcall Hook_CharProxyContactAdded(void* proxy, void* edx, void* 
 	UInt32 otherRefID = ResolveCollidableToRefID(otherCollidable);
 
 	ScopedLock lock(&g_contactLock);
-	if (g_watchedSnapshot.empty()) return;
-	if (!g_watchedSnapshot.count(actorRefID)) return;
+	if (!HasAnyWatchSnapshot()) return;
+	if (!ShouldQueueCandidateLocked(actorRefID)) return;
 	if (otherRefID == actorRefID) return;
 	QueueEvent(actorRefID, otherRefID, kChannel_CharProxy, true);
 }
@@ -396,7 +478,7 @@ static void PhantomOverlapCommon(void* phantom, void* cdBody, bool isAdd) {
 
 	{
 		ScopedLock lock(&g_contactLock);
-		if (g_watchedSnapshot.empty()) return;
+		if (!HasAnyWatchSnapshot()) return;
 		mappedPhantomRefID = LookupMappedRefID(g_phantomToRefID, phantom);
 		mappedBodyRefID = LookupMappedRefID(g_phantomToRefID, bodyWorldObj);
 	}
@@ -410,11 +492,11 @@ static void PhantomOverlapCommon(void* phantom, void* cdBody, bool isAdd) {
 	}
 
 	ScopedLock lock(&g_contactLock);
-	if (g_watchedSnapshot.empty()) return;
+	if (!HasAnyWatchSnapshot()) return;
 	if (phantomRefID == bodyRefID) return;
-	if (phantomRefID && g_watchedSnapshot.count(phantomRefID))
+	if (ShouldQueueCandidateLocked(phantomRefID))
 		QueueEvent(phantomRefID, bodyRefID, kChannel_Phantom, isAdd);
-	if (bodyRefID && g_watchedSnapshot.count(bodyRefID))
+	if (ShouldQueueCandidateLocked(bodyRefID))
 		QueueEvent(bodyRefID, phantomRefID, kChannel_Phantom, isAdd);
 }
 
@@ -480,12 +562,26 @@ static void RebuildProxyMap() {
 				if (typeID != 0x3B && typeID != 0x3C) continue;
 				UInt32 refID = *(UInt32*)((UInt8*)actor + 0x0C);
 				if (!refID) continue;
+				if (IsRefWatchedOnMain((TESObjectREFR*)actor)) {
+					void* ctrl = GetActorController(actor);
+					if (ctrl) {
+						void* proxy = *(void**)((UInt8*)ctrl + 0x08);
+						if (proxy) newProxyMap[proxy] = refID;
+					}
+				}
 				MapActorPhantom(actor, refID, newPhantomMap);
 			}
 		}
 		void** playerPtr = (void**)0x11DEA3C;
 		if (*playerPtr) {
 			UInt32 playerRefID = *(UInt32*)((UInt8*)*playerPtr + 0x0C);
+			if (IsRefWatchedOnMain((TESObjectREFR*)*playerPtr)) {
+				void* ctrl = GetActorController(*playerPtr);
+				if (ctrl) {
+					void* proxy = *(void**)((UInt8*)ctrl + 0x08);
+					if (proxy) newProxyMap[proxy] = playerRefID;
+				}
+			}
 			MapActorPhantom(*playerPtr, playerRefID, newPhantomMap);
 		}
 	}
@@ -558,15 +654,20 @@ void Update()
 		{
 			ScopedLock lock(&g_contactLock);
 			g_watchedSnapshot = g_watchedRefIDs;
+			g_watchedBaseSnapshot = g_watchedBaseFormIDs;
 		}
 		RebuildProxyMap();
 		g_snapshotDirty = false;
 		s_proxyMapTimer = 0;
 
 		std::vector<QueuedContactEvent> g_seedEvents;
+		std::vector<WatchedActorCandidate> watchedActors;
+		CollectLoadedWatchedActors(watchedActors);
+
 		//Seed existing contacts when watch state changes; add callbacks only see new contacts.
-		for (auto refID : g_watchedRefIDs) {
-			auto* form = (TESObjectREFR*)Engine::LookupFormByID(refID);
+		for (const auto& watchedActor : watchedActors) {
+			UInt32 refID = watchedActor.refID;
+			auto* form = watchedActor.ref;
 			if (!form) continue;
 			UInt8 typeID = *((UInt8*)form + 0x04);
 			if (typeID != 0x3B && typeID != 0x3C) continue;
@@ -596,7 +697,7 @@ void Update()
 			}
 		}
 
-			if (!g_seedEvents.empty()) {
+		if (!g_seedEvents.empty()) {
 			ScopedLock lock(&g_contactLock);
 			size_t room = kMaxQueuedEvents > g_pendingEvents.size() ? kMaxQueuedEvents - g_pendingEvents.size() : 0;
 			size_t toAdd = g_seedEvents.size() < room ? g_seedEvents.size() : room;
@@ -604,7 +705,7 @@ void Update()
 		}
 	}
 
-	if (!g_watchedRefIDs.empty() && ++s_proxyMapTimer >= 60) {
+	if ((!g_watchedRefIDs.empty() || !g_watchedBaseFormIDs.empty()) && ++s_proxyMapTimer >= 60) {
 		RebuildProxyMap();
 		s_proxyMapTimer = 0;
 	}
@@ -617,7 +718,7 @@ void Update()
 
 	for (const auto& evt : events) {
 		//Watch state can change during handler callbacks.
-		if (!g_watchedRefIDs.count(evt.watchedRefID)) continue;
+		if (!IsRefWatchedOnMain(evt.watchedRefID)) continue;
 
 		ContactPair pair = {evt.watchedRefID, evt.otherRefID, evt.channel};
 
@@ -656,7 +757,9 @@ void ClearState()
 	g_pendingEvents.clear();
 	g_activeContacts.clear();
 	g_watchedRefIDs.clear();
+	g_watchedBaseFormIDs.clear();
 	g_watchedSnapshot.clear();
+	g_watchedBaseSnapshot.clear();
 	g_proxyToRefID.clear();
 	g_phantomToRefID.clear();
 	g_snapshotDirty = false;
@@ -672,6 +775,9 @@ void RemoveWatch(UInt32 refID)
 {
 	g_watchedRefIDs.erase(refID);
 	g_snapshotDirty = true;
+
+	if (IsRefWatchedOnMain(refID))
+		return;
 
 	{
 		ScopedLock lock(&g_contactLock);
@@ -692,6 +798,37 @@ void RemoveWatch(UInt32 refID)
 bool IsWatched(UInt32 refID)
 {
 	return g_watchedRefIDs.count(refID) != 0;
+}
+
+void AddBaseWatch(UInt32 baseFormID)
+{
+	if (!baseFormID) return;
+	g_watchedBaseFormIDs.insert(baseFormID);
+	g_snapshotDirty = true;
+}
+
+void RemoveBaseWatch(UInt32 baseFormID)
+{
+	if (!baseFormID) return;
+	g_watchedBaseFormIDs.erase(baseFormID);
+	g_snapshotDirty = true;
+
+	for (auto it = g_activeContacts.begin(); it != g_activeContacts.end();) {
+		if (!g_watchedRefIDs.count(it->first.refA) && GetBaseFormID(it->first.refA) == baseFormID)
+			it = g_activeContacts.erase(it);
+		else
+			++it;
+	}
+}
+
+bool IsBaseWatched(UInt32 baseFormID)
+{
+	return g_watchedBaseFormIDs.count(baseFormID) != 0;
+}
+
+bool IsRefWatched(UInt32 refID)
+{
+	return IsRefWatchedOnMain(refID);
 }
 
 } //namespace OnContactHandler

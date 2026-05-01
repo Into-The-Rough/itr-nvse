@@ -201,6 +201,7 @@ namespace {
 			return Skip("no player");
 
 		bool original = OnContactHandler::IsWatched(player->refID);
+		bool originalBase = player->baseForm ? OnContactHandler::IsBaseWatched(player->baseForm->refID) : false;
 		OnContactHandler::AddWatch(player->refID);
 		if (!OnContactHandler::IsWatched(player->refID))
 		{
@@ -217,6 +218,39 @@ namespace {
 			return Fail("remove mismatch");
 		}
 
+		if (original)
+			OnContactHandler::AddWatch(player->refID);
+
+		if (!player->baseForm)
+			return Pass();
+
+		if (original)
+			OnContactHandler::RemoveWatch(player->refID);
+
+		OnContactHandler::AddBaseWatch(player->baseForm->refID);
+		if (!OnContactHandler::IsBaseWatched(player->baseForm->refID) ||
+			!OnContactHandler::IsRefWatched(player->refID))
+		{
+			if (!originalBase)
+				OnContactHandler::RemoveBaseWatch(player->baseForm->refID);
+			if (original)
+				OnContactHandler::AddWatch(player->refID);
+			return Fail("base add mismatch");
+		}
+
+		OnContactHandler::RemoveBaseWatch(player->baseForm->refID);
+		if (OnContactHandler::IsBaseWatched(player->baseForm->refID) ||
+			OnContactHandler::IsRefWatched(player->refID))
+		{
+			if (originalBase)
+				OnContactHandler::AddBaseWatch(player->baseForm->refID);
+			if (original)
+				OnContactHandler::AddWatch(player->refID);
+			return Fail("base remove mismatch");
+		}
+
+		if (originalBase)
+			OnContactHandler::AddBaseWatch(player->baseForm->refID);
 		if (original)
 			OnContactHandler::AddWatch(player->refID);
 		return Pass();
