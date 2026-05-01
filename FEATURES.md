@@ -44,6 +44,7 @@
 - ForceReload - force weapon reload
 - RefillAmmo - add ammo to actor inventory and fill clip
 - Gesture - procedural head gestures (nod/shake/tilt) with smoothstep blending
+- IsRigidBodyAtRest - check whether loaded mobile Havok rigid bodies under a ref are inactive
 - SetOnContactWatch - enable physics contact tracking for a ref, or for all refs using a base form
 - GetOnContactWatch - get ref or base form contact watch state
 - GetTargetLastSeenLocation - array [x,y,z] of where observer last saw target
