@@ -14,6 +14,8 @@
 - ModChallenge - modify challenge progress
 - DamageActorValueAlt - extended actor value damage
 - ToggleAllPrimitives (TAP) - toggle primitive refs plus regular marker refs with fixed load-time behavior
+- GetRefExteriorDoor - exterior-side load door reachable from a reference
+- GetRefNextTeleportDoor - next load door on the current shortest path to a reference
 
 **Actor**
 - ResurrectActorEx - resurrect with options

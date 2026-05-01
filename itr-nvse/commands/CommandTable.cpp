@@ -146,6 +146,9 @@ void RegisterAllCommands(void* nvsePtr)
 	/*40A9*/ nvse->SetOpcodeBase(0x40A9);
 	UICommands::RegisterCommands2(nvse);                            //SetUITexOffset
 
+	/*40AA*/ nvse->SetOpcodeBase(0x40AA);
+	ExteriorDoorCommands::RegisterCommands2(nvse);                  //GetRefNextTeleportDoor
+
 #ifdef _DEBUG
 	/*4067*/ nvse->SetOpcodeBase(0x4067);
 	CommandBoundsCommand::RegisterCommands(nvse);                    //RunITRCommandBounds
