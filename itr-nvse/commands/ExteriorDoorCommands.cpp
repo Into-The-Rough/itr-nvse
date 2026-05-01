@@ -16,6 +16,38 @@ namespace
 {
 	using DoorTeleportData = ExtraTeleport::Data;
 
+	struct TeleportPathData
+	{
+		BSSimpleArray<BGSQuestObjective::ParentSpaceNode> parentSpaceNodes;
+		BSSimpleArray<BGSQuestObjective::TeleportLink> teleportLinks;
+		float startPos[3];
+		float endPos[3];
+	};
+
+	static_assert(sizeof(TeleportPathData) == 0x38, "TeleportPathData must match engine TeleportPath");
+
+	class ScopedTeleportPathData
+	{
+	public:
+		ScopedTeleportPathData()
+		{
+			ThisCall<void>(0x6F48B0, &data_);
+		}
+
+		~ScopedTeleportPathData()
+		{
+			ThisCall<void>(0x6F4930, &data_);
+		}
+
+		ScopedTeleportPathData(const ScopedTeleportPathData&) = delete;
+		ScopedTeleportPathData& operator=(const ScopedTeleportPathData&) = delete;
+
+		TeleportPathData* Get() { return &data_; }
+
+	private:
+		TeleportPathData data_;
+	};
+
 	static TESObjectCELL* GetParentCell(TESObjectREFR* ref)
 	{
 		if (!ref)
@@ -154,6 +186,7 @@ namespace
 	};
 
 	DEFINE_COMMAND_PLUGIN(GetRefExteriorDoor, "returns the exterior-side load door reachable from a reference", 0, 1, kParams_GetRefExteriorDoor);
+	DEFINE_COMMAND_PLUGIN(GetRefNextTeleportDoor, "returns the next load door on the current shortest path to a reference", 0, 1, kParams_GetRefExteriorDoor);
 
 	bool Cmd_GetRefExteriorDoor_Execute(COMMAND_ARGS)
 	{
@@ -190,6 +223,41 @@ namespace
 
 		return true;
 	}
+
+	bool Cmd_GetRefNextTeleportDoor_Execute(COMMAND_ARGS)
+	{
+		UInt32* refResult = reinterpret_cast<UInt32*>(result);
+		*refResult = 0;
+
+		TESForm* explicitForm = nullptr;
+		ExtractArgs(EXTRACT_ARGS, &explicitForm);
+
+		TESObjectREFR* targetRef = thisObj;
+		if (explicitForm)
+		{
+			if (!explicitForm->IsReference())
+				return true;
+
+			targetRef = static_cast<TESObjectREFR*>(explicitForm);
+		}
+
+		PlayerCharacter* player = PlayerCharacter::GetSingleton();
+		if (!player || !targetRef)
+			return true;
+
+		ScopedTeleportPathData path;
+		ThisCall<void>(0x952D60, player, targetRef, path.Get(), 1);
+
+		TeleportPathData* pathData = path.Get();
+		if (pathData->teleportLinks.size == 0 || !pathData->teleportLinks.data)
+			return true;
+
+		TESObjectREFR* nextDoor = pathData->teleportLinks.data[0].door;
+		if (nextDoor)
+			*refResult = nextDoor->refID;
+
+		return true;
+	}
 }
 
 namespace ExteriorDoorCommands
@@ -198,5 +266,11 @@ namespace ExteriorDoorCommands
 	{
 		NVSEInterface* nvse = static_cast<NVSEInterface*>(nvsePtr);
 		nvse->RegisterTypedCommand(&kCommandInfo_GetRefExteriorDoor, kRetnType_Form);
+	}
+
+	void RegisterCommands2(void* nvsePtr)
+	{
+		NVSEInterface* nvse = static_cast<NVSEInterface*>(nvsePtr);
+		nvse->RegisterTypedCommand(&kCommandInfo_GetRefNextTeleportDoor, kRetnType_Form);
 	}
 }
