@@ -24,6 +24,7 @@
 #include "commands/HairColorCommands.h"
 #include "commands/CasinoBanCommands.h"
 #include "commands/ExteriorDoorCommands.h"
+#include "commands/HavokCommands.h"
 #include "commands/WorldspaceOffsetCommands.h"
 #include "features/CameraOverride.h"
 #include "features/NoWeaponSearch.h"
@@ -148,6 +149,9 @@ void RegisterAllCommands(void* nvsePtr)
 
 	/*40AA*/ nvse->SetOpcodeBase(0x40AA);
 	ExteriorDoorCommands::RegisterCommands2(nvse);                  //GetRefNextTeleportDoor
+
+	/*40B0*/ nvse->SetOpcodeBase(0x40B0);
+	HavokCommands::RegisterCommands(nvse);                          //IsRigidBodyAtRest
 
 #ifdef _DEBUG
 	/*4067*/ nvse->SetOpcodeBase(0x4067);

@@ -2,7 +2,7 @@
 #include "ITR.h"
 #include "commands/CommandTable.h"
 
-#define ITR_VERSION 107
+#define ITR_VERSION 108
 
 extern "C" {
 
