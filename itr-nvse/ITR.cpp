@@ -37,6 +37,7 @@
 #include "handlers/OwnerNameInfoHandler.h"
 #include "handlers/OnMenuFilterChangeHandler.h"
 #include "handlers/OnMenuSideChangeHandler.h"
+#include "handlers/OnMenuListRefreshHandler.h"
 #include "handlers/OnWitnessedHandler.h"
 #include "handlers/OnImpactDataSpawnHandler.h"
 #include "handlers/OnSprayDecalHandler.h"
@@ -82,6 +83,7 @@
 #include "features/NoWeaponSearch.h"
 #include "features/AutoQuickLoad.h"
 #include "features/AltTabMute.h"
+#include "features/PerkRuntimeFramework.h"
 
 #include "commands/ImperativeCommands.h"
 #include "commands/StringCommands.h"
@@ -136,10 +138,7 @@ static const _GetSingleton ConsoleManager_GetSingleton = (_GetSingleton)0x0071B1
 
 void Console_Print(const char* fmt, ...)
 {
-	if (!IsConsoleMode())
-		return;
-
-	void* consoleManager = ConsoleManager_GetSingleton(false);
+	void* consoleManager = ConsoleManager_GetSingleton(true);
 	if (!consoleManager)
 		return;
 
@@ -332,6 +331,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bInlineGlyphFix)
 					InlineGlyphFix::Init();
 				EventDispatch::RegisterEvents();
+				PerkRuntimeFramework::BuildIndex();
 				g_hooksInstalled = true;
 			}
 			break;
@@ -367,6 +367,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			ToggleAllPrimitives::Reset();
 
 			OnEntryPointHandler::BuildEntryMap();
+			PerkRuntimeFramework::BuildIndex();
 			if (Settings::bAutoGodMode && !g_godModeExecuted)
 			{
 				*(UInt8*)0x11E07BA = 1;
@@ -500,6 +501,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 		logInit("OwnerNameInfoHandler", OwnerNameInfoHandler::Init());
 	logInit("OnMenuFilterChangeHandler", OnMenuFilterChangeHandler::Init((void*)nvse));
 	logInit("OnMenuSideChangeHandler", OnMenuSideChangeHandler::Init((void*)nvse));
+	logInit("OnMenuListRefreshHandler", OnMenuListRefreshHandler::Init((void*)nvse));
 	logInit("OnWitnessedHandler", OnWitnessedHandler::Init((void*)nvse));
 	logInit("OnImpactDataSpawnHandler", OnImpactDataSpawnHandler::Init((void*)nvse));
 	logInit("OnSprayDecalHandler", OnSprayDecalHandler::Init((void*)nvse));
@@ -508,6 +510,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	logInit("OnCasinoBanHandler", OnCasinoBanHandler::Init((void*)nvse));
 	NoWeaponSearch::Init();
 	PreventWeaponSwitch::Init();
+	logInit("PerkRuntimeFramework", PerkRuntimeFramework::Init((void*)nvse));
 }
 
 namespace ITR

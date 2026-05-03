@@ -353,6 +353,17 @@ No inline or vtable hooks. This handler polls from `kMessage_MainGameLoop`.
 |-----------|------|------|--------|-------|----------|
 | 0x894081 | call | 5 | continues | yes | Hook_SetAnimAction_Jam |
 
+### OnMenuListRefreshHandler
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x782A90 | jump | 5 | trampoline | yes | Hook_InventoryMenu_UpdateList |
+| 0x75C280 | jump | 5 | trampoline | yes | Hook_ContainerMenu_RefreshContainerMenu |
+| 0x72DC30 | jump | 5 | trampoline | yes | Hook_BarterMenu_RefreshListbox |
+| 0x727680 | jump | 9 | trampoline | yes | Hook_RecipeMenu_Refresh |
+
+Each menu's tile-list rebuild function is detoured. The hook calls the trampoline first so the rebuild completes (and `GetSelectedItemRef` returns the new selection), then dispatches `ITR:OnMenuListRefresh` with the menu ID.
+
 ### SaveFileSizeHandler
 
 | Hook Site | Type | Size | Return | Chain | Function |

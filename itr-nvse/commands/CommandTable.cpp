@@ -29,6 +29,7 @@
 #include "features/CameraOverride.h"
 #include "features/NoWeaponSearch.h"
 #include "features/PreventWeaponSwitch.h"
+#include "features/PerkRuntimeFramework.h"
 #include "handlers/DialogueCameraHandler.h"
 #include "commands/GroundCommands.h"
 #include "commands/GestureCommand.h"
@@ -152,6 +153,9 @@ void RegisterAllCommands(void* nvsePtr)
 
 	/*40B0*/ nvse->SetOpcodeBase(0x40B0);
 	HavokCommands::RegisterCommands(nvse);                          //IsRigidBodyAtRest
+
+	/*40B1*/ nvse->SetOpcodeBase(0x40B1);
+	PerkRuntimeFramework::RegisterCommands(nvse);                   //GetPerkEligibility..GetPerksForForm
 
 #ifdef _DEBUG
 	/*4067*/ nvse->SetOpcodeBase(0x4067);
