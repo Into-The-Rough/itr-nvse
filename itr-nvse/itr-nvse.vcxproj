@@ -145,6 +145,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="handlers\OwnerNameInfoHandler.cpp" />
     <ClCompile Include="handlers\OnMenuFilterChangeHandler.cpp" />
     <ClCompile Include="handlers\OnMenuSideChangeHandler.cpp" />
+    <ClCompile Include="handlers\OnMenuListRefreshHandler.cpp" />
     <ClCompile Include="fixes\SlowMotionPhysicsFix.cpp" />
     <ClCompile Include="fixes\VATSProjectileFix.cpp" />
     <ClCompile Include="fixes\VATSLimbFix.cpp" />
@@ -183,6 +184,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="features\AutoQuickLoad.cpp" />
     <ClCompile Include="features\CameraOverride.cpp" />
     <ClCompile Include="features\NoWeaponSearch.cpp" />
+    <ClCompile Include="features\PerkRuntimeFramework.cpp" />
     <ClCompile Include="features\PlayerUpdateHook.cpp" />
     <ClCompile Include="features\NPCAntidoteUse.cpp" />
     <ClCompile Include="features\NPCDoctorsBagUse.cpp" />
@@ -251,6 +253,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="handlers\OwnerNameInfoHandler.h" />
     <ClInclude Include="handlers\OnMenuFilterChangeHandler.h" />
     <ClInclude Include="handlers\OnMenuSideChangeHandler.h" />
+    <ClInclude Include="handlers\OnMenuListRefreshHandler.h" />
     <ClInclude Include="fixes\SlowMotionPhysicsFix.h" />
     <ClInclude Include="fixes\VATSProjectileFix.h" />
     <ClInclude Include="fixes\VATSLimbFix.h" />
@@ -280,6 +283,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="features\QuickReadNote.h" />
     <ClInclude Include="features\VATSExtender.h" />
     <ClInclude Include="features\CameraOverride.h" />
+    <ClInclude Include="features\PerkRuntimeFramework.h" />
     <ClInclude Include="features\PlayerUpdateHook.h" />
     <ClInclude Include="features\NPCAntidoteUse.h" />
     <ClInclude Include="features\NPCDoctorsBagUse.h" />
