@@ -77,6 +77,8 @@ void RegisterEvents()
 	static P threeInts[] = { P::eParamType_Int, P::eParamType_Int, P::eParamType_Int };
 	g_eventManagerInterface->RegisterEvent("ITR:OnMenuSideChange", 3, threeInts, F::kFlag_FlushOnLoad);
 
+	g_eventManagerInterface->RegisterEvent("ITR:OnMenuListRefresh", 1, oneInt, F::kFlag_FlushOnLoad);
+
 	static P soundParams[] = { P::eParamType_String, P::eParamType_Int, P::eParamType_AnyForm };
 	g_eventManagerInterface->RegisterEvent("ITR:OnSoundPlayed", 3, soundParams, F::kFlag_FlushOnLoad);
 	g_eventManagerInterface->RegisterEvent("ITR:OnSoundCompleted", 3, soundParams, F::kFlag_FlushOnLoad);

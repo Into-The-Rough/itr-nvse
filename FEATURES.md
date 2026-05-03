@@ -113,6 +113,7 @@
 - ITR:OnKeyEnabled - fires when key enabled (keyCode, controlID)
 - ITR:OnMenuFilterChange - fires on menu filter tab change (menuID, oldFilter, newFilter, filterCount)
 - ITR:OnMenuSideChange - fires on menu side change (menuID, oldSide, newSide)
+- ITR:OnMenuListRefresh - fires after a menu's tile list rebuilds for any reason - add/remove/sell/drop/craft/equip (menuID). Inventory (1002), Container (1008), Barter (1053), Recipe (1077).
 - ITR:OnSoundPlayed - fires on sound playback (filePath, flags, sourceForm)
 - ITR:OnSoundCompleted - fires when tracked voice sound completes (filePath, flags, sourceForm)
 - ITR:OnContactBegin - fires when physics contact begins on watched actor (actor, contactType)
