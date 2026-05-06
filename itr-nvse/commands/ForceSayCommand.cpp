@@ -118,39 +118,52 @@ static ParamInfo kParams_ForceSay[] = {
 
 DEFINE_COMMAND_PLUGIN(ForceSay, "Force an actor to say a topic line, ignoring all conditions", 1, 2, kParams_ForceSay)
 
-bool Cmd_ForceSay_Execute(COMMAND_ARGS)
+namespace ForceSayCommand
 {
-	*result = 0;
+bool SayTopic(Actor* speaker, TESTopic* topic, Actor* target)
+{
+	if (!speaker || !topic)
+		return false;
 
-	TESTopic* topic = nullptr;
-	Actor* target = nullptr;
-	if (!ExtractArgs(EXTRACT_ARGS, &topic, &target))
-		return true;
-	if (!topic || !thisObj)
-		return true;
+	if (speaker->typeID != kFormType_ACHR && speaker->typeID != kFormType_ACRE)
+		return false;
 
-	if (thisObj->typeID != kFormType_ACHR && thisObj->typeID != kFormType_ACRE)
-		return true;
-	Actor* speaker = (Actor*)thisObj;
+	if (!ThisCall<void*>(0x8D8520, speaker) || !speaker->GetNiNode())
+		return false;
+
+	BSSoundHandle soundHandle;
+	using VoiceSoundFunctionEx_t = BSSoundHandle*(__thiscall*)(Actor*, BSSoundHandle*, TESTopic*, Actor*, bool, bool, UInt32, bool);
+	auto VoiceSoundFunctionEx = reinterpret_cast<VoiceSoundFunctionEx_t>(0x8A1BD0);
+	VoiceSoundFunctionEx(speaker, &soundHandle, topic, target, false, false, 0, true);
+	return soundHandle.uiSoundID != 0xFFFFFFFF;
+}
+
+bool ForceSay(Actor* speaker, TESTopic* topic, Actor* target)
+{
+	if (!speaker || !topic)
+		return false;
+
+	if (speaker->typeID != kFormType_ACHR && speaker->typeID != kFormType_ACRE)
+		return false;
 
 	void* process = ThisCall<void*>(0x8D8520, speaker); //MobileObject::GetCurrentProcess
 	if (!process)
-		return true;
+		return false;
 	if (!speaker->GetNiNode())
-		return true;
+		return false;
 
 	//walk topic->infos to get first topicinfo + quest directly (bypass all conditions)
 	TESTopic::Info* firstInfo = *(TESTopic::Info**)((UInt8*)topic + 0x2C);
 	if (!firstInfo)
-		return true;
+		return false;
 
 	if (firstInfo->infoArray.numObjs == 0)
-		return true;
+		return false;
 
 	TESTopicInfo* topicInfo = firstInfo->infoArray.data[0];
 	TESQuest* quest = firstInfo->quest;
 	if (!topicInfo || !quest)
-		return true;
+		return false;
 
 	//max lip distance so lip sync works at any range
 	UInt32* lipDist = (UInt32*)(0x11CD7D4 + 4);
@@ -162,7 +175,7 @@ bool Cmd_ForceSay_Execute(COMMAND_ARGS)
 	if (!mem)
 	{
 		*lipDist = oldLipDist;
-		return true;
+		return false;
 	}
 
 	void* item = ThisCall<void*>(0x83C520, mem, quest, topic, topicInfo, speaker); //DialogueItem_0
@@ -174,7 +187,7 @@ bool Cmd_ForceSay_Execute(COMMAND_ARGS)
 		ThisCall(0x83C670, item);
 		GameHeapFree(item);
 		*lipDist = oldLipDist;
-		return true;
+		return false;
 	}
 
 	//layout: [BSStringT text +0x00][emotion +0x08/+0x0C][BSStringT voice +0x10][anims +0x18/+0x1C]
@@ -190,7 +203,7 @@ bool Cmd_ForceSay_Execute(COMMAND_ARGS)
 		ThisCall(0x83C670, item);
 		GameHeapFree(item);
 		*lipDist = oldLipDist;
-		return true;
+		return false;
 	}
 
 	//fix voice type mismatch - scan sibling folders via BSA lookup
@@ -223,7 +236,22 @@ bool Cmd_ForceSay_Execute(COMMAND_ARGS)
 	ThisCall(0x83C670, item);
 	GameHeapFree(item);
 
-	*result = 1;
+	return true;
+}
+}
+
+bool Cmd_ForceSay_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+
+	TESTopic* topic = nullptr;
+	Actor* target = nullptr;
+	if (!ExtractArgs(EXTRACT_ARGS, &topic, &target))
+		return true;
+
+	if (thisObj && ForceSayCommand::ForceSay((Actor*)thisObj, topic, target))
+		*result = 1;
+
 	return true;
 }
 

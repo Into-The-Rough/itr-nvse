@@ -8,6 +8,8 @@
 #include "nvse/GameExtraData.h"
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <vector>
 
 extern const _ExtractArgs ExtractArgs;
@@ -48,6 +50,39 @@ namespace
 		TeleportPathData data_;
 	};
 
+	struct TravelSpace
+	{
+		bool isWorldspace = false;
+		TESWorldSpace* worldspace = nullptr;
+		TESObjectCELL* cell = nullptr;
+	};
+
+	struct RouteNode
+	{
+		TravelSpace space;
+		float cost = 0.0f;
+		float arrival[3] = {};
+		TESObjectREFR* firstDoor = nullptr;
+		bool visited = false;
+	};
+
+	struct FallbackRoute
+	{
+		TravelSpace targetSpace;
+		TESObjectREFR* door = nullptr;
+	};
+
+	struct RouteCache
+	{
+		bool valid = false;
+		TravelSpace startSpace;
+		std::vector<RouteNode> nodes;
+		std::vector<TESObjectREFR*> doors;
+		std::vector<FallbackRoute> fallbacks;
+	};
+
+	static RouteCache s_routeCache;
+
 	static TESObjectCELL* GetParentCell(TESObjectREFR* ref)
 	{
 		if (!ref)
@@ -82,6 +117,146 @@ namespace
 	static TESWorldSpace* GetTeleportWorldSpace(DoorTeleportData* teleport)
 	{
 		return teleport ? ThisCall<TESWorldSpace*>(0x43A320, teleport) : nullptr;
+	}
+
+	static bool IsValidTravelSpace(const TravelSpace& space)
+	{
+		return space.isWorldspace ? space.worldspace != nullptr : space.cell != nullptr;
+	}
+
+	static bool IsSameTravelSpace(const TravelSpace& lhs, const TravelSpace& rhs)
+	{
+		return lhs.isWorldspace == rhs.isWorldspace &&
+		       lhs.worldspace == rhs.worldspace &&
+		       lhs.cell == rhs.cell;
+	}
+
+	static TravelSpace GetTravelSpace(TESObjectCELL* cell)
+	{
+		if (!cell)
+			return {};
+
+		if (cell->IsInterior())
+			return { false, nullptr, cell };
+
+		return { true, cell->worldSpace, nullptr };
+	}
+
+	static TravelSpace GetTeleportDestinationSpace(DoorTeleportData* teleport)
+	{
+		if (TESWorldSpace* worldspace = GetTeleportWorldSpace(teleport))
+			return { true, worldspace, nullptr };
+
+		return GetTravelSpace(GetTeleportCell(teleport));
+	}
+
+	static float GetDistance(float x1, float y1, float z1, float x2, float y2, float z2)
+	{
+		const float x = x1 - x2;
+		const float y = y1 - y2;
+		const float z = z1 - z2;
+		return std::sqrt((x * x) + (y * y) + (z * z));
+	}
+
+	static float GetDoorPenalty(TESObjectREFR* door)
+	{
+		if (!door || !door->baseForm || door->baseForm->typeID != kFormType_Door)
+			return 0.0f;
+
+		return ThisCall<bool>(0x518000, door->baseForm) ? 409600.0f : 0.0f;
+	}
+
+	static void ClearRouteCache()
+	{
+		s_routeCache.valid = false;
+		s_routeCache.startSpace = {};
+		s_routeCache.nodes.clear();
+		s_routeCache.doors.clear();
+		s_routeCache.fallbacks.clear();
+	}
+
+	static SInt32 FindRouteNode(const TravelSpace& space)
+	{
+		for (std::size_t i = 0; i < s_routeCache.nodes.size(); ++i)
+		{
+			if (IsSameTravelSpace(s_routeCache.nodes[i].space, space))
+				return static_cast<SInt32>(i);
+		}
+
+		return -1;
+	}
+
+	static SInt32 FindBestOpenRouteNode()
+	{
+		SInt32 bestIndex = -1;
+		float bestCost = (std::numeric_limits<float>::max)();
+
+		for (std::size_t i = 0; i < s_routeCache.nodes.size(); ++i)
+		{
+			const RouteNode& node = s_routeCache.nodes[i];
+			if (!node.visited && node.cost < bestCost)
+			{
+				bestIndex = static_cast<SInt32>(i);
+				bestCost = node.cost;
+			}
+		}
+
+		return bestIndex;
+	}
+
+	static void AddOrUpdateRouteNode(const TravelSpace& space, float cost, const float arrival[3], TESObjectREFR* firstDoor)
+	{
+		if (!IsValidTravelSpace(space) || !firstDoor)
+			return;
+
+		const SInt32 existingIndex = FindRouteNode(space);
+		if (existingIndex >= 0)
+		{
+			RouteNode& existing = s_routeCache.nodes[existingIndex];
+			if (!existing.visited && cost < existing.cost)
+			{
+				existing.cost = cost;
+				existing.arrival[0] = arrival[0];
+				existing.arrival[1] = arrival[1];
+				existing.arrival[2] = arrival[2];
+				existing.firstDoor = firstDoor;
+			}
+			return;
+		}
+
+		RouteNode node;
+		node.space = space;
+		node.cost = cost;
+		node.arrival[0] = arrival[0];
+		node.arrival[1] = arrival[1];
+		node.arrival[2] = arrival[2];
+		node.firstDoor = firstDoor;
+		s_routeCache.nodes.push_back(node);
+	}
+
+	static bool GetFallbackRoute(const TravelSpace& targetSpace, TESObjectREFR*& door)
+	{
+		if (!IsValidTravelSpace(targetSpace))
+			return false;
+
+		for (const FallbackRoute& route : s_routeCache.fallbacks)
+		{
+			if (IsSameTravelSpace(route.targetSpace, targetSpace))
+			{
+				door = route.door;
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	static void CacheFallbackRoute(const TravelSpace& targetSpace, TESObjectREFR* door)
+	{
+		if (!IsValidTravelSpace(targetSpace))
+			return;
+
+		s_routeCache.fallbacks.push_back({ targetSpace, door });
 	}
 
 	class ScopedCellRefLock
@@ -135,6 +310,88 @@ namespace
 			TESObjectREFR* ref = iter.Get();
 			if (IsUsableLoadDoor(ref))
 				doors.push_back(ref);
+		}
+	}
+
+	static void CollectLoadDoors(const TravelSpace& space, std::vector<TESObjectREFR*>& doors)
+	{
+		if (space.isWorldspace)
+		{
+			if (space.worldspace)
+				CollectLoadDoors(space.worldspace->cell, doors);
+			return;
+		}
+
+		CollectLoadDoors(space.cell, doors);
+	}
+
+	static bool EnsureRouteCache(PlayerCharacter* player, TESObjectCELL* playerCell)
+	{
+		TravelSpace startSpace = GetTravelSpace(playerCell);
+		if (!player || !IsValidTravelSpace(startSpace))
+			return false;
+
+		if (s_routeCache.valid && IsSameTravelSpace(s_routeCache.startSpace, startSpace))
+			return true;
+
+		ClearRouteCache();
+		s_routeCache.valid = true;
+		s_routeCache.startSpace = startSpace;
+
+		RouteNode startNode;
+		startNode.space = startSpace;
+		startNode.arrival[0] = player->posX;
+		startNode.arrival[1] = player->posY;
+		startNode.arrival[2] = player->posZ;
+		s_routeCache.nodes.push_back(startNode);
+		return true;
+	}
+
+	static void ExpandRouteNode(SInt32 nodeIndex)
+	{
+		if (nodeIndex < 0 || static_cast<std::size_t>(nodeIndex) >= s_routeCache.nodes.size())
+			return;
+
+		RouteNode node = s_routeCache.nodes[nodeIndex];
+		s_routeCache.doors.clear();
+		CollectLoadDoors(node.space, s_routeCache.doors);
+
+		for (TESObjectREFR* door : s_routeCache.doors)
+		{
+			DoorTeleportData* teleport = GetTeleport(door);
+			TravelSpace destination = GetTeleportDestinationSpace(teleport);
+			if (!IsValidTravelSpace(destination) || IsSameTravelSpace(destination, node.space))
+				continue;
+
+			float arrival[3] = { teleport->x, teleport->y, teleport->z };
+			float cost = node.cost +
+			             GetDistance(node.arrival[0], node.arrival[1], node.arrival[2], door->posX, door->posY, door->posZ) +
+			             GetDoorPenalty(door);
+			TESObjectREFR* firstDoor = node.firstDoor ? node.firstDoor : door;
+			AddOrUpdateRouteNode(destination, cost, arrival, firstDoor);
+		}
+	}
+
+	static TESObjectREFR* FindCachedRouteDoor(PlayerCharacter* player, TESObjectCELL* playerCell, const TravelSpace& targetSpace)
+	{
+		if (!EnsureRouteCache(player, playerCell) || !IsValidTravelSpace(targetSpace))
+			return nullptr;
+
+		while (true)
+		{
+			SInt32 targetIndex = FindRouteNode(targetSpace);
+			if (targetIndex >= 0 && s_routeCache.nodes[targetIndex].visited)
+				return s_routeCache.nodes[targetIndex].firstDoor;
+
+			SInt32 nextIndex = FindBestOpenRouteNode();
+			if (nextIndex < 0)
+				return nullptr;
+
+			s_routeCache.nodes[nextIndex].visited = true;
+			if (IsSameTravelSpace(s_routeCache.nodes[nextIndex].space, targetSpace))
+				return s_routeCache.nodes[nextIndex].firstDoor;
+
+			ExpandRouteNode(nextIndex);
 		}
 	}
 
@@ -245,16 +502,48 @@ namespace
 		if (!player || !targetRef)
 			return true;
 
+		TESObjectCELL* playerCell = GetParentCell(player);
+		TESObjectCELL* targetCell = GetParentCell(targetRef);
+		if (!playerCell || !targetCell)
+			return true;
+
+		TravelSpace targetSpace = GetTravelSpace(targetCell);
+
+		//same-space paths contain no teleport links, so the next thing to point at is the target
+		if (IsSameTravelSpace(GetTravelSpace(playerCell), targetSpace))
+		{
+			*refResult = targetRef->refID;
+			return true;
+		}
+
+		if (TESObjectREFR* cachedDoor = FindCachedRouteDoor(player, playerCell, targetSpace))
+		{
+			*refResult = cachedDoor->refID;
+			return true;
+		}
+
+		TESObjectREFR* fallbackDoor = nullptr;
+		if (GetFallbackRoute(targetSpace, fallbackDoor))
+		{
+			if (fallbackDoor)
+				*refResult = fallbackDoor->refID;
+			return true;
+		}
+
 		ScopedTeleportPathData path;
 		ThisCall<void>(0x952D60, player, targetRef, path.Get(), 1);
 
 		TeleportPathData* pathData = path.Get();
 		if (pathData->teleportLinks.size == 0 || !pathData->teleportLinks.data)
+		{
+			CacheFallbackRoute(targetSpace, nullptr);
 			return true;
+		}
 
 		TESObjectREFR* nextDoor = pathData->teleportLinks.data[0].door;
 		if (nextDoor)
 			*refResult = nextDoor->refID;
+		CacheFallbackRoute(targetSpace, nextDoor);
 
 		return true;
 	}
@@ -272,5 +561,15 @@ namespace ExteriorDoorCommands
 	{
 		NVSEInterface* nvse = static_cast<NVSEInterface*>(nvsePtr);
 		nvse->RegisterTypedCommand(&kCommandInfo_GetRefNextTeleportDoor, kRetnType_Form);
+	}
+
+	void AdvanceFrameCache()
+	{
+		ClearRouteCache();
+	}
+
+	void ClearCache()
+	{
+		ClearRouteCache();
 	}
 }

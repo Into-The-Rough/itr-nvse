@@ -24,8 +24,10 @@
 #include "commands/HairColorCommands.h"
 #include "commands/CasinoBanCommands.h"
 #include "commands/ExteriorDoorCommands.h"
+#include "commands/ContainerCommands.h"
 #include "commands/HavokCommands.h"
 #include "commands/WorldspaceOffsetCommands.h"
+#include "commands/DetectionSoundCommands.h"
 #include "features/CameraOverride.h"
 #include "features/NoWeaponSearch.h"
 #include "features/PreventWeaponSwitch.h"
@@ -151,11 +153,17 @@ void RegisterAllCommands(void* nvsePtr)
 	/*40AA*/ nvse->SetOpcodeBase(0x40AA);
 	ExteriorDoorCommands::RegisterCommands2(nvse);                  //GetRefNextTeleportDoor
 
+	/*40AB*/ nvse->SetOpcodeBase(0x40AB);
+	ContainerCommands::RegisterCommands(nvse);                      //GetVisibleContainerInventoryCount
+
 	/*40B0*/ nvse->SetOpcodeBase(0x40B0);
 	HavokCommands::RegisterCommands(nvse);                          //IsRigidBodyAtRest
 
 	/*40B1*/ nvse->SetOpcodeBase(0x40B1);
 	PerkRuntimeFramework::RegisterCommands(nvse);                   //GetPerkEligibility..GetPerksForForm
+
+	/*40B6*/ nvse->SetOpcodeBase(0x40B6);
+	DetectionSoundCommands::RegisterCommands(nvse);                 //CreateDetectionSoundAt, CreateAnonymousDetectionSoundAt
 
 #ifdef _DEBUG
 	/*4067*/ nvse->SetOpcodeBase(0x4067);

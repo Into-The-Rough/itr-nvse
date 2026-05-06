@@ -69,6 +69,7 @@ namespace Settings
 	inline int bMusicResetOnLoad = 1;
 	inline int bOwnedCorpses = 0;
 	inline int bDetectionFollowerCrashFix = 1;
+	inline int bGetLineOfSightCrashFix = 1;
 	inline int bInlineGlyphFix = 0;
 	inline int iInlineGlyphVisualScalePercent = 88;
 
@@ -151,6 +152,7 @@ namespace Settings
 		bMusicResetOnLoad = GetINIInt("Tweaks", "bMusicResetOnLoad", 1);
 		bOwnedCorpses = GetINIInt("Tweaks", "bOwnedCorpses", 0);
 		bDetectionFollowerCrashFix = GetINIInt("Tweaks", "bDetectionFollowerCrashFix", 1);
+		bGetLineOfSightCrashFix = GetINIInt("Tweaks", "bGetLineOfSightCrashFix", 1);
 		bInlineGlyphFix = GetINIInt("Tweaks", "bInlineGlyphFix", 0);
 		iInlineGlyphVisualScalePercent = GetINIInt("Tweaks", "iInlineGlyphVisualScalePercent", 88);
 
