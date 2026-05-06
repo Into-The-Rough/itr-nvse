@@ -1,5 +1,6 @@
 #include "ITR.h"
 #include "commands/CommandTable.h"
+#include "commands/DetectionSoundCommands.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/GameObjects.h"
@@ -66,6 +67,7 @@
 #include "fixes/InitHavokCrashFix.h"
 #include "fixes/OwnedCorpses.h"
 #include "fixes/DetectionFollowerCrashFix.h"
+#include "fixes/GetLineOfSightCrashFix.h"
 #include "fixes/InlineGlyphFix.h"
 #include "features/MessageBoxQuickClose.h"
 #include "features/PreventWeaponSwitch.h"
@@ -93,6 +95,7 @@
 #include "commands/WeaponEmissiveCommands.h"
 #include "commands/UICommands.h"
 #include "commands/ActorValueCommands.h"
+#include "commands/ExteriorDoorCommands.h"
 
 #include <cstdio>
 #include <cstdarg>
@@ -328,6 +331,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					InitHavokCrashFix::Init();
 				if (Settings::bDetectionFollowerCrashFix)
 					DetectionFollowerCrashFix::Init();
+				if (Settings::bGetLineOfSightCrashFix)
+					GetLineOfSightCrashFix::Init();
 				if (Settings::bInlineGlyphFix)
 					InlineGlyphFix::Init();
 				EventDispatch::RegisterEvents();
@@ -348,6 +353,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 		case NVSEMessagingInterface::kMessage_PreLoadGame:
 			g_isLoadingSave = true;
+			DetectionSoundCommands::ClearState();
 			break;
 
 		case NVSEMessagingInterface::kMessage_NewGame:
@@ -365,6 +371,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OnContactHandler::ClearState();
 			OnVATSStateHandler::ClearState();
 			ToggleAllPrimitives::Reset();
+			ExteriorDoorCommands::ClearCache();
+			DetectionSoundCommands::ClearState();
 
 			OnEntryPointHandler::BuildEntryMap();
 			PerkRuntimeFramework::BuildIndex();
@@ -435,6 +443,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 
 		case kMessage_MainGameLoop:
+			ExteriorDoorCommands::AdvanceFrameCache();
 			AshPileNames::Update();
 			OnConsoleHandler::Update();
 			DialogueTextFilter::Update();
@@ -461,6 +470,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			ImperativeCommands::Update();
 			GestureCommand::Update();
 			ToggleAllPrimitives::Update();
+			DetectionSoundCommands::Update();
 			break;
 	}
 }
