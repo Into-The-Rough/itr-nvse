@@ -407,6 +407,13 @@
 					"mouse": "0=Vanilla (guards/cell owners bypass), 1=Strict (only door owners), 2=Full (nobody bypasses)",
 					"vars": [{ "configINI": "Tweaks:iNPCDoorUnlockBlock", "default": 0 }],
 					"strings": ["Vanilla", "Strict", "Full Block"]
+				},
+				"17": {
+					"title": "Lockpick Owner Karma Fix",
+					"type": 5,
+					"enable": 1,
+					"mouse": "No lockpick karma loss when the player already owns the locked ref through cell or faction ownership",
+					"vars": [{ "configINI": "Tweaks:bLockpickOwnerKarmaFix", "default": 1 }]
 				}
 			}
 		},

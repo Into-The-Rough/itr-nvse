@@ -52,6 +52,14 @@ Wrappers load extra context into `EDX` and tail-jump to typed `__fastcall` repla
 | 0x90D528 | call | 5 | continues | yes | IsAnOwner_Hook |
 | 0x90D5DE | call | 5 | continues | yes | IsAnOwner_Hook |
 
+### LockpickOwnerKarmaFix
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x78F74D | call | 5 | continues | yes | Hook_GetOwnerForLockpickKarma |
+
+Call-site replacement in `LockPickMenu::Update`. The hook returns no owner to the vanilla lockpick karma block when `TESObjectREFR::IsAnOwner(targetRef, player, true)` already succeeds.
+
 ### ExplodingPantsFix
 
 | Hook Site | Type | Size | Return | Chain | Function |
@@ -363,6 +371,17 @@ No inline or vtable hooks. This handler polls from `kMessage_MainGameLoop`.
 | 0x727680 | jump | 9 | trampoline | yes | Hook_RecipeMenu_Refresh |
 
 Each menu's tile-list rebuild function is detoured. The hook calls the trampoline first so the rebuild completes (and `GetSelectedItemRef` returns the new selection), then dispatches `ITR:OnMenuListRefresh` with the menu ID.
+
+### BarterCommands
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x72D6D0 | jump | 6 | trampoline | yes | Hook_Close |
+| 0x7304B0 | jump | 6 | trampoline | yes | Hook_ShouldHideItem |
+| 0x72F6F0 | jump | 6 | trampoline | yes | Hook_TransferItem |
+| 0x72FD10 | jump | 10 | trampoline | yes | Hook_ProcessTransaction |
+
+`ShowBarterMenuWhitelist` uses `ShouldHideItem` for the visible player-side filter, `TransferItem` to reject blocked player-side selections, and `ProcessTransaction` as the final guard if a blocked item is already queued. `Close` clears the active whitelist state.
 
 ### SaveFileSizeHandler
 
