@@ -1,6 +1,7 @@
 #include "ITR.h"
 #include "commands/CommandTable.h"
 #include "commands/DetectionSoundCommands.h"
+#include "commands/BarterCommands.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/GameObjects.h"
@@ -68,6 +69,7 @@
 #include "fixes/OwnedCorpses.h"
 #include "fixes/DetectionFollowerCrashFix.h"
 #include "fixes/GetLineOfSightCrashFix.h"
+#include "fixes/LockpickOwnerKarmaFix.h"
 #include "fixes/InlineGlyphFix.h"
 #include "features/MessageBoxQuickClose.h"
 #include "features/PreventWeaponSwitch.h"
@@ -333,6 +335,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					DetectionFollowerCrashFix::Init();
 				if (Settings::bGetLineOfSightCrashFix)
 					GetLineOfSightCrashFix::Init();
+				LockpickOwnerKarmaFix::Init(Settings::bLockpickOwnerKarmaFix != 0);
 				if (Settings::bInlineGlyphFix)
 					InlineGlyphFix::Init();
 				EventDispatch::RegisterEvents();
@@ -354,6 +357,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 		case NVSEMessagingInterface::kMessage_PreLoadGame:
 			g_isLoadingSave = true;
 			DetectionSoundCommands::ClearState();
+			BarterCommands::ClearState();
 			break;
 
 		case NVSEMessagingInterface::kMessage_NewGame:
@@ -373,6 +377,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			ToggleAllPrimitives::Reset();
 			ExteriorDoorCommands::ClearCache();
 			DetectionSoundCommands::ClearState();
+			BarterCommands::ClearState();
 
 			OnEntryPointHandler::BuildEntryMap();
 			PerkRuntimeFramework::BuildIndex();
@@ -415,6 +420,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					ReversePickpocketNoKarmaFix::SetEnabled(Settings::bReversePickpocketNoKarma != 0);
 					CompanionNoInfamy::SetEnabled(Settings::bCompanionNoInfamy != 0);
 					NPCDoorUnlockBlock::SetLevel(Settings::iNPCDoorUnlockBlock);
+					LockpickOwnerKarmaFix::SetEnabled(Settings::bLockpickOwnerKarmaFix != 0);
 					InlineGlyphFix::SetEnabled(Settings::bInlineGlyphFix != 0);
 
 					if (*g_thePlayer)
@@ -518,6 +524,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	logInit("OnWoundSprayHandler", OnWoundSprayHandler::Init((void*)nvse));
 	logInit("OnVATSStateHandler", OnVATSStateHandler::Init((void*)nvse));
 	logInit("OnCasinoBanHandler", OnCasinoBanHandler::Init((void*)nvse));
+	logInit("BarterCommands", BarterCommands::InitHooks());
 	NoWeaponSearch::Init();
 	PreventWeaponSwitch::Init();
 	logInit("PerkRuntimeFramework", PerkRuntimeFramework::Init((void*)nvse));

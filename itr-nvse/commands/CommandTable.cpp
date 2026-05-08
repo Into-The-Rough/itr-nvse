@@ -28,6 +28,7 @@
 #include "commands/HavokCommands.h"
 #include "commands/WorldspaceOffsetCommands.h"
 #include "commands/DetectionSoundCommands.h"
+#include "commands/BarterCommands.h"
 #include "features/CameraOverride.h"
 #include "features/NoWeaponSearch.h"
 #include "features/PreventWeaponSwitch.h"
@@ -164,6 +165,9 @@ void RegisterAllCommands(void* nvsePtr)
 
 	/*40B6*/ nvse->SetOpcodeBase(0x40B6);
 	DetectionSoundCommands::RegisterCommands(nvse);                 //CreateDetectionSoundAt, CreateAnonymousDetectionSoundAt
+
+	/*40B8*/ nvse->SetOpcodeBase(0x40B8);
+	BarterCommands::RegisterCommands(nvse);                         //ShowBarterMenuWhitelist
 
 #ifdef _DEBUG
 	/*4067*/ nvse->SetOpcodeBase(0x4067);

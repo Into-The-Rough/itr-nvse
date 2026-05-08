@@ -168,6 +168,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="fixes\InitHavokCrashFix.cpp" />
     <ClCompile Include="fixes\DetectionFollowerCrashFix.cpp" />
     <ClCompile Include="fixes\GetLineOfSightCrashFix.cpp" />
+    <ClCompile Include="fixes\LockpickOwnerKarmaFix.cpp" />
     <ClCompile Include="fixes\InlineGlyphFix.cpp" />
     <ClCompile Include="features\MessageBoxQuickClose.cpp">
       <LanguageStandard Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">stdcpp23</LanguageStandard>
@@ -211,6 +212,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="commands\ContainerCommands.cpp" />
     <ClCompile Include="commands\WorldspaceOffsetCommands.cpp" />
     <ClCompile Include="commands\DetectionSoundCommands.cpp" />
+    <ClCompile Include="commands\BarterCommands.cpp" />
     <ClCompile Include="commands\GestureCommand.cpp" />
     <ClCompile Include="handlers\OnWitnessedHandler.cpp" />
     <ClCompile Include="handlers\OnImpactDataSpawnHandler.cpp" />
@@ -279,6 +281,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="fixes\InitHavokCrashFix.h" />
     <ClInclude Include="fixes\DetectionFollowerCrashFix.h" />
     <ClInclude Include="fixes\GetLineOfSightCrashFix.h" />
+    <ClInclude Include="fixes\LockpickOwnerKarmaFix.h" />
     <ClInclude Include="fixes\InlineGlyphFix.h" />
     <ClInclude Include="features\MessageBoxQuickClose.h" />
     <ClInclude Include="features\PreventWeaponSwitch.h" />
@@ -310,6 +313,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="commands\ContainerCommands.h" />
     <ClInclude Include="commands\WorldspaceOffsetCommands.h" />
     <ClInclude Include="commands\DetectionSoundCommands.h" />
+    <ClInclude Include="commands\BarterCommands.h" />
     <ClInclude Include="commands\GestureCommand.h" />
     <ClInclude Include="handlers\OnWitnessedHandler.h" />
     <ClInclude Include="handlers\OnImpactDataSpawnHandler.h" />

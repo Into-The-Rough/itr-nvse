@@ -88,11 +88,12 @@
 // 0x40B5  GetPerksForForm
 // 0x40B6  CreateDetectionSoundAt
 // 0x40B7  CreateAnonymousDetectionSoundAt
+// 0x40B8  ShowBarterMenuWhitelist
 // 0x410E  Gesture
 //
 // not registered by itr-nvse source: 0x4000-0x4007, 0x400A-0x4016, 0x4033,
 // 0x403D-0x404F, 0x405D-0x405E, 0x4069-0x409B, 0x40AC-0x40AF,
-// 0x40B8-0x410D, 0x410F
+// 0x40B9-0x410D, 0x410F
 // These are not automatically free; other local plugins use slots inside the
 // Into the Rough-owned blocks. Check /mnt/d/plugins/opcodes.txt before assigning.
 
