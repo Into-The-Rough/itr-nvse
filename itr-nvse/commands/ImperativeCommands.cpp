@@ -337,15 +337,17 @@ namespace
 	}
 }
 
-static ParamInfo kParams_GetRefsSortedByDistance[5] = {
+static ParamInfo kParams_GetRefsSortedByDistance[7] = {
 	{ "maxDistance",      kParamType_Float,   0 },
 	{ "formType",         kParamType_Integer, 1 },
 	{ "cellDepth",        kParamType_Integer, 1 },
 	{ "includeTakenRefs", kParamType_Integer, 1 },
 	{ "baseForm",         kParamType_AnyForm, 1 },
+	{ "maxHeadingAngle",  kParamType_Float,   1 },
+	{ "limit",            kParamType_Integer, 1 },
 };
 
-DEFINE_COMMAND_PLUGIN(GetRefsSortedByDistance, "Returns array of refs sorted by distance from player", 0, 5, kParams_GetRefsSortedByDistance);
+DEFINE_COMMAND_PLUGIN(GetRefsSortedByDistance, "Returns array of refs sorted by distance from player", 0, 7, kParams_GetRefsSortedByDistance);
 
 enum {
 	kFormTypeFilter_AnyType = kFilter_AnyType,
@@ -397,8 +399,10 @@ bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 	SInt32 cellDepth = 0;
 	UInt32 includeTakenRefs = 0;
 	TESForm* baseForm = nullptr;
+	float maxHeadingAngle = 0;
+	UInt32 limit = 0;
 
-	if (!ExtractArgs(EXTRACT_ARGS, &maxDistance, &formType, &cellDepth, &includeTakenRefs, &baseForm))
+	if (!ExtractArgs(EXTRACT_ARGS, &maxDistance, &formType, &cellDepth, &includeTakenRefs, &baseForm, &maxHeadingAngle, &limit))
 		return true;
 
 	if (maxDistance <= 0)
@@ -412,11 +416,19 @@ bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 
 	float maxDistSq = maxDistance * maxDistance;
 
+	constexpr float kPi = 3.14159265358979323846f;
+	const bool useHeading = maxHeadingAngle > 0.0f && maxHeadingAngle < 180.0f;
+	const float maxHeadingRad = maxHeadingAngle * (kPi / 180.0f);
+	const float playerRotZ = player->rotZ;
+
 	struct RefWithDist {
 		TESObjectREFR* ref;
 		float distance;
 	};
 	std::vector<RefWithDist> refs;
+	if (limit > 0) refs.reserve(limit);
+
+	auto HeapCmp = [](const RefWithDist& a, const RefWithDist& b) { return a.distance < b.distance; };
 
 	TESObjectCELL* playerCell = player->parentCell;
 
@@ -435,7 +447,37 @@ bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 			float distSq = FormUtils::CalcDistanceSquared(refr, (TESObjectREFR*)player);
 			if (distSq > maxDistSq) continue;
 
-			refs.push_back({ refr, sqrtf(distSq) });
+			if (useHeading)
+			{
+				//FNV: rotZ measured from +Y, clockwise (matches atan2(dx,dy))
+				float dx = refr->posX - player->posX;
+				float dy = refr->posY - player->posY;
+				float delta = atan2f(dx, dy) - playerRotZ;
+				while (delta > kPi)  delta -= 2.0f * kPi;
+				while (delta < -kPi) delta += 2.0f * kPi;
+				if (fabsf(delta) > maxHeadingRad) continue;
+			}
+
+			float dist = sqrtf(distSq);
+
+			if (limit > 0)
+			{
+				if (refs.size() < limit)
+				{
+					refs.push_back({ refr, dist });
+					std::push_heap(refs.begin(), refs.end(), HeapCmp);
+				}
+				else if (dist < refs.front().distance)
+				{
+					std::pop_heap(refs.begin(), refs.end(), HeapCmp);
+					refs.back() = { refr, dist };
+					std::push_heap(refs.begin(), refs.end(), HeapCmp);
+				}
+			}
+			else
+			{
+				refs.push_back({ refr, dist });
+			}
 		}
 	};
 

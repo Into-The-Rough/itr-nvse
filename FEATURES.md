@@ -8,7 +8,7 @@
 - Sv_Reverse - reverse a string
 
 **Utility**
-- GetRefsSortedByDistance - refs sorted by distance with filters
+- GetRefsSortedByDistance - refs sorted by distance with filters, optional heading-cone and result-count cap
 - Duplicate - duplicate a form
 - GetAvailableRecipes - get available crafting recipes
 - ModChallenge - modify challenge progress
