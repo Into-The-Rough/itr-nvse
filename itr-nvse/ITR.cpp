@@ -46,6 +46,7 @@
 #include "handlers/OnWoundSprayHandler.h"
 #include "handlers/OnVATSStateHandler.h"
 #include "handlers/OnCasinoBanHandler.h"
+#include "handlers/OnPrePickUpHandler.h"
 
 #include "fixes/SlowMotionPhysicsFix.h"
 #include "fixes/VATSProjectileFix.h"
@@ -524,6 +525,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	logInit("OnWoundSprayHandler", OnWoundSprayHandler::Init((void*)nvse));
 	logInit("OnVATSStateHandler", OnVATSStateHandler::Init((void*)nvse));
 	logInit("OnCasinoBanHandler", OnCasinoBanHandler::Init((void*)nvse));
+	logInit("OnPrePickUpHandler", OnPrePickUpHandler::Init((void*)nvse));
 	logInit("BarterCommands", BarterCommands::InitHooks());
 	NoWeaponSearch::Init();
 	PreventWeaponSwitch::Init();
