@@ -4,6 +4,8 @@
 
 #define ITR_VERSION 110
 
+constexpr UInt32 kRequiredNVSEVersion = MAKE_NEW_VEGAS_VERSION(6, 4, 5);
+
 extern "C" {
 
 __declspec(dllexport) bool NVSEPlugin_Query(const NVSEInterface* nvse, PluginInfo* info)
@@ -13,7 +15,16 @@ __declspec(dllexport) bool NVSEPlugin_Query(const NVSEInterface* nvse, PluginInf
 	info->version = ITR_VERSION;
 
 	if (nvse->isEditor) return true;
-	if (nvse->nvseVersion < NVSE_VERSION_INTEGER) return false;
+
+	if (nvse->nvseVersion < kRequiredNVSEVersion) {
+		MessageBoxA(nullptr,
+			"ITR requires xNVSE 6.4.5-2 or newer.\n\n"
+			"Download the latest xNVSE from the xNVSE Nexus page and replace your nvse_1_4.dll.",
+			"ITR - Outdated xNVSE",
+			MB_OK | MB_ICONERROR | MB_TASKMODAL);
+		return false;
+	}
+
 	if (nvse->runtimeVersion != RUNTIME_VERSION_1_4_0_525) return false;
 	if (nvse->isNogore) return false;
 
