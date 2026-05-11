@@ -245,20 +245,32 @@ bool Init(void* nvseInterface)
 		g_invRefCreateEntry = reinterpret_cast<InvRefCreateEntry_t>(
 			dataInterface->GetFunc(kNVSEData_InventoryReferenceCreateEntry));
 
-	//sub esp,154h is imm32, so 9 prologue bytes total - 5-byte jmp + 4 nops
-	SafeWrite::WriteRelJump(kAddr_PlayerPickUp,          (UInt32)PlayerPickUp_Hook);
-	SafeWrite::WriteNop    (kAddr_PlayerPickUp + 5, 1);
+	//if another plugin already patched the prologue, skip - don't corrupt their trampoline
+	auto TryInstall = [](const char* name, UInt32 addr, const UInt8* expected, UInt32 size, void* hook, UInt32 nopCount) -> bool {
+		if (memcmp((void*)addr, expected, size) != 0)
+		{
+			Log("OnPrePickUp: %s prologue at 0x%X differs from expected, skipping (another plugin hooked here?)", name, addr);
+			return false;
+		}
+		SafeWrite::WriteRelJump(addr, (UInt32)hook);
+		if (nopCount > 0) SafeWrite::WriteNop(addr + 5, nopCount);
+		return true;
+	};
 
-	SafeWrite::WriteRelJump(kAddr_ActorPickUp,           (UInt32)ActorPickUp_Hook);
-	SafeWrite::WriteNop    (kAddr_ActorPickUp + 5, 1);
+	//sub esp,154h is imm32 form, so 9 prologue bytes (5-byte jmp + 4 nops); others use imm8 (6 bytes)
+	static const UInt8 kPrologue_PlayerPickUp[6]    = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x44 };
+	static const UInt8 kPrologue_ActorPickUp[6]     = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x54 };
+	static const UInt8 kPrologue_AddObjectTo[6]     = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x0C };
+	static const UInt8 kPrologue_ContainerXfer[9]   = { 0x55, 0x8B, 0xEC, 0x81, 0xEC, 0x54, 0x01, 0x00, 0x00 };
 
-	SafeWrite::WriteRelJump(kAddr_AddObjecttoContainer,  (UInt32)AddObjecttoContainer_Hook);
-	SafeWrite::WriteNop    (kAddr_AddObjecttoContainer + 5, 1);
+	int installed = 0;
+	installed += TryInstall("PlayerCharacter::PickUpObject", kAddr_PlayerPickUp,          kPrologue_PlayerPickUp,  6, (void*)PlayerPickUp_Hook,          1);
+	installed += TryInstall("Actor::PickUpObject",           kAddr_ActorPickUp,           kPrologue_ActorPickUp,   6, (void*)ActorPickUp_Hook,           1);
+	installed += TryInstall("TESObjectREFR::AddObjecttoContainer", kAddr_AddObjecttoContainer, kPrologue_AddObjectTo, 6, (void*)AddObjecttoContainer_Hook, 1);
+	installed += TryInstall("ContainerMenu::TransferItem",   kAddr_ContainerTransferItem, kPrologue_ContainerXfer, 9, (void*)ContainerTransferItem_Hook, 4);
 
-	SafeWrite::WriteRelJump(kAddr_ContainerTransferItem, (UInt32)ContainerTransferItem_Hook);
-	SafeWrite::WriteNop    (kAddr_ContainerTransferItem + 5, 4);
-
-	return true;
+	Log("OnPrePickUp: %d/4 hooks installed", installed);
+	return installed > 0;
 }
 
 }
