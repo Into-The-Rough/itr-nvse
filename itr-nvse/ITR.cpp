@@ -26,6 +26,7 @@
 #include "handlers/KeyHeldHandler.h"
 #include "handlers/DoubleTapHandler.h"
 #include "handlers/OnFrenzyHandler.h"
+#include "handlers/OnEffectHandler.h"
 #include "handlers/CornerMessageHandler.h"
 #include "handlers/OnEntryPointHandler.h"
 #include "handlers/OnCombatProcedureHandler.h"
@@ -450,7 +451,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 
 		case kMessage_MainGameLoop:
-			ExteriorDoorCommands::AdvanceFrameCache();
 			AshPileNames::Update();
 			OnConsoleHandler::Update();
 			DialogueTextFilter::Update();
@@ -504,6 +504,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	logInit("KeyHeldHandler", KeyHeldHandler::Init());
 	logInit("DoubleTapHandler", DoubleTapHandler::Init());
 	logInit("OnFrenzyHandler", OnFrenzyHandler::Init((void*)nvse));
+	logInit("OnEffectHandler", OnEffectHandler::Init((void*)nvse));
 	logInit("CornerMessageHandler", CornerMessageHandler::Init((void*)nvse));
 	logInit("OnEntryPointHandler", OnEntryPointHandler::Init((void*)nvse));
 	logInit("OnCombatProcedureHandler", OnCombatProcedureHandler::Init((void*)nvse));

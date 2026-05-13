@@ -27,9 +27,9 @@ constexpr UInt32 kRet_ContainerTransferItem   = 0x0075DC89;
 
 constexpr UInt32 kTESObjectREFR_BaseFormOffset = 0x20;
 static TESObjectREFR** g_thePlayer = (TESObjectREFR**)0x011DEA3C;
-//offsets verified at 0x75DC94-0x75DC9A
-static void**    g_containerMenuPtrAddr = (void**)0x011591BC;
-static UInt32*   g_containerMenuSelAddr = (UInt32*)0x011591FC;
+static void**    g_containerMenuPtrAddr = (void**)0x011D93F8;
+static UInt32*   g_containerMenuSelAddr = (UInt32*)0x011D93FC;
+constexpr UInt32 kContainerMenu_ContainerRefOffset = 0x74;
 constexpr UInt32 kContainerMenu_PlayerListOffset   = 0x98;
 constexpr UInt32 kContainerMenu_CurrentItemsOffset = 0xF8;
 
@@ -188,9 +188,8 @@ static int __cdecl CheckContainerTransferItem(SInt32 count)
 	TESObjectREFR* playerRef = *g_thePlayer;
 	if (!playerRef) return 1;
 
-	auto* container = *reinterpret_cast<TESObjectREFR**>((UInt8*)menu + 0x74);
+	auto* container = *reinterpret_cast<TESObjectREFR**>((UInt8*)menu + kContainerMenu_ContainerRefOffset);
 
-	//extendData is ExtendDataList* not ExtraDataList* - pass null, invRef reflects the stack
 	TESObjectREFR* invRef = nullptr;
 	if (g_invRefCreateEntry && container)
 		invRef = g_invRefCreateEntry(container, item, count, nullptr);
