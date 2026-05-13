@@ -26,7 +26,6 @@ namespace
 	constexpr UInt32 kAddr_BarterMenu_ProcessTransaction = 0x72FD10;
 	constexpr UInt32 kAddr_MenuItemsList_TileFromItem = 0x7A22D0;
 	constexpr UInt32 kAddr_TESObjectREFR_GetObjectReference = 0x7AF430;
-	constexpr UInt32 kAddr_BGSTalkingActivator_GetActor = 0x516BF0;
 	constexpr UInt32 kAddr_MobileObject_IsTalkingThroughActivator = 0x574900;
 	constexpr UInt32 kAddr_MobileObject_GetActivatorRef = 0x5E3FA0;
 	constexpr UInt32 kAddr_Tile_IsFloatValueNotNull = 0xA01230;
@@ -46,7 +45,6 @@ namespace
 	using ProcessTransaction_t = void* (__thiscall*)(void*);
 	using TileFromItem_t = void* (__thiscall*)(void*, ExtraContainerChanges::EntryData**);
 	using TESObjectREFR_GetObjectReference_t = TESForm* (__thiscall*)(TESObjectREFR*);
-	using TalkingActivatorGetActor_t = TESObjectREFR* (__thiscall*)(TESForm*);
 	using IsTalkingThroughActivator_t = bool(__thiscall*)(TESObjectREFR*);
 	using GetActivatorRef_t = TESObjectREFR* (__thiscall*)(TESObjectREFR*);
 	using TileIsFloatValueNotNull_t = bool(__thiscall*)(void*, UInt32);
@@ -56,8 +54,6 @@ namespace
 	const auto TileFromItem = reinterpret_cast<TileFromItem_t>(kAddr_MenuItemsList_TileFromItem);
 	const auto GetObjectReference =
 		reinterpret_cast<TESObjectREFR_GetObjectReference_t>(kAddr_TESObjectREFR_GetObjectReference);
-	const auto GetTalkingActivatorActor =
-		reinterpret_cast<TalkingActivatorGetActor_t>(kAddr_BGSTalkingActivator_GetActor);
 	const auto IsTalkingThroughActivator =
 		reinterpret_cast<IsTalkingThroughActivator_t>(kAddr_MobileObject_IsTalkingThroughActivator);
 	const auto GetActivatorRef = reinterpret_cast<GetActivatorRef_t>(kAddr_MobileObject_GetActivatorRef);
@@ -93,10 +89,11 @@ namespace
 	TransferItem_t s_origTransferItem = nullptr;
 	ProcessTransaction_t s_origProcessTransaction = nullptr;
 
-	BGSListForm* s_whitelist = nullptr;
+	BGSListForm* s_filterList = nullptr;
 	UInt32 s_merchantRefID = 0;
 	bool s_hooksInstalled = false;
-	bool s_openingWhitelistedMenu = false;
+	bool s_openingFilteredMenu = false;
+	bool s_blacklistMode = false;
 
 	bool CallRefPredicate(TESObjectREFR* ref, UInt32 vtableOffset)
 	{
@@ -113,7 +110,8 @@ namespace
 		if (!baseForm || baseForm->typeID != kFormType_TalkingActivator)
 			return nullptr;
 
-		return GetTalkingActivatorActor(baseForm);
+		//BGSTalkingActivator::talkingActor at +0x90 (JIP GameForms.h)
+		return *reinterpret_cast<TESObjectREFR**>(reinterpret_cast<UInt8*>(baseForm) + 0x90);
 	}
 
 	TESObjectREFR* ResolveBarterMerchant(TESObjectREFR* ref)
@@ -204,7 +202,7 @@ namespace
 	bool IsActive()
 	{
 		void* menu = GetBarterMenu();
-		if (!s_whitelist || !menu)
+		if (!s_filterList || !menu)
 			return false;
 
 		auto* merchant = GetMerchantRef(menu);
@@ -236,10 +234,10 @@ namespace
 		return false;
 	}
 
-	bool WhitelistContains(TESForm* item)
+	bool FilterListContains(TESForm* item)
 	{
 		std::unordered_set<UInt32> visited;
-		return FormListContains(s_whitelist, item, visited);
+		return FormListContains(s_filterList, item, visited);
 	}
 
 	void* LeftSideTile(void* menu, ExtraContainerChanges::EntryData* entry)
@@ -249,7 +247,10 @@ namespace
 
 	bool ShouldBlockPlayerItem(TESForm* item)
 	{
-		return IsActive() && item && !WhitelistContains(item);
+		if (!IsActive() || !item)
+			return false;
+		const bool inList = FilterListContains(item);
+		return s_blacklistMode ? inList : !inList;
 	}
 
 	bool ShouldBlockSelectedTransfer()
@@ -282,20 +283,23 @@ namespace
 	void NotifyBlockedSale()
 	{
 		CdeclCall<void>(kAddr_PlayMenuSound, 2);
-		Console_Print("ShowBarterMenuWhitelist >> item is not in whitelist");
+		Console_Print(s_blacklistMode
+			? "ShowBarterMenuBlacklist >> item is in blacklist"
+			: "ShowBarterMenuWhitelist >> item is not in whitelist");
 	}
 
-	void SetActive(TESObjectREFR* merchant, BGSListForm* whitelist)
+	void SetActive(TESObjectREFR* merchant, BGSListForm* filterList, bool blacklistMode)
 	{
-		s_whitelist = whitelist;
+		s_filterList = filterList;
 		s_merchantRefID = merchant ? merchant->refID : 0;
+		s_blacklistMode = blacklistMode;
 	}
 
 	void __cdecl Hook_Close()
 	{
 		if (s_origClose)
 			s_origClose();
-		if (!s_openingWhitelistedMenu)
+		if (!s_openingFilteredMenu)
 			BarterCommands::ClearState();
 	}
 
@@ -342,44 +346,65 @@ namespace
 		{"whitelist", kParamType_AnyForm, 0},
 		{"barterFlag", kParamType_Integer, 1},
 	};
+
+	static ParamInfo kParams_ShowBarterMenuBlacklist[2] = {
+		{"blacklist", kParamType_AnyForm, 0},
+		{"barterFlag", kParamType_Integer, 1},
+	};
+
+	bool ExecuteFilteredBarter(COMMAND_ARGS, bool blacklistMode)
+	{
+		*result = 0;
+
+		TESForm* listForm = nullptr;
+		UInt32 barterFlag = 0;
+		if (!ExtractArgs(EXTRACT_ARGS, &listForm, &barterFlag))
+			return true;
+		if (!s_hooksInstalled)
+			return true;
+		if (!thisObj || !listForm || listForm->typeID != kFormType_ListForm)
+			return true;
+
+		auto* merchant = ResolveBarterMerchant(thisObj);
+		if (!merchant)
+			return true;
+
+		SetActive(nullptr, static_cast<BGSListForm*>(listForm), blacklistMode);
+		s_openingFilteredMenu = true;
+		void* menu = ShowBarterMenu(merchant, barterFlag);
+		s_openingFilteredMenu = false;
+		if (!menu)
+		{
+			BarterCommands::ClearState();
+			return true;
+		}
+
+		auto* menuMerchant = GetMerchantRef(GetBarterMenu());
+		s_merchantRefID = menuMerchant ? menuMerchant->refID : merchant->refID;
+
+		*result = 1;
+		return true;
+	}
 }
 
 DEFINE_COMMAND_PLUGIN(ShowBarterMenuWhitelist,
 	"shows barter menu while allowing the player to sell only items in a FormList",
 	1, 2, kParams_ShowBarterMenuWhitelist);
 
+DEFINE_COMMAND_PLUGIN(ShowBarterMenuBlacklist,
+	"shows barter menu while preventing the player from selling items in a FormList",
+	1, 2, kParams_ShowBarterMenuBlacklist);
+
 bool Cmd_ShowBarterMenuWhitelist_Execute(COMMAND_ARGS)
 {
-	*result = 0;
+	return ExecuteFilteredBarter(paramInfo, scriptData, thisObj, containingObj,
+		scriptObj, eventList, result, opcodeOffsetPtr, false);
+}
 
-	TESForm* whitelistForm = nullptr;
-	UInt32 barterFlag = 0;
-	if (!ExtractArgs(EXTRACT_ARGS, &whitelistForm, &barterFlag))
-		return true;
-	if (!s_hooksInstalled)
-		return true;
-	if (!thisObj || !whitelistForm || whitelistForm->typeID != kFormType_ListForm)
-		return true;
-
-	auto* merchant = ResolveBarterMerchant(thisObj);
-	if (!merchant)
-		return true;
-
-	SetActive(nullptr, static_cast<BGSListForm*>(whitelistForm));
-	s_openingWhitelistedMenu = true;
-	void* menu = ShowBarterMenu(merchant, barterFlag);
-	s_openingWhitelistedMenu = false;
-	if (!menu)
-	{
-		BarterCommands::ClearState();
-		return true;
-	}
-
-	auto* menuMerchant = GetMerchantRef(GetBarterMenu());
-	s_merchantRefID = menuMerchant ? menuMerchant->refID : merchant->refID;
-
-	*result = 1;
-	return true;
+bool Cmd_ShowBarterMenuBlacklist_Execute(COMMAND_ARGS)
+{
+	return ExecuteFilteredBarter(paramInfo, scriptData, thisObj, containingObj,
+		scriptObj, eventList, result, opcodeOffsetPtr, true);
 }
 
 namespace BarterCommands
@@ -404,6 +429,30 @@ namespace BarterCommands
 
 	bool InitHooks()
 	{
+		//bail if another plugin already patched the prologue
+		static const UInt8 kPrologue_Close[6]     = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x08 };
+		static const UInt8 kPrologue_ShouldHide[6] = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x30 };
+		static const UInt8 kPrologue_Transfer[6]  = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x24 };
+		static const UInt8 kPrologue_Process[10]  = { 0x55, 0x8B, 0xEC, 0x6A, 0xFF, 0x68, 0x28, 0x97, 0xF0, 0x00 };
+
+		auto CheckPrologue = [](const char* name, UInt32 addr, const UInt8* expected, UInt32 size) -> bool {
+			if (memcmp((void*)addr, expected, size) != 0)
+			{
+				Log("BarterCommands: %s prologue at 0x%X differs from expected, skipping (another plugin hooked here?)", name, addr);
+				return false;
+			}
+			return true;
+		};
+
+		if (!CheckPrologue("BarterMenu::Close", kAddr_BarterMenu_Close, kPrologue_Close, 6))
+			return false;
+		if (!CheckPrologue("BarterMenu::ShouldHideItem", kAddr_BarterMenu_ShouldHideItem, kPrologue_ShouldHide, 6))
+			return false;
+		if (!CheckPrologue("BarterMenu::TransferItem", kAddr_BarterMenu_TransferItem, kPrologue_Transfer, 6))
+			return false;
+		if (!CheckPrologue("BarterMenu::ProcessTransaction", kAddr_BarterMenu_ProcessTransaction, kPrologue_Process, 10))
+			return false;
+
 		if (s_closeDetour.WriteRelJump(kAddr_BarterMenu_Close, Hook_Close, 6))
 		{
 			s_origClose = s_closeDetour.GetTrampoline<BarterMenuClose_t>();
@@ -453,14 +502,16 @@ namespace BarterCommands
 
 	void ClearState()
 	{
-		s_whitelist = nullptr;
+		s_filterList = nullptr;
 		s_merchantRefID = 0;
-		s_openingWhitelistedMenu = false;
+		s_openingFilteredMenu = false;
+		s_blacklistMode = false;
 	}
 
 	void RegisterCommands(void* nvsePtr)
 	{
 		NVSEInterface* nvse = static_cast<NVSEInterface*>(nvsePtr);
 		nvse->RegisterCommand(&kCommandInfo_ShowBarterMenuWhitelist);
+		nvse->RegisterCommand(&kCommandInfo_ShowBarterMenuBlacklist);
 	}
 }

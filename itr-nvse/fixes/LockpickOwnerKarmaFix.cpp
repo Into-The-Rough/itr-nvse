@@ -3,11 +3,12 @@
 #include "LockpickOwnerKarmaFix.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/EngineFunctions.h"
-#include "internal/SafeWrite.h"
+#include "internal/Detours.h"
 
 namespace LockpickOwnerKarmaFix
 {
 	static bool g_enabled = false;
+	static Detours::CallDetour s_callDetour;
 
 	static void* __fastcall Hook_GetOwnerForLockpickKarma(void* ref, void*)
 	{
@@ -24,8 +25,9 @@ namespace LockpickOwnerKarmaFix
 
 	void Init(bool enabled)
 	{
-		//LockPickMenu::Update successful-pick owner check.
-		SafeWrite::WriteRelCall(0x78F74D, (UInt32)Hook_GetOwnerForLockpickKarma);
+		//LockPickMenu::Update successful-pick owner check
+		if (!s_callDetour.WriteRelCall(0x78F74D, (UInt32)Hook_GetOwnerForLockpickKarma))
+			return;
 		g_enabled = enabled;
 	}
 
