@@ -167,7 +167,7 @@ void RegisterAllCommands(void* nvsePtr)
 	DetectionSoundCommands::RegisterCommands(nvse);                 //CreateDetectionSoundAt, CreateAnonymousDetectionSoundAt
 
 	/*40B8*/ nvse->SetOpcodeBase(0x40B8);
-	BarterCommands::RegisterCommands(nvse);                         //ShowBarterMenuWhitelist
+	BarterCommands::RegisterCommands(nvse);                         //ShowBarterMenuWhitelist, ShowBarterMenuBlacklist
 
 #ifdef _DEBUG
 	/*4067*/ nvse->SetOpcodeBase(0x4067);

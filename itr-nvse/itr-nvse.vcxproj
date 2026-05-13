@@ -132,6 +132,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="handlers\KeyHeldHandler.cpp" />
     <ClCompile Include="handlers\DoubleTapHandler.cpp" />
     <ClCompile Include="handlers\OnFrenzyHandler.cpp" />
+    <ClCompile Include="handlers\OnEffectHandler.cpp" />
     <ClCompile Include="handlers\CornerMessageHandler.cpp" />
     <ClCompile Include="handlers\OnEntryPointHandler.cpp" />
     <ClCompile Include="handlers\OnCombatProcedureHandler.cpp" />
@@ -246,6 +247,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="handlers\KeyHeldHandler.h" />
     <ClInclude Include="handlers\DoubleTapHandler.h" />
     <ClInclude Include="handlers\OnFrenzyHandler.h" />
+    <ClInclude Include="handlers\OnEffectHandler.h" />
     <ClInclude Include="handlers\CornerMessageHandler.h" />
     <ClInclude Include="handlers\OnEntryPointHandler.h" />
     <ClInclude Include="handlers\OnCombatProcedureHandler.h" />
