@@ -381,7 +381,7 @@ Each menu's tile-list rebuild function is detoured. The hook calls the trampolin
 | 0x72F6F0 | jump | 6 | trampoline | yes | Hook_TransferItem |
 | 0x72FD10 | jump | 10 | trampoline | yes | Hook_ProcessTransaction |
 
-`ShowBarterMenuWhitelist` uses `ShouldHideItem` for the visible player-side filter, `TransferItem` to reject blocked player-side selections, and `ProcessTransaction` as the final guard if a blocked item is already queued. `Close` clears the active whitelist state.
+`ShowBarterMenuWhitelist` and `ShowBarterMenuBlacklist` share the same hooks. `ShouldHideItem` filters the player-side list, `TransferItem` rejects blocked player-side selections, and `ProcessTransaction` is the final guard if a blocked item is already queued. `Close` clears the active filter state. The two commands differ only in the inclusion test: whitelist blocks items missing from the list; blacklist blocks items present in the list.
 
 ### SaveFileSizeHandler
 

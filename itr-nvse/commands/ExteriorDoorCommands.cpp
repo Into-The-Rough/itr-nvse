@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <queue>
+#include <unordered_map>
 #include <vector>
 
 extern const _ExtractArgs ExtractArgs;
@@ -72,6 +74,13 @@ namespace
 		TESObjectREFR* door = nullptr;
 	};
 
+	struct OpenEntry
+	{
+		float cost;
+		SInt32 index;
+		bool operator>(const OpenEntry& rhs) const { return cost > rhs.cost; }
+	};
+
 	struct RouteCache
 	{
 		bool valid = false;
@@ -79,9 +88,18 @@ namespace
 		std::vector<RouteNode> nodes;
 		std::vector<TESObjectREFR*> doors;
 		std::vector<FallbackRoute> fallbacks;
+		//space pointer (cell for interior, worldspace for exterior) -> nodes index
+		std::unordered_map<void*, SInt32> nodeIndex;
+		//min-heap of (cost, index); stale entries skipped lazily on pop
+		std::priority_queue<OpenEntry, std::vector<OpenEntry>, std::greater<OpenEntry>> open;
 	};
 
 	static RouteCache s_routeCache;
+
+	static void* TravelSpaceKey(const TravelSpace& s)
+	{
+		return s.isWorldspace ? static_cast<void*>(s.worldspace) : static_cast<void*>(s.cell);
+	}
 
 	static TESObjectCELL* GetParentCell(TESObjectREFR* ref)
 	{
@@ -173,35 +191,29 @@ namespace
 		s_routeCache.nodes.clear();
 		s_routeCache.doors.clear();
 		s_routeCache.fallbacks.clear();
+		s_routeCache.nodeIndex.clear();
+		s_routeCache.open = {};
 	}
 
 	static SInt32 FindRouteNode(const TravelSpace& space)
 	{
-		for (std::size_t i = 0; i < s_routeCache.nodes.size(); ++i)
-		{
-			if (IsSameTravelSpace(s_routeCache.nodes[i].space, space))
-				return static_cast<SInt32>(i);
-		}
-
-		return -1;
+		auto it = s_routeCache.nodeIndex.find(TravelSpaceKey(space));
+		return it != s_routeCache.nodeIndex.end() ? it->second : -1;
 	}
 
 	static SInt32 FindBestOpenRouteNode()
 	{
-		SInt32 bestIndex = -1;
-		float bestCost = (std::numeric_limits<float>::max)();
-
-		for (std::size_t i = 0; i < s_routeCache.nodes.size(); ++i)
+		while (!s_routeCache.open.empty())
 		{
-			const RouteNode& node = s_routeCache.nodes[i];
-			if (!node.visited && node.cost < bestCost)
-			{
-				bestIndex = static_cast<SInt32>(i);
-				bestCost = node.cost;
-			}
+			OpenEntry top = s_routeCache.open.top();
+			s_routeCache.open.pop();
+			const RouteNode& n = s_routeCache.nodes[top.index];
+			if (!n.visited && n.cost == top.cost)
+				return top.index;
+			//stale entry from a superseded relax, skip
 		}
 
-		return bestIndex;
+		return -1;
 	}
 
 	static void AddOrUpdateRouteNode(const TravelSpace& space, float cost, const float arrival[3], TESObjectREFR* firstDoor)
@@ -220,6 +232,7 @@ namespace
 				existing.arrival[1] = arrival[1];
 				existing.arrival[2] = arrival[2];
 				existing.firstDoor = firstDoor;
+				s_routeCache.open.push({ cost, existingIndex });
 			}
 			return;
 		}
@@ -231,7 +244,10 @@ namespace
 		node.arrival[1] = arrival[1];
 		node.arrival[2] = arrival[2];
 		node.firstDoor = firstDoor;
+		const SInt32 newIndex = static_cast<SInt32>(s_routeCache.nodes.size());
 		s_routeCache.nodes.push_back(node);
+		s_routeCache.nodeIndex[TravelSpaceKey(space)] = newIndex;
+		s_routeCache.open.push({ cost, newIndex });
 	}
 
 	static bool GetFallbackRoute(const TravelSpace& targetSpace, TESObjectREFR*& door)
@@ -344,6 +360,8 @@ namespace
 		startNode.arrival[1] = player->posY;
 		startNode.arrival[2] = player->posZ;
 		s_routeCache.nodes.push_back(startNode);
+		s_routeCache.nodeIndex[TravelSpaceKey(startSpace)] = 0;
+		s_routeCache.open.push({ 0.0f, 0 });
 		return true;
 	}
 
@@ -442,8 +460,14 @@ namespace
 		{ "refr", kParamType_AnyForm, 1 },
 	};
 
+	static ParamInfo kParams_GetRefNextTeleportDoor[2] =
+	{
+		{ "refr", kParamType_AnyForm, 1 },
+		{ "forceRefresh", kParamType_Integer, 1 },
+	};
+
 	DEFINE_COMMAND_PLUGIN(GetRefExteriorDoor, "returns the exterior-side load door reachable from a reference", 0, 1, kParams_GetRefExteriorDoor);
-	DEFINE_COMMAND_PLUGIN(GetRefNextTeleportDoor, "returns the next load door on the current shortest path to a reference", 0, 1, kParams_GetRefExteriorDoor);
+	DEFINE_COMMAND_PLUGIN(GetRefNextTeleportDoor, "returns the next load door on the current shortest path to a reference; pass 1 as forceRefresh to recompute from the current player position", 0, 2, kParams_GetRefNextTeleportDoor);
 
 	bool Cmd_GetRefExteriorDoor_Execute(COMMAND_ARGS)
 	{
@@ -487,7 +511,11 @@ namespace
 		*refResult = 0;
 
 		TESForm* explicitForm = nullptr;
-		ExtractArgs(EXTRACT_ARGS, &explicitForm);
+		UInt32 forceRefresh = 0;
+		ExtractArgs(EXTRACT_ARGS, &explicitForm, &forceRefresh);
+
+		if (forceRefresh)
+			ClearRouteCache();
 
 		TESObjectREFR* targetRef = thisObj;
 		if (explicitForm)
@@ -561,11 +589,6 @@ namespace ExteriorDoorCommands
 	{
 		NVSEInterface* nvse = static_cast<NVSEInterface*>(nvsePtr);
 		nvse->RegisterTypedCommand(&kCommandInfo_GetRefNextTeleportDoor, kRetnType_Form);
-	}
-
-	void AdvanceFrameCache()
-	{
-		ClearRouteCache();
 	}
 
 	void ClearCache()
