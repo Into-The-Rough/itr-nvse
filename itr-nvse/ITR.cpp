@@ -106,6 +106,7 @@
 #include <cstring>
 
 #include "internal/CallTemplates.h"
+#include "internal/Detours.h"
 
 #define kMessage_MainGameLoop 20
 #define kMessage_ReloadConfig 25  //sent via ReloadPluginConfig console command
@@ -114,30 +115,40 @@
 const _ExtractArgs ExtractArgs = (_ExtractArgs)0x005ACCB0;
 const _FormHeap_Free FormHeap_Free = (_FormHeap_Free)0x00401030;
 
-struct TLSData {
-	UInt32 pad000[(0x260 - 0x000) >> 2];
-	void* lastNiNode;
-	TESObjectREFR* lastNiNodeREFR;
-	UInt8 consoleMode;
-	UInt8 pad269[3];
-};
-static_assert(offsetof(TLSData, consoleMode) == 0x268);
+//set true only while a user-typed console line (or bat file from console) is
+//running. hooks the two MenuConsole::Idle call sites into
+//Script::CompilePartialScript. neither bConsoleMode (TLS) nor
+//Interface::IsConsoleVisible distinguish typed input from ScriptRunner /
+//RunScriptLine, but these specific call sites are unique to MenuConsole::Idle.
+static thread_local bool s_inConsoleDispatch = false;
 
-static UInt32* g_TlsIndexPtr = (UInt32*)0x0126FD98;
-static UInt8* g_consoleOpen = (UInt8*)0x11DEA2E;
+using CompilePartialScript_t = void(__thiscall*)(void*, void*, int, void*);
 
-static TLSData* GetTLSData()
+static Detours::CallDetour s_consoleDispatchBatDetour;
+static Detours::CallDetour s_consoleDispatchInputDetour;
+static CompilePartialScript_t s_origCompilePartialScript = nullptr;
+
+static void __fastcall Hook_ConsoleCompilePartialScript(void* this_, void* /*edx*/, void* apCompiler, int a3, void* apRef)
 {
-	return (TLSData*)__readfsdword(0x2C + (*g_TlsIndexPtr * 4));
+	const bool prev = s_inConsoleDispatch;
+	s_inConsoleDispatch = true;
+	s_origCompilePartialScript(this_, apCompiler, a3, apRef);
+	s_inConsoleDispatch = prev;
 }
 
 bool IsConsoleMode()
 {
-	if (!*g_consoleOpen)
-		return false;
+	return s_inConsoleDispatch;
+}
 
-	TLSData* tlsData = GetTLSData();
-	return tlsData ? tlsData->consoleMode != 0 : false;
+extern void Log(const char* fmt, ...);
+
+static void InitConsoleDispatchHooks()
+{
+	s_origCompilePartialScript = (CompilePartialScript_t)0x5AC400;
+	const bool a = s_consoleDispatchBatDetour.WriteRelCall(0x71C3E8, (UInt32)Hook_ConsoleCompilePartialScript);
+	const bool b = s_consoleDispatchInputDetour.WriteRelCall(0x71C846, (UInt32)Hook_ConsoleCompilePartialScript);
+	Log("ConsoleDispatch hooks: bat=%d input=%d", a ? 1 : 0, b ? 1 : 0);
 }
 
 typedef void* (*_GetSingleton)(bool canCreateNew);
@@ -495,6 +506,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 		Log(ok ? "%s initialized" : "%s failed to initialize", name);
 	};
 
+	InitConsoleDispatchHooks();
 	logInit("DialogueTextFilter", DialogueTextFilter::Init((void*)nvse));
 	logInit("OnStealHandler", OnStealHandler::Init((void*)nvse));
 	logInit("OnWeaponDropHandler", OnWeaponDropHandler::Init((void*)nvse));
