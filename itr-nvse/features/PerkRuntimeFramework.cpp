@@ -2180,6 +2180,9 @@ namespace
 
 	void ConsolePrintApplicablePerks(TESForm* subject, UInt32 total, const std::vector<ApplicablePerkResult>& rows)
 	{
+		if (!IsConsoleMode())
+			return;
+
 		const std::string subjectName = FormName(subject);
 		Console_Print("GetPerksForForm >> %s (%08X): %u perk(s)",
 		              subjectName.empty() ? "<unnamed>" : subjectName.c_str(),
