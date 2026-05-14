@@ -154,11 +154,29 @@ static void __cdecl DoDispatchAndPop()
 
 static UInt32 s_ExecuteFunctionReturnAddr = 0x5E5ABE;
 
+//captured at NVSE plugin load (main thread). HandleEntryPoint also runs on AI worker
+//threads during combat weapon DPS scoring — dispatching events from there both widens
+//a perk-list UAF window and reads vararg locals that may not exist for entry points
+//with zero filter args. skip all bookkeeping when not on main thread.
+static DWORD s_mainThreadId = 0;
+
 static __declspec(naked) void Hook_ExecuteFunctionCall()
 {
     __asm {
+        mov eax, fs:[0x24]                        //TEB->ClientId.UniqueThread (current tid)
+        cmp eax, [s_mainThreadId]
+        jne ai_thread
+
+        //filterForm1 lives in the first vararg slot ([ebp+0x10]) only when the entry
+        //point has more than one filter arg (v17[0]=actor, v17[1]=filterForm1...).
+        //numArgs is at [ebp-0x5E]; if <=1, the slot holds an unrelated param, not a form.
+        xor eax, eax
+        cmp byte ptr [ebp-0x5E], 1
+        jbe push_args
+        mov eax, [ebp+0x10]
+    push_args:
         push [ebp-0x74]                           //cdecl arg4: perkEntry local
-        push [ebp+0x10]                           //cdecl arg3: filterForm1
+        push eax                                  //cdecl arg3: filterForm1 (or null)
         push [ebp+0x0C]                           //cdecl arg2: actor
         movzx eax, byte ptr [ebp+0x08]            //cdecl arg1: entryPoint (1-byte id -> UInt32)
         push eax
@@ -174,6 +192,10 @@ static __declspec(naked) void Hook_ExecuteFunctionCall()
         popad
 
         jmp dword ptr [s_ExecuteFunctionReturnAddr]
+
+    ai_thread:
+        call dword ptr [s_ExecuteFunctionAddr]    //just run the engine call, no bookkeeping
+        jmp dword ptr [s_ExecuteFunctionReturnAddr]
     }
 }
 
@@ -184,6 +206,7 @@ bool Init(void* nvseInterface)
     if (nvse->isEditor) return false;
 
     if (!g_hookInstalled) {
+        s_mainThreadId = GetCurrentThreadId();
         SafeWrite::WriteRelJump(0x5E5AB9, (UInt32)Hook_ExecuteFunctionCall);
         g_hookInstalled = true;
     }
