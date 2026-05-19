@@ -82,6 +82,7 @@
 #include "features/LocationVisitPopup.h"
 #include "features/QuickReadNote.h"
 #include "features/VATSExtender.h"
+#include "features/VATSHighlightDepthFix.h"
 #include "features/CameraOverride.h"
 #include "features/CompanionNoBlock.h"
 #include "features/DoorPinchFix.h"
@@ -369,6 +370,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			AshPileNames::Init();
 			if (Settings::bVATSExtender)
 				VATSExtender::Init();
+			if (Settings::bVATSHighlightDepthFix)
+				VATSHighlightDepthFix::Init();
 			if (Settings::bSuppressObjectives || Settings::bSuppressReputation)
 				ELMO::Init(Settings::bSuppressObjectives != 0, Settings::bSuppressReputation != 0);
 			break;

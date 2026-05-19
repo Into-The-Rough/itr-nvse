@@ -241,6 +241,24 @@ If `MessageBoxQuickClose` owns `MessageMenu::HandleClick`, `QuickReadNote` regis
 | 0x800DA4 | jump | 5 | varies | yes | Hook_OnLimitReached |
 | 0x801993 | call | 5 | continues | yes | Hook_RenderScene |
 
+### VATSHighlightDepthFix
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x870C63 | call | 5 | continues | conditional | Hook_TESMain_HandleVATSOcclusionQueries |
+| 0x8741DB | call | 5 | continues | yes | Hook_RenderScenePostResolveDepth |
+| 0x8760A9 | call | 5 | continues | yes | Hook_SetupImageSpace |
+| 0xBC9C92 | call | 5 | continues | yes | Hook_SetZEnable |
+| 0x7F3E5D | call | 5 | continues | yes | Hook_VATSMenu_SetAdditionalRefMode |
+| 0x5BB610 | jmp | 6 | conditional | yes (trampoline) | Hook_HighlightAdditionalReference |
+| 0x5BB6C0 | jmp | 6 | conditional | yes (trampoline) | Hook_DeactivateAllHighlights |
+
+All call sites are target-validated against the vanilla callee and the two jmp
+sites are prologue-validated before patching; any mismatch is logged and skipped.
+
+Defers non-VATS additional-reference highlight rendering until `TESMain::DrawWorld_ImageSpace`
+so the second offscreen highlight pass can attach the rendered scene target's depth buffer.
+
 ## Commands
 
 ### ToggleAllPrimitives
