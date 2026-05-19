@@ -278,6 +278,14 @@ so the second offscreen highlight pass can attach the rendered scene target's de
 
 Both are call-site replacements inside `TESObjectREFR::Load3D` so newly loaded primitive refs, door markers, and travel markers honor the current visibility state instead of being force-culled.
 
+### InvRefData
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x411EC0 | jump | 6 | trampoline | yes | Hook_ExtraDataListCopyList |
+
+`ExtraDataList::CopyList` prologue is byte-validated before install. The hook copies plugin-owned namespaced inventory-reference state after the original list copy succeeds.
+
 ## Handlers
 
 ### CornerMessageHandler

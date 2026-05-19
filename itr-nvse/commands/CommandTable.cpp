@@ -33,6 +33,7 @@
 #include "features/NoWeaponSearch.h"
 #include "features/PreventWeaponSwitch.h"
 #include "features/PerkRuntimeFramework.h"
+#include "features/InvRefData.h"
 #include "handlers/DialogueCameraHandler.h"
 #include "commands/GroundCommands.h"
 #include "commands/GestureCommand.h"
@@ -174,6 +175,9 @@ void RegisterAllCommands(void* nvsePtr)
 
 	/*40BB*/ nvse->SetOpcodeBase(0x40BB);
 	HavokCommands::RegisterCommands3(nvse);                         //RagdollLimb
+
+	/*40BC*/ nvse->SetOpcodeBase(0x40BC);
+	InvRefData::RegisterCommands(nvse);                             //ITR*InvRefData*
 
 #ifdef _DEBUG
 	/*4067*/ nvse->SetOpcodeBase(0x4067);
