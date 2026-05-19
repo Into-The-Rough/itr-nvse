@@ -104,6 +104,7 @@
 #include "commands/UICommands.h"
 #include "commands/ActorValueCommands.h"
 #include "commands/ExteriorDoorCommands.h"
+#include "commands/HavokCommands.h"
 
 #include <cstdio>
 #include <cstdarg>
@@ -381,6 +382,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 		case NVSEMessagingInterface::kMessage_PreLoadGame:
 			g_isLoadingSave = true;
+			HavokCommands::ClearState();
 			DetectionSoundCommands::ClearState();
 			BarterCommands::ClearState();
 			CompanionNoBlock::ClearState();
@@ -396,6 +398,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			}
 			WeaponEmissiveCommands::ClearState();
 			GroundCommands::ClearState();
+			HavokCommands::ClearState();
 			GestureCommand::Reset();
 			ImperativeCommands::ClearState();
 			OnCasinoBanHandler::ClearState();
@@ -506,6 +509,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			if (Settings::bAltTabMute)
 				AltTabMute::Update();
 			GroundCommands::Update();
+			HavokCommands::Update();
 			ImperativeCommands::Update();
 			DoorPinchFix::Update();
 			GestureCommand::Update();

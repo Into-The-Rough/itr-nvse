@@ -169,6 +169,12 @@ void RegisterAllCommands(void* nvsePtr)
 	/*40B8*/ nvse->SetOpcodeBase(0x40B8);
 	BarterCommands::RegisterCommands(nvse);                         //ShowBarterMenuWhitelist, ShowBarterMenuBlacklist
 
+	/*40BA*/ nvse->SetOpcodeBase(0x40BA);
+	HavokCommands::RegisterCommands2(nvse);                         //Ragdoll
+
+	/*40BB*/ nvse->SetOpcodeBase(0x40BB);
+	HavokCommands::RegisterCommands3(nvse);                         //RagdollLimb
+
 #ifdef _DEBUG
 	/*4067*/ nvse->SetOpcodeBase(0x4067);
 	CommandBoundsCommand::RegisterCommands(nvse);                    //RunITRCommandBounds
