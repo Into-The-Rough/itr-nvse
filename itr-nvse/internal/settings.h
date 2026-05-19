@@ -36,6 +36,7 @@ namespace Settings
 	inline int bLocationVisitDisableSound = 0;
 
 	inline int bVATSExtender = 0;
+	inline int bVATSHighlightDepthFix = 0;
 	inline int bSuppressObjectives = 0;
 	inline int bSuppressReputation = 0;
 	inline int bFriendlyFire = 0;
@@ -130,6 +131,7 @@ namespace Settings
 		iLocationVisitCooldownSeconds = GetINIInt("LocationVisitPopup", "iCooldownSeconds", 300);
 		bLocationVisitDisableSound = GetINIInt("LocationVisitPopup", "bDisableSound", 0);
 		bVATSExtender = GetINIInt("Tweaks", "bVATSExtender", 0);
+		bVATSHighlightDepthFix = GetINIInt("Tweaks", "bVATSHighlightDepthFix", 0);
 		bSuppressObjectives = GetINIInt("Tweaks", "bSuppressObjectives", 0);
 		bSuppressReputation = GetINIInt("Tweaks", "bSuppressReputation", 0);
 		bFriendlyFire = GetINIInt("Tweaks", "bFriendlyFire", 0);

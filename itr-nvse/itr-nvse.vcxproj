@@ -183,6 +183,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
       <LanguageStandard Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">stdcpp23</LanguageStandard>
     </ClCompile>
     <ClCompile Include="features\VATSExtender.cpp" />
+    <ClCompile Include="features\VATSHighlightDepthFix.cpp" />
     <ClCompile Include="features\AltTabMute.cpp" />
     <ClCompile Include="features\AutoQuickLoad.cpp" />
     <ClCompile Include="features\CameraOverride.cpp" />
@@ -296,6 +297,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="features\LocationVisitPopup.h" />
     <ClInclude Include="features\QuickReadNote.h" />
     <ClInclude Include="features\VATSExtender.h" />
+    <ClInclude Include="features\VATSHighlightDepthFix.h" />
     <ClInclude Include="features\CameraOverride.h" />
     <ClInclude Include="features\CompanionNoBlock.h" />
     <ClInclude Include="features\DoorPinchFix.h" />
