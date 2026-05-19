@@ -39,6 +39,14 @@ Call-site replacement in `SetHUDCrosshairStrings`, not a global `GetBaseFullName
 
 Wrappers load extra context into `EDX` and tail-jump to typed `__fastcall` replacements so the compiler owns cleanup.
 
+### CompanionNoBlock
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0xCAF4D0 | jump | 6 | trampoline | yes | Hook_UpdateManifold |
+
+`hkpCharacterProxy::updateManifold` prologue is byte-validated before install. The hook filters only the player/current-teammate collector hits and then chains to the original manifold update.
+
 ### DetectionFollowerCrashFix
 
 | Hook Site | Type | Size | Return | Chain | Function |

@@ -83,6 +83,7 @@
 #include "features/QuickReadNote.h"
 #include "features/VATSExtender.h"
 #include "features/CameraOverride.h"
+#include "features/CompanionNoBlock.h"
 #include "features/DoorPinchFix.h"
 #include "features/PlayerUpdateHook.h"
 #include "features/NPCAntidoteUse.h"
@@ -340,6 +341,9 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bNPCDoctorsBagUse)
 					NPCDoctorsBagUse::Init(Settings::fDoctorsBagUseTimer);
 				CompanionNoInfamy::Init(Settings::bCompanionNoInfamy != 0);
+				CompanionNoBlock::Init(Settings::bCompanionNoBlock != 0, Settings::iCompanionNoBlockReleaseFrames,
+				                       Settings::iCompanionNoBlockRestoreDistance, Settings::bCompanionNoBlockInteriorOnly != 0,
+				                       Settings::bCompanionNoBlockDebugLog != 0);
 				if (Settings::bPathingNullActorFix)
 					PathingNullActorFix::Init();
 				if (Settings::bNavMeshInfoCrashFix)
@@ -373,6 +377,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			g_isLoadingSave = true;
 			DetectionSoundCommands::ClearState();
 			BarterCommands::ClearState();
+			CompanionNoBlock::ClearState();
 			DoorPinchFix::ClearState();
 			break;
 
@@ -394,6 +399,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			ExteriorDoorCommands::ClearCache();
 			DetectionSoundCommands::ClearState();
 			BarterCommands::ClearState();
+			CompanionNoBlock::ClearState();
 			DoorPinchFix::ClearState();
 
 			OnEntryPointHandler::BuildEntryMap();
@@ -437,6 +443,9 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					ApplyVATSSpeechFixSetting();
 					ReversePickpocketNoKarmaFix::SetEnabled(Settings::bReversePickpocketNoKarma != 0);
 					CompanionNoInfamy::SetEnabled(Settings::bCompanionNoInfamy != 0);
+					CompanionNoBlock::UpdateSettings(Settings::bCompanionNoBlock != 0, Settings::iCompanionNoBlockReleaseFrames,
+					                                 Settings::iCompanionNoBlockRestoreDistance, Settings::bCompanionNoBlockInteriorOnly != 0,
+					                                 Settings::bCompanionNoBlockDebugLog != 0);
 					NPCDoorUnlockBlock::SetLevel(Settings::iNPCDoorUnlockBlock);
 					LockpickOwnerKarmaFix::SetEnabled(Settings::bLockpickOwnerKarmaFix != 0);
 					InlineGlyphFix::SetEnabled(Settings::bInlineGlyphFix != 0);
@@ -479,6 +488,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OnJumpLandHandler::Update();
 			OnCasinoBanHandler::Update();
 			OnCombatProcedureHandler::Update();
+			CompanionNoBlock::Update();
 			OnContactHandler::Update();
 			OnMenuFilterChangeHandler::Update();
 			OnMenuSideChangeHandler::Update();
