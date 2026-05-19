@@ -342,9 +342,9 @@ static ParamInfo kParams_GetRefsSortedByDistance[7] = {
 	{ "formType",         kParamType_Integer, 1 },
 	{ "cellDepth",        kParamType_Integer, 1 },
 	{ "includeTakenRefs", kParamType_Integer, 1 },
-	{ "baseForm",         kParamType_AnyForm, 1 },
 	{ "maxHeadingAngle",  kParamType_Float,   1 },
 	{ "limit",            kParamType_Integer, 1 },
+	{ "baseForm",         kParamType_AnyForm, 1 },
 };
 
 DEFINE_COMMAND_PLUGIN(GetRefsSortedByDistance, "Returns array of refs sorted by distance from player", 0, 7, kParams_GetRefsSortedByDistance);
@@ -402,7 +402,7 @@ bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 	float maxHeadingAngle = 0;
 	UInt32 limit = 0;
 
-	if (!ExtractArgs(EXTRACT_ARGS, &maxDistance, &formType, &cellDepth, &includeTakenRefs, &baseForm, &maxHeadingAngle, &limit))
+	if (!ExtractArgs(EXTRACT_ARGS, &maxDistance, &formType, &cellDepth, &includeTakenRefs, &maxHeadingAngle, &limit, &baseForm))
 		return true;
 
 	if (maxDistance <= 0)
