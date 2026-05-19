@@ -66,6 +66,11 @@ namespace Settings
 	inline float fDoctorsBagUseTimer = 15.0f;
 
 	inline int bCompanionNoInfamy = 0;
+	inline int bCompanionNoBlock = 0;
+	inline int iCompanionNoBlockReleaseFrames = 30;
+	inline int iCompanionNoBlockRestoreDistance = 220;
+	inline int bCompanionNoBlockInteriorOnly = 1;
+	inline int bCompanionNoBlockDebugLog = 0;
 	inline int bPathingNullActorFix = 1;
 	inline int bNavMeshInfoCrashFix = 1;
 	inline int bInitHavokCrashFix = 1;
@@ -151,6 +156,11 @@ namespace Settings
 		fDoctorsBagUseTimer = (float)GetINIInt("NPCDoctorsBagUse", "iUseTimer", 15);
 
 		bCompanionNoInfamy = GetINIInt("Tweaks", "bCompanionNoInfamy", 0);
+		bCompanionNoBlock = GetINIInt("Tweaks", "bCompanionNoBlock", 0);
+		iCompanionNoBlockReleaseFrames = GetINIInt("CompanionNoBlock", "iReleaseFrames", 30);
+		iCompanionNoBlockRestoreDistance = GetINIInt("CompanionNoBlock", "iRestoreDistance", 220);
+		bCompanionNoBlockInteriorOnly = GetINIInt("CompanionNoBlock", "bInteriorOnly", 1);
+		bCompanionNoBlockDebugLog = GetINIInt("CompanionNoBlock", "bDebugLog", 0);
 
 		bPathingNullActorFix = GetINIInt("Tweaks", "bPathingNullActorFix", 1);
 		bNavMeshInfoCrashFix = GetINIInt("Tweaks", "bNavMeshInfoCrashFix", 1);

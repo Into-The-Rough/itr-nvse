@@ -186,6 +186,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="features\AltTabMute.cpp" />
     <ClCompile Include="features\AutoQuickLoad.cpp" />
     <ClCompile Include="features\CameraOverride.cpp" />
+    <ClCompile Include="features\CompanionNoBlock.cpp" />
     <ClCompile Include="features\DoorPinchFix.cpp" />
     <ClCompile Include="features\NoWeaponSearch.cpp" />
     <ClCompile Include="features\PerkRuntimeFramework.cpp" />
@@ -296,6 +297,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="features\QuickReadNote.h" />
     <ClInclude Include="features\VATSExtender.h" />
     <ClInclude Include="features\CameraOverride.h" />
+    <ClInclude Include="features\CompanionNoBlock.h" />
     <ClInclude Include="features\DoorPinchFix.h" />
     <ClInclude Include="features\PerkRuntimeFramework.h" />
     <ClInclude Include="features\PlayerUpdateHook.h" />
