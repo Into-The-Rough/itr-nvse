@@ -83,6 +83,7 @@
 #include "features/QuickReadNote.h"
 #include "features/VATSExtender.h"
 #include "features/CameraOverride.h"
+#include "features/DoorPinchFix.h"
 #include "features/PlayerUpdateHook.h"
 #include "features/NPCAntidoteUse.h"
 #include "features/NPCDoctorsBagUse.h"
@@ -324,6 +325,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					LocationVisitPopup::Init(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
 				FriendlyFire::Init(Settings::bFriendlyFire != 0);
 				NoDoorFade::Init(Settings::bNoDoorFade != 0);
+				DoorPinchFix::Init(Settings::bDoorPinchFix != 0, Settings::iDoorPinchDistance, Settings::iDoorPinchTimeoutMs);
 				if (Settings::bArmorDTDRFix)
 					ArmorDTDRFix::Init();
 				if (Settings::bQuickReadNote)
@@ -371,6 +373,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			g_isLoadingSave = true;
 			DetectionSoundCommands::ClearState();
 			BarterCommands::ClearState();
+			DoorPinchFix::ClearState();
 			break;
 
 		case NVSEMessagingInterface::kMessage_NewGame:
@@ -391,6 +394,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			ExteriorDoorCommands::ClearCache();
 			DetectionSoundCommands::ClearState();
 			BarterCommands::ClearState();
+			DoorPinchFix::ClearState();
 
 			OnEntryPointHandler::BuildEntryMap();
 			PerkRuntimeFramework::BuildIndex();
@@ -429,6 +433,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					OwnedCorpses::SetEnabled(Settings::bOwnedCorpses != 0);
 					KillActorXPFix::SetEnabled(Settings::bKillActorXPFix != 0);
 					NoDoorFade::SetEnabled(Settings::bNoDoorFade != 0);
+					DoorPinchFix::UpdateSettings(Settings::bDoorPinchFix != 0, Settings::iDoorPinchDistance, Settings::iDoorPinchTimeoutMs);
 					ApplyVATSSpeechFixSetting();
 					ReversePickpocketNoKarmaFix::SetEnabled(Settings::bReversePickpocketNoKarma != 0);
 					CompanionNoInfamy::SetEnabled(Settings::bCompanionNoInfamy != 0);
@@ -486,6 +491,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				AltTabMute::Update();
 			GroundCommands::Update();
 			ImperativeCommands::Update();
+			DoorPinchFix::Update();
 			GestureCommand::Update();
 			ToggleAllPrimitives::Update();
 			DetectionSoundCommands::Update();

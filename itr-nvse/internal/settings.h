@@ -40,6 +40,9 @@ namespace Settings
 	inline int bSuppressReputation = 0;
 	inline int bFriendlyFire = 0;
 	inline int bNoDoorFade = 0;
+	inline int bDoorPinchFix = 1;
+	inline int iDoorPinchDistance = 140;
+	inline int iDoorPinchTimeoutMs = 8000;
 	inline int bArmorDTDRFix = 1;
 
 	inline int bQuickReadNote = 0;
@@ -126,6 +129,9 @@ namespace Settings
 		bSuppressReputation = GetINIInt("Tweaks", "bSuppressReputation", 0);
 		bFriendlyFire = GetINIInt("Tweaks", "bFriendlyFire", 0);
 		bNoDoorFade = GetINIInt("Tweaks", "bNoDoorFade", 0);
+		bDoorPinchFix = GetINIInt("Tweaks", "bDoorPinchFix", 1);
+		iDoorPinchDistance = GetINIInt("DoorPinchFix", "iDistance", 140);
+		iDoorPinchTimeoutMs = GetINIInt("DoorPinchFix", "iTimeoutMs", 8000);
 		bArmorDTDRFix = GetINIInt("Tweaks", "bArmorDTDRFix", 1);
 		bQuickReadNote = GetINIInt("Tweaks", "bQuickReadNote", 0);
 		iQuickReadNoteTimeoutMs = GetINIInt("QuickReadNote", "iTimeoutMs", 5000);
