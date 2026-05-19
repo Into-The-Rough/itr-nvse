@@ -95,6 +95,14 @@ Call-site replacement in `LockPickMenu::Update`. The hook returns no owner to th
 |-----------|------|------|--------|-------|----------|
 | 0x576AB3 | jump | 6 | 0x576AB9 / 0x576AD5 | no | Hook |
 
+### JIPExtraDataSerializationFix
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| jip_nvse.dll JPED pattern + 0x09 | patch | 1 | continues | n/a | keySize multiplier byte |
+
+Pattern-scans `jip_nvse.dll` for a unique broken or already-fixed JPED save-size sequence. The direct byte patch uses `SafeWrite::Write8`, which flushes the instruction cache.
+
 ### KillActorXPFix
 
 | Hook Site | Type | Size | Return | Chain | Function |
