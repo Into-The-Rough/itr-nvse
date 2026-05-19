@@ -52,6 +52,14 @@ Wrappers load extra context into `EDX` and tail-jump to typed `__fastcall` repla
 | 0x90D528 | call | 5 | continues | yes | IsAnOwner_Hook |
 | 0x90D5DE | call | 5 | continues | yes | IsAnOwner_Hook |
 
+### DoorPinchFix
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x518B40 | call | 5 | continues | yes | Hook_HandleActivate |
+
+Call-site replacement after `HandleActivate` so non-load door collision can be temporarily disabled only after the engine has actually started an open/close transition.
+
 ### LockpickOwnerKarmaFix
 
 | Hook Site | Type | Size | Return | Chain | Function |
