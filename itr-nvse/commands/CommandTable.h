@@ -92,20 +92,11 @@
 // 0x40B9  ShowBarterMenuBlacklist
 // 0x40BA  Ragdoll
 // 0x40BB  RagdollLimb
-// 0x40BC  ITRSetInvRefDataFloat
-// 0x40BD  ITRGetInvRefDataFloat
-// 0x40BE  ITRSetInvRefDataForm
-// 0x40BF  ITRGetInvRefDataForm
-// 0x40C0  ITRSetInvRefDataString
-// 0x40C1  ITRGetInvRefDataString
-// 0x40C2  ITRHasInvRefData
-// 0x40C3  ITRClearInvRefData
-// 0x40C4  ITRClearInvRefDataNamespace
 // 0x410E  Gesture
 //
 // not registered by itr-nvse source: 0x4000-0x4007, 0x400A-0x4016, 0x4033,
 // 0x403D-0x404F, 0x405D-0x405E, 0x4069-0x409B, 0x40AC-0x40AF,
-// 0x40C5-0x410D, 0x410F
+// 0x40BC-0x410D, 0x410F
 // These are not automatically free; other local plugins use slots inside the
 // Into the Rough-owned blocks. Check /mnt/d/plugins/opcodes.txt before assigning.
 
