@@ -73,7 +73,6 @@
 #include "fixes/GetLineOfSightCrashFix.h"
 #include "fixes/LockpickOwnerKarmaFix.h"
 #include "fixes/InlineGlyphFix.h"
-#include "fixes/JIPExtraDataSerializationFix.h"
 #include "features/MessageBoxQuickClose.h"
 #include "features/PreventWeaponSwitch.h"
 #include "features/ELMO.h"
@@ -369,8 +368,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 
 		case NVSEMessagingInterface::kMessage_PostPostLoad:
-			if (Settings::bJIPExtraDataSerializationFix)
-				JIPExtraDataSerializationFix::Init();
 			DialogueCameraHandler::InstallCameraHooks(); //always install - hooks check bDialogueCamera at runtime
 			InitVATSSpeechFix();
 			AshPileNames::Init();

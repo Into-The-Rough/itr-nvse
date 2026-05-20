@@ -82,7 +82,6 @@ namespace Settings
 	inline int bLockpickOwnerKarmaFix = 1;
 	inline int bInlineGlyphFix = 0;
 	inline int iInlineGlyphVisualScalePercent = 88;
-	inline int bJIPExtraDataSerializationFix = 0;
 
 	inline int iWitnessDetectionThreshold = 25;
 	inline float fWitnessSearchRadius = 2048.0f;
@@ -176,7 +175,6 @@ namespace Settings
 		bLockpickOwnerKarmaFix = GetINIInt("Tweaks", "bLockpickOwnerKarmaFix", 1);
 		bInlineGlyphFix = GetINIInt("Tweaks", "bInlineGlyphFix", 0);
 		iInlineGlyphVisualScalePercent = GetINIInt("Tweaks", "iInlineGlyphVisualScalePercent", 88);
-		bJIPExtraDataSerializationFix = GetINIInt("Tweaks", "bJIPExtraDataSerializationFix", 0);
 
 		iWitnessDetectionThreshold = GetINIInt("OnWitnessed", "iDetectionThreshold", 25);
 		fWitnessSearchRadius = (float)GetINIInt("OnWitnessed", "iSearchRadius", 2048);
