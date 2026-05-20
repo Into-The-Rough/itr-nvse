@@ -93,7 +93,6 @@
 #include "features/AutoQuickLoad.h"
 #include "features/AltTabMute.h"
 #include "features/PerkRuntimeFramework.h"
-#include "features/InvRefData.h"
 
 #include "commands/ImperativeCommands.h"
 #include "commands/StringCommands.h"
@@ -568,7 +567,6 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	logInit("OnCasinoBanHandler", OnCasinoBanHandler::Init((void*)nvse));
 	logInit("OnPrePickUpHandler", OnPrePickUpHandler::Init((void*)nvse));
 	logInit("BarterCommands", BarterCommands::InitHooks());
-	logInit("InvRefData", InvRefData::Init((void*)nvse));
 	NoWeaponSearch::Init();
 	PreventWeaponSwitch::Init();
 	logInit("PerkRuntimeFramework", PerkRuntimeFramework::Init((void*)nvse));
