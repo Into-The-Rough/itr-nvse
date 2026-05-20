@@ -362,6 +362,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bInlineGlyphFix)
 					InlineGlyphFix::Init();
 				EventDispatch::RegisterEvents();
+				OnJumpLandHandler::InstallListenerProbes();
 				PerkRuntimeFramework::BuildIndex();
 				g_hooksInstalled = true;
 			}
@@ -388,6 +389,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			BarterCommands::ClearState();
 			CompanionNoBlock::ClearState();
 			DoorPinchFix::ClearState();
+			OnJumpLandHandler::ClearState();
 			break;
 
 		case NVSEMessagingInterface::kMessage_NewGame:
@@ -414,6 +416,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 			OnEntryPointHandler::BuildEntryMap();
 			PerkRuntimeFramework::BuildIndex();
+			OnJumpLandHandler::ClearState();
+			OnJumpLandHandler::InstallListenerProbes();
 			if (Settings::bAutoGodMode && !g_godModeExecuted)
 			{
 				*(UInt8*)0x11E07BA = 1;
