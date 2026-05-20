@@ -61,7 +61,7 @@ namespace CombatItemUse
 	inline bool IsCharacter(void* actor)
 	{
 		uint8_t typeID = *(uint8_t*)((char*)actor + 0x04);
-		return typeID == 0x3B || typeID == 0x43;
+		return typeID == 0x3B;
 	}
 
 	//extracts the combat actor from a combatState, returns null if invalid
