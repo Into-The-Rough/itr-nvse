@@ -33,6 +33,7 @@
 #include "features/NoWeaponSearch.h"
 #include "features/PreventWeaponSwitch.h"
 #include "features/PerkRuntimeFramework.h"
+#include "features/EyeMeshOverride.h"
 #include "features/AimZoomFirstPersonOnly.h"
 #include "handlers/DialogueCameraHandler.h"
 #include "commands/GroundCommands.h"
@@ -175,6 +176,9 @@ void RegisterAllCommands(void* nvsePtr)
 
 	/*40BB*/ nvse->SetOpcodeBase(0x40BB);
 	HavokCommands::RegisterCommands3(nvse);                         //RagdollLimb
+
+	/*40BC*/ nvse->SetOpcodeBase(0x40BC);
+	EyeMeshOverride::RegisterCommands(nvse);                        //SetEyeMesh, ClearEyeMesh
 
 	/*40BF*/ nvse->SetOpcodeBase(0x40BF);
 	AimZoomFirstPersonOnly::RegisterCommands(nvse);                 //SetAimZoomFirstPersonOnly, GetAimZoomFirstPersonOnly
