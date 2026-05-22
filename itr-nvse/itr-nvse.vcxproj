@@ -192,6 +192,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="features\DoorPinchFix.cpp" />
     <ClCompile Include="features\NoWeaponSearch.cpp" />
     <ClCompile Include="features\PerkRuntimeFramework.cpp" />
+    <ClCompile Include="features\EyeMeshOverride.cpp" />
     <ClCompile Include="features\PlayerUpdateHook.cpp" />
     <ClCompile Include="features\NPCAntidoteUse.cpp" />
     <ClCompile Include="features\NPCDoctorsBagUse.cpp" />
@@ -303,6 +304,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="features\CompanionNoBlock.h" />
     <ClInclude Include="features\DoorPinchFix.h" />
     <ClInclude Include="features\PerkRuntimeFramework.h" />
+    <ClInclude Include="features\EyeMeshOverride.h" />
     <ClInclude Include="features\AimZoomFirstPersonOnly.h" />
     <ClInclude Include="features\PlayerUpdateHook.h" />
     <ClInclude Include="features\NPCAntidoteUse.h" />
