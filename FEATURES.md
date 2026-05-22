@@ -56,6 +56,8 @@
 
 **Camera**
 - SetCameraAngle - direct camera transform control
+- SetAimZoomFirstPersonOnly - runtime toggle for first-person-only aiming zoom
+- GetAimZoomFirstPersonOnly - current first-person-only aiming zoom state
 - SetDialogueCameraEnabled - runtime toggle for dialogue camera
 - SetDialogueCameraMode - auto angle mode: cycle, fixed, random, manual
 - SetDialogueCameraFixedAngle - fixed angle used by fixed mode

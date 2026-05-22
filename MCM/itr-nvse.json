@@ -98,6 +98,13 @@
 					"mouse": "Companions killing faction members doesn't give player infamy",
 					"vars": [{ "configINI": "Tweaks:bCompanionNoInfamy", "default": 0 }]
 				},
+				"10": {
+					"title": "First Person Aim Zoom",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Only apply aiming camera zoom in first person",
+					"vars": [{ "configINI": "Tweaks:bAimZoomFirstPersonOnly", "default": 0 }]
+				},
 				"11": {
 					"title": "Quick Read Note",
 					"enable": 1,

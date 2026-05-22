@@ -93,6 +93,7 @@
 #include "features/AutoQuickLoad.h"
 #include "features/AltTabMute.h"
 #include "features/PerkRuntimeFramework.h"
+#include "features/AimZoomFirstPersonOnly.h"
 
 #include "commands/ImperativeCommands.h"
 #include "commands/StringCommands.h"
@@ -359,6 +360,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				LockpickOwnerKarmaFix::Init(Settings::bLockpickOwnerKarmaFix != 0);
 				if (Settings::bInlineGlyphFix)
 					InlineGlyphFix::Init();
+				AimZoomFirstPersonOnly::Init(Settings::bAimZoomFirstPersonOnly != 0);
 				EventDispatch::RegisterEvents();
 				OnJumpLandHandler::InstallListenerProbes();
 				PerkRuntimeFramework::BuildIndex();
@@ -459,6 +461,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					NPCDoorUnlockBlock::SetLevel(Settings::iNPCDoorUnlockBlock);
 					LockpickOwnerKarmaFix::SetEnabled(Settings::bLockpickOwnerKarmaFix != 0);
 					InlineGlyphFix::SetEnabled(Settings::bInlineGlyphFix != 0);
+					AimZoomFirstPersonOnly::SetEnabled(Settings::bAimZoomFirstPersonOnly != 0);
 
 					if (*g_thePlayer)
 					{
