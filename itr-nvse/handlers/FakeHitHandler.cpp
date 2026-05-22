@@ -29,11 +29,15 @@ struct TESForm {
 	UInt32 refID;
 };
 
+struct TESObjectCELL;
+
 struct TESObjectREFR {
 	void* vtbl;
 	UInt8 pad04[0x30 - 4];
 	float posX, posY, posZ;
-	UInt8 pad3C[0x68 - 0x3C];
+	UInt8 pad3C[0x40 - 0x3C];
+	TESObjectCELL* parentCell;
+	UInt8 pad44[0x68 - 0x44];
 	UInt32 GetRefID() { return *(UInt32*)((UInt8*)this + 0x0C); }
 };
 
@@ -196,6 +200,11 @@ static Sound_SetNiNode_t Sound_SetNiNode = (Sound_SetNiNode_t)0xAD8F20;
 static Sound_Play_t Sound_Play = (Sound_Play_t)0xAD8830;
 static void** g_decalManager = (void**)0x11C57F8;
 static void* g_bsAudioManager = (void*)0x11F6EF0;
+
+//0x522BA0 - TESObjectWEAP::GetImpactData(material). reads weapon+0x24C, remaps raw
+//material 0-31 to an impactDatas slot via 0x58E8F0. null if the weapon has no set
+typedef BGSImpactData* (__thiscall* GetWeaponImpactData_t)(TESObjectWEAP*, UInt32);
+static GetWeaponImpactData_t GetWeaponImpactData = (GetWeaponImpactData_t)0x522BA0;
 
 static const char* GetBodyPartNodeName(SInt32 loc) {
 	switch (loc) {
@@ -477,6 +486,54 @@ static bool Cmd_FakeHitEx_Execute(COMMAND_ARGS) {
 	return true;
 }
 
+static void SpawnObjectImpactEffect(TESObjectREFR* obj, BGSImpactData* impactData) {
+	if (!obj || !impactData) return;
+
+	NiPoint3 pos = { obj->posX, obj->posY, obj->posZ };
+
+	if (obj->parentCell) {
+		BSString* nifPath = (BSString*)((UInt8*)impactData + 0x1C);
+		const char* modelPath = nifPath->m_data;
+		if (modelPath && modelPath[0]) {
+			NiPoint3 rot = { 0, 0, 1 };
+			LoadTempEffectParticle(obj->parentCell, impactData->effectDuration, modelPath, rot, pos, 1.0f, 7, nullptr);
+		}
+	}
+
+	TESSound* sounds[2] = { (TESSound*)impactData->sound1, (TESSound*)impactData->sound2 };
+	for (TESSound* sound : sounds) {
+		if (!sound || !sound->refID) continue;
+		Sound snd;
+		InitSoundForm(g_bsAudioManager, &snd, sound->refID, 0x102);
+		if (snd.soundKey != 0xFFFFFFFF) {
+			Sound_SetPos(&snd, pos.x, pos.y, pos.z);
+			Sound_Play(&snd, 0);
+		}
+	}
+}
+
+static bool Cmd_FakeImpact_Execute(COMMAND_ARGS) {
+	*result = 0;
+	if (!thisObj || !extractArgs) return true;
+
+	TESForm* weaponForm = nullptr;
+	SInt32 materialType = -1;
+	if (!extractArgs(EXTRACT_ARGS_EX, &weaponForm, &materialType)) return true;
+
+	//weapon only: GetWeaponImpactData reads weapon+0x24C, garbage on any other form
+	if (!weaponForm || *((UInt8*)weaponForm + 4) != 0x28) return true;
+
+	//materialType is a raw MATERIAL_TYPE (0-31), remapped to a slot by GetWeaponImpactData.
+	//<0 = omitted; true auto-detect needs a collision (raycast), so fall back to 0 for now
+	UInt32 material = (materialType < 0) ? 0 : (UInt32)materialType;
+	BGSImpactData* impactData = GetWeaponImpactData((TESObjectWEAP*)weaponForm, material);
+	if (!impactData) return true;
+
+	SpawnObjectImpactEffect((TESObjectREFR*)thisObj, impactData);
+	*result = 1;
+	return true;
+}
+
 static ParamInfo kParams_FakeHit[6] = {
 	{"attacker", kParamType_ObjectRef, 1}, {"damage", kParamType_Float, 1},
 	{"weapon", kParamType_ObjectID, 1}, {"hitLocation", kParamType_Integer, 1},
@@ -500,6 +557,16 @@ static CommandInfo kCommandInfo_FakeHitEx = {
 	Cmd_FakeHitEx_Execute, nullptr, nullptr, 0
 };
 
+static ParamInfo kParams_FakeImpact[2] = {
+	{"weapon", kParamType_ObjectID, 0},
+	{"materialType", kParamType_Integer, 1}
+};
+
+static CommandInfo kCommandInfo_FakeImpact = {
+	"FakeImpact", "", 0, "Spawns a weapon's impact effect (particle + impact sounds) on the calling object. materialType (0-31, optional) picks the impact-data-set slot; omit to use the default.", 1, 2, kParams_FakeImpact,
+	Cmd_FakeImpact_Execute, nullptr, nullptr, 0
+};
+
 namespace FakeHitHandler {
 bool Init(void* nvse)
 {
@@ -516,5 +583,11 @@ void RegisterCommands(void* nvsePtr)
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_FakeHit);
 	nvse->RegisterCommand(&kCommandInfo_FakeHitEx);
+}
+
+void RegisterCommands2(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_FakeImpact);
 }
 }
