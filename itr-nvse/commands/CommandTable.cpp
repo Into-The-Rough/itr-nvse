@@ -179,6 +179,9 @@ void RegisterAllCommands(void* nvsePtr)
 	/*40BF*/ nvse->SetOpcodeBase(0x40BF);
 	AimZoomFirstPersonOnly::RegisterCommands(nvse);                 //SetAimZoomFirstPersonOnly, GetAimZoomFirstPersonOnly
 
+	/*40C1*/ nvse->SetOpcodeBase(0x40C1);
+	FakeHitHandler::RegisterCommands2(nvse);                        //FakeImpact
+
 #ifdef _DEBUG
 	/*4067*/ nvse->SetOpcodeBase(0x4067);
 	CommandBoundsCommand::RegisterCommands(nvse);                    //RunITRCommandBounds
