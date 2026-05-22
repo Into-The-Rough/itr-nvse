@@ -184,6 +184,15 @@ The inline detour at `0xAEDFBD` is only installed when the site still matches th
 |-----------|------|------|--------|-------|----------|
 | 0x86E88C | call | 5 | continues | yes | PollControlsHook |
 
+### AimZoomFirstPersonOnly
+
+| Hook Site | Type | Size | Return | Chain | Function |
+|-----------|------|------|--------|-------|----------|
+| 0x94375E | call | 5 | continues | yes | Hook_UpdateAimZoomFromPlayerUpdate |
+| 0x944847 | call | 5 | continues | yes | Hook_UpdateAimZoomFromSecondaryUpdate |
+
+Runs the engine aim/FOV updater first, then restores default player FOV while the player is aiming in third person. This avoids patching the inner FOV math block, which can already be modified by camera plugins.
+
 ### ELMO
 
 | Hook Site | Type | Size | Return | Chain | Function |
