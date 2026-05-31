@@ -145,6 +145,11 @@ struct BaseProcess {
 	void CopyHitData(ActorHitData* hitData) {
 		((void (__thiscall*)(BaseProcess*, ActorHitData*))((*(void***)this)[0x1DD]))(this, hitData);
 	}
+	//slot 0x1DE - resets the hitData240 contents. without this an actor knocked
+	//down by FakeHit keeps stale last-hit data and skips its getup animation
+	void ResetHitData() {
+		((void (__thiscall*)(BaseProcess*))((*(void***)this)[0x1DE]))(this);
+	}
 };
 
 struct Actor {
@@ -169,6 +174,25 @@ struct Actor {
 };
 static_assert(offsetof(Actor, parentCell) == 0x40);
 static_assert(offsetof(Actor, baseProcess) == 0x68);
+
+struct BGSBodyPart {
+	UInt8 pad00[0x63];
+	UInt8 actorValue;	//0x63 - this part's limb condition AV
+};
+
+struct BGSBodyPartData {
+	UInt8 pad00[0x34];
+	BGSBodyPart* bodyParts[15];	//0x34 - indexed directly by hitLocation 0..14
+};
+static_assert(offsetof(BGSBodyPartData, bodyParts) == 0x34);
+
+//GetBodyPartData is vtable slot 96 on the base form - TESActorBase (NPC, via
+//race) at 0x5F0F80, TESCreature at 0x5FA2E0. dispatching the virtual covers both
+static BGSBodyPartData* GetActorBodyPartData(Actor* actor) {
+	void* baseForm = *(void**)((char*)actor + 0x20);	//TESObjectREFR::baseForm
+	if (!baseForm) return nullptr;
+	return ((BGSBodyPartData* (__thiscall*)(void*))((*(void***)baseForm)[96]))(baseForm);
+}
 
 struct BSString { const char* m_data; UInt16 m_dataLen, m_bufLen; };
 struct TESSound { void* vtbl; UInt32 typeID, flags, refID; };
@@ -405,8 +429,14 @@ static void ApplyHit(Actor* target, Actor* attacker, ActorHitData* hitData,
 {
 	target->baseProcess->CopyHitData(hitData);
 	target->DamageHealthAndFatigue(damage, fatigueDmg, attacker);
-	if (limbDmg > 0.0f && hitLocation >= 0 && hitLocation <= 6)
-		target->DamageActorValue(40 + hitLocation, limbDmg, attacker);
+	//limb damage hits the body part's condition AV. resolve it from the actor's
+	//body part data - the AV varies per part and per race. DamageActorValue takes
+	//a positive damage amount (it gates out negatives for condition AVs 0x19-0x1F)
+	if (limbDmg > 0.0f && hitLocation >= 0 && hitLocation <= 14) {
+		if (BGSBodyPartData* bpd = GetActorBodyPartData(target))
+			if (BGSBodyPart* part = bpd->bodyParts[hitLocation])
+				target->DamageActorValue(part->actorValue, limbDmg, attacker);
+	}
 
 	if (!skipOnHit) {
 		//script events: OnHit (0x80) and OnHitWith (0x100)
@@ -427,6 +457,9 @@ static void ApplyHit(Actor* target, Actor* attacker, ActorHitData* hitData,
 		PlaceSkinnedBloodDecal(target, attacker, weapon, bloodLoc);
 		PlayImpactSound(target, weapon, bloodLoc);
 	}
+
+	if (target->baseProcess)
+		target->baseProcess->ResetHitData();
 }
 
 static bool Cmd_FakeHit_Execute(COMMAND_ARGS) {
