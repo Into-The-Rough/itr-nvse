@@ -33,7 +33,7 @@ namespace NPCDoorUnlockBlock
 		if (actor == GetPlayer())
 			return s_detour.GetTrampoline<_CanActorIgnoreLock>()(doorRef, actor, activate, movement);
 
-		//always allow companions (vanilla behavior)
+		//always allow companions (vanilla behaviour)
 		if (IsFollowing(actor))
 			return s_detour.GetTrampoline<_CanActorIgnoreLock>()(doorRef, actor, activate, movement);
 

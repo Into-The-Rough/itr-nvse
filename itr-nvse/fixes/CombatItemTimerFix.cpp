@@ -32,7 +32,7 @@ namespace CombatItemTimerFix
 	struct CombatState
 	{
 		uint8_t pad[0x1A4];
-		void* pCombatItems[2];      //0x1A4
+		void* pCombatItems[2]; //0x1A4
 		AITimer kCombatItemTimers[2]; //0x1AC
 	};
 

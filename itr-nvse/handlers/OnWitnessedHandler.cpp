@@ -1,9 +1,5 @@
-//hooks Crime::AddtoActorKnowList (0x9EB9C0) to dispatch ITR:OnWitnessed for
-//steal / pickpocket / attack / murder — engine calls it per unique witness as
-//each *Alarm iterates nearby actors.
-//
-//trespass bypasses Crime entirely, so we also hook Actor::TrespassAlarm (0x8C0EC0)
-//and run our own witness scan at entry.
+//ITR:OnWitnessed - hook Crime::AddtoActorKnowList (0x9EB9C0), fired per witness.
+//trespass bypasses Crime, so also hook Actor::TrespassAlarm (0x8C0EC0).
 
 #include "OnWitnessedHandler.h"
 #include "internal/NVSEMinimal.h"
@@ -14,7 +10,6 @@
 #include "internal/globals.h"
 #include <vector>
 
-//PlayerCharacter singleton — trespass is always player-perpetrated on the engine path
 static Actor* GetPlayerActor() { return *reinterpret_cast<Actor**>(0x11DEA3C); }
 
 constexpr UInt32 kAddr_AddtoActorKnowList = 0x9EB9C0;
@@ -60,15 +55,12 @@ static void __fastcall Hook_AddKnow(Engine::Crime* crime, void* /*edx*/, Actor* 
 }
 
 //Actor::TrespassAlarm signature: void __thiscall (Actor* this, TESObjectREFR* apRef, TESForm* apOwnership, UInt32);
-//retn 0Ch = 3 args after this. First check inside: if (this != player) bail — so the perp
-//is always the player here. This wrapper needs to return whatever the original returned
-//(the function ends with `or eax, -1` then ret so it always returns -1).
+//retn 0Ch = 3 args after this. First check inside: if (this != player) bail
 static UInt32 __fastcall Hook_Trespass(Actor* actorThis, void* /*edx*/,
                                        TESObjectREFR* apRef, TESForm* apOwnership, UInt32 arg3)
 {
 	if (!g_isLoadingSave && actorThis && apRef)
 	{
-		//trespass is always player-perpetrated on this engine path (internal cmp vs PC singleton)
 		Actor* player = GetPlayerActor();
 		if (player)
 		{
@@ -91,19 +83,11 @@ bool Init(void* nvseInterface)
 	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
 	if (nvse->isEditor) return false;
 
-	//Crime::AddtoActorKnowList prologue at 0x9EB9C0:
-	//55        push ebp
-	//8B EC     mov ebp, esp
-	//51        push ecx
-	//89 4D FC  mov [ebp-4], ecx   <- first clean boundary >= 5 is 7 bytes
+	//7-byte prologue
 	if (!s_addKnowDetour.WriteRelJump(kAddr_AddtoActorKnowList, Hook_AddKnow, 7))
 		return false;
 
-	//Actor::TrespassAlarm prologue at 0x8C0EC0:
-	//55        push ebp
-	//8B EC     mov ebp, esp
-	//83 EC 24  sub esp, 24h
-	//89 4D E0  mov [ebp-20h], ecx  <- first clean boundary >= 5 is 9 bytes
+	//9-byte prologue
 	if (!s_trespassDetour.WriteRelJump(kAddr_TrespassAlarm, Hook_Trespass, 9))
 	{
 		s_addKnowDetour.Remove();

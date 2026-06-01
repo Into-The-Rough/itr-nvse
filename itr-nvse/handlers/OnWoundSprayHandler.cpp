@@ -1,9 +1,6 @@
-//detects environmental blood-splatter decals placed behind a wounded actor.
-//Actor::CreateBlood raycasts in the projectile direction after the body decal
-//and (gated by fCombatEnvironmentBloodChance) drops a decal on the wall/floor
-//it finds. We hook the entry to capture actor+hit, snapshot the live body-part
-//IPCT just before the dispatch site, then trampoline TESObjectCELL::AddDecal
-//to fire one event per placed splatter.
+//environmental blood splatter behind a wounded actor. hook Actor::CreateBlood to capture
+//actor+hit, snapshot the body-part IPCT, then trampoline TESObjectCELL::AddDecal to fire
+//one event per splatter.
 
 #include "OnWoundSprayHandler.h"
 #include "internal/NVSEMinimal.h"

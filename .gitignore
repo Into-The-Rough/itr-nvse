@@ -1,7 +1,4 @@
-# Backup files
 *~
-
-# Build outputs
 Debug/
 Release/
 *.obj
@@ -10,8 +7,6 @@ Release/
 *.exp
 *.lib
 *.dll
-
-# VS files
 .vs/
 *.user
 *.suo
@@ -21,8 +16,6 @@ Release/
 *.VC.db
 *.VC.opendb
 ipch/
-
-# Local docs export
 /wiki_pages/
 /nexus_description.txt
 /docs/

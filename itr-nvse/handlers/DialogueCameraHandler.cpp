@@ -10,7 +10,6 @@
 #include <cmath>
 #include <cstdlib>
 
-//camera hooks - intercept game's own camera update calls
 namespace CameraHooks {
 	struct NiVector3 { float x, y, z; };
 
@@ -90,7 +89,6 @@ namespace CameraHooks {
 		if (g_hooksInstalled)
 			return true;
 
-		//hook addresses (verified in IDA):
 		//0x94AD8A - SetLocalTranslate in PlayerCharacter::HandleFlycamMovement
 		//0x94AD9D - SetLocalRotate in PlayerCharacter::HandleFlycamMovement
 		//0x94BDC2 - SetLocalTranslate in PlayerCharacter::UpdateCamera
@@ -403,11 +401,8 @@ __declspec(naked) void Hook_DisableDialogueZoom() {
 	}
 }
 
-//site 6: FocusOnActor fallback SetFOV (0x953BB4)
-//when site 5 skips the zoom block, v78 stays 0 and the fallback
-//calls SetFOV with a narrow distance-based value every frame.
-//skip it when dialogue camera active.
-//original: movzx eax,[ebp-15h]; test eax,eax; jnz short 0x953BFB (8 bytes)
+//site 6: FocusOnActor fallback SetFOV (0x953BB4) - fires every frame when site 5
+//skips the zoom block, skip it when dialogue camera active. patched site = 8 bytes.
 static const UInt32 kSite6_Continue = 0x953BBC;
 static const UInt32 kSite6_Skip = 0x953BFB;
 __declspec(naked) void Hook_SkipFallbackFOV() {
