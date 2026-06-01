@@ -190,8 +190,8 @@ static ParamInfo kParams_ClearEyeMesh[1] = {
 	{"eyes", kParamType_AnyForm, 0},
 };
 
-DEFINE_COMMAND_PLUGIN(SetEyeMesh, "Register a per-eyes-form mesh override (path relative to Meshes\\); rightMesh optional, defaults to leftMesh", 0, 3, kParams_SetEyeMesh);
-DEFINE_COMMAND_PLUGIN(ClearEyeMesh, "Remove a per-eyes-form mesh override", 0, 1, kParams_ClearEyeMesh);
+DEFINE_COMMAND_PLUGIN(SetEyeMesh, "Register a per-eyes-form mesh override (path relative to Meshes\\); rightMesh optional, defaults to leftMesh. Run Update3D on an actor to apply it", 0, 3, kParams_SetEyeMesh);
+DEFINE_COMMAND_PLUGIN(ClearEyeMesh, "Remove a per-eyes-form mesh override. Run Update3D on an actor to apply it", 0, 1, kParams_ClearEyeMesh);
 
 namespace EyeMeshOverride
 {

@@ -1,6 +1,7 @@
 //tests for testable C++ logic called by asm hooks
 
 #include "test.h"
+#include "internal/ConsoleCommand.h"
 #include <cstdio>
 #include <cstring>
 #include <unordered_map>
@@ -111,6 +112,46 @@ TEST(FormatReputationMessage_EmptyDesc)
 {
 	const char* result = FormatReputationMessage("Legion", "Vilified", "");
 	ASSERT_STREQ(result, "Legion - Vilified. ");
+	return true;
+}
+
+TEST(ConsoleCommand_ExtractsSimpleCommand)
+{
+	char buf[64];
+	ASSERT(ConsoleCommand::ExtractCommandName("tgm", buf, sizeof(buf)));
+	ASSERT_STREQ(buf, "tgm");
+	return true;
+}
+
+TEST(ConsoleCommand_LowercasesCommand)
+{
+	char buf[64];
+	ASSERT(ConsoleCommand::ExtractCommandName("TCL", buf, sizeof(buf)));
+	ASSERT_STREQ(buf, "tcl");
+	return true;
+}
+
+TEST(ConsoleCommand_StripsRefPrefix)
+{
+	char buf[64];
+	ASSERT(ConsoleCommand::ExtractCommandName("player.additem 0000000F 1", buf, sizeof(buf)));
+	ASSERT_STREQ(buf, "additem");
+	return true;
+}
+
+TEST(ConsoleCommand_StripsArrowRefPrefix)
+{
+	char buf[64];
+	ASSERT(ConsoleCommand::ExtractCommandName("someRef->disable", buf, sizeof(buf)));
+	ASSERT_STREQ(buf, "disable");
+	return true;
+}
+
+TEST(ConsoleCommand_IgnoresEmptyAndComments)
+{
+	char buf[64] = "unchanged";
+	ASSERT(!ConsoleCommand::ExtractCommandName("   ; comment", buf, sizeof(buf)));
+	ASSERT_STREQ(buf, "");
 	return true;
 }
 

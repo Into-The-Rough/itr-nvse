@@ -14,6 +14,7 @@
 - ModChallenge - modify challenge progress
 - DamageActorValueAlt - extended actor value damage
 - ToggleAllPrimitives (TAP) - toggle primitive refs plus regular marker refs with fixed load-time behaviour
+- CenterOnCellAlt (COCA) - dispatch a synthetic new-session message before COC when launched from the main menu
 - GetRefExteriorDoor - exterior-side load door reachable from a reference
 - GetRefNextTeleportDoor - next load door on the current shortest path to a reference
 
@@ -22,6 +23,8 @@
 - ResurrectAll - resurrect all dead actors in area
 - SetCreatureCombatSkill - set creature combat skill
 - SetRaceAlt - set actor race at runtime
+- SetEyeMesh - override an eyes form's left/right mesh (run Update3D on an actor to apply)
+- ClearEyeMesh - remove an eyes form mesh override (run Update3D on an actor to apply)
 - UseAidItem - force actor to use an aid item
 - ForceCrouch - force actor into crouch
 - DisableCrouching - prevent actor from crouching
@@ -37,6 +40,7 @@
 **Combat**
 - FakeHit - simulate hit on actor
 - FakeHitEx - simulate hit with extended params
+- FakeImpact - spawn a weapon's impact effect (particle + sound) on the calling object
 - SetNoWeaponSearch - disable weapon search for actor
 - GetNoWeaponSearch - get weapon search state
 - SetPreventWeaponSwitch - prevent NPC weapon switching
@@ -113,6 +117,7 @@
 - ITR:OnJumpStart - fires when actor starts jumping (actor)
 - ITR:OnConsoleOpen - fires on console open
 - ITR:OnConsoleClose - fires on console close
+- ITR:OnConsoleCommand - fires when a typed console command or bat file line reaches Script::Run (sCommand, sFullCommand, rCalleeRef). `sCommand` is lower-case and strips ref prefixes, so `player.additem` dispatches `additem`.
 - ITR:OnKeyDisabled - fires when key disabled (keyCode, controlID)
 - ITR:OnKeyEnabled - fires when key enabled (keyCode, controlID)
 - ITR:OnMenuFilterChange - fires on menu filter tab change (menuID, oldFilter, newFilter, filterCount)

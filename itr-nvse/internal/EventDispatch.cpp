@@ -45,8 +45,8 @@ void RegisterEvents()
 	static P cornerParams[] = { P::eParamType_String, P::eParamType_Int, P::eParamType_String, P::eParamType_String, P::eParamType_Float, P::eParamType_Int };
 	g_eventManagerInterface->RegisterEvent("ITR:OnCornerMessage", 6, cornerParams, F::kFlag_FlushOnLoad);
 
-	static P dialogueParams[] = { P::eParamType_AnyForm, P::eParamType_AnyForm, P::eParamType_AnyForm, P::eParamType_String, P::eParamType_String };
-	g_eventManagerInterface->RegisterEvent("ITR:OnDialogueText", 5, dialogueParams, F::kFlag_FlushOnLoad);
+	static P dialogueParams[] = { P::eParamType_AnyForm, P::eParamType_AnyForm, P::eParamType_AnyForm, P::eParamType_String, P::eParamType_String, P::eParamType_Float };
+	g_eventManagerInterface->RegisterEvent("ITR:OnDialogueText", 6, dialogueParams, F::kFlag_FlushOnLoad);
 
 	static P oneInt[] = { P::eParamType_Int };
 	g_eventManagerInterface->RegisterEvent("ITR:OnDoubleTap", 1, oneInt, F::kFlag_FlushOnLoad);
@@ -59,6 +59,8 @@ void RegisterEvents()
 
 	g_eventManagerInterface->RegisterEvent("ITR:OnConsoleOpen", 0, nullptr, F::kFlag_FlushOnLoad);
 	g_eventManagerInterface->RegisterEvent("ITR:OnConsoleClose", 0, nullptr, F::kFlag_FlushOnLoad);
+	static P consoleCommandParams[] = { P::eParamType_String, P::eParamType_String, P::eParamType_AnyForm };
+	g_eventManagerInterface->RegisterEvent("ITR:OnConsoleCommand", 3, consoleCommandParams, F::kFlag_FlushOnLoad);
 
 	static P entryPointParams[] = { P::eParamType_AnyForm, P::eParamType_Int, P::eParamType_AnyForm, P::eParamType_AnyForm };
 	g_eventManagerInterface->RegisterEvent("ITR:OnEntryPoint", 4, entryPointParams, F::kFlag_FlushOnLoad);

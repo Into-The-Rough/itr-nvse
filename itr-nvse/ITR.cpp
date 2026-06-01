@@ -16,6 +16,7 @@
 #include "internal/settings.h"
 #include "internal/EngineFunctions.h"
 #include "internal/EventDispatch.h"
+#include "internal/ConsoleCommand.h"
 
 #include "handlers/DialogueTextFilter.h"
 #include "handlers/OnStealHandler.h"
@@ -80,6 +81,7 @@
 #include "commands/GroundCommands.h"
 #include "commands/GestureCommand.h"
 #include "commands/ToggleAllPrimitives.h"
+#include "commands/CenterOnCellAltCommand.h"
 #include "features/LocationVisitPopup.h"
 #include "features/QuickReadNote.h"
 #include "features/VATSExtender.h"
@@ -122,24 +124,49 @@ const _ExtractArgs ExtractArgs = (_ExtractArgs)0x005ACCB0;
 const _FormHeap_Free FormHeap_Free = (_FormHeap_Free)0x00401030;
 
 //set true only while a user-typed console line (or bat file from console) is
-//running. hooks the two MenuConsole::Idle call sites into
-//Script::CompilePartialScript. neither bConsoleMode (TLS) nor
-//Interface::IsConsoleVisible distinguish typed input from ScriptRunner /
-//RunScriptLine, but these specific call sites are unique to MenuConsole::Idle.
+//running. hooks the two MenuConsole::Idle call sites into Script::Run. neither
+//bConsoleMode (TLS) nor Interface::IsConsoleVisible distinguish typed input
+//from ScriptRunner / RunScriptLine, but these call sites are unique to
+//MenuConsole::Idle.
 static thread_local bool s_inConsoleDispatch = false;
 
-using CompilePartialScript_t = void(__thiscall*)(void*, void*, int, void*);
+using ConsoleScriptRun_t = int(__thiscall*)(void*, void*, int, void*);
 
 static Detours::CallDetour s_consoleDispatchBatDetour;
 static Detours::CallDetour s_consoleDispatchInputDetour;
-static CompilePartialScript_t s_origCompilePartialScript = nullptr;
+static ConsoleScriptRun_t s_origConsoleScriptRun = nullptr;
 
-static void __fastcall Hook_ConsoleCompilePartialScript(void* this_, void* /*edx*/, void* apCompiler, int a3, void* apRef)
+struct EventManagerDispatchInterface {
+	void* registerEvent;
+	bool (*DispatchEvent)(const char* eventName, TESObjectREFR* thisObj, ...);
+};
+
+static const char* GetScriptText(void* script)
+{
+	return script ? *reinterpret_cast<const char**>(reinterpret_cast<UInt8*>(script) + 0x2C) : nullptr;
+}
+
+static void DispatchConsoleCommandEvent(const char* fullCommand, TESObjectREFR* calleeRef)
+{
+	if (!g_eventManagerInterface || !fullCommand || !fullCommand[0])
+		return;
+
+	char commandName[128];
+	if (!ConsoleCommand::ExtractCommandName(fullCommand, commandName, sizeof(commandName)))
+		return;
+
+	reinterpret_cast<EventManagerDispatchInterface*>(g_eventManagerInterface)->DispatchEvent("ITR:OnConsoleCommand", nullptr,
+		commandName, fullCommand, calleeRef);
+}
+
+static int __fastcall Hook_ConsoleScriptRun(void* script, void* /*edx*/, void* scriptContext, int a3, TESObjectREFR* calleeRef)
 {
 	const bool prev = s_inConsoleDispatch;
 	s_inConsoleDispatch = true;
-	s_origCompilePartialScript(this_, apCompiler, a3, apRef);
+	DispatchConsoleCommandEvent(GetScriptText(script), calleeRef);
+	const int result = s_origConsoleScriptRun(script, scriptContext, a3, calleeRef);
 	s_inConsoleDispatch = prev;
+	return result;
 }
 
 bool IsConsoleMode()
@@ -151,9 +178,9 @@ extern void Log(const char* fmt, ...);
 
 static void InitConsoleDispatchHooks()
 {
-	s_origCompilePartialScript = (CompilePartialScript_t)0x5AC400;
-	const bool a = s_consoleDispatchBatDetour.WriteRelCall(0x71C3E8, (UInt32)Hook_ConsoleCompilePartialScript);
-	const bool b = s_consoleDispatchInputDetour.WriteRelCall(0x71C846, (UInt32)Hook_ConsoleCompilePartialScript);
+	s_origConsoleScriptRun = (ConsoleScriptRun_t)0x5AC400;
+	const bool a = s_consoleDispatchBatDetour.WriteRelCall(0x71C3E8, (UInt32)Hook_ConsoleScriptRun);
+	const bool b = s_consoleDispatchInputDetour.WriteRelCall(0x71C846, (UInt32)Hook_ConsoleScriptRun);
 	Log("ConsoleDispatch hooks: bat=%d input=%d", a ? 1 : 0, b ? 1 : 0);
 }
 
@@ -391,11 +418,16 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			CompanionNoBlock::ClearState();
 			DoorPinchFix::ClearState();
 			OnJumpLandHandler::ClearState();
+			DialogueTextFilter::ClearState();
 			break;
 
 		case NVSEMessagingInterface::kMessage_NewGame:
 		case NVSEMessagingInterface::kMessage_PostLoadGame:
 			g_isLoadingSave = false;
+			if (msg->type == NVSEMessagingInterface::kMessage_NewGame)
+				CenterOnCellAltCommand::OnNewGame();
+			else
+				CenterOnCellAltCommand::ClearPending();
 			if (msg->type == NVSEMessagingInterface::kMessage_PostLoadGame && Settings::bMusicResetOnLoad)
 			{
 				ResetMusicStateForLoad();
@@ -419,6 +451,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			PerkRuntimeFramework::BuildIndex();
 			OnJumpLandHandler::ClearState();
 			OnJumpLandHandler::InstallListenerProbes();
+			DialogueTextFilter::ClearState();
 			if (Settings::bAutoGodMode && !g_godModeExecuted)
 			{
 				*(UInt8*)0x11E07BA = 1;
@@ -522,6 +555,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			GestureCommand::Update();
 			ToggleAllPrimitives::Update();
 			DetectionSoundCommands::Update();
+			CenterOnCellAltCommand::Update();
 			break;
 	}
 }

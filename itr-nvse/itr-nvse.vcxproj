@@ -221,6 +221,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="commands\WorldspaceOffsetCommands.cpp" />
     <ClCompile Include="commands\DetectionSoundCommands.cpp" />
     <ClCompile Include="commands\BarterCommands.cpp" />
+    <ClCompile Include="commands\CenterOnCellAltCommand.cpp" />
     <ClCompile Include="commands\GestureCommand.cpp" />
     <ClCompile Include="handlers\OnWitnessedHandler.cpp" />
     <ClCompile Include="handlers\OnImpactDataSpawnHandler.cpp" />
@@ -333,6 +334,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="commands\WorldspaceOffsetCommands.h" />
     <ClInclude Include="commands\DetectionSoundCommands.h" />
     <ClInclude Include="commands\BarterCommands.h" />
+    <ClInclude Include="commands\CenterOnCellAltCommand.h" />
     <ClInclude Include="commands\GestureCommand.h" />
     <ClInclude Include="handlers\OnWitnessedHandler.h" />
     <ClInclude Include="handlers\OnImpactDataSpawnHandler.h" />
@@ -341,6 +343,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="handlers\OnVATSStateHandler.h" />
     <ClInclude Include="handlers\OnCasinoBanHandler.h" />
     <ClInclude Include="handlers\OnPrePickUpHandler.h" />
+    <ClInclude Include="internal\ConsoleCommand.h" />
     <ClInclude Include="internal\WitnessScan.h" />
   </ItemGroup>
   <ItemGroup>

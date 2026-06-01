@@ -30,6 +30,7 @@
 #include "commands/WorldspaceOffsetCommands.h"
 #include "commands/DetectionSoundCommands.h"
 #include "commands/BarterCommands.h"
+#include "commands/CenterOnCellAltCommand.h"
 #include "features/CameraOverride.h"
 #include "features/NoWeaponSearch.h"
 #include "features/PreventWeaponSwitch.h"
@@ -186,6 +187,9 @@ void RegisterAllCommands(void* nvsePtr)
 
 	/*40C1*/ nvse->SetOpcodeBase(0x40C1);
 	FakeHitHandler::RegisterCommands2(nvse);                        //FakeImpact
+
+	/*40C2*/ nvse->SetOpcodeBase(0x40C2);
+	CenterOnCellAltCommand::RegisterCommands(nvse);                 //CenterOnCellAlt
 
 #ifdef _DEBUG
 	/*4067*/ nvse->SetOpcodeBase(0x4067);
