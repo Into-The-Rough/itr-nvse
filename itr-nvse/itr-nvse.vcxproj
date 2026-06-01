@@ -159,6 +159,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="fixes\FriendlyFire.cpp" />
     <ClCompile Include="fixes\NoDoorFade.cpp" />
     <ClCompile Include="fixes\ArmorDTDRFix.cpp" />
+    <ClCompile Include="fixes\ItemModFlagSafety.cpp" />
     <ClCompile Include="fixes\DoorPackageOwnershipFix.cpp" />
     <ClCompile Include="fixes\NPCDoorUnlockBlock.cpp" />
     <ClCompile Include="fixes\VATSSpeechFix.cpp" />
@@ -207,6 +208,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="commands\ForceSayCommand.cpp" />
     <ClCompile Include="commands\IsSayingCommand.cpp" />
     <ClCompile Include="commands\WeaponEmissiveCommands.cpp" />
+    <ClCompile Include="commands\ItemModFlagCommands.cpp" />
     <ClCompile Include="commands\UICommands.cpp" />
     <ClCompile Include="commands\ActorValueCommands.cpp" />
     <ClCompile Include="commands\GroundCommands.cpp" />
@@ -281,6 +283,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="fixes\FriendlyFire.h" />
     <ClInclude Include="fixes\NoDoorFade.h" />
     <ClInclude Include="fixes\ArmorDTDRFix.h" />
+    <ClInclude Include="fixes\ItemModFlagSafety.h" />
     <ClInclude Include="fixes\DoorPackageOwnershipFix.h" />
     <ClInclude Include="fixes\NPCDoorUnlockBlock.h" />
     <ClInclude Include="fixes\VATSSpeechFix.h" />
@@ -317,6 +320,7 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="commands\ForceSayCommand.h" />
     <ClInclude Include="commands\IsSayingCommand.h" />
     <ClInclude Include="commands\WeaponEmissiveCommands.h" />
+    <ClInclude Include="commands\ItemModFlagCommands.h" />
     <ClInclude Include="commands\UICommands.h" />
     <ClInclude Include="commands\ActorValueCommands.h" />
     <ClInclude Include="commands\GroundCommands.h" />

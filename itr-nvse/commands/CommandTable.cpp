@@ -16,6 +16,7 @@
 #include "commands/ForceSayCommand.h"
 #include "commands/IsSayingCommand.h"
 #include "commands/WeaponEmissiveCommands.h"
+#include "commands/ItemModFlagCommands.h"
 #include "commands/UICommands.h"
 #include "commands/ActorValueCommands.h"
 #include "commands/CommandBoundsCommand.h"
@@ -190,6 +191,9 @@ void RegisterAllCommands(void* nvsePtr)
 	/*4067*/ nvse->SetOpcodeBase(0x4067);
 	CommandBoundsCommand::RegisterCommands(nvse);                    //RunITRCommandBounds
 #endif
+
+	/*40AC*/ nvse->SetOpcodeBase(0x40AC);
+	ItemModFlagCommands::RegisterCommands(nvse);                     //SetItemModFlags, GetItemModFlags
 
 	/*410E*/ nvse->SetOpcodeBase(0x410E);
 	GestureCommand::RegisterCommands(nvse);                          //Gesture

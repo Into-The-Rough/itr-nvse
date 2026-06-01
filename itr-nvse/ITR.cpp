@@ -60,6 +60,7 @@
 #include "fixes/FriendlyFire.h"
 #include "fixes/NoDoorFade.h"
 #include "fixes/ArmorDTDRFix.h"
+#include "fixes/ItemModFlagSafety.h"
 #include "fixes/DoorPackageOwnershipFix.h"
 #include "fixes/NPCDoorUnlockBlock.h"
 #include "fixes/VATSSpeechFix.h"
@@ -361,6 +362,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bInlineGlyphFix)
 					InlineGlyphFix::Init();
 				AimZoomFirstPersonOnly::Init(Settings::bAimZoomFirstPersonOnly != 0);
+				ItemModFlagSafety::Init();
 				EventDispatch::RegisterEvents();
 				OnJumpLandHandler::InstallListenerProbes();
 				PerkRuntimeFramework::BuildIndex();
@@ -369,6 +371,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 
 		case NVSEMessagingInterface::kMessage_PostPostLoad:
+			ItemModFlagSafety::InitJIPModFlagGate(); //after JIP's PostLoad installs GetEntryDataModFlagsHook
 			DialogueCameraHandler::InstallCameraHooks(); //always install - hooks check bDialogueCamera at runtime
 			InitVATSSpeechFix();
 			AshPileNames::Init();
