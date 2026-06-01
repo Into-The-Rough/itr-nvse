@@ -57,6 +57,7 @@ struct ConfirmedSpeak
 	UInt32 baseFormID;
 	UInt8 responseNum;
 	DWORD timestamp;
+	float durationSeconds;
 	char modName[64];
 	char voicePath[260];
 };
@@ -415,15 +416,16 @@ static __declspec(naked) void DialogueTextHook() {
 	}
 }
 
-//SpeakSoundFunction hook - commit-level confirmation that a line is actually playing
-//0x8A20D0: push ebp(1) + mov ebp,esp(2) + push -1(2) = 5 bytes
-constexpr UInt32 kAddr_SpeakSound = 0x8A20D0;
-constexpr UInt32 kAddr_SpeakSoundBody = 0x8A20D5;
-static UInt32 g_speakChainAddr = 0;
+//SpeakSound computes the final engine duration immediately before returning it.
+constexpr UInt32 kAddr_SpeakSoundDuration = 0x8A2CD3;
+constexpr UInt32 kAddr_SpeakSoundDurationReturn = 0x8A2CD9;
 
-static void __cdecl OnSpeakConfirm(Actor* speaker, const char* voicePath) {
+static void __cdecl OnSpeakConfirm(Actor* speaker, const char* voicePath, float durationSeconds) {
+	if (g_isLoadingSave) return;
 	if (!speaker || !voicePath || !*voicePath) return;
 	if (!IsWorldRef(speaker)) return;
+	if (!(durationSeconds > 0.0f) || durationSeconds > 3600.0f)
+		durationSeconds = 0.0f;
 
 	UInt32 speakerRefID = ReadRefID(speaker);
 	if (!speakerRefID) return;
@@ -456,6 +458,7 @@ static void __cdecl OnSpeakConfirm(Actor* speaker, const char* voicePath) {
 	cs.baseFormID = baseFormID;
 	cs.responseNum = respNum;
 	cs.timestamp = GetTickCount();
+	cs.durationSeconds = durationSeconds;
 	ParseModNameFromVoicePath(voicePath, cs.modName, sizeof(cs.modName));
 	strncpy_s(cs.voicePath, sizeof(cs.voicePath), voicePath, _TRUNCATE);
 	DialogueTextFilter::g_confirmedSpeaks.push_back(cs);
@@ -464,41 +467,48 @@ static void __cdecl OnSpeakConfirm(Actor* speaker, const char* voicePath) {
 
 static auto g_speakCallback = &OnSpeakConfirm;
 
-static __declspec(naked) void SpeakSoundHook() {
+static __declspec(naked) void SpeakSoundDurationHook() {
 	__asm {
 		pushad
 		pushfd
 
-		//voicePath at [esp+4] before pushad(0x20)+pushfd(0x04) = [esp+0x28]
-		push    dword ptr [esp+0x28]          //cdecl arg2: voicePath
-		push    ecx                           //cdecl arg1: speaker (thiscall this)
+		push    dword ptr [ebp-228h]          //cdecl arg3: durationSeconds
+		push    dword ptr [ebp+08h]           //cdecl arg2: voicePath
+		push    dword ptr [ebp-298h]          //cdecl arg1: speaker
 		call    [g_speakCallback]
-		add     esp, 8
+		add     esp, 0Ch
 
 		popfd
 		popad
 
-		mov     eax, [g_speakChainAddr]       //previous chain owner if any
-		test    eax, eax
-		jnz     chain_speak
-
-		push    ebp                           //replay stolen prologue (with SEH sentinel)
-		mov     ebp, esp
-		push    0FFFFFFFFh
-		mov     eax, kAddr_SpeakSoundBody
-		jmp     eax
-
-	chain_speak:
+		fld     dword ptr [ebp-228h]
+		mov     eax, kAddr_SpeakSoundDurationReturn
 		jmp     eax
 	}
 }
 
 namespace DialogueTextFilter {
+void ClearState()
+{
+	EnsureStateLockInitialized();
+	ScopedLock lock(&g_dtfStateLock);
+	g_pendingEvents.clear();
+	g_confirmedSpeaks.clear();
+	g_recentSpeaks.clear();
+	g_recentFallbacks.clear();
+	g_spokenGreets.clear();
+	g_mainThreadId = 0;
+}
+
 void Update()
 {
 	EnsureStateLockInitialized();
 	if (g_dtfStateLockInit != 2) return;
 	if (!g_eventManagerInterface) return;
+	if (g_isLoadingSave) {
+		ClearState();
+		return;
+	}
 
 	DWORD currentThreadId = GetCurrentThreadId();
 	if (!DialogueTextFilter::g_mainThreadId)
@@ -559,17 +569,21 @@ void Update()
 		if (!hasVoice) {
 			g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
 				reinterpret_cast<TESObjectREFR*>(speaker),
-				speaker, topic, topicInfo, evt.text, "");
+				speaker, topic, topicInfo, evt.text, "", PackEventFloatArg(evt.duration));
 			continue;
 		}
 
 		UInt32 baseFormID = evt.topicInfoRefID & 0x00FFFFFF;
 		bool confirmed = false;
+		float durationSeconds = 0.0f;
+		char confirmedVoicePath[260] = {0};
 		for (auto cit = confirmedSpeaks.begin(); cit != confirmedSpeaks.end(); ++cit) {
 			if (cit->speakerRefID == evt.speakerRefID &&
 				cit->baseFormID == baseFormID &&
 				cit->responseNum == evt.responseNum) {
 				confirmed = true;
+				durationSeconds = cit->durationSeconds;
+				strncpy_s(confirmedVoicePath, sizeof(confirmedVoicePath), cit->voicePath, _TRUNCATE);
 				confirmedSpeaks.erase(cit);
 				break;
 			}
@@ -592,7 +606,9 @@ void Update()
 			}
 			g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
 				reinterpret_cast<TESObjectREFR*>(speaker),
-				speaker, topic, topicInfo, evt.text, voicePath);
+				speaker, topic, topicInfo, evt.text,
+				confirmedVoicePath[0] ? confirmedVoicePath : voicePath,
+				PackEventFloatArg(durationSeconds > 0.0f ? durationSeconds : evt.duration));
 		} else if (nowTick - evt.dispatchAfterTick > 30000) {
 		} else {
 			deferredEvents.push_back(evt);
@@ -644,7 +660,7 @@ void Update()
 
 		g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
 			reinterpret_cast<TESObjectREFR*>(speaker),
-			speaker, topic, info, textBuf, cit->voicePath);
+			speaker, topic, info, textBuf, cit->voicePath, PackEventFloatArg(cit->durationSeconds));
 		DialogueTextFilter::g_recentFallbacks.push_back(
 			{cit->speakerRefID, cit->baseFormID, cit->responseNum, nowTick});
 
@@ -691,13 +707,11 @@ bool Init(void* nvseInterface) {
 	SafeWrite::WriteRelJump(kAddr_RunResult, (UInt32)DialogueTextHook);
 	SafeWrite::Write8(kAddr_RunResult + 5, 0x90);
 
-	UInt8 speakFirstByte = *(UInt8*)kAddr_SpeakSound;
-	if (speakFirstByte == 0xE9)
-		g_speakChainAddr = SafeWrite::GetRelJumpTarget(kAddr_SpeakSound);
-	else
-		g_speakChainAddr = 0;
-
-	SafeWrite::WriteRelJump(kAddr_SpeakSound, (UInt32)SpeakSoundHook);
+	static const UInt8 expectedSpeakDurationBytes[] = { 0xD9, 0x85, 0xD8, 0xFD, 0xFF, 0xFF };
+	if (memcmp((void*)kAddr_SpeakSoundDuration, expectedSpeakDurationBytes, sizeof(expectedSpeakDurationBytes)) == 0) {
+		SafeWrite::WriteRelJump(kAddr_SpeakSoundDuration, (UInt32)SpeakSoundDurationHook);
+		SafeWrite::WriteNop(kAddr_SpeakSoundDuration + 5, 1);
+	}
 	DialogueTextFilter::g_hookInstalled = true;
 
 	return true;

@@ -34,9 +34,17 @@ static ContainerMenu_Refresh_t    s_origContainerRefresh = nullptr;
 static BarterMenu_Refresh_t       s_origBarterRefresh = nullptr;
 static RecipeMenu_Refresh_t       s_origRecipeRefresh = nullptr;
 
+static DWORD s_mainThreadId = 0;
+
 static void Dispatch(UInt32 menuID) {
-	if (g_eventManagerInterface)
+	if (!g_eventManagerInterface) return;
+	//these menu rebuilds can be pumped on an AI task thread when another mod routes the
+	//UI pump off-main. plain DispatchEvent races NVSE's handler list and runs handler
+	//scripts off-thread, so defer to the main thread there.
+	if (GetCurrentThreadId() == s_mainThreadId)
 		g_eventManagerInterface->DispatchEvent("ITR:OnMenuListRefresh", nullptr, (int)menuID);
+	else if (g_eventManagerInterface->DispatchEventThreadSafe)
+		g_eventManagerInterface->DispatchEventThreadSafe("ITR:OnMenuListRefresh", nullptr, nullptr, (int)menuID);
 }
 
 static void __cdecl Hook_InventoryMenu_UpdateList() {
@@ -62,6 +70,8 @@ static void __fastcall Hook_RecipeMenu_Refresh(void* this_, void* /*edx*/, int a
 bool Init(void* nvseInterface) {
 	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
 	if (nvse->isEditor) return false;
+
+	s_mainThreadId = GetCurrentThreadId();
 
 	bool allOk = true;
 
