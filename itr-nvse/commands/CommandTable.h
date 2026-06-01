@@ -80,6 +80,8 @@
 // 0x40A9  SetUITexOffset
 // 0x40AA  GetRefNextTeleportDoor
 // 0x40AB  GetVisibleContainerInventoryCount
+// 0x40AC  SetItemModFlags
+// 0x40AD  GetItemModFlags
 // 0x40B0  IsRigidBodyAtRest
 // 0x40B1  GetPerkEligibility
 // 0x40B2  GetPerkBlockers
@@ -100,7 +102,7 @@
 // 0x410E  Gesture
 //
 // not registered by itr-nvse source: 0x4000-0x4007, 0x400A-0x4016, 0x4033,
-// 0x403D-0x404F, 0x405D-0x405E, 0x4069-0x409B, 0x40AC-0x40AF,
+// 0x403D-0x404F, 0x405D-0x405E, 0x4069-0x409B, 0x40AE-0x40AF,
 // 0x40BE, 0x40C2-0x410D, 0x410F
 // These are not automatically free; other local plugins use slots inside the
 // Into the Rough-owned blocks. Check /mnt/d/plugins/opcodes.txt before assigning.
