@@ -1,12 +1,6 @@
-//fires ITR:OnEffectApplied when a magic effect commits to a target
-//(past resist/reflect/absorb gates) and ITR:OnEffectRemoved when the engine
-//actually removes an effect from a target.
-//
-//gap this fills: xNVSE OnMagicEffectHit fires before the resistance check
-//and only passes the base EffectSetting + target. it can't say which
-//spell/potion the effect came from, so scripts can't read per-slot
-//magnitude/duration. these events pass (target, parentForm, effectItemIndex,
-//caster) so scripts can call GetNthEffectMagnitude etc.
+//fires ITR:OnEffectApplied (effect commits, past resist/reflect/absorb) and
+//ITR:OnEffectRemoved. passes (target, parentForm, effectItemIndex, caster) so
+//scripts get the source spell/potion, unlike xNVSE OnMagicEffectHit.
 
 #include <Windows.h>
 
@@ -21,20 +15,18 @@ class TESForm;
 
 namespace {
 
-//ActiveEffect layout — verified from ActiveEffect::ActiveEffect at 0x803D30
+//ActiveEffect layout - verified from ActiveEffect::ActiveEffect at 0x803D30
 constexpr UInt32 kAE_pSpell  = 0x08;  //MagicItem*
 constexpr UInt32 kAE_pEffect = 0x0C;  //EffectItem*
 constexpr UInt32 kAE_pCaster = 0x28;  //MagicCaster*
 
-//inside a MagicItem (SpellItem/AlchemyItem/etc.), the EffectItemList subobject
-//starts at offset 0x0C. GetEffectItemIndex expects that subobject ptr, not the
-//form base. engine itself does this at 0x823523, 0x8058EE
+//EffectItemList subobject GetEffectItemIndex wants, not the form base (engine: 0x823523)
 constexpr UInt32 kMI_EffectItemList = 0x0C;
 
-//TESForm::refID — standard FNV layout
+//TESForm::refID - standard FNV layout
 constexpr UInt32 kTESForm_FormID = 0x0C;
 
-//MagicTarget is embedded at +0x94 in Actor — verified in CheckAddEffect at 0x823651
+//MagicTarget is embedded at +0x94 in Actor - verified in CheckAddEffect at 0x823651
 constexpr UInt32 kMagicTargetOffset_InActor = 0x94;
 
 constexpr UInt32 kAddr_MagicTarget_AddTarget        = 0x8230F0;
@@ -60,9 +52,7 @@ const auto MagicItem_GetMagicItemFormID =
 Detours::JumpDetour s_detourAddTarget;
 Detours::JumpDetour s_detourRemoveEffect;
 
-//convert MagicTarget* to owning Actor* if it belongs to one
-//uses vtable slot 3 (MagicTargetIsActor) — verified at 0x82363C in CheckAddEffect.
-//non-actor magic targets (activators, etc.) return nullptr — HUD scripts don't care
+//MagicTarget* -> owning Actor* via vtable slot 3 (MagicTargetIsActor); null if not an actor
 void* MagicTargetToActor(void* magicTarget)
 {
 	if (!magicTarget) return nullptr;
@@ -76,11 +66,6 @@ void Dispatch(const char* name, void* target, void* magicItem, void* caster, voi
 {
 	if (!g_eventManagerInterface || !target || !magicItem) return;
 
-	//`magicItem` is a MagicItem subobject pointer (the engine's apMagicItem), NOT
-	//the owning TESForm. for SpellItem/EnchantmentItem the subobject lives at +0x18
-	//in the form; AlchemyItem etc. have their own layout. ask the engine for the
-	//formID then resolve to the form base — that's what scripts can use as a ref.
-	//runtime MagicItemObjects (perk-built abilities) return 0 → filter out.
 	UInt32 formID = MagicItem_GetMagicItemFormID(magicItem);
 	if (!formID) return;
 	void* parentForm = Engine::LookupFormByID(formID);
@@ -117,10 +102,6 @@ char __fastcall Hooked_AddTarget(void* thisTgt, void* /*edx*/,
 void __fastcall Hooked_RemoveEffect(void* thisTgt, void* /*edx*/,
 	void* effect, bool actuallyRemove)
 {
-	//fire only on the actual-removal path. the queue-for-later path
-	//(actuallyRemove==false) just sets a flag — UpdateTarget eventually
-	//calls RemoveEffect again with actuallyRemove==true, which is where
-	//EffectRemoved + destruction happens. firing here covers all paths once.
 	if (actuallyRemove && effect) {
 		void* target = MagicTargetToActor(thisTgt);
 		if (target) {

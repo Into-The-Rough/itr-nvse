@@ -18,6 +18,6 @@ namespace WitnessScan {
 	                   float radius, int detectionThreshold,
 	                   std::vector<Hit>& out);
 
-	//single-actor query — returns DetectionData.detectionValue, or -100 if none
+	//single-actor query - returns DetectionData.detectionValue, or -100 if none
 	int GetDetectionValue(Actor* observer, Actor* target);
 }

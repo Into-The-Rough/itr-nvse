@@ -15,7 +15,7 @@ namespace
 	PlayerCharacter** g_player = reinterpret_cast<PlayerCharacter**>(0x11DEA3C);
 
 	typedef void* (__thiscall* _getRoot)(void*);
-	const _getRoot getRoot = reinterpret_cast<_getRoot>(0x624020);  //hkpCollidable::getRoot
+	const _getRoot getRoot = reinterpret_cast<_getRoot>(0x624020); //hkpCollidable::getRoot
 
 	//hkpCharacterProxy::updateManifold reads both collectors as
 	//hkpAllCdPointCollector::m_hits hkArray at +0x10: data +0x00, size +0x04.
@@ -26,14 +26,14 @@ namespace
 	constexpr UInt32 kRootCdPointStride = 112;
 	constexpr UInt32 kRootCdPoint_CollidableB = 0x48;
 	constexpr UInt32 kStalePairSteps = 600;
-	constexpr UInt32 kRebuildInterval = 60;  //proxy map only changes on cell/teammate change - no need to rebuild every frame
+	constexpr UInt32 kRebuildInterval = 60; //proxy map only changes on cell/teammate change - no need to rebuild every frame
 
 	bool g_enabled = false;
-	volatile bool g_active = false;          //read by the physics hook before the lock - volatile so it isn't cached
+	volatile bool g_active = false; //read by the physics hook before the lock - volatile so it isn't cached
 	bool g_interiorOnly = true;
 	bool g_hookInstalled = false;
-	volatile LONG g_releaseFrames = 30;      //written on the main thread, read by the physics hook
-	volatile LONG g_stepCounter = 0;         //InterlockedIncrement on the main thread; snapshotted by the physics hook
+	volatile LONG g_releaseFrames = 30; //written on the main thread, read by the physics hook
+	volatile LONG g_stepCounter = 0; //InterlockedIncrement on the main thread; snapshotted by the physics hook
 	UInt32 g_rebuildCountdown = 0;
 
 	CRITICAL_SECTION g_lock;
@@ -43,10 +43,10 @@ namespace
 	void* g_playerPhantom = nullptr;
 	std::unordered_set<void*> g_teammateProxies;
 	std::unordered_set<void*> g_teammatePhantoms;
-	std::unordered_map<void*, void*> g_proxyToPhantom;  //pair key lookup on the teammate side
+	std::unordered_map<void*, void*> g_proxyToPhantom; //pair key lookup on the teammate side
 
 	struct PairContact { UInt32 count; UInt32 lastStep; };
-	std::unordered_map<void*, PairContact> g_contactDur;  //keyed by teammate phantom
+	std::unordered_map<void*, PairContact> g_contactDur; //keyed by teammate phantom
 
 	//owning hkpWorldObject of a contact collidable; hkpCollidable is embedded at hkpWorldObject+0x10
 	void* ResolveCollidableToWorldObj(void* collidable)
@@ -303,7 +303,7 @@ namespace CompanionNoBlock
 	{
 		if (!g_lockInit)
 			return;
-		g_rebuildCountdown = 0;  //rebuild immediately on next enable
+		g_rebuildCountdown = 0; //rebuild immediately on next enable
 		EnterCriticalSection(&g_lock);
 		g_active = false;
 		g_playerProxy = nullptr;

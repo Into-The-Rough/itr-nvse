@@ -43,9 +43,9 @@ namespace QuickReadNote
 	#define GAME_SCREEN_HEIGHT (*(UInt32*)0x11F9434)
 
 	struct BSSoundHandle {
-		UInt32 uiSoundID;  //0x00
+		UInt32 uiSoundID; //0x00
 		bool bAssumeSuccess; //0x04
-		UInt32 uiState;    //0x08
+		UInt32 uiState; //0x08
 		BSSoundHandle() : uiSoundID(0xFFFFFFFF), bAssumeSuccess(false), uiState(0) {}
 		bool IsValid() const { return uiSoundID != 0xFFFFFFFF; }
 		bool IsPlaying() const {
@@ -117,10 +117,10 @@ namespace QuickReadNote
 	};
 
 	struct DialogueResponse {
-		BSString strResponseText;   //0x00
-		UInt32 uiEmotionType;       //0x08
-		UInt32 uiEmotionValue;      //0x0C
-		BSString strVoiceFilePath;  //0x10
+		BSString strResponseText; //0x00
+		UInt32 uiEmotionType; //0x08
+		UInt32 uiEmotionValue; //0x0C
+		BSString strVoiceFilePath; //0x10
 		void* pSpeakerAnimation;
 		void* pListenerAnimation;
 		void* pSound;
@@ -526,8 +526,8 @@ namespace QuickReadNote
 
 	__declspec(naked) void OnNoteAddedHook() {
 		__asm {
-			mov edx, [ebp+8]       //BGSNote* arg from caller frame -> fastcall arg2
-			jmp ProcessNoteAdded   //ecx (setting) already loaded by original call site
+			mov edx, [ebp+8] //BGSNote* arg from caller frame -> fastcall arg2
+			jmp ProcessNoteAdded //ecx (setting) already loaded by original call site
 		}
 	}
 

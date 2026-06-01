@@ -14,7 +14,7 @@
 
 extern const _ExtractArgs ExtractArgs;
 
-constexpr UInt32 kOffset_Challenge_Amount = 0x6C;     //current progress
+constexpr UInt32 kOffset_Challenge_Amount = 0x6C; //current progress
 constexpr UInt32 kAddr_TESChallenge_IncrementAmount = 0x5F60E0;
 constexpr UInt32 kMiscStat_ChallengesCompleted = 27;
 
@@ -85,7 +85,7 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 
 	UInt32 newAmount = (UInt32)signedNew;
 
-	//show progress notification at interval boundaries (vanilla behavior)
+	//show progress notification at interval boundaries (vanilla behaviour)
 	if (newAmount < threshold)
 	{
 		UInt32 interval = *(UInt32*)(challenge + 0x60); //data.interval

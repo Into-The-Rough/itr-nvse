@@ -1,12 +1,7 @@
-//fires four events from three engine hooks:
-//  ITR:OnVATSEnter   -- VATS::SetMode entering mode 4 (PLAYBACK)
-//  ITR:OnVATSLeave   -- VATS::SetMode entering mode 0 (NONE)
-//  ITR:OnKillCamStart -- PlayerCharacter::StartKillcamForActor when fKillCamTimer
-//                        actually transitions 0 -> nonzero (the function bails on
-//                        most calls, only dispatch when a killcam really started)
-//  ITR:OnKillCamEnd   -- PlayerCharacter::ForceEndKillCam, the chokepoint for both
-//                        natural expiry (called from PlayerCharacter::Update) and
-//                        forced cancellation (toggle, load)
+//four events from three hooks:
+//  ITR:OnVATSEnter/OnVATSLeave - VATS::SetMode mode 4/0
+//  ITR:OnKillCamStart - PlayerCharacter::StartKillcamForActor (only on 0->nonzero fKillCamTimer)
+//  ITR:OnKillCamEnd   - PlayerCharacter::ForceEndKillCam
 
 #include "OnVATSStateHandler.h"
 #include "internal/NVSEMinimal.h"

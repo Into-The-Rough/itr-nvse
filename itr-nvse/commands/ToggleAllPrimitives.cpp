@@ -834,7 +834,7 @@ namespace
 	}
 }
 
-DEFINE_COMMAND_ALT_PLUGIN(ToggleAllPrimitives, TAP, "Toggle all primitives and marker refs with fixed load-time behavior", 0, 0, nullptr)
+DEFINE_COMMAND_ALT_PLUGIN(ToggleAllPrimitives, TAP, "Toggle all primitives and marker refs with fixed load-time behaviour", 0, 0, nullptr)
 
 bool Cmd_ToggleAllPrimitives_Execute(COMMAND_ARGS)
 {

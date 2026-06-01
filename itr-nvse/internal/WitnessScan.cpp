@@ -40,7 +40,7 @@ void FindWitnesses(Actor* perpetrator, const float* crimeLocXYZ,
 		if (actor == perpetrator) continue;
 		if (!actor->baseProcess) continue;
 
-		//skip teammates — they never witness crimes committed by the player
+		//skip teammates - they never witness crimes committed by the player
 		if (*reinterpret_cast<UInt8*>(reinterpret_cast<char*>(actor) + 0x18D))
 			continue;
 

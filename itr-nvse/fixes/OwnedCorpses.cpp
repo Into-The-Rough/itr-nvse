@@ -95,7 +95,7 @@ namespace OwnedCorpses
 	}
 
 	//StealAlarm witness hook
-	//vanilla uses the dead body as witness (can't detect → no alarm)
+	//vanilla uses the dead body as witness (can't detect - no alarm)
 	//skip dead actors so it falls through to faction-based witness search
 	static UInt32 kStealAlarmUseWitness = 0x8BFC52;
 	static UInt32 kStealAlarmFactionSearch = 0x8BFBBE;
@@ -116,7 +116,7 @@ namespace OwnedCorpses
 			mov eax, [ecx]
 			call [eax + 0x22C]
 			test al, al
-			jnz factionSearch //dead → find a real witness
+			jnz factionSearch //dead - find a real witness
 
 		useAsWitness:
 			mov edx, [ebp - 0x1C]

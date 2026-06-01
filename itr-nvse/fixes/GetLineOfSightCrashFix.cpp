@@ -33,7 +33,7 @@ namespace GetLineOfSightCrashFix
 		{
 			mov edx, [ebx + 8]              //apCaster
 			test edx, edx
-			jz bail                          //null caster -> original behavior
+			jz bail                          //null caster -> original behaviour
 			test dword ptr [edx + 8], 0x800  //TESForm flags: disabled bit
 			jnz bail
 			mov edx, [ebx + 0x0C]           //apTarget

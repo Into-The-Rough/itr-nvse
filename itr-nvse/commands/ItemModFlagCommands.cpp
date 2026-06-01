@@ -2,7 +2,7 @@
 //stamps the engine's weapon-mod flag (ExtraWeaponModFlags, xData 0x8D) onto an inventory item instance.
 //the vanilla inventory list draws "+" for any item carrying it, type-agnostic (verified: InitFunc,
 //UpdateInventoryMenu, sub_719EF0 all append "+" on sub_4BD820 with no type check), and the engine
-//serialises 0x8D with the item - so the marker shows and persists, on armor too.
+//serialises 0x8D with the item - so the marker shows and persists, on armour too.
 //ItemModFlagSafety neutralises the non-weapon-safe consumers (sub_4BD570, the stat-card mod block).
 //
 //called on the item's inventory reference, exactly like JIP's SetWeaponRefModFlags (minus its weapon gate):

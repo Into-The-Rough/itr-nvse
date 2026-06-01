@@ -219,17 +219,17 @@ bool ForceSay(Actor* speaker, TESTopic* topic, Actor* target)
 		speakerAnim, listenerAnim, target,
 		true, false, false, true, true); //abQueue=false for sync lip load
 
-	ThisCall(0x57AD20, speaker, topic);     //SetSayToTopic
+	ThisCall(0x57AD20, speaker, topic); //SetSayToTopic
 	ThisCall(0x57ACE0, speaker, topicInfo); //SetSayToTopicInfo
-	ThisCall(0x57AD60, speaker, 1);         //SetSayToResponseNumber
+	ThisCall(0x57AD60, speaker, 1); //SetSayToResponseNumber
 
 	ThisCall(0xAD8E60, &soundHandle,
-		(void*)0x936A20,                    //Actor::SayToCallBack
+		(void*)0x936A20, //Actor::SayToCallBack
 		(void*)(speaker->refID));
 
-	ThisCall(0x8D8DC0, process, (UInt8)1);  //SetDoingSayTo
+	ThisCall(0x8D8DC0, process, (UInt8)1); //SetDoingSayTo
 
-	ThisCall(0x83C850, item, 0);            //RunResult(TIRS_BEGIN)
+	ThisCall(0x83C850, item, 0); //RunResult(TIRS_BEGIN)
 
 	*lipDist = oldLipDist;
 

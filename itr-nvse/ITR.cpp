@@ -570,7 +570,7 @@ static void InitLog()
 static void RegisterHandlers(NVSEInterface* nvse)
 {
 	auto logInit = [](const char* name, bool ok) {
-		Log(ok ? "%s initialized" : "%s failed to initialize", name);
+		Log(ok ? "%s initialised" : "%s failed to initialise", name);
 	};
 
 	InitConsoleDispatchHooks();

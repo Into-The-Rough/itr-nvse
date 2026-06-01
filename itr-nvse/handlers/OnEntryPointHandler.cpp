@@ -105,7 +105,7 @@ void BuildEntryMap()
         perkNode = perkNode->next;
     }
 
-    //atomic swap - readers instantly see the new complete map
+    //readers instantly see the new complete map
     InterlockedExchangePointer((volatile PVOID*)&g_activeMap, buildMap);
     g_useMapB = !g_useMapB;
 }
@@ -154,10 +154,6 @@ static void __cdecl DoDispatchAndPop()
 
 static UInt32 s_ExecuteFunctionReturnAddr = 0x5E5ABE;
 
-//captured at NVSE plugin load (main thread). HandleEntryPoint also runs on AI worker
-//threads during combat weapon DPS scoring — dispatching events from there both widens
-//a perk-list UAF window and reads vararg locals that may not exist for entry points
-//with zero filter args. skip all bookkeeping when not on main thread.
 static DWORD s_mainThreadId = 0;
 
 static __declspec(naked) void Hook_ExecuteFunctionCall()

@@ -15,7 +15,7 @@ extern const _ExtractArgs ExtractArgs;
 
 namespace
 {
-	static constexpr UInt32 kRagdollFlag_Flip = 1;   //spin about pitch axis (front/back flip)
+	static constexpr UInt32 kRagdollFlag_Flip = 1; //spin about pitch axis (front/back flip)
 	static constexpr float kRagdollEnterForce = 0.01f;
 	//ragdoll bodies don't exist until the anim->ragdoll blend creates them;
 	//that can take ~1s, plus KnockExplosion may defer a frame via the task queue
@@ -134,12 +134,12 @@ namespace
 	{
 		switch (limb)
 		{
-			case 1:           return 1;   //head
-			case 3: case 5:   return 3;   //left arm / hand
-			case 4: case 6:   return 5;   //right arm / hand
-			case 7: case 9:   return 7;   //left leg / foot
-			case 8: case 10:  return 10;  //right leg / foot
-			default:          return -1;  //torso / pelvis -> whole-body falloff
+			case 1:           return 1; //head
+			case 3: case 5:   return 3; //left arm / hand
+			case 4: case 6:   return 5; //right arm / hand
+			case 7: case 9:   return 7; //left leg / foot
+			case 8: case 10:  return 10; //right leg / foot
+			default:          return -1; //torso / pelvis -> whole-body falloff
 		}
 	}
 
@@ -156,10 +156,10 @@ namespace
 
 		if (void* collObj = GetbhkCollisionObject(node))
 		{
-			if (void* rb = ThisCall<void*>(0x6FA820, collObj))          //Sun::GetBase
+			if (void* rb = ThisCall<void*>(0x6FA820, collObj)) //Sun::GetBase
 			{
-				if (void* hk = ThisCall<void*>(0x4AE750, rb))           //GetHkReferencedObject
-					ThisCall<void>(0x561800, hk, angVel);                //setAngularVelocity
+				if (void* hk = ThisCall<void*>(0x4AE750, rb)) //GetHkReferencedObject
+					ThisCall<void>(0x561800, hk, angVel); //setAngularVelocity
 			}
 		}
 
@@ -167,9 +167,9 @@ namespace
 		if (!asNode)
 			return;
 
-		const int count = ThisCall<int>(0x43B480, asNode);              //NiNode::GetArrayCount
+		const int count = ThisCall<int>(0x43B480, asNode); //NiNode::GetArrayCount
 		for (int i = 0; i < count; i++)
-			ApplySpinRecursive(ThisCall<void*>(0x43B4A0, asNode, i), angVel);  //NiNode::GetAt
+			ApplySpinRecursive(ThisCall<void*>(0x43B4A0, asNode, i), angVel); //NiNode::GetAt
 	}
 
 	//BIPED_PART (5-bit, bits 8-12 of the collision filter): 1=head, 2=body,
@@ -189,7 +189,7 @@ namespace
 			case 8:  return part >= 14 && part <= 16;
 			case 9:  return part == 10;
 			case 10: return part == 16;
-			default: return true;   //whole-body
+			default: return true; //whole-body
 		}
 	}
 
@@ -203,22 +203,22 @@ namespace
 
 		if (void* collObj = GetbhkCollisionObject(node))
 		{
-			if (void* base = ThisCall<void*>(0x6FA820, collObj))         //Sun::GetBase
+			if (void* base = ThisCall<void*>(0x6FA820, collObj)) //Sun::GetBase
 			{
 				UInt32 cf = 0;
-				ThisCall<void*>(0x43B4F0, base, &cf);                    //bhkRigidBody::GetCollisionFilter
+				ThisCall<void*>(0x43B4F0, base, &cf); //bhkRigidBody::GetCollisionFilter
 				const int part = (cf >> 8) & 0x1F;
 				if (LimbMatchesPart(limb, part))
 				{
-					if (void* hk = ThisCall<void*>(0x4AE750, base))      //GetHkReferencedObject
+					if (void* hk = ThisCall<void*>(0x4AE750, base)) //GetHkReferencedObject
 					{
-						float* cur = ThisCall<float*>(0x560DC0, hk);     //getLinearVelocity
+						float* cur = ThisCall<float*>(0x560DC0, hk); //getLinearVelocity
 						alignas(16) float v[4] = {
 							impulse[0] + (cur ? cur[0] : 0.0f),
 							impulse[1] + (cur ? cur[1] : 0.0f),
 							impulse[2] + (cur ? cur[2] : 0.0f),
 							0.0f };
-						ThisCall<void>(0x5616D0, hk, v);                 //setLinearVelocity
+						ThisCall<void>(0x5616D0, hk, v); //setLinearVelocity
 					}
 				}
 			}
@@ -246,20 +246,20 @@ namespace
 		bhkWorld_SetMotion(root, kMotionType_Dynamic, 1, 0, 1);
 
 		char arData[0x20] = {};
-		ThisCall<void>(0x43D410, arData, 0.0f, 0, 0);   //NiUpdateData::NiUpdateData(0,false,false)
-		ThisCall<void>(0xA59C60, root, arData);          //NiAVObject::Update
+		ThisCall<void>(0x43D410, arData, 0.0f, 0, 0); //NiUpdateData::NiUpdateData(0,false,false)
+		ThisCall<void>(0xA59C60, root, arData); //NiAVObject::Update
 
 		//62B660 runs SSE (movaps) on this vector - hkVector4 must be 16-aligned
 		NiPoint3 src = { linear.x, linear.y, linear.z };
 		alignas(16) float hkDir[4] = {};
-		CdeclCall<void*>(0x4A3E00, hkDir, &src);          //NI2HKMIGRATION_POINT3
+		CdeclCall<void*>(0x4A3E00, hkDir, &src); //NI2HKMIGRATION_POINT3
 
 		const float force = sqrtf(LengthSq(linear));
 		const int idx = LimbTargetIndex(limb);
 		struct { char pad[0x10]; int index; } limbData = { {}, idx };
 		void* limbArg = idx >= 0 ? &limbData : nullptr;
 
-		CdeclCall<void>(0x62B660, root, hkDir, force, limbArg);  //NiNode::62B660
+		CdeclCall<void>(0x62B660, root, hkDir, force, limbArg); //NiNode::62B660
 
 		if (spin != 0.0f)
 		{
@@ -438,7 +438,7 @@ bool Cmd_Ragdoll_Execute(COMMAND_ARGS)
 
 	Actor* actor = (Actor*)thisObj;
 	BaseProcess* process = actor->baseProcess;
-	if (!process || process->processLevel != 0)   //KnockExplosion is HighProcess-only
+	if (!process || process->processLevel != 0) //KnockExplosion is HighProcess-only
 		return true;
 
 	//KnockExplosion runs the full engine ragdoll setup (readiness gate,
@@ -484,7 +484,7 @@ bool Cmd_RagdollLimb_Execute(COMMAND_ARGS)
 		return true;
 	if (!thisObj || !IsActorRef(thisObj))
 		return true;
-	if (!HasRagdollController(thisObj))   //no-op unless already ragdolling
+	if (!HasRagdollController(thisObj)) //no-op unless already ragdolling
 		return true;
 
 	NiNode* root = GetRefRootNode(thisObj);
@@ -493,7 +493,7 @@ bool Cmd_RagdollLimb_Execute(COMMAND_ARGS)
 
 	NiPoint3 src = { x, y, z };
 	alignas(16) float impulse[4] = {};
-	CdeclCall<void*>(0x4A3E00, impulse, &src);   //NI2HKMIGRATION_POINT3
+	CdeclCall<void*>(0x4A3E00, impulse, &src); //NI2HKMIGRATION_POINT3
 
 	ApplyLimbImpulseRecursive(root, ClampLimb(limb), impulse);
 	*result = 1.0;

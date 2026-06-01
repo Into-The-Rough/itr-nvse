@@ -1,11 +1,6 @@
-//detects blood spray decal placements (limb sever/explode).
-//hooks BGSDecalEmitter::Update to capture the active emitter, then intercepts
-//the AddDecal call inside its raycast loop to fire one event per landed decal.
-//
-//design: decal placement happens inside BGSDecalEmitter::Update's loop. Each
-//successful raycast calls TESObjectCELL::AddDecal with a DECAL_CREATION_DATA
-//whose kOrigin is the world hit point. Single-threaded (main loop), so a
-//static "current emitter" pointer is safe across the entry/AddDecal hooks.
+//blood spray decals (limb sever/explode). hook BGSDecalEmitter::Update to capture the
+//active emitter, then TESObjectCELL::AddDecal in its raycast loop to fire one event per
+//decal. main-loop only, so the static emitter ptr is safe.
 
 #include "OnSprayDecalHandler.h"
 #include "internal/NVSEMinimal.h"

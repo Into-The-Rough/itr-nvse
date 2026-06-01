@@ -132,27 +132,27 @@ namespace LocationVisitPopup
 	__declspec(naked) void CheckDiscoveredMarkerHook() {
 		static const UInt32 kRetnAddr = 0x7795E4;
 		__asm {
-			movzx edx, byte ptr[ebp - 0x90]      //replay stolen byte read (flag) so the return path is consistent
+			movzx edx, byte ptr[ebp - 0x90] //replay stolen byte read (flag) so the return path is consistent
 			test edx, edx
 			jz skipCheck
-			mov eax, [ebp - 0x8C]                //caller's marker entry pair
+			mov eax, [ebp - 0x8C] //caller's marker entry pair
 			test eax, eax
 			jz skipCheck
-			mov ecx, [eax]                       //ecx = markerDataPtr at +0x00
+			mov ecx, [eax] //ecx = markerDataPtr at +0x00
 			test ecx, ecx
 			jz skipCheck
-			mov eax, [eax + 4]                   //eax = marker ref pointer at +0x04
+			mov eax, [eax + 4] //eax = marker ref pointer at +0x04
 			test eax, eax
 			jz skipCheck
 			pushad
 			pushfd
-			push ecx                             //cdecl arg2: markerDataPtr (name ptr lives at +4)
-			push dword ptr[eax + 0x0C]           //cdecl arg1: markerRefID from TESObjectREFR::refID
+			push ecx //cdecl arg2: markerDataPtr (name ptr lives at +4)
+			push dword ptr[eax + 0x0C] //cdecl arg1: markerRefID from TESObjectREFR::refID
 			call OnInDiscoveredMarkerRadius
-			add esp, 8                           //cdecl caller cleans 2 dwords
+			add esp, 8 //cdecl caller cleans 2 dwords
 			popfd
 			popad
-			movzx edx, byte ptr[ebp - 0x90]      //re-load edx for the fallthrough; pop clobbered it
+			movzx edx, byte ptr[ebp - 0x90] //re-load edx for the fallthrough; pop clobbered it
 		skipCheck:
 			jmp kRetnAddr
 		}
