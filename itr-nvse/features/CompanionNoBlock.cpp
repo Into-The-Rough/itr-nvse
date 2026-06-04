@@ -21,7 +21,7 @@ namespace
 	//hkpAllCdPointCollector::m_hits hkArray at +0x10: data +0x00, size +0x04.
 	constexpr UInt32 kCollector_HitsData = 0x10;
 	constexpr UInt32 kCollector_HitsSize = 0x14;
-	//The same function copies hkpRootCdPoint in 112-byte chunks and compares
+	//the same function copies hkpRootCdPoint in 112-byte chunks and compares
 	//m_rootCollidableB at +0x48 while matching old manifold points.
 	constexpr UInt32 kRootCdPointStride = 112;
 	constexpr UInt32 kRootCdPoint_CollidableB = 0x48;

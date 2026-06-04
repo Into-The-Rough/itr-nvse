@@ -1,14 +1,9 @@
-//SetItemModFlags / GetItemModFlags
-//stamps the engine's weapon-mod flag (ExtraWeaponModFlags, xData 0x8D) onto an inventory item instance.
-//the vanilla inventory list draws "+" for any item carrying it, type-agnostic (verified: InitFunc,
-//UpdateInventoryMenu, sub_719EF0 all append "+" on sub_4BD820 with no type check), and the engine
-//serialises 0x8D with the item - so the marker shows and persists, on armour too.
-//ItemModFlagSafety neutralises the non-weapon-safe consumers (sub_4BD570, the stat-card mod block).
-//
-//called on the item's inventory reference, exactly like JIP's SetWeaponRefModFlags (minus its weapon gate):
-//  rItemRef.SetItemModFlags 5
-//resolved via xNVSE's InventoryReferenceGetForRefID (same NVSEDataInterface path ImperativeCommands
-//uses for CreateEntry). falls back to a plain placed reference's own list if thisObj isn't an inv ref.
+//setitemmodflags and getitemmodflags
+//sets ExtraWeaponModFlags 0x8D on an inventory item instance
+//vanilla persists the extra data with the item
+//itemmodflagsafety guards weapon-only display paths
+//inventory refs resolve through xnvse InventoryReferenceGetForRefID
+//placed refs use their own extra data list
 
 #include "ItemModFlagCommands.h"
 #define FORMUTILS_USE_NVSE_TYPES
@@ -39,7 +34,7 @@ namespace
 	static const _FormHeapAlloc FormHeapAlloc = (_FormHeapAlloc)0x401000;
 	static const _FormHeapFree  FormHeapFree = (_FormHeapFree)0x401030;
 
-	//xNVSE inventory reference - layout per JIP InventoryRef / xNVSE InventoryReference
+	//xnvse inventory reference layout
 	struct InvRef
 	{
 		TESForm*                          type;         // 00
@@ -51,7 +46,7 @@ namespace
 	typedef InvRef* (*InvRefGetForID_t)(UInt32 refID);
 	static InvRefGetForID_t g_invRefGetForID = nullptr;
 
-	//BaseExtraList helpers - manual presence-bitfield management, mirrors ImperativeCommands.cpp
+	//base extra list helpers
 	static bool ListHasType(BaseExtraList* list, UInt32 type)
 	{
 		if (!list) return false;
@@ -99,7 +94,7 @@ namespace
 		UInt8* x = (UInt8*)FormHeapAlloc(0x10);
 		memset(x, 0, 0x10);
 		*(UInt32*)x = kVtbl_ExtraWeaponModFlags;
-		x[0x04] = kXData_WeaponModFlags;     //BSExtraData::type
+		x[0x04] = kXData_WeaponModFlags;     //extra data type
 		*(UInt32*)(x + 0x0C) = flags;        //installed-slot bitmask, read as a byte by sub_424940
 		return (BSExtraData*)x;
 	}
@@ -133,7 +128,7 @@ namespace
 		node->next = newNode;
 	}
 
-	//the inv ref's own xData when present; otherwise create one on the entry (count-1 case = this instance)
+	//use inv ref xdata when present otherwise create entry xdata
 	static ExtraDataList* ResolveInstanceData(InvRef* invRef, bool create)
 	{
 		if (invRef->xData) return invRef->xData;
@@ -166,7 +161,7 @@ namespace
 			return true;
 		flags &= 7;
 
-		//inventory reference -> its live instance xData; else a plain placed ref -> its own list
+		//inventory ref uses instance xdata otherwise placed ref uses its own list
 		BaseExtraList* xData;
 		if (InvRef* invRef = g_invRefGetForID ? g_invRefGetForID(thisObj->refID) : nullptr) {
 			xData = ResolveInstanceData(invRef, flags != 0);

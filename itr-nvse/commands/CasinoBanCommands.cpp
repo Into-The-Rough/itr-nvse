@@ -18,7 +18,6 @@ constexpr UInt32 kOffset_Casino_MaxWinnings = 0x210;
 constexpr UInt32 kOffset_Player_CasinoDataList = 0x610;
 static void* const kAddr_PlayerSingleton = (void*)0x11DEA3C;
 
-//engine funcs we borrow from BlackJackMenu::Create
 typedef void* (__cdecl*  _OperatorNew)(UInt32 size);
 typedef void (__thiscall* _CasinoStatsCtor)(void* self);
 typedef bool (__thiscall* _BSSimpleList_IsEmpty)(void* self);

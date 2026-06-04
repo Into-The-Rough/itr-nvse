@@ -342,7 +342,7 @@ namespace VATSHighlightDepthFix
 
 	void __fastcall Hook_VATSMenu_SetAdditionalRefMode(void* vatsData, void* edx, UInt32* mode)
 	{
-		// VATS target selection also uses additional refs; clear script-owned refs before vanilla repopulates them.
+		//VATS target selection also uses additional refs, so clear script-owned refs before vanilla repopulates them
 		ResetHighlightDataForVATS(vatsData);
 		VATSHighlightData_SetMode(vatsData, mode);
 	}

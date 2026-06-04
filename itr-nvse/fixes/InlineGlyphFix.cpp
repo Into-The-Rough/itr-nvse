@@ -1,15 +1,6 @@
-//scales inline SUActn button glyphs (&-sUActn...%a. / &...;) to the owning
-//tile's zoom. vanilla renders button icons in an UNZOOMED geometry (1.0
-//transform) while surrounding text is zoom-transformed by the tile, so at
-//tile zoom != 100% the button appears oversized and offset far to the
-//right of where the text ends (ELMO, B42 Notify, Smooth Notifications).
-//
-//strategy: scale all four ButtonIcon metric fields by the tile scale so
-//the button appears proportional to the zoomed text; apply an extra
-//visualScale shrink to metric[0] with a matching metric[2] re-center;
-//Hook_AddButton pre-scales cursor.x so the button's unzoomed left edge
-//(cursor.x*scale + metric[1]*scale) sits next to where zoomed text ends.
-
+//scales inline SUActn button glyphs (&-sUActn...%a. / &...;) to the owning tile's zoom.
+//vanilla renders button icons in an UNZOOMED geometry (1.0 transform) while surrounding text is zoom-transformed by the tile
+//so at tile zoom != 100% the button appears oversized and offset far to the right of where the text ends
 #include "InlineGlyphFix.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/CallTemplates.h"
@@ -139,16 +130,6 @@ namespace InlineGlyphFix
 		if (scale > 0.999f && scale < 1.001f) return;
 		float visualScale = GetGlyphVisualScale();
 
-		//metric[0]=size (vanilla coord), [1]=X bearing (vanilla), [2]=Z offset
-		//(ALREADY in tile font coord: vanilla sets it to this->fLargestHeight),
-		//[3]=post-kern (vanilla coord). top = cursor.z + metric[2], bottom =
-		//top - size. shrinking size without touching metric[2] biases the
-		//glyph upward, so shift metric[2] down by the per-side shrink amount
-		//to keep the center fixed.
-		//all four metric fields are in the button's UNZOOMED coord space (the
-		//button icon geometry renders at 1.0 regardless of the tile's zoom).
-		//scale each by the tile factor so the button appears proportional to
-		//the zoomed text, then recenter vertically for the visualScale shrink.
 		float oldSize = icon->metric[0];
 		float oldAdvance = oldSize + icon->metric[3];
 		float scaledSize = oldSize * scale;
