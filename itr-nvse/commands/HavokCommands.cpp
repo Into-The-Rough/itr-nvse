@@ -17,8 +17,7 @@ namespace
 {
 	static constexpr UInt32 kRagdollFlag_Flip = 1; //spin about pitch axis (front/back flip)
 	static constexpr float kRagdollEnterForce = 0.01f;
-	//ragdoll bodies don't exist until the anim->ragdoll blend creates them;
-	//that can take ~1s, plus KnockExplosion may defer a frame via the task queue
+	//ragdoll bodies don't exist until the anim->ragdoll blend creates them
 	static constexpr UInt8 kMaxRagdollRetryFrames = 120;
 	static constexpr UInt32 kMaxRagdollMotionMs = 60000;
 	static constexpr int kMaxRagdollMotions = 64;
@@ -61,8 +60,7 @@ namespace
 	static bhkWorld_SetMotion_t bhkWorld_SetMotion = (bhkWorld_SetMotion_t)0xC6A350;
 	static constexpr int kMotionType_Dynamic = 1;
 
-	//bhkUtilFunctions::GetbhkCollisionObject - RTTI-checked, returns null for a
-	//node with no bhkCollisionObject. safe when fed real scene nodes.
+	//bhkUtilFunctions::GetbhkCollisionObject returns null when the node has no collision object
 	typedef void* (__cdecl* GetbhkCollisionObject_t)(void*);
 	static GetbhkCollisionObject_t GetbhkCollisionObject = (GetbhkCollisionObject_t)0x43B610;
 
@@ -128,8 +126,8 @@ namespace
 
 	struct NiPoint3 { float x, y, z; };
 
-	//62B660 reads the targeted limb index at limbData+0x10 (1-12 -> biped part,
-	//boosts that part's impulse). map the command's limb arg; -1/null = uniform.
+	//62B660 reads the targeted limb index at limbData+0x10
+	//the command limb arg selects the boosted biped part
 	int LimbTargetIndex(UInt8 limb)
 	{
 		switch (limb)
@@ -143,10 +141,8 @@ namespace
 		}
 	}
 
-	//recurse the real scene tree exactly like NiNode::62B660 does (vtable slot 3
-	//= GetAsNiNode, then GetArrayCount/GetAt) and set angular velocity on every
-	//ragdoll body via the engine accessors. only safe once the bodies are real
-	//(controller exists) - the caller gates on that.
+	//walk the scene tree and set angular velocity on each ragdoll body
+	//the caller only reaches this after the ragdoll controller exists
 	typedef NiNode* (__thiscall* GetAsNiNode_t)(void*);
 
 	void ApplySpinRecursive(void* node, const float* angVel)
@@ -156,9 +152,9 @@ namespace
 
 		if (void* collObj = GetbhkCollisionObject(node))
 		{
-			if (void* rb = ThisCall<void*>(0x6FA820, collObj)) //Sun::GetBase
+			if (void* rb = ThisCall<void*>(0x6FA820, collObj)) //base rigid body
 			{
-				if (void* hk = ThisCall<void*>(0x4AE750, rb)) //GetHkReferencedObject
+				if (void* hk = ThisCall<void*>(0x4AE750, rb)) //hk referenced object
 					ThisCall<void>(0x561800, hk, angVel); //setAngularVelocity
 			}
 		}
@@ -167,14 +163,15 @@ namespace
 		if (!asNode)
 			return;
 
-		const int count = ThisCall<int>(0x43B480, asNode); //NiNode::GetArrayCount
+		const int count = ThisCall<int>(0x43B480, asNode); //child count
 		for (int i = 0; i < count; i++)
-			ApplySpinRecursive(ThisCall<void*>(0x43B4A0, asNode, i), angVel); //NiNode::GetAt
+			ApplySpinRecursive(ThisCall<void*>(0x43B4A0, asNode, i), angVel); //child node
 	}
 
-	//BIPED_PART (5-bit, bits 8-12 of the collision filter): 1=head, 2=body,
-	//3/4=spine, 5/6/7=L upperarm/forearm/hand, 8/9/10=L thigh/calf/foot,
-	//11/12/13=R arm, 14/15/16=R leg. command limb arg -> part set; 0 = all.
+	//biped part is bits 8-12 of the collision filter
+	//1=head 2=body 3/4=spine
+	//5/6/7=left arm 8/9/10=left leg
+	//11/12/13=right arm 14/15/16=right leg
 	bool LimbMatchesPart(UInt8 limb, int part)
 	{
 		switch (limb)
@@ -193,9 +190,8 @@ namespace
 		}
 	}
 
-	//same proven-safe recursion: add a migrated directional impulse to every
-	//body whose engine biped-part matches the target limb. assumes the ragdoll
-	//controller already exists (caller gates) - no entry, no by-name lookup.
+	//apply a migrated linear impulse to bodies whose collision filter biped
+	//part matches the requested limb
 	void ApplyLimbImpulseRecursive(void* node, UInt8 limb, const float* impulse)
 	{
 		if (!node)
@@ -203,14 +199,14 @@ namespace
 
 		if (void* collObj = GetbhkCollisionObject(node))
 		{
-			if (void* base = ThisCall<void*>(0x6FA820, collObj)) //Sun::GetBase
+			if (void* base = ThisCall<void*>(0x6FA820, collObj)) //base rigid body
 			{
 				UInt32 cf = 0;
 				ThisCall<void*>(0x43B4F0, base, &cf); //bhkRigidBody::GetCollisionFilter
 				const int part = (cf >> 8) & 0x1F;
 				if (LimbMatchesPart(limb, part))
 				{
-					if (void* hk = ThisCall<void*>(0x4AE750, base)) //GetHkReferencedObject
+					if (void* hk = ThisCall<void*>(0x4AE750, base)) //hk referenced object
 					{
 						float* cur = ThisCall<float*>(0x560DC0, hk); //getLinearVelocity
 						alignas(16) float v[4] = {
@@ -233,10 +229,9 @@ namespace
 			ApplyLimbImpulseRecursive(ThisCall<void*>(0x43B4A0, asNode, i), limb, impulse);
 	}
 
-	//mirrors MiddleHighProcess::KnockExplosion's tail: force the ragdoll bodies
-	//dynamic, refresh transforms, then let the engine's own recursive,
-	//null-safe NiNode::62B660 apply the migrated directional impulse. spin is
-	//layered on after via the same safe recursion. no hand-rolled body lookup.
+	//use the engine ragdoll path to make bodies dynamic and apply the
+	//directional impulse
+	//spin is layered on after that pass
 	bool ApplyRagdollMotion(TESObjectREFR* ref, UInt8 limb, const Vec3& linear, float spin, UInt32 flags)
 	{
 		NiNode* root = GetRefRootNode(ref);
@@ -246,29 +241,26 @@ namespace
 		bhkWorld_SetMotion(root, kMotionType_Dynamic, 1, 0, 1);
 
 		char arData[0x20] = {};
-		ThisCall<void>(0x43D410, arData, 0.0f, 0, 0); //NiUpdateData::NiUpdateData(0,false,false)
-		ThisCall<void>(0xA59C60, root, arData); //NiAVObject::Update
+		ThisCall<void>(0x43D410, arData, 0.0f, 0, 0); //update data ctor
+		ThisCall<void>(0xA59C60, root, arData); //update root
 
 		//62B660 runs SSE (movaps) on this vector - hkVector4 must be 16-aligned
 		NiPoint3 src = { linear.x, linear.y, linear.z };
 		alignas(16) float hkDir[4] = {};
-		CdeclCall<void*>(0x4A3E00, hkDir, &src); //NI2HKMIGRATION_POINT3
+		CdeclCall<void*>(0x4A3E00, hkDir, &src); //nif to havok vector
 
 		const float force = sqrtf(LengthSq(linear));
 		const int idx = LimbTargetIndex(limb);
 		struct { char pad[0x10]; int index; } limbData = { {}, idx };
 		void* limbArg = idx >= 0 ? &limbData : nullptr;
 
-		CdeclCall<void>(0x62B660, root, hkDir, force, limbArg); //NiNode::62B660
+		CdeclCall<void>(0x62B660, root, hkDir, force, limbArg); //apply impulse
 
 		if (spin != 0.0f)
 		{
-			//angular velocity (rad/s, scale-invariant - no NI->HK migration).
-			//flip flag: spin about the actor's right vector for a head-over-
-			//heels front/back flip. rotZ is from +Y clockwise so forward is
-			//(sin,cos,0), right is (cos,-sin,0). spin>0 = back, spin<0 = front.
-			//otherwise spin about the knock direction (corkscrew), vertical if
-			//no direction. one coherent world spin = whole-body tumble.
+			//angular velocity in rad/s
+			//flip uses the actor right vector
+			//otherwise spin uses the knock direction or world up
 			Vec3 axis;
 			if (flags & kRagdollFlag_Flip)
 			{
@@ -293,8 +285,8 @@ namespace
 
 	void PushActorAway(BaseProcess* process, Actor* actor, float x, float y, float z, float force)
 	{
-		//This virtual is not at one stable slot across process vtables; the
-		//implementation itself is stdcall-like thiscall and returns with retn 14h.
+		//this virtual is not at one stable slot across process vtables
+		//the implementation returns with retn 14h
 		ThisCall<void>(0x91FEE0, process, actor, x, y, z, force);
 	}
 
@@ -305,8 +297,8 @@ namespace
 		return (UInt8)limb;
 	}
 
-	//actor+0xAC is the bhkRagdollController; non-null means the ragdoll instance
-	//is built and its bodies are real - the precondition for any Havok access
+	//actor+0xAC is the bhkRagdollController
+	//non-null means the ragdoll bodies are available
 	bool HasRagdollController(TESObjectREFR* ref)
 	{
 		return ref && *(void**)((UInt8*)ref + 0xAC) != nullptr;
@@ -438,14 +430,11 @@ bool Cmd_Ragdoll_Execute(COMMAND_ARGS)
 
 	Actor* actor = (Actor*)thisObj;
 	BaseProcess* process = actor->baseProcess;
-	if (!process || process->processLevel != 0) //KnockExplosion is HighProcess-only
+	if (!process || process->processLevel != 0) //knockexplosion is highprocess only
 		return true;
 
-	//KnockExplosion runs the full engine ragdoll setup (readiness gate,
-	//bhkRagdollController create, SetMotion->Dynamic, recursive impulse) and
-	//flings the actor away from a world point. that gets the actor ragdolling
-	//safely; the queued pass then applies precise per-limb linear+spin once
-	//the controller exists.
+	//knockexplosion creates the ragdoll controller and applies the first push
+	//the queued pass adds precise limb motion once the controller exists
 	const Vec3 linear = { x, y, z };
 	const float mag = sqrtf(LengthSq(linear));
 
@@ -493,7 +482,7 @@ bool Cmd_RagdollLimb_Execute(COMMAND_ARGS)
 
 	NiPoint3 src = { x, y, z };
 	alignas(16) float impulse[4] = {};
-	CdeclCall<void*>(0x4A3E00, impulse, &src); //NI2HKMIGRATION_POINT3
+	CdeclCall<void*>(0x4A3E00, impulse, &src); //nif to havok vector
 
 	ApplyLimbImpulseRecursive(root, ClampLimb(limb), impulse);
 	*result = 1.0;
@@ -540,9 +529,9 @@ void Update()
 			continue;
 		}
 
-		//the precondition every prior crash lacked: never touch Havok bodies
-		//until the ragdoll controller exists. KnockExplosion builds it within
-		//a few frames; wait (don't poke) until then.
+		//ragdoll bodies are unavailable until KnockExplosion creates the
+		//controller
+		//wait before touching Havok state
 		if (!HasRagdollController(ref))
 		{
 			if (motion.retryFrames)

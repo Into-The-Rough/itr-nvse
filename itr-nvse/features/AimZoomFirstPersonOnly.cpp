@@ -13,6 +13,10 @@ namespace AimZoomFirstPersonOnly
 {
 	using UpdateAimZoom_t = void(__thiscall*)(void* player, float delta);
 
+	//both sites call the aim-zoom update at 0x95DE30, from PlayerCharacter::Update and the secondary update path
+	constexpr UInt32 kCall_PlayerUpdateAimZoom = 0x94375E;
+	constexpr UInt32 kCall_SecondaryUpdateAimZoom = 0x944847;
+
 	static bool s_installAttempted = false;
 	static Detours::CallDetour s_playerUpdateCall;
 	static Detours::CallDetour s_secondaryUpdateCall;
@@ -92,12 +96,12 @@ namespace AimZoomFirstPersonOnly
 
 		s_installAttempted = true;
 
-		if (s_playerUpdateCall.WriteRelCall(0x94375E, Hook_UpdateAimZoomFromPlayerUpdate))
+		if (s_playerUpdateCall.WriteRelCall(kCall_PlayerUpdateAimZoom, Hook_UpdateAimZoomFromPlayerUpdate))
 			s_playerUpdateOriginal = reinterpret_cast<UpdateAimZoom_t>(s_playerUpdateCall.GetOverwrittenAddr());
 		else
 			Log("AimZoomFirstPersonOnly: failed to hook PlayerCharacter::Update aim zoom call");
 
-		if (s_secondaryUpdateCall.WriteRelCall(0x944847, Hook_UpdateAimZoomFromSecondaryUpdate))
+		if (s_secondaryUpdateCall.WriteRelCall(kCall_SecondaryUpdateAimZoom, Hook_UpdateAimZoomFromSecondaryUpdate))
 			s_secondaryUpdateOriginal = reinterpret_cast<UpdateAimZoom_t>(s_secondaryUpdateCall.GetOverwrittenAddr());
 		else
 			Log("AimZoomFirstPersonOnly: failed to hook secondary aim zoom call");
