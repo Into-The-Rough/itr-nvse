@@ -146,3 +146,71 @@ TEST(CooldownTracker_NotLeftNoTrigger)
 	ASSERT_EQ(result, 1);
 	return true;
 }
+
+TEST(CooldownTracker_LeaveThresholdBoundary)
+{
+	CooldownTracker<64> tracker;
+	uint32_t cooldown = 60000;
+	uint32_t leaveThreshold = 3000;
+
+	tracker.Check(0x12345, 1000, cooldown);
+	tracker.UpdateCooldowns(4000, leaveThreshold);
+	ASSERT_EQ(tracker.Check(0x12345, 4001, cooldown), 1);
+
+	tracker.UpdateCooldowns(7002, leaveThreshold);
+	ASSERT_EQ(tracker.Check(0x12345, 7003, cooldown), 0);
+	return true;
+}
+
+TEST(CooldownTracker_ZeroCooldownTriggersAfterLeaving)
+{
+	CooldownTracker<64> tracker;
+	uint32_t leaveThreshold = 3000;
+
+	tracker.Check(0x12345, 1000, 0);
+	tracker.UpdateCooldowns(5000, leaveThreshold);
+	ASSERT_EQ(tracker.Check(0x12345, 6000, 0), 0);
+	tracker.MarkShown(0x12345, 6000);
+
+	tracker.UpdateCooldowns(10000, leaveThreshold);
+	ASSERT_EQ(tracker.Check(0x12345, 11000, 0), 0);
+	return true;
+}
+
+TEST(CooldownTracker_MarkShownUnknownDoesNotAdd)
+{
+	CooldownTracker<64> tracker;
+	tracker.MarkShown(0x12345, 1000);
+	ASSERT_EQ(tracker.Count(), 0);
+	ASSERT_EQ(tracker.Check(0x12345, 2000, 60000), 1);
+	ASSERT_EQ(tracker.Count(), 1);
+	return true;
+}
+
+TEST(CooldownTracker_ClearResetsPublicSlots)
+{
+	CooldownTracker<4> tracker;
+	tracker.Check(1, 1000, 60000);
+	tracker.Check(2, 1000, 60000);
+	tracker.MarkShown(1, 2000);
+	tracker.UpdateCooldowns(5000, 3000);
+	tracker.Clear();
+
+	ASSERT_EQ(tracker.Count(), 0);
+	for (int i = 0; i < tracker.Capacity(); i++) {
+		ASSERT_EQ(tracker.ids[i], 0);
+		ASSERT_EQ(tracker.lastSeen[i], 0);
+		ASSERT_EQ(tracker.popupTime[i], 0);
+		ASSERT(!tracker.hasLeft[i]);
+	}
+	return true;
+}
+
+TEST(CooldownTracker_TimeWrapMarksLeft)
+{
+	CooldownTracker<64> tracker;
+	tracker.Check(0x12345, 0xFFFFFFF0u, 60000);
+	tracker.UpdateCooldowns(20, 32);
+	ASSERT_EQ(tracker.Check(0x12345, 21, 60000), 0);
+	return true;
+}

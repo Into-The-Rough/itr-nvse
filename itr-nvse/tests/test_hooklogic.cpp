@@ -2,6 +2,9 @@
 
 #include "test.h"
 #include "internal/ConsoleCommand.h"
+#include "internal/ExtraDataUtils.h"
+#include "internal/FallDamageLogic.h"
+#include "internal/FormatLogic.h"
 #include <cstdio>
 #include <cstring>
 #include <unordered_map>
@@ -11,20 +14,10 @@ typedef unsigned short UInt16;
 typedef unsigned char UInt8;
 typedef signed int SInt32;
 
-static void FormatFileSize(unsigned long long bytes, char* out, size_t outSize)
-{
-	if (bytes >= 1048576ULL)
-		sprintf_s(out, outSize, "%.1f MB", bytes / 1048576.0);
-	else if (bytes >= 1024ULL)
-		sprintf_s(out, outSize, "%.1f KB", bytes / 1024.0);
-	else
-		sprintf_s(out, outSize, "%llu B", bytes);
-}
-
 TEST(FormatFileSize_Bytes)
 {
 	char buf[32];
-	FormatFileSize(512, buf, sizeof(buf));
+	FormatLogic::FormatFileSize(512, buf, sizeof(buf));
 	ASSERT_STREQ(buf, "512 B");
 	return true;
 }
@@ -32,7 +25,7 @@ TEST(FormatFileSize_Bytes)
 TEST(FormatFileSize_ZeroBytes)
 {
 	char buf[32];
-	FormatFileSize(0, buf, sizeof(buf));
+	FormatLogic::FormatFileSize(0, buf, sizeof(buf));
 	ASSERT_STREQ(buf, "0 B");
 	return true;
 }
@@ -40,7 +33,7 @@ TEST(FormatFileSize_ZeroBytes)
 TEST(FormatFileSize_OneByte)
 {
 	char buf[32];
-	FormatFileSize(1, buf, sizeof(buf));
+	FormatLogic::FormatFileSize(1, buf, sizeof(buf));
 	ASSERT_STREQ(buf, "1 B");
 	return true;
 }
@@ -48,7 +41,7 @@ TEST(FormatFileSize_OneByte)
 TEST(FormatFileSize_Kilobytes)
 {
 	char buf[32];
-	FormatFileSize(1024, buf, sizeof(buf));
+	FormatLogic::FormatFileSize(1024, buf, sizeof(buf));
 	ASSERT_STREQ(buf, "1.0 KB");
 	return true;
 }
@@ -56,7 +49,7 @@ TEST(FormatFileSize_Kilobytes)
 TEST(FormatFileSize_Kilobytes_Fractional)
 {
 	char buf[32];
-	FormatFileSize(1536, buf, sizeof(buf));  //1.5 KB
+	FormatLogic::FormatFileSize(1536, buf, sizeof(buf));
 	ASSERT_STREQ(buf, "1.5 KB");
 	return true;
 }
@@ -64,7 +57,7 @@ TEST(FormatFileSize_Kilobytes_Fractional)
 TEST(FormatFileSize_JustUnderMB)
 {
 	char buf[32];
-	FormatFileSize(1048575, buf, sizeof(buf));  //1 MB - 1 byte
+	FormatLogic::FormatFileSize(1048575, buf, sizeof(buf));
 	ASSERT_STREQ(buf, "1024.0 KB");
 	return true;
 }
@@ -72,7 +65,7 @@ TEST(FormatFileSize_JustUnderMB)
 TEST(FormatFileSize_Megabytes)
 {
 	char buf[32];
-	FormatFileSize(1048576, buf, sizeof(buf));
+	FormatLogic::FormatFileSize(1048576, buf, sizeof(buf));
 	ASSERT_STREQ(buf, "1.0 MB");
 	return true;
 }
@@ -80,7 +73,7 @@ TEST(FormatFileSize_Megabytes)
 TEST(FormatFileSize_Megabytes_Large)
 {
 	char buf[32];
-	FormatFileSize(10485760, buf, sizeof(buf));  //10 MB
+	FormatLogic::FormatFileSize(10485760, buf, sizeof(buf));
 	ASSERT_STREQ(buf, "10.0 MB");
 	return true;
 }
@@ -88,8 +81,22 @@ TEST(FormatFileSize_Megabytes_Large)
 TEST(FormatFileSize_Megabytes_Fractional)
 {
 	char buf[32];
-	FormatFileSize(1572864, buf, sizeof(buf));  //1.5 MB
+	FormatLogic::FormatFileSize(1572864, buf, sizeof(buf));
 	ASSERT_STREQ(buf, "1.5 MB");
+	return true;
+}
+
+TEST(FormatFileSize_OneGigabyteStillUsesMB)
+{
+	char buf[32];
+	FormatLogic::FormatFileSize(1073741824ULL, buf, sizeof(buf));
+	ASSERT_STREQ(buf, "1024.0 MB");
+	return true;
+}
+
+TEST(FormatFileSize_NullOutputIgnored)
+{
+	FormatLogic::FormatFileSize(1024, nullptr, 0);
 	return true;
 }
 
@@ -97,8 +104,7 @@ static char g_msgBuffer[512];
 
 static const char* FormatReputationMessage(const char* factionName, const char* repTitle, const char* repDesc)
 {
-	sprintf_s(g_msgBuffer, "%s - %s. %s", factionName, repTitle, repDesc);
-	return g_msgBuffer;
+	return FormatLogic::FormatReputationMessage(g_msgBuffer, sizeof(g_msgBuffer), factionName, repTitle, repDesc);
 }
 
 TEST(FormatReputationMessage_Basic)
@@ -112,6 +118,13 @@ TEST(FormatReputationMessage_EmptyDesc)
 {
 	const char* result = FormatReputationMessage("Legion", "Vilified", "");
 	ASSERT_STREQ(result, "Legion - Vilified. ");
+	return true;
+}
+
+TEST(FormatReputationMessage_NullFields)
+{
+	const char* result = FormatReputationMessage(nullptr, nullptr, nullptr);
+	ASSERT_STREQ(result, " - . ");
 	return true;
 }
 
@@ -155,18 +168,50 @@ TEST(ConsoleCommand_IgnoresEmptyAndComments)
 	return true;
 }
 
+TEST(ConsoleCommand_TruncatesToOutputBuffer)
+{
+	char buf[5];
+	ASSERT(ConsoleCommand::ExtractCommandName("VeryLongCommand arg", buf, sizeof(buf)));
+	ASSERT_STREQ(buf, "very");
+	return true;
+}
+
+TEST(ConsoleCommand_OneByteOutputBuffer)
+{
+	char buf[1] = {'x'};
+	ASSERT(ConsoleCommand::ExtractCommandName("tgm", buf, sizeof(buf)));
+	ASSERT_STREQ(buf, "");
+	return true;
+}
+
+TEST(ConsoleCommand_NullLineLeavesOutputUntouched)
+{
+	char buf[16] = "unchanged";
+	ASSERT(!ConsoleCommand::ExtractCommandName(nullptr, buf, sizeof(buf)));
+	ASSERT_STREQ(buf, "unchanged");
+	return true;
+}
+
+TEST(ConsoleCommand_NullOutputRejected)
+{
+	ASSERT(!ConsoleCommand::ExtractCommandName("tgm", nullptr, 16));
+	return true;
+}
+
+TEST(ConsoleCommand_StripsLastDottedPrefix)
+{
+	char buf[64];
+	ASSERT(ConsoleCommand::ExtractCommandName("foo.bar.baz 1", buf, sizeof(buf)));
+	ASSERT_STREQ(buf, "baz");
+	return true;
+}
+
 static float g_globalFallDamageMult = 1.0f;
 static std::unordered_map<UInt32, float> g_actorFallDamageMults;
 
 static float GetFallDamageMultForActor(UInt32 refID)
 {
-	if (refID && !g_actorFallDamageMults.empty())
-	{
-		auto it = g_actorFallDamageMults.find(refID);
-		if (it != g_actorFallDamageMults.end())
-			return it->second;
-	}
-	return g_globalFallDamageMult;
+	return FallDamageLogic::ResolveMultiplier(refID, g_globalFallDamageMult, g_actorFallDamageMults);
 }
 
 TEST(FallDamageMult_DefaultGlobal)
@@ -219,6 +264,21 @@ TEST(FallDamageMult_ZeroRefID)
 	return true;
 }
 
+TEST(FallDamageMult_ClampNegative)
+{
+	ASSERT_NEAR(FallDamageLogic::ClampMultiplier(-2.0f), 0.0f, 0.001f);
+	ASSERT_NEAR(FallDamageLogic::ClampMultiplier(1.25f), 1.25f, 0.001f);
+	return true;
+}
+
+TEST(FallDamageMult_OverrideStorageRules)
+{
+	ASSERT(!FallDamageLogic::StoresActorOverride(1.0f));
+	ASSERT(FallDamageLogic::StoresActorOverride(0.0f));
+	ASSERT(FallDamageLogic::StoresActorOverride(1.25f));
+	return true;
+}
+
 struct BSExtraData {
 	void** vtbl;
 	UInt8 type;
@@ -234,16 +294,8 @@ struct BaseExtraList {
 };
 
 static BSExtraData* GetExtraDataByType(BaseExtraList* list, UInt8 type) {
-	if (!list || !list->head) return nullptr;
-	UInt8 byteIndex = type >> 3;
-	UInt8 bitMask = 1 << (type & 7);
-	if (byteIndex < sizeof(list->presentBits) && !(list->presentBits[byteIndex] & bitMask))
-		return nullptr;
-	for (BSExtraData* data = list->head; data; data = data->next) {
-		if (data->type == type)
-			return data;
-	}
-	return nullptr;
+	if (!list) return nullptr;
+	return ExtraDataUtils::GetExtraDataByType(list->head, list->presentBits, sizeof(list->presentBits), type);
 }
 
 TEST(ExtraData_NullList)
@@ -341,5 +393,29 @@ TEST(ExtraData_HighType)
 	list.presentBits[11] = (1 << 7);
 
 	ASSERT(GetExtraDataByType(&list, 0x5F) == &data);
+	return true;
+}
+
+TEST(ExtraData_TypeOutsidePresenceBitsScansList)
+{
+	BSExtraData data = {};
+	data.type = 0xF0;
+	data.next = nullptr;
+
+	BaseExtraList list = {};
+	list.head = &data;
+	memset(list.presentBits, 0, sizeof(list.presentBits));
+
+	ASSERT(GetExtraDataByType(&list, 0xF0) == &data);
+	return true;
+}
+
+TEST(ExtraData_NullPresenceBitsScansList)
+{
+	BSExtraData data = {};
+	data.type = 7;
+	data.next = nullptr;
+
+	ASSERT(ExtraDataUtils::GetExtraDataByType(&data, nullptr, 0, 7) == &data);
 	return true;
 }

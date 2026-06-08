@@ -4,6 +4,7 @@
 #include "nvse/GameObjects.h"
 #include "nvse/ParamInfos.h"
 #include "FallDamageHandler.h"
+#include "internal/FallDamageLogic.h"
 #include "internal/SafeWrite.h"
 #include "internal/ScopedLock.h"
 #include <unordered_map>
@@ -23,13 +24,7 @@ static float __cdecl GetFallDamageMultForActor(UInt32 refID)
 {
 	InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
 	ScopedLock lock(&g_fdhLock);
-	if (refID && !g_actorFallDamageMults.empty())
-	{
-		auto it = g_actorFallDamageMults.find(refID);
-		if (it != g_actorFallDamageMults.end())
-			return it->second;
-	}
-	return g_globalFallDamageMult;
+	return FallDamageLogic::ResolveMultiplier(refID, g_globalFallDamageMult, g_actorFallDamageMults);
 }
 
 namespace FallDamageHook
@@ -217,17 +212,16 @@ bool HasOverride(Actor* actor)
 
 void SetMultiplier(float mult, Actor* actor)
 {
-	if (mult < 0.0f)
-		mult = 0.0f;
+	mult = FallDamageLogic::ClampMultiplier(mult);
 
 	InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
 	ScopedLock lock(&g_fdhLock);
 	if (actor)
 	{
-		if (mult == 1.0f)
-			g_actorFallDamageMults.erase(actor->refID);
-		else
+		if (FallDamageLogic::StoresActorOverride(mult))
 			g_actorFallDamageMults[actor->refID] = mult;
+		else
+			g_actorFallDamageMults.erase(actor->refID);
 	}
 	else
 	{

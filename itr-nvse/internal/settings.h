@@ -72,7 +72,6 @@ namespace Settings
 	inline int iCompanionNoBlockReleaseFrames = 30;
 	inline int iCompanionNoBlockRestoreDistance = 220;
 	inline int bCompanionNoBlockInteriorOnly = 1;
-	inline int bCompanionNoBlockDebugLog = 0;
 	inline int bPathingNullActorFix = 1;
 	inline int bNavMeshInfoCrashFix = 1;
 	inline int bInitHavokCrashFix = 1;
@@ -168,7 +167,6 @@ namespace Settings
 		iCompanionNoBlockReleaseFrames = GetINIInt("CompanionNoBlock", "iReleaseFrames", 30);
 		iCompanionNoBlockRestoreDistance = GetINIInt("CompanionNoBlock", "iRestoreDistance", 220);
 		bCompanionNoBlockInteriorOnly = GetINIInt("CompanionNoBlock", "bInteriorOnly", 1);
-		bCompanionNoBlockDebugLog = GetINIInt("CompanionNoBlock", "bDebugLog", 0);
 
 		bPathingNullActorFix = GetINIInt("Tweaks", "bPathingNullActorFix", 1);
 		bNavMeshInfoCrashFix = GetINIInt("Tweaks", "bNavMeshInfoCrashFix", 1);

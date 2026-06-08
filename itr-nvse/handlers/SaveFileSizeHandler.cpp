@@ -1,6 +1,7 @@
 #include "SaveFileSizeHandler.h"
 #include "internal/SafeWrite.h"
 #include "internal/EngineFunctions.h"
+#include "internal/FormatLogic.h"
 #include <cstdio>
 
 static const UInt32 kTileValue_user1 = 0x1005;
@@ -34,16 +35,6 @@ namespace SaveFileSizeHandler
 			ConstructSavegamePath(*g_saveGameManager, g_savePath);
 	}
 
-	static void FormatFileSize(ULONGLONG bytes, char* out, size_t outSize)
-	{
-		if (bytes >= 1048576ULL)
-			sprintf_s(out, outSize, "%.1f MB", bytes / 1048576.0);
-		else if (bytes >= 1024ULL)
-			sprintf_s(out, outSize, "%.1f KB", bytes / 1024.0);
-		else
-			sprintf_s(out, outSize, "%llu B", bytes);
-	}
-
 	static UInt32 ReadCallTarget(UInt32 addr)
 	{
 		UInt8* p = (UInt8*)addr;
@@ -72,7 +63,7 @@ namespace SaveFileSizeHandler
 
 		ULONGLONG fileSize = ((ULONGLONG)fad.nFileSizeHigh << 32) | fad.nFileSizeLow;
 		char sizeStr[32];
-		FormatFileSize(fileSize, sizeStr, sizeof(sizeStr));
+		FormatLogic::FormatFileSize(fileSize, sizeStr, sizeof(sizeStr));
 
 		static char newLoc[512];
 		sprintf_s(newLoc, "%s - %s", entry->location, sizeStr);

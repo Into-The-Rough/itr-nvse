@@ -374,8 +374,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					NPCDoctorsBagUse::Init(Settings::fDoctorsBagUseTimer);
 				CompanionNoInfamy::Init(Settings::bCompanionNoInfamy != 0);
 				CompanionNoBlock::Init(Settings::bCompanionNoBlock != 0, Settings::iCompanionNoBlockReleaseFrames,
-				                       Settings::iCompanionNoBlockRestoreDistance, Settings::bCompanionNoBlockInteriorOnly != 0,
-				                       Settings::bCompanionNoBlockDebugLog != 0);
+				                       Settings::iCompanionNoBlockRestoreDistance, Settings::bCompanionNoBlockInteriorOnly != 0);
 				if (Settings::bPathingNullActorFix)
 					PathingNullActorFix::Init();
 				if (Settings::bNavMeshInfoCrashFix)
@@ -493,8 +492,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					ReversePickpocketNoKarmaFix::SetEnabled(Settings::bReversePickpocketNoKarma != 0);
 					CompanionNoInfamy::SetEnabled(Settings::bCompanionNoInfamy != 0);
 					CompanionNoBlock::UpdateSettings(Settings::bCompanionNoBlock != 0, Settings::iCompanionNoBlockReleaseFrames,
-					                                 Settings::iCompanionNoBlockRestoreDistance, Settings::bCompanionNoBlockInteriorOnly != 0,
-					                                 Settings::bCompanionNoBlockDebugLog != 0);
+					                                 Settings::iCompanionNoBlockRestoreDistance, Settings::bCompanionNoBlockInteriorOnly != 0);
 					NPCDoorUnlockBlock::SetLevel(Settings::iNPCDoorUnlockBlock);
 					LockpickOwnerKarmaFix::SetEnabled(Settings::bLockpickOwnerKarmaFix != 0);
 					InlineGlyphFix::SetEnabled(Settings::bInlineGlyphFix != 0);
