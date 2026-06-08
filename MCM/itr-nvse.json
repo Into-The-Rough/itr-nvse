@@ -525,37 +525,111 @@
 					"vars": [{ "configINI": "Tweaks:bVATSSpeechFix", "default": 0 }]
 				},
 				"14": {
+					"title": "VATS Highlight Depth Fix",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Experimental: make non-VATS additional-reference highlights test against world depth (made for Loot Locator)",
+					"vars": [{ "configINI": "Tweaks:bVATSHighlightDepthFix", "default": 0 }]
+				},
+				"15": {
 					"title": "Crash Fixes",
 					"enable": 1,
 					"type": 0
 				},
-				"15": {
+				"16": {
 					"title": "Detection Follower Crash Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix crash when GetDetectionState called during cell transitions",
 					"vars": [{ "configINI": "Tweaks:bDetectionFollowerCrashFix", "default": 1 }]
 				},
-				"16": {
+				"17": {
 					"title": "Pathing Null Actor Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix crash from null actor in pathing code",
 					"vars": [{ "configINI": "Tweaks:bPathingNullActorFix", "default": 1 }]
 				},
-				"17": {
+				"18": {
 					"title": "NavMesh Info Crash Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix crash in NavMesh info processing",
 					"vars": [{ "configINI": "Tweaks:bNavMeshInfoCrashFix", "default": 1 }]
 				},
-				"18": {
+				"19": {
 					"title": "Init Havok Crash Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix crash during Havok physics initialization",
 					"vars": [{ "configINI": "Tweaks:bInitHavokCrashFix", "default": 1 }]
+				},
+				"20": {
+					"title": "Collision",
+					"enable": 1,
+					"type": 0
+				},
+				"21": {
+					"title": "Door Pinch Fix",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Temporarily disable nearby opening door collision so doors can't shove or trap you",
+					"vars": [{ "configINI": "Tweaks:bDoorPinchFix", "default": 1 }]
+				},
+				"22": {
+					"title": "Door Pinch Distance",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Player distance in game units for temporarily disabling opening door collision",
+					"vars": [{ "configINI": "DoorPinchFix:iDistance", "default": 140 }],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 10,
+						"valueMin": 50,
+						"valueMax": 400,
+						"suffix": "u"
+					}
+				},
+				"23": {
+					"title": "Door Pinch Timeout",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Safety restore timeout in milliseconds if an opening sequence never reports finished",
+					"vars": [{ "configINI": "DoorPinchFix:iTimeoutMs", "default": 8000 }],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 500,
+						"valueMin": 1000,
+						"valueMax": 15000,
+						"suffix": "ms"
+					}
+				},
+				"24": {
+					"title": "Companion No Block",
+					"type": 5,
+					"enable": 1,
+					"mouse": "You and teammates ghost through each other after sustained contact so you can't block each other in tight spaces",
+					"vars": [{ "configINI": "Tweaks:bCompanionNoBlock", "default": 0 }]
+				},
+				"25": {
+					"title": "Companion Release Frames",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Frames of continuous contact before a player/companion pair ghosts through each other. Lower = ghosts sooner",
+					"vars": [{ "configINI": "CompanionNoBlock:iReleaseFrames", "default": 30 }],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 5,
+						"valueMin": 5,
+						"valueMax": 120
+					}
+				},
+				"26": {
+					"title": "Companion Interior Only",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Only apply companion no-block in interior cells",
+					"vars": [{ "configINI": "CompanionNoBlock:bInteriorOnly", "default": 1 }]
 				}
 			}
 		},
