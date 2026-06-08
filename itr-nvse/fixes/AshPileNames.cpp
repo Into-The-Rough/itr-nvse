@@ -8,6 +8,7 @@
 #include <cstdint>
 
 #include "internal/globals.h"
+#include "internal/ExtraDataUtils.h"
 #include "internal/SafeWrite.h"
 namespace Settings { extern int bAshPileNames; }
 
@@ -21,14 +22,7 @@ namespace AshPileNames
 	static BSExtraData* GetExtraDataByType(BaseExtraList* list, UInt32 type)
 	{
 		if (!list) return nullptr;
-		UInt32 index = (type >> 3);
-		UInt8 bitMask = 1 << (type % 8);
-		if (!(list->m_presenceBitfield[index] & bitMask))
-			return nullptr;
-		for (BSExtraData* traverse = list->m_data; traverse; traverse = traverse->next)
-			if (traverse->type == type)
-				return traverse;
-		return nullptr;
+		return ExtraDataUtils::GetExtraDataByType(list->m_data, list->m_presenceBitfield, sizeof(list->m_presenceBitfield), type);
 	}
 
 	static const char* GetActorNameFromAshPile(TESObjectREFR* ashPileRef)
@@ -111,4 +105,3 @@ namespace AshPileNames
 			Init();
 	}
 }
-

@@ -115,3 +115,39 @@ TEST(RefIdSet_Capacity)
 	ASSERT_EQ(set.Capacity(), 32);
 	return true;
 }
+
+TEST(RefIdSet_RemoveSwapsLastAndClearsTail)
+{
+	RefIdSet<4> set;
+	set.Add(0x11111);
+	set.Add(0x22222);
+	set.Add(0x33333);
+
+	ASSERT(set.Remove(0x22222));
+	ASSERT_EQ(set.Count(), 2);
+	ASSERT(set.Contains(0x11111));
+	ASSERT(set.Contains(0x33333));
+	ASSERT_EQ(set.ids[2], 0);
+	return true;
+}
+
+TEST(RefIdSet_RemoveZeroDoesNothing)
+{
+	RefIdSet<4> set;
+	set.Add(0x11111);
+	ASSERT(!set.Remove(0));
+	ASSERT_EQ(set.Count(), 1);
+	ASSERT(set.Contains(0x11111));
+	return true;
+}
+
+TEST(RefIdSet_DuplicateAtCapacityDoesNotReportFull)
+{
+	RefIdSet<2> set;
+	ASSERT(set.Add(0x11111));
+	ASSERT(set.Add(0x22222));
+	ASSERT(!set.Add(0x11111));
+	ASSERT_EQ(set.Count(), 2);
+	ASSERT(set.Contains(0x22222));
+	return true;
+}

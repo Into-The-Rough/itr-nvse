@@ -55,6 +55,9 @@
     <ClInclude Include="..\internal\RefIdSet.h" />
     <ClInclude Include="..\internal\StringMatch.h" />
     <ClInclude Include="..\internal\CooldownTracker.h" />
+    <ClInclude Include="..\internal\ExtraDataUtils.h" />
+    <ClInclude Include="..\internal\FallDamageLogic.h" />
+    <ClInclude Include="..\internal\FormatLogic.h" />
     <ClInclude Include="..\internal\GestureMath.h" />
     <ClInclude Include="..\internal\ConsoleCommand.h" />
     <ClInclude Include="..\internal\SafeWrite.h" />

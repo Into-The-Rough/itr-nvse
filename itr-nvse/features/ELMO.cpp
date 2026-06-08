@@ -5,6 +5,7 @@
 #include "handlers/CornerMessageHandler.h"
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"
+#include "internal/FormatLogic.h"
 #include "internal/SafeWrite.h"
 #include <cstdio>
 
@@ -34,8 +35,7 @@ namespace ELMO
 
 	const char* __cdecl FormatReputationMessage(const char* factionName, const char* repTitle, const char* repDesc)
 	{
-		sprintf_s(g_msgBuffer, "%s - %s. %s", factionName, repTitle, repDesc);
-		return g_msgBuffer;
+		return FormatLogic::FormatReputationMessage(g_msgBuffer, sizeof(g_msgBuffer), factionName, repTitle, repDesc);
 	}
 
 	static UInt32 GetObjectiveEmotion(UInt32 isCompleted, UInt32 isReminder)

@@ -84,3 +84,23 @@ TEST(StringMatch_NeedleLongerThanHaystack)
 	ASSERT(!ContainsSubstringCI("hi", "hello"));
 	return true;
 }
+
+TEST(StringMatch_WildcardOnlyWhenNeedleIsSingleStar)
+{
+	ASSERT(ContainsSubstringCI("hello", "*"));
+	ASSERT(!ContainsSubstringCI("hello", "he*"));
+	return true;
+}
+
+TEST(StringMatch_NullNeedleMatchesEmptyHaystack)
+{
+	ASSERT(ContainsSubstringCI("", nullptr));
+	return true;
+}
+
+TEST(StringMatch_PunctuationAndSpaces)
+{
+	ASSERT(ContainsSubstringCI("NCR - Liked. They appreciate your help", "liked. they"));
+	ASSERT(!ContainsSubstringCI("NCR - Liked", "liked they"));
+	return true;
+}

@@ -258,19 +258,19 @@ namespace
 
 namespace CompanionNoBlock
 {
-	void Init(bool enabled, int releaseFrames, int, bool interiorOnly, bool)
+	void Init(bool enabled, int releaseFrames, int, bool interiorOnly)
 	{
 		if (!g_lockInit)
 		{
 			InitializeCriticalSection(&g_lock);
 			g_lockInit = true;
 		}
-		UpdateSettings(enabled, releaseFrames, 0, interiorOnly, false);
+		UpdateSettings(enabled, releaseFrames, 0, interiorOnly);
 		if (g_enabled)
 			InstallHook();
 	}
 
-	void UpdateSettings(bool enabled, int releaseFrames, int, bool interiorOnly, bool)
+	void UpdateSettings(bool enabled, int releaseFrames, int, bool interiorOnly)
 	{
 		g_enabled = enabled;
 		g_releaseFrames = releaseFrames > 0 ? releaseFrames : 1;

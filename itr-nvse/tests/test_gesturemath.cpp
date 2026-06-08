@@ -136,3 +136,36 @@ TEST(GestureMath_NodCycleTimeIsClamped)
 	ASSERT_NEAR(angle, 0.6f, 0.0001f);
 	return true;
 }
+
+TEST(GestureMath_SmoothstepMidpoint)
+{
+	ASSERT_NEAR(GestureMath::Smoothstep(0.5f), 0.5f, 0.0001f);
+	return true;
+}
+
+TEST(GestureMath_ZeroDurationHasZeroEnvelope)
+{
+	ASSERT_NEAR(GestureMath::ComputeEnvelope(GestureMath::kGesture_Shake, 0, 0, 0.4f), 0.0f, 0.0001f);
+	ASSERT_NEAR(GestureMath::ComputeAngleRadians(GestureMath::kGesture_Shake, 0, 0, 0.6f, 0.4f), 0.0f, 0.0001f);
+	return true;
+}
+
+TEST(GestureMath_UnknownGestureProducesZeroAngle)
+{
+	ASSERT_NEAR(GestureMath::ComputeAngleRadians(99, 500, 3000, 0.6f, 0.4f), 0.0f, 0.0001f);
+	return true;
+}
+
+TEST(GestureMath_ShakeQuarterCycleAtAmplitude)
+{
+	float angle = GestureMath::ComputeAngleRadians(GestureMath::kGesture_Shake, 250, 2000, 0.4f, 1.0f);
+	ASSERT_NEAR(angle, 0.4f, 0.0001f);
+	return true;
+}
+
+TEST(GestureMath_TiltZeroCycleTimeKeepsAmplitude)
+{
+	float angle = GestureMath::ComputeAngleRadians(GestureMath::kGesture_Tilt, 500, 2000, 0.25f, 0.0f);
+	ASSERT_NEAR(angle, 0.25f, 0.0001f);
+	return true;
+}

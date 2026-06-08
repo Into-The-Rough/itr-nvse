@@ -2,8 +2,8 @@
 
 namespace CompanionNoBlock
 {
-	void Init(bool enabled, int distance, int restoreDistance, bool interiorOnly, bool debugLog);
-	void UpdateSettings(bool enabled, int distance, int restoreDistance, bool interiorOnly, bool debugLog);
+	void Init(bool enabled, int distance, int restoreDistance, bool interiorOnly);
+	void UpdateSettings(bool enabled, int distance, int restoreDistance, bool interiorOnly);
 	void Update();
 	void ClearState();
 }
