@@ -87,6 +87,10 @@ namespace Settings
 	inline int iWitnessDetectionThreshold = 25;
 	inline float fWitnessSearchRadius = 2048.0f;
 
+	inline int bOnNearMiss = 0;
+	inline float fNearMissRadius = 256.0f;
+	inline int iNearMissCooldownMs = 250;
+
 	inline char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -180,6 +184,10 @@ namespace Settings
 
 		iWitnessDetectionThreshold = GetINIInt("OnWitnessed", "iDetectionThreshold", 25);
 		fWitnessSearchRadius = (float)GetINIInt("OnWitnessed", "iSearchRadius", 2048);
+
+		bOnNearMiss = GetINIInt("Tweaks", "bOnNearMiss", 0);
+		fNearMissRadius = (float)GetINIInt("OnNearMiss", "iRadius", 256);
+		iNearMissCooldownMs = GetINIInt("OnNearMiss", "iCooldownMs", 250);
 
 	}
 }
