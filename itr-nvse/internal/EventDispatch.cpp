@@ -117,6 +117,10 @@ void RegisterEvents()
 	};
 	g_eventManagerInterface->RegisterEvent("ITR:OnWoundSpray", 11, woundSprayParams, F::kFlag_FlushOnLoad);
 
+	//actor, shooter, weapon, distance
+	static P nearMissParams[] = { P::eParamType_AnyForm, P::eParamType_AnyForm, P::eParamType_AnyForm, P::eParamType_Float };
+	g_eventManagerInterface->RegisterEvent("ITR:OnNearMiss", 4, nearMissParams, F::kFlag_FlushOnLoad);
+
 	g_eventManagerInterface->RegisterEvent("ITR:OnCasinoBan", 1, oneForm, F::kFlag_FlushOnLoad);
 
 	//target, parentForm, effectItemIndex, caster
