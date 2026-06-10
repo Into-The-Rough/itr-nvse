@@ -328,6 +328,7 @@ static float g_dollyProgress = 0.0f;
 static bool g_dollyFirstDone = false;
 float g_shakeAmplitude = -1.0f; //-1 = use default
 static bool g_rngSeeded = false;
+static bool g_playerMovementSettled = false;
 
 static const siv::PerlinNoise g_perlinPitch{ 4 };
 static const siv::PerlinNoise g_perlinYaw{ 5 };
@@ -360,6 +361,20 @@ static Detours::CallDetour s_pickAnimationsCall;
 static Detours::CallDetour s_setFirstPersonCall;
 typedef void(__thiscall* Show1stPerson_t)(void*, bool);
 typedef void(__thiscall* PickAnimations_t)(void*, float, float);
+
+struct DialogueVec3 { float x, y, z; };
+
+static void ClearPlayerDialogueMovement(void* player)
+{
+	if (!player) return;
+
+	void* mover = *(void**)((UInt8*)player + 0x190);
+	if (!mover) return;
+
+	DialogueVec3 zero = {};
+	ThisCall<void>(0x9EA570, mover, &zero); //PlayerMover::SetSpeedVector
+	ThisCall<void>(0x9EA3B0, mover, 0x3F); //PlayerMover::ClearMovementFlag_
+}
 
 //sites 1&2: call wrappers for Show1stPerson (0x951A10)
 //when dialogue camera active, skip the force-third-person call
@@ -450,16 +465,25 @@ __declspec(naked) void Hook_SkipFallbackFOV() {
 	}
 }
 
-//site 7: skip PickAnimations in FocusOnActor heading block (0x953B2F)
-//the heading block rotates the player toward NPC (good) but PickAnimations
-//sees the heading change and selects a walk/turn animation (bad).
-//skip just this call - heading still applies to 3D via UpdateAnimation.
+//site 7: suppress per-frame PickAnimations in FocusOnActor's heading block.
+//Allow one clean reselect after dialogue starts so movement entered from a run
+//doesn't keep a stale locomotion group on the visible 3rd person body.
 static void __fastcall Hook_SkipPickAnimations(void* actor, void*, float a1, float a2) {
+	auto original = reinterpret_cast<PickAnimations_t>(s_pickAnimationsCall.GetOverwrittenAddr());
+	if (!original)
+		return;
+
 	if (!Settings::bDialogueCamera)
 	{
-		auto original = reinterpret_cast<PickAnimations_t>(s_pickAnimationsCall.GetOverwrittenAddr());
-		if (original)
-			original(actor, a1, a2);
+		original(actor, a1, a2);
+		return;
+	}
+
+	if (!g_playerMovementSettled && (g_inDialogue || g_MenuVisibilityArray[kMenuType_Dialogue]))
+	{
+		ClearPlayerDialogueMovement(actor);
+		original(actor, a1, a2);
+		g_playerMovementSettled = true;
 	}
 }
 
@@ -891,10 +915,11 @@ static void OnDialogueStart() {
 	PlayerCharacter* player = *g_thePlayerPtr;
 	if (!player) return;
 
-	g_wasFirstPerson = !*(bool*)((UInt8*)player + 0x64A); //is3rdPerson
+	g_wasFirstPerson = !*(bool*)((UInt8*)player + 0x64C); //bThirdPerson
 	if (g_wasFirstPerson) {
 		SetFirstPerson(player, false);
 	}
+	ClearPlayerDialogueMovement(player);
 
 	g_dialogueLineCount = 0;
 	g_lastTopicInfoID = 0;
@@ -923,6 +948,7 @@ static void OnDialogueEnd() {
 	}
 	g_dialogueTarget = nullptr;
 	g_dialogueTargetID = 0;
+	g_playerMovementSettled = false;
 }
 
 void Update() {
