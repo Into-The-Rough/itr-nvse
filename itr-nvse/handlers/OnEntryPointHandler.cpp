@@ -5,7 +5,11 @@
 
 #include "OnEntryPointHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
+#include "internal/Detours.h"
+
+extern void Log(const char* fmt, ...);
 
 class BGSPerk;
 class BGSPerkEntry;
@@ -83,7 +87,7 @@ void BuildEntryMap()
     EntryMap* buildMap = g_useMapB ? &g_mapB : &g_mapA;
     buildMap->clear();
 
-    DataHandler** pDataHandler = (DataHandler**)0x11C3F2C;
+    DataHandler** pDataHandler = (DataHandler**)g_dataHandlerPtr;
     if (!pDataHandler || !*pDataHandler) return;
 
     tList<BGSPerk>* perkList = (tList<BGSPerk>*)((UInt8*)*pDataHandler + 0x178);
@@ -111,7 +115,8 @@ void BuildEntryMap()
 }
 }
 
-static UInt32 s_ExecuteFunctionAddr = 0x5E5B40;
+static UInt32 s_ExecuteFunctionAddr = 0; //chained original, set at install
+static Detours::CallDetour s_executeFunctionDetour;
 
 static void __cdecl PushContext(UInt32 entryPoint, Actor* actor, TESForm* filterForm1, BGSEntryPointPerkEntry* perkEntry)
 {
@@ -159,6 +164,9 @@ static DWORD s_mainThreadId = 0;
 static __declspec(naked) void Hook_ExecuteFunctionCall()
 {
     __asm {
+        add esp, 4                                //drop the ret addr pushed by the site call
+                                                  //(always 0x5E5ABE), engine args must sit at
+                                                  //esp for the inner call
         mov eax, fs:[0x24]                        //TEB->ClientId.UniqueThread (current tid)
         cmp eax, [s_mainThreadId]
         jne ai_thread
@@ -203,8 +211,13 @@ bool Init(void* nvseInterface)
 
     if (!g_hookInstalled) {
         s_mainThreadId = GetCurrentThreadId();
-        SafeWrite::WriteRelJump(0x5E5AB9, (UInt32)Hook_ExecuteFunctionCall);
-        g_hookInstalled = true;
+        if (s_executeFunctionDetour.WriteRelCall(0x5E5AB9, (UInt32)Hook_ExecuteFunctionCall))
+        {
+            s_ExecuteFunctionAddr = s_executeFunctionDetour.GetOverwrittenAddr();
+            g_hookInstalled = true;
+        }
+        else
+            Log("OnEntryPointHandler: no CALL at 0x5E5AB9, another mod owns the perk dispatch, handler disabled");
     }
 
     return true;

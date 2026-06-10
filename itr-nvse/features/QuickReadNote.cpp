@@ -6,7 +6,9 @@
 #include <cstring>
 #include "QuickReadNote.h"
 #include "internal/SafeWrite.h"
+#include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 
 #include "internal/globals.h"
 #include "internal/CallTemplates.h"
@@ -255,8 +257,7 @@ namespace QuickReadNote
 
 			void* voice = *(void**)((UInt8*)note + 0x6C);
 			Conversation* pConversation = (Conversation*)GameHeapAlloc(sizeof(Conversation));
-			void** g_thePlayer = (void**)0x11DEA3C;
-			ThisCall<void>(0x83B850, pConversation, character, *g_thePlayer, voice);
+			ThisCall<void>(0x83B850, pConversation, character, *(void**)g_thePlayerPtr, voice);
 
 			UInt32 audioFlags = *(UInt32*)0x7974CA;
 			pConversation->FirstItem();
@@ -517,11 +518,12 @@ namespace QuickReadNote
 		}
 	}
 
-	static UInt32 s_originalNoteAddedCall = 0;
+	static Detours::CallDetour s_noteAddedCall;
 
 	const char* __fastcall ProcessNoteAdded(void* setting, BGSNote* note) {
 		OnNoteAddedCallback(note);
-		return ThisCall<const char*>(s_originalNoteAddedCall, setting);
+		auto original = reinterpret_cast<const char*(__thiscall*)(void*)>(s_noteAddedCall.GetOverwrittenAddr());
+		return original ? original(setting) : "";
 	}
 
 	__declspec(naked) void OnNoteAddedHook() {
@@ -531,7 +533,7 @@ namespace QuickReadNote
 		}
 	}
 
-	static UInt32 s_originalQueueUIMessage = 0;
+	static Detours::CallDetour s_queueUIMessageCall;
 	static char s_modifiedMessage[512];
 
 	static const char* kControlNames[] = {
@@ -552,7 +554,8 @@ namespace QuickReadNote
 			msg = s_modifiedMessage;
 		}
 		typedef char(__cdecl* QueueUIMessageFn)(char*, UInt32, char*, char*, float, char);
-		return ((QueueUIMessageFn)s_originalQueueUIMessage)(msg, emotion, imagePath, soundName, time, instantEnd);
+		auto original = reinterpret_cast<QueueUIMessageFn>(s_queueUIMessageCall.GetOverwrittenAddr());
+		return original ? original(msg, emotion, imagePath, soundName, time, instantEnd) : 0;
 	}
 
 	class OSInputGlobals {
@@ -560,7 +563,7 @@ namespace QuickReadNote
 		bool GetControlState(UInt32 controlCode, UInt8 state) {
 			return Engine::OSInputGlobals_GetControlState(this, controlCode, state);
 		}
-		static OSInputGlobals* GetSingleton() { return *(OSInputGlobals**)0x11F35CC; }
+		static OSInputGlobals* GetSingleton() { return (OSInputGlobals*)*g_inputGlobalsPtr; }
 	};
 
 	void Init(int timeoutMs, int controlID, int maxLines) {
@@ -568,11 +571,8 @@ namespace QuickReadNote
 		g_controlID = controlID;
 		g_maxLines = maxLines;
 
-		s_originalNoteAddedCall = SafeWrite::GetRelJumpTarget(0x966B0A);
-		SafeWrite::WriteRelCall(0x966B0A, (UInt32)OnNoteAddedHook);
-
-		s_originalQueueUIMessage = SafeWrite::GetRelJumpTarget(0x966B53);
-		SafeWrite::WriteRelCall(0x966B53, (UInt32)OnQueueUIMessageHook);
+		s_noteAddedCall.WriteRelCall(0x966B0A, OnNoteAddedHook);
+		s_queueUIMessageCall.WriteRelCall(0x966B53, OnQueueUIMessageHook);
 
 		if (MessageBoxQuickClose::IsInstalled()) {
 			MessageBoxQuickClose::SetHandleClickObserver(OnMessageMenuHandleClick);

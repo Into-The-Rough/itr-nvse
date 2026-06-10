@@ -5,6 +5,7 @@
 #include "OnContactHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
 #include "internal/ScopedLock.h"
 #include "internal/Detours.h"
@@ -155,6 +156,11 @@ static void __fastcall Hook_ContactPointAdded(void* listener, void* edx, void* e
 	void* bodyA = *(void**)((UInt8*)event + 0x00);
 	void* bodyB = *(void**)((UInt8*)event + 0x04);
 
+	{
+		ScopedLock lock(&g_contactLock);
+		if (!HasAnyWatchSnapshot()) return;
+	}
+
 	UInt32 refA = ResolveCollidableToRefID(bodyA);
 	UInt32 refB = ResolveCollidableToRefID(bodyB);
 
@@ -244,7 +250,6 @@ static void DispatchContactEventDirect(UInt32 watchedRefID, UInt32 otherRefID, U
 	g_eventManagerInterface->DispatchEvent(eventName, watched, (TESForm*)other, (int)channel);
 }
 
-static void* g_processManager = (void*)0x11E0E80;
 struct ProcessManagerLite {
 	UInt32 unk000;
 	struct { void** vtbl; void** data; UInt16 capacity; UInt16 firstFreeEntry; UInt16 numObjs; UInt16 growSize; } objects;
@@ -310,7 +315,7 @@ static void CollectLoadedWatchedActors(std::vector<WatchedActorCandidate>& out) 
 		}
 	}
 
-	void** playerPtr = (void**)0x11DEA3C;
+	void** playerPtr = (void**)g_thePlayerPtr;
 	if (*playerPtr)
 		AddWatchedActorCandidate((TESObjectREFR*)*playerPtr, seenRefIDs, out);
 }
@@ -535,7 +540,7 @@ static void RebuildProxyMap() {
 	std::unordered_map<void*, UInt32> newProxyMap;
 	std::unordered_map<void*, UInt32> newPhantomMap;
 
-		for (auto refID : g_watchedRefIDs) {
+	for (auto refID : g_watchedRefIDs) {
 		auto* form = (TESObjectREFR*)Engine::LookupFormByID(refID);
 		if (!form) continue;
 		UInt8 typeID = *((UInt8*)form + 0x04);
@@ -547,7 +552,7 @@ static void RebuildProxyMap() {
 		MapActorPhantom(form, refID, newPhantomMap);
 	}
 
-		auto* pm = reinterpret_cast<ProcessManagerLite*>(g_processManager);
+	auto* pm = reinterpret_cast<ProcessManagerLite*>(g_processManager);
 	if (pm && pm->objects.data) {
 		UInt32 upper = pm->objects.firstFreeEntry;
 		for (int bucket = 0; bucket < 2; bucket++) {
@@ -572,7 +577,7 @@ static void RebuildProxyMap() {
 				MapActorPhantom(actor, refID, newPhantomMap);
 			}
 		}
-		void** playerPtr = (void**)0x11DEA3C;
+		void** playerPtr = (void**)g_thePlayerPtr;
 		if (*playerPtr) {
 			UInt32 playerRefID = *(UInt32*)((UInt8*)*playerPtr + 0x0C);
 			if (IsRefWatchedOnMain((TESObjectREFR*)*playerPtr)) {
@@ -660,7 +665,7 @@ void Update()
 		g_snapshotDirty = false;
 		s_proxyMapTimer = 0;
 
-		std::vector<QueuedContactEvent> g_seedEvents;
+		std::vector<QueuedContactEvent> seedEvents;
 		std::vector<WatchedActorCandidate> watchedActors;
 		CollectLoadedWatchedActors(watchedActors);
 
@@ -685,7 +690,7 @@ void Update()
 				if (!bodies[i]) continue;
 				UInt32 otherRefID = ResolveWorldObjToRefID(bodies[i]);
 				if (otherRefID && otherRefID != refID)
-					g_seedEvents.push_back({refID, otherRefID, kChannel_CharProxy, true});
+					seedEvents.push_back({refID, otherRefID, kChannel_CharProxy, true});
 			}
 
 			UInt8 noContact = *((UInt8*)ctrl + 0x608);
@@ -693,15 +698,15 @@ void Update()
 			if (!noContact && bodyUnderFeet) {
 				UInt32 feetRefID = ResolveWorldObjToRefID(bodyUnderFeet);
 				if (feetRefID && feetRefID != refID)
-					g_seedEvents.push_back({refID, feetRefID, kChannel_CharProxy, true});
+					seedEvents.push_back({refID, feetRefID, kChannel_CharProxy, true});
 			}
 		}
 
-		if (!g_seedEvents.empty()) {
+		if (!seedEvents.empty()) {
 			ScopedLock lock(&g_contactLock);
 			size_t room = kMaxQueuedEvents > g_pendingEvents.size() ? kMaxQueuedEvents - g_pendingEvents.size() : 0;
-			size_t toAdd = g_seedEvents.size() < room ? g_seedEvents.size() : room;
-			g_pendingEvents.insert(g_pendingEvents.end(), g_seedEvents.begin(), g_seedEvents.begin() + toAdd);
+			size_t toAdd = seedEvents.size() < room ? seedEvents.size() : room;
+			g_pendingEvents.insert(g_pendingEvents.end(), seedEvents.begin(), seedEvents.begin() + toAdd);
 		}
 	}
 

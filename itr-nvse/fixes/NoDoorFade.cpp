@@ -5,7 +5,7 @@
 #include "NoDoorFade.h"
 #include <cstdint>
 
-#include "internal/SafeWrite.h"
+#include "internal/Detours.h"
 #include "internal/globals.h"
 
 namespace NoDoorFade
@@ -13,12 +13,13 @@ namespace NoDoorFade
 	static bool g_enabled = false;
 
 	typedef void (__thiscall* FadeOut_t)(void* process, void* actor, void* doorRef, bool teleport);
-	FadeOut_t Original_FadeOut = (FadeOut_t)0x8FE960; //HighProcess::FadeOut
+	static Detours::CallDetour s_fadeOutCall;
 
 	void __fastcall Hook_FadeOut(void* process, void* edx, void* actor, void* doorRef, bool teleport)
 	{
-		//call original to set up fade state and teleport ref
-		Original_FadeOut(process, actor, doorRef, teleport);
+		auto original = reinterpret_cast<FadeOut_t>(s_fadeOutCall.GetOverwrittenAddr());
+		if (original)
+			original(process, actor, doorRef, teleport);
 
 		//if enabled, immediately zero alpha so fade completes next frame
 		if (g_enabled && teleport)
@@ -35,7 +36,7 @@ namespace NoDoorFade
 
 	void Init(bool enabled)
 	{
-		SafeWrite::WriteRelCall(0x51895B, (UInt32)Hook_FadeOut);
+		s_fadeOutCall.WriteRelCall(0x51895B, Hook_FadeOut);
 		g_enabled = enabled;
 	}
 }

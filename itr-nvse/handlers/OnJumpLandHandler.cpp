@@ -8,6 +8,7 @@
 #include "OnJumpLandHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
 
 enum HkCharState : UInt32 {
@@ -19,9 +20,6 @@ enum HkCharState : UInt32 {
 	kHkState_Swimming = 5,
 	kHkState_Projectile = 6,
 };
-
-static void* g_processManager = (void*)0x11E0E80;
-static void** g_thePlayer = (void**)0x011DEA3C;
 
 template <typename T>
 struct NiTArrayLite {
@@ -171,7 +169,7 @@ static void ProcessActorsFromProcessManager() {
 			ProcessActor(*objArray);
 	}
 
-	void* player = g_thePlayer ? *g_thePlayer : nullptr;
+	void* player = *(void**)g_thePlayerPtr;
 	if (player)
 		ProcessActor(player);
 }

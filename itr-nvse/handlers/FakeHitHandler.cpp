@@ -2,6 +2,8 @@
 
 #include "FakeHitHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include <Windows.h>
 #include <cstdio>
 #include <cstring>
@@ -213,7 +215,6 @@ typedef void* (__cdecl* GetObjectByName_t)(void* rootNode, const char* name);
 typedef void (__thiscall* InitSoundForm_t)(void* audioMgr, Sound* sound, UInt32 formRefID, UInt32 flags);
 typedef void (__thiscall* Sound_SetPos_t)(Sound* sound, float x, float y, float z);
 typedef void (__thiscall* Sound_SetNiNode_t)(Sound* sound, NiNode* node);
-typedef void (__thiscall* Sound_Play_t)(Sound* sound, UInt32 arg);
 
 static AddGeometryDecal_t AddGeometryDecal = (AddGeometryDecal_t)0x4A10D0;
 static LoadTempEffectParticle_t LoadTempEffectParticle = (LoadTempEffectParticle_t)0x6890B0;
@@ -221,9 +222,7 @@ static GetObjectByName_t GetObjectByName = (GetObjectByName_t)0x4AAE30;
 static InitSoundForm_t InitSoundForm = (InitSoundForm_t)0xAE5870;
 static Sound_SetPos_t Sound_SetPos = (Sound_SetPos_t)0xAD8B60;
 static Sound_SetNiNode_t Sound_SetNiNode = (Sound_SetNiNode_t)0xAD8F20;
-static Sound_Play_t Sound_Play = (Sound_Play_t)0xAD8830;
 static void** g_decalManager = (void**)0x11C57F8;
-static void* g_bsAudioManager = (void*)0x11F6EF0;
 
 //0x522BA0 - TESObjectWEAP::GetImpactData(material). reads weapon+0x24C, remaps raw
 //material 0-31 to an impactDatas slot via 0x58E8F0. null if the weapon has no set
@@ -359,21 +358,21 @@ static void PlayImpactSound(Actor* target, TESObjectWEAP* weapon, SInt32 hitLoca
 	TESSound* sound1 = (TESSound*)impactData->sound1;
 	if (sound1 && sound1->refID) {
 		Sound snd;
-		InitSoundForm(g_bsAudioManager, &snd, sound1->refID, 0x102);
+		InitSoundForm(g_audioManager, &snd, sound1->refID, 0x102);
 		if (snd.soundKey != 0xFFFFFFFF) {
 			Sound_SetPos(&snd, effectPos.x, effectPos.y, effectPos.z);
 			if (actorNode) Sound_SetNiNode(&snd, actorNode);
-			Sound_Play(&snd, 0);
+			Engine::BSSoundHandle_Play(&snd, false);
 		}
 	}
 	TESSound* sound2 = (TESSound*)impactData->sound2;
 	if (sound2 && sound2->refID) {
 		Sound snd2;
-		InitSoundForm(g_bsAudioManager, &snd2, sound2->refID, 0x102);
+		InitSoundForm(g_audioManager, &snd2, sound2->refID, 0x102);
 		if (snd2.soundKey != 0xFFFFFFFF) {
 			Sound_SetPos(&snd2, effectPos.x, effectPos.y, effectPos.z);
 			if (actorNode) Sound_SetNiNode(&snd2, actorNode);
-			Sound_Play(&snd2, 0);
+			Engine::BSSoundHandle_Play(&snd2, false);
 		}
 	}
 }
@@ -421,8 +420,6 @@ static ActorHitData BuildHitData(Actor* target, Actor* attacker, TESObjectWEAP* 
 typedef void (__thiscall* AttackAlarm_t)(Actor* victim, void* attacker, UInt32 minorCrime, int unk);
 static AttackAlarm_t AttackAlarm = (AttackAlarm_t)0x8C0460;
 
-static void* g_playerSingleton = (void*)0x11DEA3C;
-
 static void ApplyHit(Actor* target, Actor* attacker, ActorHitData* hitData,
 	float damage, float fatigueDmg, float limbDmg, SInt32 hitLocation,
 	TESObjectWEAP* weapon, bool skipOnHit)
@@ -447,7 +444,7 @@ static void ApplyHit(Actor* target, Actor* attacker, ActorHitData* hitData,
 			MarkScriptEvent((TESForm*)weapon, targetExtra, 0x100);
 
 		//hostility: if player is the attacker, trigger crime/combat AI
-		if (attacker && attacker == *(Actor**)g_playerSingleton)
+		if (attacker && attacker == *(Actor**)g_thePlayerPtr)
 			AttackAlarm(target, attacker, 0, 0);
 	}
 
@@ -458,8 +455,7 @@ static void ApplyHit(Actor* target, Actor* attacker, ActorHitData* hitData,
 		PlayImpactSound(target, weapon, bloodLoc);
 	}
 
-	if (target->baseProcess)
-		target->baseProcess->ResetHitData();
+	target->baseProcess->ResetHitData();
 }
 
 static bool Cmd_FakeHit_Execute(COMMAND_ARGS) {
@@ -537,10 +533,10 @@ static void SpawnObjectImpactEffect(TESObjectREFR* obj, BGSImpactData* impactDat
 	for (TESSound* sound : sounds) {
 		if (!sound || !sound->refID) continue;
 		Sound snd;
-		InitSoundForm(g_bsAudioManager, &snd, sound->refID, 0x102);
+		InitSoundForm(g_audioManager, &snd, sound->refID, 0x102);
 		if (snd.soundKey != 0xFFFFFFFF) {
 			Sound_SetPos(&snd, pos.x, pos.y, pos.z);
-			Sound_Play(&snd, 0);
+			Engine::BSSoundHandle_Play(&snd, false);
 		}
 	}
 }

@@ -4,7 +4,7 @@
 #include "SlowMotionPhysicsFix.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/CallTemplates.h"
-#include "internal/SafeWrite.h"
+#include "internal/Detours.h"
 
 #include "internal/globals.h"
 
@@ -21,8 +21,9 @@ namespace SlowMotionPhysicsFix
 	static UInt32* g_VATSMode = (UInt32*)0x11F2258;
 	static float* g_globalTimeMultiplier = (float*)0x11AC3A0;
 	static Setting* g_havokMaxTime = (Setting*)0x1267B34;
-	static UInt32 originalStepDeltaTime = 0;
-	static UInt32 originalSetFrameTimeMarker = 0;
+	static Detours::CallDetour s_stepDeltaTimeCall;
+	static Detours::CallDetour s_setFrameTimeMarkerCall;
+	typedef void(__thiscall* HavokWorldFloatFn)(void*, float);
 
 	static bool IsVATSActive() { return *g_VATSMode != 0; }
 	static float GetGlobalTimeMultiplier() { return *g_globalTimeMultiplier; }
@@ -44,24 +45,28 @@ namespace SlowMotionPhysicsFix
 					delta = maxDelta;
 			}
 		}
-		ThisCall<void>(originalSetFrameTimeMarker, hkpWorld, delta);
+		auto original = reinterpret_cast<HavokWorldFloatFn>(s_setFrameTimeMarkerCall.GetOverwrittenAddr());
+		if (original)
+			original(hkpWorld, delta);
 	}
 
 	void __fastcall Hook_StepDeltaTime(void* hkpWorld, void* edx, float stepTime) {
+		auto original = reinterpret_cast<HavokWorldFloatFn>(s_stepDeltaTimeCall.GetOverwrittenAddr());
+		if (!original)
+			return;
+
 		if (IsVATSActive()) {
-			ThisCall<void>(originalStepDeltaTime, hkpWorld, stepTime);
+			original(hkpWorld, stepTime);
 			return;
 		}
 		if (stepTime < kMinStepTime)
 			stepTime = kMinStepTime;
-		ThisCall<void>(originalStepDeltaTime, hkpWorld, stepTime);
+		original(hkpWorld, stepTime);
 	}
 
 	void Init() {
-		originalSetFrameTimeMarker = SafeWrite::GetRelJumpTarget(kAddr_SetFrameTimeMarkerCall);
-		SafeWrite::WriteRelCall(kAddr_SetFrameTimeMarkerCall, (UInt32)Hook_SetFrameTimeMarker);
-		originalStepDeltaTime = SafeWrite::GetRelJumpTarget(kAddr_StepDeltaTimeCall);
-		SafeWrite::WriteRelCall(kAddr_StepDeltaTimeCall, (UInt32)Hook_StepDeltaTime);
+		s_setFrameTimeMarkerCall.WriteRelCall(kAddr_SetFrameTimeMarkerCall, Hook_SetFrameTimeMarker);
+		s_stepDeltaTimeCall.WriteRelCall(kAddr_StepDeltaTimeCall, Hook_StepDeltaTime);
 	}
 }
 

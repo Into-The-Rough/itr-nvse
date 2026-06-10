@@ -4,9 +4,8 @@
 #define FORMUTILS_USE_NVSE_TYPES
 #include "internal/FormUtils.h"
 #include "internal/EngineFunctions.h"
-#include "internal/BSSpinLock.h"
-#include "internal/Detours.h"
-#include "internal/ScopedLock.h"
+#include "internal/GameGlobals.h"
+#include "internal/CallTemplates.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/GameObjects.h"
@@ -18,8 +17,6 @@
 #include "nvse/ParamInfos.h"
 #include <vector>
 #include <algorithm>
-#include <set>
-#include <unordered_map>
 #include <cmath>
 
 extern const _ExtractArgs ExtractArgs;
@@ -27,22 +24,6 @@ extern const _ExtractArgs ExtractArgs;
 extern NVSEArrayVarInterface* g_arrInterface;
 
 using namespace FormUtils;
-
-static CRITICAL_SECTION g_crouchLock;
-static volatile LONG g_crouchLockInit = 0;
-static std::set<UInt32> g_crouchDisabledActors;
-
-static void EnsureCrouchLock() {
-	InitCriticalSectionOnce(&g_crouchLockInit, &g_crouchLock);
-}
-
-static bool IsCrouchDisabled(UInt32 refID) {
-	if (!refID || g_crouchLockInit != 2)
-		return false;
-
-	ScopedLock lock(&g_crouchLock);
-	return g_crouchDisabledActors.count(refID) != 0;
-}
 
 namespace
 {
@@ -78,7 +59,6 @@ namespace
 		const char* name;
 	};
 
-	using QueueUIMessage_t = bool (*)(const char* msgText, UInt32 iconType, const char* iconPath, const char* soundPath, float displayTime, UInt8 unk5);
 	using InventoryRefCreateEntry_t = TESObjectREFR* (__stdcall *)(TESObjectREFR* container, TESForm* itemForm, SInt32 countDelta, ExtraDataList* xData);
 	constexpr UInt32 kNVSEData_InventoryReferenceCreateEntry = 7;
 	constexpr UInt32 kAVCode_PerceptionCondition = 0x19;
@@ -87,119 +67,8 @@ namespace
 
 	static EventManagerInterfaceEx* g_eventInterface = nullptr;
 	static InventoryRefCreateEntry_t g_inventoryRefCreateEntry = nullptr;
-	static QueueUIMessage_t s_queueUIMessage = reinterpret_cast<QueueUIMessage_t>(0x7052F0); //QueueUIMessage
 	static Setting* g_sFullHealth = reinterpret_cast<Setting*>(0x11D2AF0);
 	static BGSDefaultObjectManager** g_defaultObjectManager = reinterpret_cast<BGSDefaultObjectManager**>(0x11CA80C);
-
-	struct RadioData
-	{
-		void* voiceList;
-		UInt32 unk04;
-		UInt32 offset;
-		UInt32 soundTimeRemaining;
-	};
-
-	struct RadioEntry
-	{
-		TESObjectREFR* radioRef;
-		RadioData data;
-	};
-
-	using GetRadioEntryFromActivator_t = RadioEntry* (__cdecl*)(void*);
-	using DisableNPCRadio_t = void(__cdecl*)(Actor*);
-	using SetNPCRadio_t = void(__cdecl*)(Actor*, TESObjectREFR*);
-
-	struct RadioSoundKey
-	{
-		UInt32 soundKey;
-		UInt8 byte04;
-		UInt8 pad05[3];
-		UInt32 unk08;
-	};
-
-	struct DynamicRadio
-	{
-		TESObjectREFR* ref;
-		RadioSoundKey sound;
-		RadioSoundKey radioStaticSound;
-		UInt8 isActive;
-		UInt8 pad[3];
-	};
-
-	struct ExtraRadioDataLite //kExtraData_RadioData (0x68)
-	{
-		UInt8 pad00[0x10];
-		UInt32 rangeType;
-		float staticPerc;
-		TESObjectREFR* positionRef;
-	};
-
-	struct BSGameSound
-	{
-		void* vtbl;
-		UInt32 mapKey;
-		UInt32 audioFlags;
-		UInt32 flags00C;
-		UInt32 stateFlags;
-		UInt32 duration;
-		UInt16 staticAttenuation;
-		UInt16 unk01A;
-		UInt16 unk01C;
-		UInt16 unk01E;
-		UInt16 unk020;
-		UInt16 unk022;
-		float volume;
-		float flt028;
-		float flt02C;
-		UInt32 unk030;
-		UInt16 baseSamplingFreq;
-		char filePath[254];
-	};
-
-	struct SoundMapEntry
-	{
-		SoundMapEntry* next;
-		UInt32 key;
-		void* data;
-	};
-
-	struct SoundMap
-	{
-		void* vtbl;
-		UInt32 numBuckets;
-		SoundMapEntry** buckets;
-		UInt32 numItems;
-
-		BSGameSound* Lookup(UInt32 key) const
-		{
-			if (!buckets || !numBuckets) return nullptr;
-			for (SoundMapEntry* entry = buckets[key % numBuckets]; entry; entry = entry->next)
-			{
-				if (entry->key == key)
-					return reinterpret_cast<BSGameSound*>(entry->data);
-			}
-			return nullptr;
-		}
-	};
-
-	static RadioEntry** g_currentRadio = reinterpret_cast<RadioEntry**>(0x11DD42C);
-	static tList<DynamicRadio>* g_dynamicRadios = reinterpret_cast<tList<DynamicRadio>*>(0x11DD58C);
-	static UInt8* g_radioEnabled = reinterpret_cast<UInt8*>(0x11DD434);
-	static char* g_currentSongPath = reinterpret_cast<char*>(0x11DD448);
-	static SoundMap* g_playingSounds = reinterpret_cast<SoundMap*>(0x11F6EF0 + 0x54);
-	static GetRadioEntryFromActivator_t s_getRadioEntryFromActivator = reinterpret_cast<GetRadioEntryFromActivator_t>(0x832830);
-	static DisableNPCRadio_t s_disableNPCRadio = reinterpret_cast<DisableNPCRadio_t>(0x835980);
-	static SetNPCRadio_t s_setNPCRadio = reinterpret_cast<SetNPCRadio_t>(0x835810);
-
-	static const char* GetSoundPath(UInt32 soundKey)
-	{
-		if (!soundKey || soundKey == 0xFFFFFFFF || !g_playingSounds)
-			return "<none>";
-		BSGameSound* sound = g_playingSounds->Lookup(soundKey);
-		if (!sound || !sound->filePath[0])
-			return "<unresolved>";
-		return sound->filePath;
-	}
 
 	static bool IsActorRef(TESObjectREFR* ref)
 	{
@@ -248,7 +117,7 @@ namespace
 		auto showBlockedMessage = []()
 		{
 			if (g_sFullHealth && g_sFullHealth->data.str)
-				s_queueUIMessage(g_sFullHealth->data.str, 0, nullptr, nullptr, 2.0f, 0);
+				Engine::QueueUIMessage(g_sFullHealth->data.str, 0, nullptr, nullptr, 2.0f, false);
 		};
 
 		if (item == defObjMgr->defaultObjects.asStruct.Stimpak || item == defObjMgr->defaultObjects.asStruct.SuperStimpak)
@@ -319,7 +188,7 @@ namespace
 			static_cast<UInt32>(0));
 
 		UInt32 isSpecialActivation = 0;
-		g_eventInterface->DispatchEventAlt(
+		auto retnAlt = g_eventInterface->DispatchEventAlt(
 			"ShowOff:OnPreActivateInventoryItemAlt",
 			resultCallback,
 			&shouldActivate,
@@ -330,7 +199,9 @@ namespace
 			static_cast<UInt32>(0),
 			isSpecialActivation);
 
-		if (retn == EventManagerInterfaceEx::kRetn_UnknownEvent)
+		//unknown events never invoke the callback, only treat the result as authoritative if either event exists
+		if (retn == EventManagerInterfaceEx::kRetn_UnknownEvent &&
+			retnAlt == EventManagerInterfaceEx::kRetn_UnknownEvent)
 			return true;
 
 		return shouldActivate != 0;
@@ -611,7 +482,7 @@ bool Cmd_GetAvailableRecipes_Execute(COMMAND_ARGS)
 	PlayerCharacter* player = PlayerCharacter::GetSingleton();
 	if (!player) return true;
 
-	DataHandler* dataHandler = *(DataHandler**)0x011C3F2C;
+	DataHandler* dataHandler = *(DataHandler**)g_dataHandlerPtr;
 	if (!dataHandler) return true;
 
 	std::vector<TESForm*> availableRecipes;
@@ -685,33 +556,10 @@ bool Cmd_GetAvailableRecipes_Execute(COMMAND_ARGS)
 
 typedef void* (__thiscall *_GetCombatController)(Actor*);
 typedef void* (__thiscall *_GetCombatTargetForActor)(void* combatGroup, Actor* target);
-typedef bool (__thiscall *_CombatGroupCanAddTarget)(void* combatGroup, Actor* target);
-typedef bool (__thiscall *_ActorIsDeadForForceCombatTarget)(Actor*, bool);
-typedef bool (__thiscall *_ActorCanAttackActor)(Actor*, Actor*);
-typedef UInt8 (__thiscall *_CharacterIsGuardForForceCombatTarget)(Character*);
-typedef void (__thiscall *_CombatControllerSetTarget)(void* combatController, Actor* target);
-typedef void (__thiscall *_CombatControllerAddCombatTarget)(void* combatController, Actor* target, SInt32 a3, SInt32 a4, float a5, float a6);
-typedef void* (__thiscall *_CombatManagerAddCombatant)(void* combatManager, Actor* actor, Actor* target, SInt32 a4, SInt32 a5);
-typedef void (__thiscall *_ActorStartCombat)(Actor* actor, Actor* target, void* combatGroup, bool ignoreActorLimit, bool isAggressor, bool a6, UInt32 a7, bool a8, TESPackage* package);
-typedef void (__thiscall *_ActorPutCreatedPackage)(Actor* actor, void* package, UInt32 unk1, UInt32 unk2);
-typedef void (__thiscall *_ProcessComputeLastTimeProcessed)(void* process);
-typedef void (__thiscall *_ProcessSavePackageToExtraData)(void* process, Actor* actor);
-typedef void (__thiscall *_CombatControllerSetByte0C4)(void* combatController);
+typedef bool (__thiscall *_ActorIsDead)(Actor*, bool);
 static const _GetCombatController GetCombatController = (_GetCombatController)0x8A02D0;
 static const _GetCombatTargetForActor GetCombatTargetForActor = (_GetCombatTargetForActor)0x9865D0;
-static const _CombatGroupCanAddTarget CombatGroupCanAddTarget = (_CombatGroupCanAddTarget)0x9866D0;
-static const _ActorIsDeadForForceCombatTarget ActorIsDeadForForceCombatTarget = (_ActorIsDeadForForceCombatTarget)0x8844F0;
-static const _ActorCanAttackActor ActorCanAttackActor = (_ActorCanAttackActor)0x8B0670;
-static const _CharacterIsGuardForForceCombatTarget CharacterIsGuardForForceCombatTarget = (_CharacterIsGuardForForceCombatTarget)0x8D1ED0;
-static const _CombatControllerSetTarget CombatControllerSetTarget = (_CombatControllerSetTarget)0x980830;
-static const _CombatControllerAddCombatTarget CombatControllerAddCombatTarget = (_CombatControllerAddCombatTarget)0x97F930;
-static const _CombatManagerAddCombatant CombatManagerAddCombatant = (_CombatManagerAddCombatant)0x992110;
-static const _ActorStartCombat ActorStartCombat = (_ActorStartCombat)0x89FCF0;
-static const _ActorPutCreatedPackage ActorPutCreatedPackage = (_ActorPutCreatedPackage)0x87EAC0;
-static const _ProcessComputeLastTimeProcessed ProcessComputeLastTimeProcessed = (_ProcessComputeLastTimeProcessed)0x907650;
-static const _ProcessSavePackageToExtraData ProcessSavePackageToExtraData = (_ProcessSavePackageToExtraData)0x9130F0;
-static const _CombatControllerSetByte0C4 CombatControllerSetByte0C4 = (_CombatControllerSetByte0C4)0x8A0250;
-static void** g_combatManager = reinterpret_cast<void**>(0x11F1958);
+static const _ActorIsDead ActorIsDead = (_ActorIsDead)0x8844F0;
 
 #ifdef _DEBUG
 //debug command to dump CombatTarget memory for offset verification
@@ -825,279 +673,6 @@ static void* GetCombatTargetData(Actor* observer, Actor* target)
 	return GetCombatTargetForActor(combatGroup, target);
 }
 
-namespace
-{
-	using EvaluateCombatTargets_t = Actor* (__thiscall*)(void* combatGroup, Actor* actor);
-	using CanAttackActor_t = bool (__thiscall*)(Actor* actor, Actor* target);
-
-	enum class ForceCombatTargetResult
-	{
-		kSuccess,
-		kInvalidArgs,
-		kNoProcess,
-		kActorDead,
-		kHookFailed,
-		kNoCombatController,
-		kNoCombatGroup,
-		kCannotAddTarget,
-		kAddTargetFailed,
-	};
-
-	static CRITICAL_SECTION g_forceCombatTargetLock;
-	static volatile LONG g_forceCombatTargetLockInit = 0;
-	static std::unordered_map<UInt32, UInt32> g_forcedCombatTargets;
-	static Detours::JumpDetour s_forceCombatTargetDetour;
-	static Detours::JumpDetour s_forceCombatCanAttackDetour;
-	static EvaluateCombatTargets_t s_evaluateCombatTargetsOriginal = nullptr;
-	static CanAttackActor_t s_canAttackActorOriginal = nullptr;
-	static bool g_forceCombatTargetHookInstalled = false;
-	static UInt32 GetForcedCombatTargetRefID(UInt32 actorRefID);
-
-	static bool IsForcedCombatTargetPair(Actor* actor, Actor* target)
-	{
-		if (!actor || !target || actor == target)
-			return false;
-		if (ActorIsDeadForForceCombatTarget(actor, false) || ActorIsDeadForForceCombatTarget(target, false))
-			return false;
-		return GetForcedCombatTargetRefID(actor->refID) == target->refID;
-	}
-
-	static void* TryAddCombatantBootstrap(Actor* actor, Actor* target, bool ignoreActorLimit)
-	{
-		if (!actor || !target || !g_combatManager || !*g_combatManager)
-			return nullptr;
-
-		if (!ActorCanAttackActor(actor, target))
-			return nullptr;
-
-		void* combatController = CombatManagerAddCombatant(*g_combatManager, actor, target, 0, 0);
-		if (!combatController)
-			return nullptr;
-
-		if (ignoreActorLimit)
-			CombatControllerSetByte0C4(combatController);
-
-		void* process = Engine::Actor_GetProcess(actor);
-		if (process)
-		{
-			ProcessComputeLastTimeProcessed(process);
-			ProcessSavePackageToExtraData(process, actor);
-		}
-
-		ActorPutCreatedPackage(actor, combatController, 0, 1);
-		actor->unk104 = 1;
-		return combatController;
-	}
-
-	static void EnsureForceCombatTargetLockInit()
-	{
-		InitCriticalSectionOnce(&g_forceCombatTargetLockInit, &g_forceCombatTargetLock);
-	}
-
-	static UInt32 GetForcedCombatTargetRefID(UInt32 actorRefID)
-	{
-		if (!actorRefID || g_forceCombatTargetLockInit != 2)
-			return 0;
-
-		ScopedLock lock(&g_forceCombatTargetLock);
-		auto it = g_forcedCombatTargets.find(actorRefID);
-		return it != g_forcedCombatTargets.end() ? it->second : 0;
-	}
-
-	static void SetForcedCombatTargetRefID(UInt32 actorRefID, UInt32 targetRefID)
-	{
-		if (!actorRefID || !targetRefID)
-			return;
-
-		EnsureForceCombatTargetLockInit();
-		ScopedLock lock(&g_forceCombatTargetLock);
-		g_forcedCombatTargets[actorRefID] = targetRefID;
-	}
-
-	static void ClearForcedCombatTargetRefID(UInt32 actorRefID)
-	{
-		if (!actorRefID || g_forceCombatTargetLockInit != 2)
-			return;
-
-		ScopedLock lock(&g_forceCombatTargetLock);
-		g_forcedCombatTargets.erase(actorRefID);
-	}
-
-	static Actor* __fastcall Hook_EvalueCombatTargets(void* combatGroup, void*, Actor* actor)
-	{
-		if (!s_evaluateCombatTargetsOriginal)
-			return nullptr;
-
-		if (!combatGroup || !actor)
-			return s_evaluateCombatTargetsOriginal(combatGroup, actor);
-
-		UInt32 forcedTargetRefID = GetForcedCombatTargetRefID(actor->refID);
-		if (!forcedTargetRefID)
-			return s_evaluateCombatTargetsOriginal(combatGroup, actor);
-
-		TESForm* forcedForm = (TESForm*)Engine::LookupFormByID(forcedTargetRefID);
-		Actor* forcedTarget = forcedForm && IsActorRef((TESObjectREFR*)forcedForm) ? (Actor*)forcedForm : nullptr;
-		if (!forcedTarget || forcedTarget == actor || ActorIsDeadForForceCombatTarget(forcedTarget, false))
-		{
-			ClearForcedCombatTargetRefID(actor->refID);
-			return s_evaluateCombatTargetsOriginal(combatGroup, actor);
-		}
-
-		if (GetCombatTargetForActor(combatGroup, forcedTarget))
-			return forcedTarget;
-
-		return s_evaluateCombatTargetsOriginal(combatGroup, actor);
-	}
-
-	static bool __fastcall Hook_CanAttackActor(Actor* actor, void*, Actor* target)
-	{
-		if (IsForcedCombatTargetPair(actor, target))
-			return true;
-		if (!s_canAttackActorOriginal)
-			return true;
-		return s_canAttackActorOriginal(actor, target);
-	}
-
-	static bool EnsureForceCombatTargetHookInstalled()
-	{
-		if (g_forceCombatTargetHookInstalled)
-			return true;
-
-		EnsureForceCombatTargetLockInit();
-
-		if (!s_forceCombatTargetDetour.WriteRelJump(0x986C60, Hook_EvalueCombatTargets, 10))
-			return false;
-
-		s_evaluateCombatTargetsOriginal = s_forceCombatTargetDetour.GetTrampoline<EvaluateCombatTargets_t>();
-		if (!s_evaluateCombatTargetsOriginal)
-		{
-			s_forceCombatTargetDetour.Remove();
-			return false;
-		}
-
-		if (!s_forceCombatCanAttackDetour.WriteRelJump(0x8B0670, Hook_CanAttackActor, 6))
-		{
-			s_forceCombatTargetDetour.Remove();
-			s_evaluateCombatTargetsOriginal = nullptr;
-			return false;
-		}
-
-		s_canAttackActorOriginal = s_forceCombatCanAttackDetour.GetTrampoline<CanAttackActor_t>();
-		if (!s_canAttackActorOriginal)
-		{
-			s_forceCombatCanAttackDetour.Remove();
-			s_forceCombatTargetDetour.Remove();
-			s_evaluateCombatTargetsOriginal = nullptr;
-			return false;
-		}
-
-		g_forceCombatTargetHookInstalled = true;
-		return true;
-	}
-
-	static const char* ForceCombatTargetResultToString(ForceCombatTargetResult result)
-	{
-		switch (result)
-		{
-		case ForceCombatTargetResult::kSuccess:
-			return "success";
-		case ForceCombatTargetResult::kInvalidArgs:
-			return "invalid actor/target";
-		case ForceCombatTargetResult::kNoProcess:
-			return "actor or target has no current process";
-		case ForceCombatTargetResult::kActorDead:
-			return "actor or target is dead";
-		case ForceCombatTargetResult::kHookFailed:
-			return "target-selection hook unavailable";
-		case ForceCombatTargetResult::kNoCombatController:
-			return "failed to create or get combat controller";
-		case ForceCombatTargetResult::kNoCombatGroup:
-			return "combat controller has no combat group";
-		case ForceCombatTargetResult::kCannotAddTarget:
-			return "combat group rejected target (likely faction/aggression relation)";
-		case ForceCombatTargetResult::kAddTargetFailed:
-			return "target was not added to combat group";
-		default:
-			return "unknown";
-		}
-	}
-
-	static ForceCombatTargetResult TryForceCombatTarget(Actor* actor, Actor* target)
-	{
-		if (!actor || !target || actor == target)
-			return ForceCombatTargetResult::kInvalidArgs;
-		if (!Engine::Actor_GetProcess(actor) || !Engine::Actor_GetProcess(target))
-			return ForceCombatTargetResult::kNoProcess;
-		if (ActorIsDeadForForceCombatTarget(actor, false) || ActorIsDeadForForceCombatTarget(target, false))
-			return ForceCombatTargetResult::kActorDead;
-		if (!EnsureForceCombatTargetHookInstalled())
-			return ForceCombatTargetResult::kHookFailed;
-		SetForcedCombatTargetRefID(actor->refID, target->refID);
-
-		void* combatController = GetCombatController(actor);
-		if (!combatController)
-		{
-			const bool ignoreActorLimit = true;
-			bool isGuard = actor->baseForm && actor->baseForm->typeID == kFormType_NPC
-				&& CharacterIsGuardForForceCombatTarget((Character*)actor) != 0;
-			ActorStartCombat(actor, target, nullptr, ignoreActorLimit, !isGuard, false, 0, true, nullptr);
-			combatController = GetCombatController(actor);
-			if (!combatController)
-				combatController = TryAddCombatantBootstrap(actor, target, ignoreActorLimit);
-		}
-
-		if (!combatController)
-		{
-			ClearForcedCombatTargetRefID(actor->refID);
-			return ForceCombatTargetResult::kNoCombatController;
-		}
-
-		void* combatGroup = *(void**)((UInt8*)combatController + 0x80);
-		if (!combatGroup)
-		{
-			ClearForcedCombatTargetRefID(actor->refID);
-			return ForceCombatTargetResult::kNoCombatGroup;
-		}
-
-		if (!GetCombatTargetForActor(combatGroup, target))
-		{
-			if (!CombatGroupCanAddTarget(combatGroup, target))
-			{
-				ClearForcedCombatTargetRefID(actor->refID);
-				return ForceCombatTargetResult::kCannotAddTarget;
-			}
-			CombatControllerAddCombatTarget(combatController, target, 0, 0, 0.0f, 0.0f);
-		}
-
-		if (!GetCombatTargetForActor(combatGroup, target))
-		{
-			ClearForcedCombatTargetRefID(actor->refID);
-			return ForceCombatTargetResult::kAddTargetFailed;
-		}
-
-		CombatControllerSetTarget(combatController, target);
-		return ForceCombatTargetResult::kSuccess;
-	}
-
-	static void ClearForcedCombatTarget(Actor* actor)
-	{
-		if (!actor)
-			return;
-
-		ClearForcedCombatTargetRefID(actor->refID);
-
-		void* combatController = GetCombatController(actor);
-		if (!combatController)
-			return;
-
-		void* combatGroup = *(void**)((UInt8*)combatController + 0x80);
-		if (!combatGroup || !s_evaluateCombatTargetsOriginal)
-			return;
-
-		CombatControllerSetTarget(combatController, s_evaluateCombatTargetsOriginal(combatGroup, actor));
-	}
-}
-
 //helper to create position array from CombatTarget offset
 static bool CreatePositionArray(COMMAND_ARGS, void* combatTarget, UInt32 offset)
 {
@@ -1177,193 +752,8 @@ static ParamInfo kParams_UseAidItem[1] = {
 	{ "item", kParamType_AnyForm, 0 },
 };
 
-DEFINE_COMMAND_PLUGIN(ChangeRadioTrack, "Forces active radio station to advance to next track", 0, 0, nullptr);
-DEFINE_COMMAND_PLUGIN(IsRadioPlaying, "Returns 1 if any pip-boy or ambient radio is currently playing", 0, 0, nullptr);
 DEFINE_COMMAND_PLUGIN(UseAidItem, "Uses an aid item (AlchemyItem) on the calling actor", 1, 1, kParams_UseAidItem);
 DEFINE_COMMAND_PLUGIN(SetCreatureCombatSkill, "Sets creature combat skill (0-255)", 0, 2, kParams_SetCreatureCombatSkill);
-
-//resolve TalkingActivator or Activator->radioStation from a base form
-static void* ResolveRadioActivator(TESForm* baseForm)
-{
-	if (!baseForm) return nullptr;
-	if (baseForm->typeID == kFormType_TalkingActivator)
-		return baseForm;
-	if (baseForm->typeID == kFormType_Activator)
-	{
-		auto* actBase = static_cast<TESObjectACTI*>(baseForm);
-		if (actBase->radioStation)
-			return actBase->radioStation;
-		return baseForm;
-	}
-	return nullptr;
-}
-
-static void StopRadioSound(RadioSoundKey* key)
-{
-	RadioSoundKey copy = *key;
-	Engine::BSSoundHandle_Stop(&copy);
-	key->soundKey = 0xFFFFFFFF;
-}
-
-static bool AdvanceDynamicRadios(double* result)
-{
-	if (!g_dynamicRadios)
-		return false;
-
-	UInt32 stoppedCount = 0, advancedCount = 0, reseatCount = 0;
-
-	for (auto iter = g_dynamicRadios->Begin(); !iter.End(); ++iter)
-	{
-		DynamicRadio* dr = iter.Get();
-		if (!dr || !dr->isActive)
-			continue;
-
-		TESObjectREFR* stationRef = nullptr;
-		Actor* sourceActor = nullptr;
-		void* activator = nullptr;
-
-		if (dr->ref)
-		{
-			stationRef = dr->ref;
-			TESForm* baseForm = dr->ref->baseForm;
-			if (baseForm)
-			{
-				UInt8 baseType = baseForm->typeID;
-				if (baseType == kFormType_NPC || baseType == kFormType_Creature)
-					sourceActor = static_cast<Actor*>(dr->ref);
-				activator = ResolveRadioActivator(baseForm);
-			}
-
-			auto* xRadio = reinterpret_cast<ExtraRadioDataLite*>(
-				Engine::BaseExtraList_GetByType(&dr->ref->extraDataList, kExtraData_RadioData));
-			if (xRadio && xRadio->positionRef)
-			{
-				stationRef = xRadio->positionRef;
-				activator = ResolveRadioActivator(stationRef->baseForm);
-			}
-		}
-
-		if (activator)
-		{
-			RadioEntry* entry = s_getRadioEntryFromActivator(activator);
-			if (entry)
-			{
-				entry->data.soundTimeRemaining = 1;
-				advancedCount++;
-			}
-		}
-
-		UInt32 soundKey = dr->sound.soundKey;
-		UInt32 staticKey = dr->radioStaticSound.soundKey;
-
-		if (soundKey && soundKey != 0xFFFFFFFF)
-		{
-			StopRadioSound(&dr->sound);
-			stoppedCount++;
-		}
-		if (staticKey && staticKey != 0xFFFFFFFF)
-		{
-			StopRadioSound(&dr->radioStaticSound);
-			stoppedCount++;
-		}
-
-		//if station entry couldn't be advanced directly, reseat the radio
-		if (!advancedCount && stationRef)
-		{
-			Actor* reseatActor = sourceActor ? sourceActor : PlayerCharacter::GetSingleton();
-			if (reseatActor && s_disableNPCRadio && s_setNPCRadio)
-			{
-				s_disableNPCRadio(reseatActor);
-				s_setNPCRadio(reseatActor, stationRef);
-				reseatCount++;
-			}
-		}
-	}
-
-	if (stoppedCount || advancedCount || reseatCount)
-	{
-		if (IsConsoleMode())
-			Console_Print("ChangeRadioTrack >> stopped=%d advanced=%d reseat=%d",
-				stoppedCount, advancedCount, reseatCount);
-		*result = 1;
-		return true;
-	}
-
-	if (IsConsoleMode())
-		Console_Print("ChangeRadioTrack >> no active ambient radio");
-	return false;
-}
-
-static bool AdvanceCurrentRadioTrack(double* result)
-{
-	*result = 0;
-
-	if (!g_currentRadio)
-		return true;
-
-	UInt8 radioEnabled = g_radioEnabled ? *g_radioEnabled : 0;
-	RadioEntry* radio = radioEnabled ? *g_currentRadio : nullptr;
-
-	//pip-boy radio disabled or no entry - try ambient/dynamic radios
-	if (!radio)
-	{
-		AdvanceDynamicRadios(result);
-		return true;
-	}
-
-	//force one tick remaining so the engine advances to next track
-	radio->data.soundTimeRemaining = 1;
-	*result = 1;
-	return true;
-}
-
-bool Cmd_ChangeRadioTrack_Execute(COMMAND_ARGS)
-{
-	return AdvanceCurrentRadioTrack(result);
-}
-
-bool Cmd_IsRadioPlaying_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-
-	if (g_currentSongPath[0])
-	{
-		*result = 1;
-		return true;
-	}
-
-	if (g_radioEnabled && *g_radioEnabled && g_currentRadio && *g_currentRadio)
-	{
-		if ((*g_currentRadio)->data.soundTimeRemaining)
-		{
-			*result = 1;
-			return true;
-		}
-	}
-
-	if (!g_dynamicRadios)
-		return true;
-
-	for (auto iter = g_dynamicRadios->Begin(); !iter.End(); ++iter)
-	{
-		DynamicRadio* dr = iter.Get();
-		if (!dr)
-			continue;
-
-		if (!dr->isActive)
-			continue;
-
-		UInt32 soundKey = dr->sound.soundKey;
-		UInt32 staticKey = dr->radioStaticSound.soundKey;
-		if ((soundKey && soundKey != 0xFFFFFFFF) || (staticKey && staticKey != 0xFFFFFFFF))
-		{
-			*result = 1;
-			return true;
-		}
-	}
-
-	return true;
-}
 
 bool Cmd_UseAidItem_Execute(COMMAND_ARGS)
 {
@@ -1431,62 +821,9 @@ bool Cmd_SetCreatureCombatSkill_Execute(COMMAND_ARGS)
 	return true;
 }
 
-static ActorProcessManager* g_actorProcessManager = (ActorProcessManager*)0x11E0E80;
-typedef void (__thiscall *_ActorResurrect)(Actor*, bool, bool, bool);
-static const _ActorResurrect ActorResurrect = (_ActorResurrect)0x89F780;
-static BSSpinLock* g_processListsActorLock = (BSSpinLock*)0x11F11A0;
-typedef void* (__cdecl *_FormHeap_Allocate)(UInt32);
-typedef void (__cdecl *_FormHeap_Free)(void*);
-typedef void (__thiscall *_BaseExtraList_Copy)(void*, void*);
-static const _FormHeap_Allocate s_formHeapAllocate = (_FormHeap_Allocate)0x401000;
-static const _FormHeap_Free s_formHeapFree = (_FormHeap_Free)0x401030;
-static const _BaseExtraList_Copy BaseExtraList_Copy = (_BaseExtraList_Copy)0x411EC0;
-
 static void** g_modelLoader = (void**)0x11C3B3C;
 typedef void (__thiscall *_ModelLoader_QueueReference)(void*, TESObjectREFR*, UInt32, bool);
 static const _ModelLoader_QueueReference ModelLoader_QueueReference = (_ModelLoader_QueueReference)0x444850;
-typedef NiNode* (__thiscall *_TESObjectREFR_Get3D)(TESObjectREFR*);
-static const _TESObjectREFR_Get3D TESObjectREFR_Get3D = (_TESObjectREFR_Get3D)0x43FCD0;
-static constexpr UInt32 kExtraDataListVtbl = 0x010143E8;
-static constexpr UInt32 kExtraContainerChangesVtbl = 0x01015BB8;
-
-enum ResurrectActorExFlags : UInt32
-{
-	kResurrectActorEx_ResetInventory = 1 << 0,
-};
-
-struct ResurrectActorExTrace
-{
-	UInt32 refID;
-	UInt32 flags;
-	UInt32 frameIndex;
-	float lastPosZ;
-};
-
-struct ResurrectActorExEntrySnapshot
-{
-	TESForm* type = nullptr;
-	SInt32 countDelta = 0;
-	std::vector<ExtraDataList*> extraLists;
-};
-
-struct ResurrectActorExInventorySnapshot
-{
-	float unk2 = 0.0f;
-	float unk3 = 0.0f;
-	UInt8 byte10 = 0;
-	std::vector<ResurrectActorExEntrySnapshot> entries;
-};
-
-static std::vector<ResurrectActorExTrace> s_resurrectActorExTraces;
-static constexpr UInt32 kResurrectActorExTraceFrames = 15;
-
-static ParamInfo kParams_ResurrectActorEx[1] = {
-	{ "flags", kParamType_Integer, 1 },
-};
-
-DEFINE_COMMAND_PLUGIN(ResurrectActorEx, "Resurrect actor with flags: 1=reset inventory", 1, 1, kParams_ResurrectActorEx);
-DEFINE_COMMAND_PLUGIN(ResurrectAll, "Resurrects all dead actors in high process", 0, 0, nullptr);
 
 static void TESObjectREFR_Set3D(TESObjectREFR* ref, void* niNode, bool unloadArt)
 {
@@ -1497,336 +834,7 @@ static void TESObjectREFR_Set3D(TESObjectREFR* ref, void* niNode, bool unloadArt
 	fn(ref, niNode, unloadArt);
 }
 
-static bool BaseExtraList_HasType(const BaseExtraList* list, UInt32 type)
-{
-	if (!list) return false;
-	UInt32 index = (type >> 3);
-	UInt8 bitMask = 1 << (type % 8);
-	return (list->m_presenceBitfield[index] & bitMask) != 0;
-}
-
-static void BaseExtraList_MarkType(BaseExtraList* list, UInt32 type, bool cleared)
-{
-	if (!list) return;
-	UInt32 index = (type >> 3);
-	UInt8 bitMask = 1 << (type % 8);
-	UInt8& flag = list->m_presenceBitfield[index];
-	if (cleared)
-		flag &= ~bitMask;
-	else
-		flag |= bitMask;
-}
-
-static BSExtraData* BaseExtraList_GetByTypeLocal(BaseExtraList* list, UInt32 type)
-{
-	if (!list || !BaseExtraList_HasType(list, type)) return nullptr;
-	for (BSExtraData* traverse = list->m_data; traverse; traverse = traverse->next)
-		if (traverse->type == type)
-			return traverse;
-	return nullptr;
-}
-
-static bool BaseExtraList_RemoveLocal(BaseExtraList* list, BSExtraData* toRemove, bool freeData)
-{
-	if (!list || !toRemove || !BaseExtraList_HasType(list, toRemove->type))
-		return false;
-
-	bool removed = false;
-	if (list->m_data == toRemove)
-	{
-		list->m_data = toRemove->next;
-		removed = true;
-	}
-	else
-	{
-		for (BSExtraData* traverse = list->m_data; traverse; traverse = traverse->next)
-		{
-			if (traverse->next == toRemove)
-			{
-				traverse->next = toRemove->next;
-				removed = true;
-				break;
-			}
-		}
-	}
-
-	if (!removed)
-		return false;
-
-	BaseExtraList_MarkType(list, toRemove->type, true);
-	if (freeData)
-		s_formHeapFree(toRemove);
-	return true;
-}
-
-static bool BaseExtraList_RemoveByTypeLocal(BaseExtraList* list, UInt32 type, bool freeData)
-{
-	return BaseExtraList_RemoveLocal(list, BaseExtraList_GetByTypeLocal(list, type), freeData);
-}
-
-static bool BaseExtraList_AddLocal(BaseExtraList* list, BSExtraData* toAdd)
-{
-	if (!list || !toAdd || BaseExtraList_HasType(list, toAdd->type))
-		return false;
-
-	toAdd->next = list->m_data;
-	list->m_data = toAdd;
-	BaseExtraList_MarkType(list, toAdd->type, false);
-	return true;
-}
-
-template <class TList, class TItem>
-static void AppendListItem(TList* list, TItem* item)
-{
-	if (!list || !item) return;
-
-	using Node = typename TList::_Node;
-	Node* head = list->Head();
-	if (!head->item)
-	{
-		head->item = item;
-		head->next = nullptr;
-		return;
-	}
-
-	Node* node = head;
-	while (node->next)
-		node = node->next;
-
-	Node* newNode = static_cast<Node*>(s_formHeapAllocate(sizeof(Node)));
-	memset(newNode, 0, sizeof(Node));
-	newNode->item = item;
-	node->next = newNode;
-}
-
-static ExtraDataList* CreateEmptyExtraDataList()
-{
-	auto* list = static_cast<ExtraDataList*>(s_formHeapAllocate(sizeof(ExtraDataList)));
-	memset(list, 0, sizeof(ExtraDataList));
-	*(UInt32*)list = kExtraDataListVtbl;
-	return list;
-}
-
-static ExtraContainerChanges* CreateEmptyExtraContainerChanges(TESObjectREFR* owner)
-{
-	auto* xChanges = static_cast<ExtraContainerChanges*>(s_formHeapAllocate(sizeof(ExtraContainerChanges)));
-	memset(xChanges, 0, sizeof(ExtraContainerChanges));
-	*(UInt32*)xChanges = kExtraContainerChangesVtbl;
-	xChanges->type = kExtraData_ContainerChanges;
-
-	xChanges->data = static_cast<ExtraContainerChanges::Data*>(s_formHeapAllocate(sizeof(ExtraContainerChanges::Data)));
-	memset(xChanges->data, 0, sizeof(ExtraContainerChanges::Data));
-	xChanges->data->owner = owner;
-	return xChanges;
-}
-
-static ExtraContainerChanges::EntryDataList* CreateEmptyEntryDataList()
-{
-	auto* list = static_cast<ExtraContainerChanges::EntryDataList*>(s_formHeapAllocate(sizeof(ExtraContainerChanges::EntryDataList)));
-	memset(list, 0, sizeof(ExtraContainerChanges::EntryDataList));
-	return list;
-}
-
-static ExtraContainerChanges::ExtendDataList* CreateEmptyExtendDataList()
-{
-	auto* list = static_cast<ExtraContainerChanges::ExtendDataList*>(s_formHeapAllocate(sizeof(ExtraContainerChanges::ExtendDataList)));
-	memset(list, 0, sizeof(ExtraContainerChanges::ExtendDataList));
-	return list;
-}
-
-static ExtraContainerChanges::EntryData* CreateEntryData(TESForm* form, SInt32 countDelta)
-{
-	auto* entry = static_cast<ExtraContainerChanges::EntryData*>(s_formHeapAllocate(sizeof(ExtraContainerChanges::EntryData)));
-	memset(entry, 0, sizeof(ExtraContainerChanges::EntryData));
-	entry->type = form;
-	entry->countDelta = countDelta;
-	return entry;
-}
-
-static ExtraDataList* CloneExtraDataList(ExtraDataList* source)
-{
-	if (!source) return nullptr;
-	auto* copy = CreateEmptyExtraDataList();
-	BaseExtraList_Copy(copy, source);
-	return copy;
-}
-
-static void FreeExtraDataListOwned(ExtraDataList* xData)
-{
-	if (!xData) return;
-	for (UInt32 type = 0; type < 0xFF; type++)
-		BaseExtraList_RemoveByTypeLocal(xData, type, true);
-	s_formHeapFree(xData);
-}
-
-template <class TList, class TItem, class FreeItemFn>
-static void FreeListOwned(TList* list, FreeItemFn&& freeItem)
-{
-	if (!list) return;
-
-	using Node = typename TList::_Node;
-	Node* node = list->Head();
-	while (node)
-	{
-		Node* next = node->next;
-		if (node->item)
-			freeItem(node->item);
-		if (node != list->Head())
-				s_formHeapFree(node);
-		node = next;
-	}
-		s_formHeapFree(list);
-}
-
-static void FreeEntryDataOwned(ExtraContainerChanges::EntryData* entry)
-{
-	if (!entry) return;
-	if (entry->extendData)
-	{
-		FreeListOwned<ExtraContainerChanges::ExtendDataList, ExtraDataList>(
-			entry->extendData,
-			[](ExtraDataList* xData) { FreeExtraDataListOwned(xData); });
-	}
-	s_formHeapFree(entry);
-}
-
-static void FreeInventorySnapshot(ResurrectActorExInventorySnapshot& snapshot)
-{
-	for (auto& entry : snapshot.entries)
-	{
-		for (auto* xData : entry.extraLists)
-			FreeExtraDataListOwned(xData);
-		entry.extraLists.clear();
-	}
-	snapshot.entries.clear();
-}
-
-static ResurrectActorExInventorySnapshot CaptureInventorySnapshot(Actor* actor)
-{
-	ResurrectActorExInventorySnapshot snapshot;
-	if (!actor) return snapshot;
-
-	auto* xChanges = static_cast<ExtraContainerChanges*>(BaseExtraList_GetByTypeLocal(&actor->extraDataList, kExtraData_ContainerChanges));
-	if (!xChanges || !xChanges->data || !xChanges->data->objList)
-		return snapshot;
-
-	snapshot.unk2 = xChanges->data->unk2;
-	snapshot.unk3 = xChanges->data->unk3;
-	snapshot.byte10 = xChanges->data->byte10;
-
-	for (auto entryIter = xChanges->data->objList->Begin(); !entryIter.End(); ++entryIter)
-	{
-		auto* entry = entryIter.Get();
-		if (!entry || !entry->type)
-			continue;
-
-		ResurrectActorExEntrySnapshot entrySnapshot;
-		entrySnapshot.type = entry->type;
-		entrySnapshot.countDelta = entry->countDelta;
-
-		if (entry->extendData)
-		{
-			for (auto xDataIter = entry->extendData->Begin(); !xDataIter.End(); ++xDataIter)
-			{
-				if (auto* xData = xDataIter.Get())
-					entrySnapshot.extraLists.push_back(CloneExtraDataList(xData));
-			}
-		}
-
-		snapshot.entries.push_back(std::move(entrySnapshot));
-	}
-
-	return snapshot;
-}
-
-static void RestoreInventorySnapshot(Actor* actor, ResurrectActorExInventorySnapshot& snapshot)
-{
-	if (!actor) return;
-
-	auto* xChanges = static_cast<ExtraContainerChanges*>(BaseExtraList_GetByTypeLocal(&actor->extraDataList, kExtraData_ContainerChanges));
-	if (!xChanges)
-	{
-		xChanges = CreateEmptyExtraContainerChanges(actor);
-		BaseExtraList_AddLocal(&actor->extraDataList, xChanges);
-	}
-	else if (!xChanges->data)
-	{
-		xChanges->data = static_cast<ExtraContainerChanges::Data*>(s_formHeapAllocate(sizeof(ExtraContainerChanges::Data)));
-		memset(xChanges->data, 0, sizeof(ExtraContainerChanges::Data));
-	}
-
-	if (xChanges->data->objList)
-		FreeListOwned<ExtraContainerChanges::EntryDataList, ExtraContainerChanges::EntryData>(
-			xChanges->data->objList,
-			[](ExtraContainerChanges::EntryData* entry) { FreeEntryDataOwned(entry); });
-
-	xChanges->data->owner = actor;
-	xChanges->data->unk2 = snapshot.unk2;
-	xChanges->data->unk3 = snapshot.unk3;
-	xChanges->data->byte10 = snapshot.byte10;
-	xChanges->data->objList = snapshot.entries.empty() ? nullptr : CreateEmptyEntryDataList();
-
-	for (auto& snapshotEntry : snapshot.entries)
-	{
-		auto* entry = CreateEntryData(snapshotEntry.type, snapshotEntry.countDelta);
-		if (!snapshotEntry.extraLists.empty())
-		{
-			entry->extendData = CreateEmptyExtendDataList();
-			for (auto* xData : snapshotEntry.extraLists)
-				AppendListItem(entry->extendData, xData);
-			snapshotEntry.extraLists.clear();
-		}
-		AppendListItem(xChanges->data->objList, entry);
-	}
-
-	snapshot.entries.clear();
-}
-
-void ImperativeCommands::Update()
-{
-	for (size_t i = 0; i < s_resurrectActorExTraces.size();)
-	{
-		auto& trace = s_resurrectActorExTraces[i];
-		auto* form = static_cast<TESForm*>(Engine::LookupFormByID(trace.refID));
-		if (!form || !IsActorRef(reinterpret_cast<TESObjectREFR*>(form)))
-		{
-			s_resurrectActorExTraces.erase(s_resurrectActorExTraces.begin() + i);
-			continue;
-		}
-
-		auto* actor = static_cast<Actor*>(form);
-		trace.lastPosZ = actor->posZ;
-		trace.frameIndex++;
-
-		if (trace.frameIndex >= kResurrectActorExTraceFrames)
-		{
-			s_resurrectActorExTraces.erase(s_resurrectActorExTraces.begin() + i);
-			continue;
-		}
-
-		++i;
-	}
-
-}
-
-void ImperativeCommands::ClearState()
-{
-	s_resurrectActorExTraces.clear();
-	if (g_crouchLockInit == 2) {
-		ScopedLock lock(&g_crouchLock);
-		g_crouchDisabledActors.clear();
-	}
-	if (g_forceCombatTargetLockInit == 2)
-	{
-		ScopedLock lock(&g_forceCombatTargetLock);
-		g_forcedCombatTargets.clear();
-	}
-}
-
 //ForceReload - forces actor to play reload animation and refill ammo
-typedef bool (__thiscall *_ActorIsDead)(Actor*, bool);
-static const _ActorIsDead ActorIsDead = (_ActorIsDead)0x8844F0;
-
 typedef char (__thiscall *_ActorReload)(Actor*, TESObjectWEAP*, UInt32, bool);
 static const _ActorReload ActorReload = (_ActorReload)0x8A8420;
 
@@ -1883,7 +891,7 @@ bool Cmd_ForceReload_Execute(COMMAND_ARGS)
 
 	void* invChanges = nullptr;
 	TESForm* correctAmmo = nullptr;
-	bool hasAmmo = false;
+	bool hasAmmo = false; //out-param sink, engine writes it unconditionally
 	if (!ammoInfo) {
 		invChanges = GetInventoryChanges(thisObj);
 	}
@@ -1911,125 +919,6 @@ bool Cmd_ForceReload_Execute(COMMAND_ARGS)
 	return true;
 }
 
-bool Cmd_ResurrectAll_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-	UInt32 count = 0;
-
-	PlayerCharacter* player = PlayerCharacter::GetSingleton();
-	if (!player || !player->parentCell) return true;
-
-	auto ProcessCell = [&](TESObjectCELL* cell)
-	{
-		if (!cell) return;
-		for (auto iter = cell->objectList.Begin(); !iter.End(); ++iter)
-		{
-			TESObjectREFR* refr = iter.Get();
-			if (!refr || refr == player) continue;
-
-			UInt8 baseType = refr->baseForm ? refr->baseForm->typeID : 0;
-			if (baseType != kFormType_Creature && baseType != kFormType_NPC) continue;
-
-			Actor* actor = (Actor*)refr;
-			if (actor->lifeState != 2) continue;
-
-			//clear 3D first so resurrection doesn't reuse dismembered model
-			TESObjectREFR_Set3D(refr, nullptr, true);
-
-			ActorResurrect(actor, true, true, false);
-
-			//queue model reload
-			if (*g_modelLoader)
-				ModelLoader_QueueReference(*g_modelLoader, refr, 1, false);
-
-			count++;
-		}
-	};
-
-	ProcessCell(player->parentCell);
-
-	TESWorldSpace* world = player->parentCell->worldSpace;
-	if (world && world->cellMap && !player->parentCell->IsInterior() && player->parentCell->coords)
-	{
-		SInt32 baseX = (SInt32)player->parentCell->coords->x;
-		SInt32 baseY = (SInt32)player->parentCell->coords->y;
-
-		for (SInt32 dx = -1; dx <= 1; dx++)
-		{
-			for (SInt32 dy = -1; dy <= 1; dy++)
-			{
-				if (dx == 0 && dy == 0) continue;
-				UInt32 key = ((baseX + dx) << 16) | ((baseY + dy) & 0xFFFF);
-				TESObjectCELL* cell = world->cellMap->Lookup(key);
-				ProcessCell(cell);
-			}
-		}
-	}
-
-	*result = count;
-
-	if (IsConsoleMode())
-		Console_Print("ResurrectAll >> Resurrected %d actors", count);
-
-	return true;
-}
-
-bool Cmd_ResurrectActorEx_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-
-	UInt32 flags = 0;
-	if (!ExtractArgs(EXTRACT_ARGS, &flags))
-		return true;
-
-	if (!IsActorRef(thisObj))
-		return true;
-
-	Actor* actor = static_cast<Actor*>(thisObj);
-	const UInt32 normalizedFlags = flags & kResurrectActorEx_ResetInventory;
-	const bool resetInventory = (normalizedFlags & kResurrectActorEx_ResetInventory) != 0;
-	const bool has3D = TESObjectREFR_Get3D(thisObj) != nullptr;
-	ResurrectActorExInventorySnapshot inventorySnapshot;
-
-	if (!resetInventory)
-	{
-		inventorySnapshot = CaptureInventorySnapshot(actor);
-	}
-
-	if (has3D)
-	{
-		TESObjectREFR_Set3D(thisObj, nullptr, true);
-	}
-
-	{
-		BSSpinLockScope actorLock(g_processListsActorLock);
-		ActorResurrect(actor, true, has3D, false);
-	}
-
-	if (!resetInventory)
-	{
-		RestoreInventorySnapshot(actor, inventorySnapshot);
-	}
-	else
-	{
-		FreeInventorySnapshot(inventorySnapshot);
-	}
-
-	if (*g_modelLoader)
-		ModelLoader_QueueReference(*g_modelLoader, thisObj, 1, false);
-
-	s_resurrectActorExTraces.erase(
-		std::remove_if(
-			s_resurrectActorExTraces.begin(),
-			s_resurrectActorExTraces.end(),
-			[&](const ResurrectActorExTrace& trace) { return trace.refID == actor->refID; }),
-		s_resurrectActorExTraces.end());
-	s_resurrectActorExTraces.push_back({ actor->refID, normalizedFlags, 0, actor->posZ });
-
-	*result = 1;
-	return true;
-}
-
 //TESDataHandler::CreateFormFromID - allocates a blank form of given type
 typedef TESForm* (*_CreateFormInstance)(UInt8 type);
 static const _CreateFormInstance CreateFormInstance = (_CreateFormInstance)0x465110;
@@ -2037,7 +926,6 @@ static const _CreateFormInstance CreateFormInstance = (_CreateFormInstance)0x465
 //DataHandler::DoAddForm - registers form in game DB, assigns runtime 0xFF formID
 typedef UInt32 (__thiscall *_DataHandler_DoAddForm)(void*, TESForm*);
 static const _DataHandler_DoAddForm DataHandler_DoAddForm = (_DataHandler_DoAddForm)0x4603B0;
-static void** g_dataHandler = (void**)0x11C3F2C;
 
 static ParamInfo kParams_SetRaceAlt[1] = {
 	{ "race", kParamType_Race, 0 },
@@ -2089,10 +977,12 @@ bool Cmd_SetRaceAlt_Execute(COMMAND_ARGS)
 		//virtual CopyFrom copies all NPC data (AI, spells, race, facegen, etc)
 		cloneForm->CopyFrom(origNPC);
 
-		if (*g_dataHandler)
-			DataHandler_DoAddForm(*g_dataHandler, cloneForm);
+		if (*g_dataHandlerPtr)
+			DataHandler_DoAddForm(*g_dataHandlerPtr, cloneForm);
 
 		targetNPC = (TESNPC*)cloneForm;
+		//runtime 0xFF clone is not serialized, the swap does not survive save/load,
+		//callers must reapply on load (documented in FEATURES.md)
 		thisObj->baseForm = cloneForm;
 
 	}
@@ -2129,25 +1019,20 @@ bool Init(void* nvsePtr)
 			dataInterface->GetFunc(kNVSEData_InventoryReferenceCreateEntry));
 	}
 
-	EnsureForceCombatTargetLockInit();
-	EnsureForceCombatTargetHookInstalled();
-
 	return true;
 }
 
 void RegisterCommands(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_IsRadioPlaying);
+	nvse->RegisterTypedCommand(&kCommandInfo_GetRefsSortedByDistance, kRetnType_Array);
+	nvse->RegisterTypedCommand(&kCommandInfo_Duplicate, kRetnType_Form);
+	nvse->RegisterTypedCommand(&kCommandInfo_GetAvailableRecipes, kRetnType_Array);
 }
 
 void RegisterCommands2(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterTypedCommand(&kCommandInfo_GetRefsSortedByDistance, kRetnType_Array);
-	nvse->RegisterTypedCommand(&kCommandInfo_Duplicate, kRetnType_Form);
-	nvse->RegisterTypedCommand(&kCommandInfo_GetAvailableRecipes, kRetnType_Array);
-	nvse->RegisterCommand(&kCommandInfo_ChangeRadioTrack);
 #ifdef _DEBUG
 	nvse->RegisterCommand(&kCommandInfo_DumpCombatTarget);
 #endif
@@ -2163,171 +1048,22 @@ void RegisterCommands3(void* nvsePtr)
 	nvse->RegisterCommand(&kCommandInfo_UseAidItem);
 }
 
-void RegisterCommands6(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_ResurrectActorEx);
-}
-
 void RegisterCommands4(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_SetCreatureCombatSkill);
-	nvse->RegisterCommand(&kCommandInfo_ResurrectAll);
-	nvse->RegisterCommand(&kCommandInfo_ForceReload);
 }
 
 void RegisterCommands5(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_SetRaceAlt);
+	nvse->RegisterCommand(&kCommandInfo_ForceReload);
 }
 
-//--- ForceCrouch / DisableCrouching ---
-//
-//hooks Actor::SetMovementFlag (0x8B39F0) and CombatController::SetShouldSneak
-//(0x981520) at function level to cover all callers
-
-typedef void (__thiscall *_SetShouldSneak)(void*, bool);
-typedef void (__thiscall *_SetMovementFlag)(Actor*, UInt32);
-static _SetShouldSneak OrigSetShouldSneak = nullptr;
-static _SetMovementFlag OrigSetMovementFlag = nullptr;
-
-//trampoline for Actor::SetMovementFlag - strips 0x400 for disabled actors
-static void __fastcall Hook_SetMovementFlag(Actor* actor, void* edx, UInt32 flags) {
-	if ((flags & 0x400) && IsCrouchDisabled(actor->refID))
-		flags &= ~0x400;
-	OrigSetMovementFlag(actor, flags);
-}
-
-//trampoline for CombatController::SetShouldSneak - forces false for disabled actors
-static void __fastcall Hook_SetShouldSneak(void* cc, void* edx, bool shouldSneak) {
-	if (shouldSneak) {
-		Actor* owner = *(Actor**)((UInt8*)cc + 0xBC);
-		if (owner && IsCrouchDisabled(owner->refID))
-			shouldSneak = false;
-	}
-	OrigSetShouldSneak(cc, shouldSneak);
-}
-
-static UInt8 g_moveFlagTrampoline[12];
-static UInt8 g_sneakTrampoline[12];
-
-//verified in IDA: both targets start with the same 7-byte prologue
-static bool WriteTrampoline(UInt32 target, void* hook, UInt8* trampBuf, void** origOut) {
-	const UInt32 stolen = 7;
-	memcpy(trampBuf, (void*)target, stolen);
-	trampBuf[stolen] = 0xE9;
-	*(UInt32*)(trampBuf + stolen + 1) = (target + stolen) - ((UInt32)trampBuf + stolen + 5);
-	DWORD old;
-	VirtualProtect(trampBuf, stolen + 5, PAGE_EXECUTE_READWRITE, &old);
-	*origOut = trampBuf;
-	VirtualProtect((void*)target, stolen, PAGE_EXECUTE_READWRITE, &old);
-	*(UInt8*)target = 0xE9;
-	*(UInt32*)(target + 1) = (UInt32)hook - target - 5;
-	*(UInt8*)(target + 5) = 0x90;
-	*(UInt8*)(target + 6) = 0x90;
-	VirtualProtect((void*)target, stolen, old, &old);
-	FlushInstructionCache(GetCurrentProcess(), (void*)target, stolen);
-	return true;
-}
-
-static bool g_crouchHookInstalled = false;
-static bool InstallCrouchHooks() {
-	if (g_crouchHookInstalled) return true;
-	EnsureCrouchLock();
-
-	if (!WriteTrampoline(0x8B39F0, Hook_SetMovementFlag, g_moveFlagTrampoline, (void**)&OrigSetMovementFlag))
-		return false;
-	if (!WriteTrampoline(0x981520, Hook_SetShouldSneak, g_sneakTrampoline, (void**)&OrigSetShouldSneak))
-		return false;
-
-	g_crouchHookInstalled = true;
-	return true;
-}
-
-static ParamInfo kParams_ForceCrouch[1] = {
-	{"crouch", kParamType_Integer, 0},
-};
-DEFINE_COMMAND_PLUGIN(ForceCrouch, "Force actor to crouch (1) or stand (0)", 1, 1, kParams_ForceCrouch);
-
-bool Cmd_ForceCrouch_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-	UInt32 crouch = 0;
-	if (!ExtractArgs(EXTRACT_ARGS, &crouch)) return true;
-	if (!IsActorRef(thisObj)) return true;
-
-	auto* actor = (Actor*)thisObj;
-	typedef UInt32 (__thiscall *_GetFlags)(Actor*);
-	auto GetMoveFlags = (_GetFlags)0x8846E0;
-
-	if (!InstallCrouchHooks()) return true;
-
-	void* cc = GetCombatController(actor);
-	if (cc) {
-		auto SetSneak = OrigSetShouldSneak ? OrigSetShouldSneak : (_SetShouldSneak)0x981520;
-		SetSneak(cc, (bool)crouch);
-	}
-	*(UInt8*)((UInt8*)actor + 0x125) = crouch ? 1 : 0; //bForceSneak
-	//read-modify-write to preserve other movement bits
-	UInt32 flags = GetMoveFlags(actor);
-	if (crouch)
-		flags |= 0x400;
-	else
-		flags &= ~0x400;
-	auto SetMoveFlag = OrigSetMovementFlag ? OrigSetMovementFlag : (_SetMovementFlag)0x8B39F0;
-	SetMoveFlag(actor, flags);
-
-	*result = 1;
-	if (IsConsoleMode())
-		Console_Print("ForceCrouch >> %s", crouch ? "crouch" : "stand");
-	return true;
-}
-
-static ParamInfo kParams_DisableCrouching[1] = {
-	{"disable", kParamType_Integer, 0},
-};
-DEFINE_COMMAND_PLUGIN(DisableCrouching, "Prevent actor from crouching (1=disable, 0=enable)", 1, 1, kParams_DisableCrouching);
-
-bool Cmd_DisableCrouching_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-	UInt32 disable = 0;
-	if (!ExtractArgs(EXTRACT_ARGS, &disable)) return true;
-	if (!IsActorRef(thisObj)) return true;
-
-	if (!InstallCrouchHooks()) return true;
-
-	auto* actor = (Actor*)thisObj;
-	if (disable) {
-		{
-			ScopedLock lock(&g_crouchLock);
-			g_crouchDisabledActors.insert(actor->refID);
-		}
-		//force stand immediately
-		void* cc = GetCombatController(actor);
-		if (cc) {
-			auto SetSneak = OrigSetShouldSneak ? OrigSetShouldSneak : (_SetShouldSneak)0x981520;
-			SetSneak(cc, false);
-		}
-		*(UInt8*)((UInt8*)actor + 0x125) = 0;
-	} else {
-		ScopedLock lock(&g_crouchLock);
-		g_crouchDisabledActors.erase(actor->refID);
-	}
-
-	*result = 1;
-	if (IsConsoleMode())
-		Console_Print("DisableCrouching >> %s", disable ? "disabled" : "enabled");
-	return true;
-}
-
-void RegisterCommands7(void* nvsePtr)
+void RegisterCommands6(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_ForceCrouch);
-	nvse->RegisterCommand(&kCommandInfo_DisableCrouching);
+	nvse->RegisterCommand(&kCommandInfo_SetRaceAlt);
 }
 
 //--- SetOnContactWatch / GetOnContactWatch ---
@@ -2412,57 +1148,11 @@ bool Cmd_GetOnContactWatch_Execute(COMMAND_ARGS)
 	return true;
 }
 
-void RegisterCommands8(void* nvsePtr)
+void RegisterCommands7(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_SetOnContactWatch);
 	nvse->RegisterCommand(&kCommandInfo_GetOnContactWatch);
-}
-
-static ParamInfo kParams_ForceCombatTarget[1] = {
-	{"target", kParamType_Actor, 1},
-};
-DEFINE_COMMAND_PLUGIN(ForceCombatTarget, "Force actor to target a specific combat target; pass 0 to clear", 1, 1, kParams_ForceCombatTarget);
-
-bool Cmd_ForceCombatTarget_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-
-	if (!thisObj || !IsActorRef(thisObj))
-		return true;
-
-	Actor* actor = (Actor*)thisObj;
-	Actor* target = nullptr;
-	if (!ExtractArgs(EXTRACT_ARGS, &target))
-		return true;
-
-	if (!target)
-	{
-		ClearForcedCombatTarget(actor);
-		*result = 1;
-		if (IsConsoleMode())
-			Console_Print("ForceCombatTarget >> cleared");
-		return true;
-	}
-
-	ForceCombatTargetResult forceResult = TryForceCombatTarget(actor, target);
-	if (forceResult != ForceCombatTargetResult::kSuccess)
-	{
-		if (IsConsoleMode())
-			Console_Print("ForceCombatTarget >> failed: %s", ForceCombatTargetResultToString(forceResult));
-		return true;
-	}
-
-	*result = 1;
-	if (IsConsoleMode())
-		Console_Print("ForceCombatTarget >> %08X", target->refID);
-	return true;
-}
-
-void RegisterCommands9(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_ForceCombatTarget);
 }
 
 //RefillAmmo - adds ammo to actor's inventory and fills their clip
@@ -2552,7 +1242,7 @@ bool Cmd_RefillAmmo_Execute(COMMAND_ARGS)
 	return true;
 }
 
-void RegisterCommands10(void* nvsePtr)
+void RegisterCommands8(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_RefillAmmo);

@@ -5,6 +5,7 @@
 
 #include "KeyHeldHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
 
 static int g_thresholdMs = 500;
@@ -17,7 +18,7 @@ void Update()
 {
 	if (!g_eventManagerInterface) return;
 
-	void* input = *(void**)0x11F35CC;
+	void* input = *g_inputGlobalsPtr;
 	if (!input) return;
 	UInt8* keys = (UInt8*)((UInt8*)input + 0x18F8);
 	DWORD now = GetTickCount();

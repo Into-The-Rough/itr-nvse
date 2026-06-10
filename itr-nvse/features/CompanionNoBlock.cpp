@@ -1,6 +1,7 @@
 #include "CompanionNoBlock.h"
 
 #include "internal/Detours.h"
+#include "internal/GameGlobals.h"
 #include "nvse/GameForms.h"
 #include "nvse/GameObjects.h"
 
@@ -12,8 +13,6 @@ extern void Log(const char* fmt, ...);
 
 namespace
 {
-	PlayerCharacter** g_player = reinterpret_cast<PlayerCharacter**>(0x11DEA3C);
-
 	typedef void* (__thiscall* _getRoot)(void*);
 	const _getRoot getRoot = reinterpret_cast<_getRoot>(0x624020); //hkpCollidable::getRoot
 
@@ -203,7 +202,7 @@ namespace
 		std::unordered_set<void*> teammatePhantoms;
 		std::unordered_map<void*, void*> proxyToPhantom;
 
-		PlayerCharacter* player = g_player ? *g_player : nullptr;
+		PlayerCharacter* player = *g_thePlayerPtr;
 		bool gateOpen = false;
 		if (player && player->parentCell && player->refID)
 		{

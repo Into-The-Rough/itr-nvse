@@ -2,72 +2,43 @@
 
 #include "FriendlyFire.h"
 #include <Windows.h>
-#include <cstdint>
 
 #include "internal/globals.h"
-#include "internal/SafeWrite.h"
+#include "internal/Detours.h"
 
 namespace FriendlyFire
 {
 	static bool g_enabled = false;
-	static bool g_initialized = false;
+	static bool g_installed = false;
+	static Detours::CallDetour s_inCombatWithDetour;     //0x9C314E in Projectile::9C30D0
+	static Detours::CallDetour s_isCombatTargetDetour;   //0x899D50 in Actor::899CB0
 
-	//original bytes at 0x9C314E (5 bytes)
-	static uint8_t g_origBytes1[5] = {0};
-	//original byte at 0x899D5A (1 byte)
-	static uint8_t g_origByte2 = 0;
+	typedef bool (__thiscall *_ActorBoolFn)(void*, void*);
 
-	void ApplyPatch()
+	static bool __fastcall Hook_IsInCombatWithActor(void* thisActor, void*, void* otherActor)
 	{
-		//bypass IsInCombatWithActor in Projectile::9C30D0
-		//mov al, 1; nop x3
-		SafeWrite::Write8(0x9C314E, 0xB0);
-		SafeWrite::Write8(0x9C314F, 0x01);
-		SafeWrite::Write8(0x9C3150, 0x90);
-		SafeWrite::Write8(0x9C3151, 0x90);
-		SafeWrite::Write8(0x9C3152, 0x90);
-
-		//bypass IsActoraCombatTarget in Actor::899CB0
-		SafeWrite::Write8(0x899D5A, 0xEB);
+		if (g_enabled) return true;
+		return ((_ActorBoolFn)s_inCombatWithDetour.GetOverwrittenAddr())(thisActor, otherActor);
 	}
 
-	void RemovePatch()
+	static bool __fastcall Hook_IsActoraCombatTarget(void* controller, void*, void* actor)
 	{
-		//restore original bytes at 0x9C314E
-		for (int i = 0; i < 5; i++)
-			SafeWrite::Write8(0x9C314E + i, g_origBytes1[i]);
-
-		//restore original byte at 0x899D5A
-		SafeWrite::Write8(0x899D5A, g_origByte2);
+		if (g_enabled) return true;
+		return ((_ActorBoolFn)s_isCombatTargetDetour.GetOverwrittenAddr())(controller, actor);
 	}
 
 	void SetEnabled(bool enabled)
 	{
-		if (!g_initialized) return;
-		if (enabled == g_enabled) return;
-
-		if (enabled)
-			ApplyPatch();
-		else
-			RemovePatch();
-
-		g_enabled = enabled;
+		g_enabled = enabled && g_installed;
 	}
 
 	void Init(bool enabled)
 	{
-		//save original bytes before any patching
-		memcpy(g_origBytes1, (void*)0x9C314E, 5);
-		g_origByte2 = *(uint8_t*)0x899D5A;
-
-		g_initialized = true;
-
-		if (enabled)
-		{
-			ApplyPatch();
-			g_enabled = true;
-		}
-
+		bool a = s_inCombatWithDetour.WriteRelCall(0x9C314E, (UInt32)Hook_IsInCombatWithActor);
+		bool b = s_isCombatTargetDetour.WriteRelCall(0x899D50, (UInt32)Hook_IsActoraCombatTarget);
+		if (!a || !b)
+			Log("FriendlyFire: hook install %d/%d (site already patched by another mod?)", a ? 1 : 0, b ? 1 : 0);
+		g_installed = a && b;
+		g_enabled = enabled && g_installed;
 	}
 }
-

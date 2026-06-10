@@ -3,12 +3,14 @@
 #include "OnWeaponJamHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/EventDispatch.h"
-
-static thread_local Actor* g_jamActor = nullptr;
+#include "internal/Detours.h"
 
 namespace OnWeaponJamHandler {
     bool g_hookInstalled = false;
 }
+
+static Detours::CallDetour s_setAnimActionCall;
+using SetAnimAction_t = int(__thiscall*)(Actor*, int, void*);
 
 static TESObjectWEAP* GetActorCurrentWeapon(Actor* actor)
 {
@@ -27,41 +29,25 @@ static TESObjectWEAP* GetActorCurrentWeapon(Actor* actor)
     return (TESObjectWEAP*)(*(UInt32*)(itemChange + 0x08));
 }
 
-static void __cdecl SaveJamActor(Actor* actor)
+static void DispatchWeaponJamEvent(Actor* actor)
 {
-    g_jamActor = actor;
-}
+    if (!actor) return;
 
-static void __cdecl DispatchWeaponJamEvent()
-{
-    if (!g_jamActor) return;
-
-    TESObjectWEAP* weapon = GetActorCurrentWeapon(g_jamActor);
+    TESObjectWEAP* weapon = GetActorCurrentWeapon(actor);
     if (!weapon) return;
 
     if (g_eventManagerInterface)
         g_eventManagerInterface->DispatchEventThreadSafe("ITR:OnWeaponJam",
-            nullptr, reinterpret_cast<TESObjectREFR*>(g_jamActor),
-            g_jamActor, weapon);
+            nullptr, reinterpret_cast<TESObjectREFR*>(actor),
+            actor, weapon);
 }
 
-static UInt32 s_SetAnimActionAddr = 0x8A73E0;
-
-static __declspec(naked) void Hook_SetAnimAction_Jam()
+static int __fastcall Hook_SetAnimAction_Jam(Actor* actor, void*, int action, void* sequence)
 {
-    __asm {
-        push ecx                              //stash thiscall this (actor) for restore
-        push ecx                              //cdecl arg for SaveJamActor
-        call SaveJamActor
-        add esp, 4                            //cdecl cleanup of pushed arg
-        pop ecx                               //restore actor for downstream SetAnimAction
-        pushad
-        pushfd
-        call DispatchWeaponJamEvent           //fires event via the stashed g_jamActor
-        popfd
-        popad
-        jmp dword ptr [s_SetAnimActionAddr]   //tail into real SetAnimAction, ecx already set
-    }
+    DispatchWeaponJamEvent(actor);
+
+    auto original = reinterpret_cast<SetAnimAction_t>(s_setAnimActionCall.GetOverwrittenAddr());
+    return original ? original(actor, action, sequence) : 0;
 }
 
 namespace OnWeaponJamHandler {
@@ -71,7 +57,8 @@ bool Init(void* nvseInterface)
     if (nvse->isEditor) return false;
 
     if (!g_hookInstalled) {
-        SafeWrite::WriteRelCall(0x894081, (UInt32)Hook_SetAnimAction_Jam);
+        if (!s_setAnimActionCall.WriteRelCall(0x894081, Hook_SetAnimAction_Jam))
+            return false;
         g_hookInstalled = true;
     }
 

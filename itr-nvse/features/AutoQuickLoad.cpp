@@ -2,8 +2,9 @@
 //hooks PollControls to inject F9 keypress after a configurable delay
 
 #include "AutoQuickLoad.h"
-#include "internal/SafeWrite.h"
+#include "internal/Detours.h"
 #include "internal/settings.h"
+#include "internal/GameGlobals.h"
 #include "internal/globals.h"
 #include <Windows.h>
 
@@ -18,7 +19,7 @@ namespace AutoQuickLoad
 	#endif
 
 	typedef void (__thiscall *_PollControls)(void*);
-	static const _PollControls PollControls = (_PollControls)0x86F390;
+	static Detours::CallDetour s_pollControlsCall;
 
 	static bool IsStartMenuVisible()
 	{
@@ -29,7 +30,10 @@ namespace AutoQuickLoad
 	//so the game sees it as a real keypress when it checks GetUserAction(QuickLoad)
 	void __fastcall PollControlsHook(void* tesMain, void* edx)
 	{
-		PollControls(tesMain);
+		auto original = reinterpret_cast<_PollControls>(s_pollControlsCall.GetOverwrittenAddr());
+		if (original)
+			original(tesMain);
+
 		if (g_done)
 			return;
 
@@ -52,14 +56,14 @@ namespace AutoQuickLoad
 			return;
 
 		//DIK_F9=0x43, currKeyStates at +0x18F8
-		auto input = *(UInt8**)0x11F35CC;
+		auto input = (UInt8*)*g_inputGlobalsPtr;
 		if (input) input[0x18F8 + 0x43] = 0x80;
 		g_done = true;
 	}
 
 	void InstallHook()
 	{
-		SafeWrite::WriteRelCall(0x86E88C, (UInt32)PollControlsHook);
+		s_pollControlsCall.WriteRelCall(0x86E88C, PollControlsHook);
 	}
 
 	void Update()

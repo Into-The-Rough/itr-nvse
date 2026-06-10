@@ -4,6 +4,7 @@
 #include "nvse/GameForms.h"
 #include "nvse/GameObjects.h"
 #include "internal/SafeWrite.h"
+#include "internal/Detours.h"
 
 #include "internal/globals.h"
 #include "internal/EngineFunctions.h"
@@ -18,6 +19,7 @@ namespace VATSExtender
 
 	UInt32 g_lastLocationID = 0;
 	bool g_lastWasInterior = false;
+	static Detours::CallDetour s_renderSceneCall;
 
 	void** g_interfaceManager = (void**)0x11D8A80;
 
@@ -134,7 +136,9 @@ namespace VATSExtender
 			}
 		}
 
-		CdeclCall(0xB6C0D0, camera, accumulator);
+		auto original = reinterpret_cast<void(__cdecl*)(void*, void*)>(s_renderSceneCall.GetOverwrittenAddr());
+		if (original)
+			original(camera, accumulator);
 	}
 
 	void Init()
@@ -142,8 +146,7 @@ namespace VATSExtender
 		if (*(UInt8*)0x800DA4 == 0x68)
 			SafeWrite::WriteRelJump(0x800DA4, (UInt32)Hook_OnLimitReached);
 
-		if (*(UInt8*)0x801993 == 0xE8)
-			SafeWrite::WriteRelCall(0x801993, (UInt32)Hook_RenderScene);
+		s_renderSceneCall.WriteRelCall(0x801993, Hook_RenderScene);
 	}
 }
 

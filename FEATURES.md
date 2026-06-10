@@ -22,7 +22,7 @@
 - ResurrectActorEx - resurrect with options
 - ResurrectAll - resurrect all dead actors in area
 - SetCreatureCombatSkill - set creature combat skill
-- SetRaceAlt - set actor race at runtime
+- SetRaceAlt - set actor race at runtime. Note: the race swap uses a runtime-created form and does not persist through save/load — re-apply it in a load-game handler (e.g. ITR's own events or a quest script).
 - SetEyeMesh - override an eyes form's left/right mesh (run Update3D on an actor to apply)
 - ClearEyeMesh - remove an eyes form mesh override (run Update3D on an actor to apply)
 - UseAidItem - force actor to use an aid item

@@ -3,6 +3,7 @@
 
 #include "VATSProjectileFix.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/Detours.h"
 
 #include "internal/globals.h"
 #include "internal/CallTemplates.h"
@@ -44,11 +45,13 @@ namespace VATSProjectileFix
 
 	constexpr UInt32 kAddr_HookSite = 0x7ED349;
 
-	static UInt32 s_originalVATSMenuUpdate = 0;
+	static Detours::CallDetour s_vatsMenuUpdateCall;
+	typedef bool(__thiscall* VATSMenuUpdate_t)(void*);
 
 	static bool __fastcall VATSMenuUpdate_Hook(void* pThis)
 	{
-		bool result = ThisCall<bool>(s_originalVATSMenuUpdate, pThis);
+		auto original = reinterpret_cast<VATSMenuUpdate_t>(s_vatsMenuUpdateCall.GetOverwrittenAddr());
+		bool result = original ? original(pThis) : false;
 		if (!result) return result;
 
 		void** ppTargetRef = (void**)0x11F21CC;
@@ -80,9 +83,7 @@ namespace VATSProjectileFix
 
 	void Init()
 	{
-		SInt32 currentDisp = *(SInt32*)(kAddr_HookSite + 1);
-		s_originalVATSMenuUpdate = kAddr_HookSite + 5 + currentDisp;
-		SafeWrite::Write32(kAddr_HookSite + 1, (UInt32)VATSMenuUpdate_Hook - kAddr_HookSite - 5);
+		s_vatsMenuUpdateCall.WriteRelCall(kAddr_HookSite, VATSMenuUpdate_Hook);
 	}
 }
 

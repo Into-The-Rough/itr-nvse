@@ -3,6 +3,8 @@
 #include "OwnedBeds.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
+#include "internal/Detours.h"
 
 #include "internal/globals.h"
 #include "internal/CallTemplates.h"
@@ -10,6 +12,7 @@
 namespace OwnedBeds
 {
 	static bool g_enabled = false;
+	static Detours::CallDetour s_isOwnerCall;
 
 	static bool g_playerWarnedAboutBed = false;
 
@@ -24,8 +27,8 @@ namespace OwnedBeds
 	static _ProcessGreet ProcessGreet = (_ProcessGreet)0x8DBE30;
 
 	static void SendAssaultAlarmToBedOwner(void* bedRef, void* owner) {
-		void* player = *(void**)0x11DEA3C;
-		void* processList = (void*)0x11E0E80;
+		void* player = *(void**)g_thePlayerPtr;
+		void* processList = g_processManager;
 		void* nearbyActor = nullptr;
 
 		UInt8 formType = GetFormType(owner);
@@ -82,7 +85,7 @@ namespace OwnedBeds
 
 	void Init(bool enabled)
 	{
-		SafeWrite::WriteRelCall(0x509679, (UInt32)IsAnOwnerHook);
+		s_isOwnerCall.WriteRelCall(0x509679, IsAnOwnerHook);
 		g_enabled = enabled;
 	}
 }

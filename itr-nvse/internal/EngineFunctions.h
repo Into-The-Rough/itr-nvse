@@ -66,6 +66,9 @@ inline auto Tile_SetString = (void(__thiscall*)(void*, int, const char*, bool))0
 inline auto Tile_GetValue = (void*(__thiscall*)(void*, int))0xA01000;
 inline auto Tile_TextToTrait = (int(__cdecl*)(const char*))0xA01860;
 
+//ui messages - emotion picks the default icon, last arg queues behind the current message
+inline auto QueueUIMessage = (bool(__cdecl*)(const char*, UInt32, const char*, const char*, float, bool))0x7052F0;
+
 //sound handles
 inline auto BSSoundHandle_Play = (bool(__thiscall*)(void*, bool))0xAD8830;
 inline auto BSSoundHandle_Stop = (void(__thiscall*)(void*))0xAD88F0;

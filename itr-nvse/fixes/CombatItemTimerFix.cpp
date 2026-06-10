@@ -4,11 +4,14 @@
 
 #include "CombatItemTimerFix.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/Detours.h"
 
 #include "internal/globals.h"
 
 namespace CombatItemTimerFix
 {
+	static Detours::CallDetour s_resetCombatItemTimerCall;
+
 	//combat item types
 	enum { COMBAT_ITEM_RESTORE = 0, COMBAT_ITEM_BUFF = 1, COMBAT_ITEM_COUNT = 2 };
 
@@ -56,7 +59,7 @@ namespace CombatItemTimerFix
 
 	void Init()
 	{
-		SafeWrite::WriteRelCall(0x9DAB61, (UInt32)Hook_ResetCombatItemTimer);
+		s_resetCombatItemTimerCall.WriteRelCall(0x9DAB61, Hook_ResetCombatItemTimer);
 	}
 }
 

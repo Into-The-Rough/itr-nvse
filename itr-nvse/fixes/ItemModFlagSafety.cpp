@@ -6,6 +6,7 @@
 #include "ItemModFlagSafety.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/Detours.h"
+#include "internal/EngineFunctions.h"
 #include "internal/globals.h"
 
 namespace ItemModFlagSafety
@@ -46,15 +47,12 @@ namespace ItemModFlagSafety
 	//sub_775A00 builds the world activation prompt
 	//jip only appends plus in the weapon branch
 	//0x776F87 is after the prompt name write and before display branching
-	typedef void* (__thiscall* GetByType_t)(void*, UInt32);
-	static const GetByType_t GetByType = (GetByType_t)0x410220;
-
 	static void __fastcall RolloverAppendPlus(void* refr)
 	{
 		if (!refr) return;
 		void* base = *(void**)((char*)refr + 0x20); //base form
 		if (!base || *(UInt8*)((char*)base + 0x04) == 0x28) return; //weapon handled by jip
-		void* x = GetByType((void*)((char*)refr + 0x44), 0x8D); //ref BaseExtraList is embedded at +0x44
+		void* x = Engine::BaseExtraList_GetByType((void*)((char*)refr + 0x44), 0x8D); //ref BaseExtraList is embedded at +0x44
 		if (!x || *(UInt8*)((char*)x + 0x0C) == 0) return;
 		char* name = (char*)0x11D9C48;
 		UInt32 len = 0;

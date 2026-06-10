@@ -11,6 +11,9 @@
 #include "commands/ImperativeCommands.h"
 #include "commands/StringCommands.h"
 #include "commands/RadioCommands.h"
+#include "commands/ResurrectCommands.h"
+#include "commands/ForceCombatTargetCommands.h"
+#include "commands/CrouchCommands.h"
 #include "commands/ChallengeCommands.h"
 #include "commands/DialogueCommands.h"
 #include "commands/ForceSayCommand.h"
@@ -57,7 +60,7 @@ void RegisterAllCommands(void* nvsePtr)
 	FakeHitHandler::RegisterCommands(nvse); //FakeHit, FakeHitEx
 
 	nvse->SetOpcodeBase(0x401C);
-	ImperativeCommands::RegisterCommands(nvse); //IsRadioPlaying
+	RadioCommands::RegisterCommands3(nvse); //IsRadioPlaying
 
 	nvse->SetOpcodeBase(0x401D);
 	CameraOverride::RegisterCommands(nvse); //SetCameraAngle
@@ -66,7 +69,9 @@ void RegisterAllCommands(void* nvsePtr)
 	StringCommands::RegisterCommands(nvse); //Sv_TrimStr, Sv_Join, Sv_Reverse
 
 	nvse->SetOpcodeBase(0x4021);
-	ImperativeCommands::RegisterCommands2(nvse); //GetRefsSortedByDistance..GetTargetInitialLocation
+	ImperativeCommands::RegisterCommands(nvse); //GetRefsSortedByDistance, Duplicate, GetAvailableRecipes
+	RadioCommands::RegisterCommands4(nvse); //ChangeRadioTrack
+	ImperativeCommands::RegisterCommands2(nvse); //GetTargetLastSeenLocation..GetTargetInitialLocation
 
 	nvse->SetOpcodeBase(0x402A);
 	NoWeaponSearch::RegisterCommands(nvse); //SetNoWeaponSearch, GetNoWeaponSearch
@@ -84,19 +89,21 @@ void RegisterAllCommands(void* nvsePtr)
 	RadioCommands::RegisterCommands2(nvse); //GetPlayingRadioText
 
 	nvse->SetOpcodeBase(0x4032);
-	ImperativeCommands::RegisterCommands6(nvse); //ResurrectActorEx
+	ResurrectCommands::RegisterCommands(nvse); //ResurrectActorEx
 
 	nvse->SetOpcodeBase(0x4034);
 	ChallengeCommands::RegisterCommands(nvse); //ModChallenge
 
 	nvse->SetOpcodeBase(0x4035);
-	ImperativeCommands::RegisterCommands4(nvse); //SetCreatureCombatSkill, ResurrectAll, ForceReload
+	ImperativeCommands::RegisterCommands4(nvse); //SetCreatureCombatSkill
+	ResurrectCommands::RegisterCommands2(nvse); //ResurrectAll
+	ImperativeCommands::RegisterCommands5(nvse); //ForceReload
 
 	nvse->SetOpcodeBase(0x4038);
 	DialogueCommands::RegisterCommands(nvse); //GetDialogueInfoFlags, SetDialogueInfoFlags, GetDisplayedDialogueInfos
 
 	nvse->SetOpcodeBase(0x403B);
-	ImperativeCommands::RegisterCommands5(nvse); //SetRaceAlt
+	ImperativeCommands::RegisterCommands6(nvse); //SetRaceAlt
 
 	nvse->SetOpcodeBase(0x403C);
 	ForceSayCommand::RegisterCommands(nvse); //ForceSay
@@ -120,19 +127,19 @@ void RegisterAllCommands(void* nvsePtr)
 	GroundCommands::RegisterCommands(nvse); //MoveToTerrain, GetDistanceToTerrain, MoveToGround, GetDistanceToGround
 
 	nvse->SetOpcodeBase(0x405B);
-	ImperativeCommands::RegisterCommands7(nvse); //ForceCrouch, DisableCrouching
+	CrouchCommands::RegisterCommands(nvse); //ForceCrouch, DisableCrouching
 
 	nvse->SetOpcodeBase(0x405F);
-	ImperativeCommands::RegisterCommands8(nvse); //SetOnContactWatch, GetOnContactWatch
+	ImperativeCommands::RegisterCommands7(nvse); //SetOnContactWatch, GetOnContactWatch
 
 	nvse->SetOpcodeBase(0x4061);
-	ImperativeCommands::RegisterCommands9(nvse); //ForceCombatTarget
+	ForceCombatTargetCommands::RegisterCommands(nvse); //ForceCombatTarget
 
 	nvse->SetOpcodeBase(0x4062);
 	DialogueCameraHandler::RegisterCommands2(nvse); //SetDialogueCameraEnabled, SetDialogueCameraMode, SetDialogueCameraFixedAngle, SetDialogueCameraAngle
 
 	nvse->SetOpcodeBase(0x4066);
-	ImperativeCommands::RegisterCommands10(nvse); //RefillAmmo
+	ImperativeCommands::RegisterCommands8(nvse); //RefillAmmo
 
 	nvse->SetOpcodeBase(0x4068);
 	ToggleAllPrimitives::RegisterCommands(nvse); //ToggleAllPrimitives

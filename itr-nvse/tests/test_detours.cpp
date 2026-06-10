@@ -65,6 +65,38 @@ TEST(JumpDetour_RelocatesRel32Call)
 	return true;
 }
 
+TEST(CallDetour_RejectsSecondInstallPreservesOriginal)
+{
+	ScopedCodeBuffer source(64);
+	ASSERT(source.ptr != nullptr);
+
+	const UInt32 callSite = reinterpret_cast<UInt32>(source.ptr);
+	const UInt32 originalTarget = reinterpret_cast<UInt32>(source.ptr + 24);
+	const UInt32 hookTarget = reinterpret_cast<UInt32>(source.ptr + 32);
+	const UInt32 secondHookTarget = reinterpret_cast<UInt32>(source.ptr + 40);
+
+	source.ptr[0] = 0xE8;
+	*reinterpret_cast<SInt32*>(source.ptr + 1) = static_cast<SInt32>(originalTarget - (callSite + 5));
+
+	Detours::CallDetour detour;
+	ASSERT(detour.WriteRelCall(callSite, hookTarget));
+	ASSERT_EQ(detour.GetOverwrittenAddr(), originalTarget);
+	ASSERT(!detour.WriteRelCall(callSite, secondHookTarget));
+	ASSERT_EQ(detour.GetOverwrittenAddr(), originalTarget);
+
+	const UInt32 currentTarget = callSite + 5 + *reinterpret_cast<SInt32*>(source.ptr + 1);
+	ASSERT_EQ(currentTarget, hookTarget);
+	ASSERT(detour.Remove());
+	ASSERT(!detour.IsInstalled());
+	ASSERT_EQ(memcmp(source.ptr, "\xE8", 1), 0);
+
+	const UInt32 restoredTarget = callSite + 5 + *reinterpret_cast<SInt32*>(source.ptr + 1);
+	ASSERT_EQ(restoredTarget, originalTarget);
+	ASSERT(detour.WriteRelCall(callSite, secondHookTarget));
+	ASSERT_EQ(detour.GetOverwrittenAddr(), originalTarget);
+	return true;
+}
+
 TEST(JumpDetour_AcceptsCmovccPrologue)
 {
 	ScopedCodeBuffer source(32);
@@ -77,6 +109,90 @@ TEST(JumpDetour_AcceptsCmovccPrologue)
 	ASSERT(detour.WriteRelJump(reinterpret_cast<UInt32>(source.ptr), reinterpret_cast<UInt32>(source.ptr + 16), sizeof(original)));
 	ASSERT(detour.Remove());
 	ASSERT_EQ(memcmp(source.ptr, original, sizeof(original)), 0);
+	return true;
+}
+
+TEST(JumpDetour_ChainsExistingRelJump)
+{
+	ScopedCodeBuffer source(64);
+	ASSERT(source.ptr != nullptr);
+
+	const UInt32 sourceAddr = reinterpret_cast<UInt32>(source.ptr);
+	const UInt32 previousTarget = reinterpret_cast<UInt32>(source.ptr + 24);
+	const UInt32 hookTarget = reinterpret_cast<UInt32>(source.ptr + 40);
+
+	source.ptr[0] = 0xE9;
+	*reinterpret_cast<SInt32*>(source.ptr + 1) = static_cast<SInt32>(previousTarget - (sourceAddr + 5));
+
+	const UInt8 original[5] = { source.ptr[0], source.ptr[1], source.ptr[2], source.ptr[3], source.ptr[4] };
+
+	Detours::JumpDetour detour;
+	UInt8* trampoline = nullptr;
+	ASSERT(detour.WriteRelJumpChainable(sourceAddr, hookTarget, 5, &trampoline));
+	ASSERT(trampoline != nullptr);
+	ASSERT_EQ(source.ptr[0], 0xE9);
+
+	const UInt32 currentTarget = sourceAddr + 5 + *reinterpret_cast<SInt32*>(source.ptr + 1);
+	ASSERT_EQ(currentTarget, hookTarget);
+
+	const UInt32 trampolineTarget = reinterpret_cast<UInt32>(trampoline + 5) + *reinterpret_cast<SInt32*>(trampoline + 1);
+	ASSERT_EQ(trampolineTarget, previousTarget);
+
+	ASSERT(detour.Remove());
+	ASSERT_EQ(memcmp(source.ptr, original, sizeof(original)), 0);
+	return true;
+}
+
+TEST(CallDetour_RemoveRefusesForeignPatch)
+{
+	ScopedCodeBuffer source(64);
+	ASSERT(source.ptr != nullptr);
+
+	const UInt32 callSite = reinterpret_cast<UInt32>(source.ptr);
+	const UInt32 originalTarget = reinterpret_cast<UInt32>(source.ptr + 24);
+	const UInt32 hookTarget = reinterpret_cast<UInt32>(source.ptr + 32);
+	const UInt32 foreignTarget = reinterpret_cast<UInt32>(source.ptr + 40);
+
+	source.ptr[0] = 0xE8;
+	*reinterpret_cast<SInt32*>(source.ptr + 1) = static_cast<SInt32>(originalTarget - (callSite + 5));
+
+	Detours::CallDetour detour;
+	ASSERT(detour.WriteRelCall(callSite, hookTarget));
+
+	//another mod re-patches the same site after us
+	*reinterpret_cast<SInt32*>(source.ptr + 1) = static_cast<SInt32>(foreignTarget - (callSite + 5));
+
+	ASSERT(!detour.Remove());
+	ASSERT(detour.IsInstalled());
+	ASSERT_EQ(source.ptr[0], 0xE8);
+	const UInt32 currentTarget = callSite + 5 + *reinterpret_cast<SInt32*>(source.ptr + 1);
+	ASSERT_EQ(currentTarget, foreignTarget);
+	return true;
+}
+
+TEST(JumpDetour_RemoveRefusesForeignPatch)
+{
+	ScopedCodeBuffer source(64);
+	ASSERT(source.ptr != nullptr);
+
+	const UInt8 original[5] = { 0x0F, 0x45, 0xC1, 0x90, 0x90 };
+	memcpy(source.ptr, original, sizeof(original));
+
+	const UInt32 sourceAddr = reinterpret_cast<UInt32>(source.ptr);
+	const UInt32 foreignTarget = reinterpret_cast<UInt32>(source.ptr + 40);
+
+	Detours::JumpDetour detour;
+	ASSERT(detour.WriteRelJump(sourceAddr, reinterpret_cast<UInt32>(source.ptr + 16), sizeof(original)));
+	ASSERT_EQ(source.ptr[0], 0xE9);
+
+	//another mod re-patches the same site after us
+	*reinterpret_cast<SInt32*>(source.ptr + 1) = static_cast<SInt32>(foreignTarget - (sourceAddr + 5));
+
+	ASSERT(!detour.Remove());
+	ASSERT(detour.IsInstalled());
+	ASSERT_EQ(source.ptr[0], 0xE9);
+	const UInt32 currentTarget = sourceAddr + 5 + *reinterpret_cast<SInt32*>(source.ptr + 1);
+	ASSERT_EQ(currentTarget, foreignTarget);
 	return true;
 }
 

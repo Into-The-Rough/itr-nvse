@@ -1,6 +1,8 @@
 #include "SaveFileSizeHandler.h"
 #include "internal/SafeWrite.h"
+#include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "internal/FormatLogic.h"
 #include <cstdio>
 
@@ -22,24 +24,17 @@ static_assert(offsetof(BGSSaveLoadFileEntry, location) == 0x14);
 
 typedef void (__thiscall *_ConstructSavegamePath)(void*, char*);
 static const _ConstructSavegamePath ConstructSavegamePath = (_ConstructSavegamePath)0x84FF30;
-static void** g_saveGameManager = (void**)0x11DE134;
 
 namespace SaveFileSizeHandler
 {
 	static char g_savePath[MAX_PATH] = {0};
 	static UInt32 g_chainTarget = 0;
+	static Detours::CallDetour s_setupTileCall;
 
 	static void EnsureSavePath()
 	{
-		if (g_savePath[0] == '\0' && *g_saveGameManager)
-			ConstructSavegamePath(*g_saveGameManager, g_savePath);
-	}
-
-	static UInt32 ReadCallTarget(UInt32 addr)
-	{
-		UInt8* p = (UInt8*)addr;
-		if (p[0] != 0xE8) return 0;
-		return addr + 5 + *(SInt32*)(addr + 1);
+		if (g_savePath[0] == '\0' && *g_saveGameManagerPtr)
+			ConstructSavegamePath(*g_saveGameManagerPtr, g_savePath);
 	}
 
 	static const UInt32 kAddr_HookSite = 0x7D6931;
@@ -99,12 +94,10 @@ namespace SaveFileSizeHandler
 
 	static void InstallHooks()
 	{
-		g_chainTarget = ReadCallTarget(kAddr_HookSite);
-		if (g_chainTarget == 0)
+		if (!s_setupTileCall.WriteRelCall(kAddr_HookSite, Hook))
 			return;
-
+		g_chainTarget = s_setupTileCall.GetOverwrittenAddr();
 		SafeWrite::WriteNop(kAddr_JnzPatch, 6);
-		SafeWrite::WriteRelCall(kAddr_HookSite, (UInt32)Hook);
 	}
 
 	bool Init()

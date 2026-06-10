@@ -122,8 +122,9 @@ namespace InlineGlyphFix
 	{
 		s_origComputeButtonMetrics(font, icon, character);
 
+		//hook may outlive a refused remove
 		void* tile = s_currentTile;
-		if (!tile || !font || !icon) return;
+		if (!s_installed || !tile || !font || !icon) return;
 		s_lastTile = tile;
 
 		float scale = GetTileScale(tile, font);
@@ -161,7 +162,7 @@ namespace InlineGlyphFix
 			return;
 
 		void* tile = GetActiveTile();
-		if (!tile || !cursor)
+		if (!s_installed || !tile || !cursor)
 		{
 			s_origAddButton(font, iconIdx, triShape, cursor);
 			return;
@@ -227,32 +228,38 @@ namespace InlineGlyphFix
 			return false;
 		}
 
-		UInt32 origMakeNode = 0;
-		if (!SwapVtableSlot(kAddr_TileTextVtable_MakeNode, (UInt32)Hook_MakeNode, origMakeNode))
+		//nonzero means a foreign vtable hook still chains through us, reswapping would capture it and cycle
+		if (!s_origMakeNode)
 		{
-			Log("InlineGlyphFix: failed to swap TileText vtable");
-			s_addButtonDetour.Remove();
-			s_metricsDetour.Remove();
-			s_origComputeButtonMetrics = nullptr;
-			s_origAddButton = nullptr;
-			return false;
+			UInt32 origMakeNode = 0;
+			if (!SwapVtableSlot(kAddr_TileTextVtable_MakeNode, (UInt32)Hook_MakeNode, origMakeNode))
+			{
+				Log("InlineGlyphFix: failed to swap TileText vtable");
+				s_addButtonDetour.Remove();
+				s_metricsDetour.Remove();
+				s_origComputeButtonMetrics = nullptr;
+				s_origAddButton = nullptr;
+				return false;
+			}
+			s_origMakeNode = (TileText_MakeNode_t)origMakeNode;
 		}
-		s_origMakeNode = (TileText_MakeNode_t)origMakeNode;
 		return true;
 	}
 
 	static void UninstallHooks()
 	{
-		if (s_origMakeNode)
+		//only restore while the slot is still ours, a foreign hook may chain through us
+		if (s_origMakeNode && *(UInt32*)kAddr_TileTextVtable_MakeNode == (UInt32)Hook_MakeNode)
 		{
 			UInt32 dummy = 0;
 			SwapVtableSlot(kAddr_TileTextVtable_MakeNode, (UInt32)s_origMakeNode, dummy);
 			s_origMakeNode = nullptr;
 		}
-		s_addButtonDetour.Remove();
-		s_metricsDetour.Remove();
-		s_origComputeButtonMetrics = nullptr;
-		s_origAddButton = nullptr;
+		//keep originals if Remove is refused, the still-live hooks need them to pass through
+		if (s_addButtonDetour.Remove())
+			s_origAddButton = nullptr;
+		if (s_metricsDetour.Remove())
+			s_origComputeButtonMetrics = nullptr;
 		s_currentTile = nullptr;
 		s_lastTile = nullptr;
 	}

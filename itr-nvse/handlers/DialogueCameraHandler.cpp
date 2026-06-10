@@ -2,7 +2,10 @@
 #include "nvse/PluginAPI.h"
 #include "nvse/GameObjects.h"
 #include "internal/SafeWrite.h"
+#include "internal/Detours.h"
 #include "internal/CallTemplates.h"
+#include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "internal/globals.h"
 #include "internal/Mat3.h"
 #include "internal/settings.h"
@@ -28,6 +31,10 @@ namespace CameraHooks {
 	static SetLocalTranslate_t g_origTranslate2 = nullptr;
 	static SetLocalRotate_t g_origRotate1 = nullptr;
 	static SetLocalRotate_t g_origRotate2 = nullptr;
+	static Detours::CallDetour g_translateCall1;
+	static Detours::CallDetour g_translateCall2;
+	static Detours::CallDetour g_rotateCall1;
+	static Detours::CallDetour g_rotateCall2;
 	static bool g_hooksInstalled = false;
 
 	void __fastcall TranslateHook1(void* node, void* edx, NiVector3* pos) {
@@ -74,15 +81,23 @@ namespace CameraHooks {
 	}
 
 	template<typename T>
-	static bool PatchRelCall(UInt32 src, UInt32 dst, T& orig, const char* name) {
+	static bool PatchRelCall(Detours::CallDetour& detour, UInt32 src, T dst, T& orig, const char* name) {
 		if (*(UInt8*)src != 0xE8) {
 			Log("DialogueCameraHandler: %s patch site 0x%08X expected CALL, found 0x%02X", name, src, *(UInt8*)src);
 			return false;
 		}
 
-		orig = reinterpret_cast<T>(SafeWrite::GetRelJumpTarget(src));
-		SafeWrite::WriteRelCall(src, dst);
+		if (!detour.WriteRelCall(src, dst))
+			return false;
+		orig = reinterpret_cast<T>(detour.GetOverwrittenAddr());
 		return true;
+	}
+
+	static void RollbackHooks() {
+		if (g_translateCall1.Remove()) g_origTranslate1 = nullptr;
+		if (g_rotateCall1.Remove()) g_origRotate1 = nullptr;
+		if (g_translateCall2.Remove()) g_origTranslate2 = nullptr;
+		if (g_rotateCall2.Remove()) g_origRotate2 = nullptr;
 	}
 
 	bool InstallHooks() {
@@ -93,14 +108,14 @@ namespace CameraHooks {
 		//0x94AD9D - SetLocalRotate in PlayerCharacter::HandleFlycamMovement
 		//0x94BDC2 - SetLocalTranslate in PlayerCharacter::UpdateCamera
 		//0x94BDD5 - SetLocalRotate in PlayerCharacter::UpdateCamera
-		if (!PatchRelCall(0x94AD8A, (UInt32)TranslateHook1, g_origTranslate1, "HandleFlycamMovement::SetLocalTranslate"))
+		const bool ok = PatchRelCall(g_translateCall1, 0x94AD8A, TranslateHook1, g_origTranslate1, "HandleFlycamMovement::SetLocalTranslate")
+			&& PatchRelCall(g_rotateCall1, 0x94AD9D, RotateHook1, g_origRotate1, "HandleFlycamMovement::SetLocalRotate")
+			&& PatchRelCall(g_translateCall2, 0x94BDC2, TranslateHook2, g_origTranslate2, "UpdateCamera::SetLocalTranslate")
+			&& PatchRelCall(g_rotateCall2, 0x94BDD5, RotateHook2, g_origRotate2, "UpdateCamera::SetLocalRotate");
+		if (!ok) {
+			RollbackHooks();
 			return false;
-		if (!PatchRelCall(0x94AD9D, (UInt32)RotateHook1, g_origRotate1, "HandleFlycamMovement::SetLocalRotate"))
-			return false;
-		if (!PatchRelCall(0x94BDC2, (UInt32)TranslateHook2, g_origTranslate2, "UpdateCamera::SetLocalTranslate"))
-			return false;
-		if (!PatchRelCall(0x94BDD5, (UInt32)RotateHook2, g_origRotate2, "UpdateCamera::SetLocalRotate"))
-			return false;
+		}
 
 		g_cameraRot.Identity();
 		g_hooksInstalled = true;
@@ -180,59 +195,37 @@ static float CastRay(float startX, float startY, float startZ,
 	return rcData.hitFraction;
 }
 
+//<1.0 when the camera sits closer to the actor's head than minDist
+static float ActorProximityFrac(float camX, float camY, float camZ,
+								float lookX, float lookY, float lookZ,
+								TESObjectREFR* actor, float minDist) {
+	if (!actor) return 1.0f;
+
+	float dx = camX - actor->posX;
+	float dy = camY - actor->posY;
+	float dz = camZ - (actor->posZ + 60.0f);
+	float dist = sqrtf(dx*dx + dy*dy + dz*dz);
+	if (dist >= minDist) return 1.0f;
+
+	float lookToCamX = camX - lookX;
+	float lookToCamY = camY - lookY;
+	float lookToCamZ = camZ - lookZ;
+	float totalDist = sqrtf(lookToCamX*lookToCamX + lookToCamY*lookToCamY + lookToCamZ*lookToCamZ);
+	if (totalDist <= 1.0f) return 1.0f;
+
+	return (totalDist - (minDist - dist) * 1.5f) / totalDist;
+}
+
 //returns safe fraction from look target (1.0=ok, <1.0=pull closer)
 static float CheckCameraClip(float camX, float camY, float camZ,
 							 float lookX, float lookY, float lookZ,
 							 TESObjectREFR* npc, TESObjectREFR* player) {
 	float safeFrac = 1.0f;
 
-	if (npc) {
-		float npcX = npc->posX;
-		float npcY = npc->posY;
-		float npcZ = npc->posZ + 60.0f;
-		float dx = camX - npcX;
-		float dy = camY - npcY;
-		float dz = camZ - npcZ;
-		float distToNPC = sqrtf(dx*dx + dy*dy + dz*dz);
-
-		constexpr float kMinNPCDist = 40.0f;
-		if (distToNPC < kMinNPCDist) {
-			float lookToCamX = camX - lookX;
-			float lookToCamY = camY - lookY;
-			float lookToCamZ = camZ - lookZ;
-			float totalDist = sqrtf(lookToCamX*lookToCamX + lookToCamY*lookToCamY + lookToCamZ*lookToCamZ);
-			if (totalDist > 1.0f) {
-				float adjustedFrac = (totalDist - (kMinNPCDist - distToNPC) * 1.5f) / totalDist;
-				if (adjustedFrac < safeFrac) {
-					safeFrac = adjustedFrac;
-				}
-			}
-		}
-	}
-
-	if (player) {
-		float plrX = player->posX;
-		float plrY = player->posY;
-		float plrZ = player->posZ + 60.0f;
-		float dx = camX - plrX;
-		float dy = camY - plrY;
-		float dz = camZ - plrZ;
-		float distToPlayer = sqrtf(dx*dx + dy*dy + dz*dz);
-
-		constexpr float kMinPlayerDist = 35.0f;
-		if (distToPlayer < kMinPlayerDist) {
-			float lookToCamX = camX - lookX;
-			float lookToCamY = camY - lookY;
-			float lookToCamZ = camZ - lookZ;
-			float totalDist = sqrtf(lookToCamX*lookToCamX + lookToCamY*lookToCamY + lookToCamZ*lookToCamZ);
-			if (totalDist > 1.0f) {
-				float adjustedFrac = (totalDist - (kMinPlayerDist - distToPlayer) * 1.5f) / totalDist;
-				if (adjustedFrac < safeFrac) {
-					safeFrac = adjustedFrac;
-				}
-			}
-		}
-	}
+	float frac = ActorProximityFrac(camX, camY, camZ, lookX, lookY, lookZ, npc, 40.0f);
+	if (frac < safeFrac) safeFrac = frac;
+	frac = ActorProximityFrac(camX, camY, camZ, lookX, lookY, lookZ, player, 35.0f);
+	if (frac < safeFrac) safeFrac = frac;
 
 	//raycast from look target to camera, offset start past actor collision
 	float rayDirX = camX - lookX;
@@ -284,8 +277,6 @@ enum CameraAngleMode {
 	kAngleMode_Manual
 };
 
-static PlayerCharacter** g_thePlayer = (PlayerCharacter**)0x11DEA3C;
-
 struct InterfaceManager {
 	UInt8 pad[0xFC];
 	TESObjectREFR* crosshairRef;  //0xFC
@@ -309,6 +300,7 @@ static constexpr UInt32 kMenuType_Dialogue = 1009;
 
 static bool g_inDialogue = false;
 static TESObjectREFR* g_dialogueTarget = nullptr;
+static UInt32 g_dialogueTargetID = 0;
 static CameraAngle g_currentAngle = kAngle_Vanilla;
 static CameraAngleMode g_angleMode = kAngleMode_Cycle;
 static CameraAngle g_fixedAngle = kAngle_Vanilla;
@@ -319,6 +311,7 @@ static UInt32 g_lastTopicInfoID = 0;
 
 static float g_baseCamX = 0, g_baseCamY = 0, g_baseCamZ = 0;
 static float g_baseLookX = 0, g_baseLookY = 0, g_baseLookZ = 0;
+static bool g_hasPrevShot = false;
 static double g_noiseTime = 0;
 
 static float g_transFromCamX = 0, g_transFromCamY = 0, g_transFromCamZ = 0;
@@ -339,14 +332,52 @@ static bool g_rngSeeded = false;
 static const siv::PerlinNoise g_perlinPitch{ 4 };
 static const siv::PerlinNoise g_perlinYaw{ 5 };
 
+//stateful - call exactly once per frame, from Update only
+static float FrameDelta()
+{
+	static LARGE_INTEGER s_freq = {};
+	static LARGE_INTEGER s_last = {};
+	LARGE_INTEGER now;
+	QueryPerformanceCounter(&now);
+	if (!s_freq.QuadPart)
+	{
+		QueryPerformanceFrequency(&s_freq);
+		s_last = now;
+		return 1.0f / 60.0f;
+	}
+	float dt = (float)((double)(now.QuadPart - s_last.QuadPart) / (double)s_freq.QuadPart);
+	s_last = now;
+	if (dt > 0.1f) dt = 0.1f;   //clamp hitches so shots don't teleport
+	if (dt < 0.0f) dt = 0.0f;
+	return dt;
+}
+
 static int* g_pDialogueCamera = &Settings::bDialogueCamera;
 static const UInt32 kAddr_bShouldRestore1stPerson = 0x11F21D0;
+static Detours::CallDetour s_show1stPersonFocusCall;
+static Detours::CallDetour s_show1stPersonDialogCall;
+static Detours::CallDetour s_pickAnimationsCall;
+static Detours::CallDetour s_setFirstPersonCall;
+typedef void(__thiscall* Show1stPerson_t)(void*, bool);
+typedef void(__thiscall* PickAnimations_t)(void*, float, float);
 
 //sites 1&2: call wrappers for Show1stPerson (0x951A10)
 //when dialogue camera active, skip the force-third-person call
-static void __fastcall Hook_Show1stPerson(void* player, void* edx, bool show) {
+static void Hook_Show1stPerson(Detours::CallDetour& detour, void* player, bool show) {
 	if (!Settings::bDialogueCamera)
-		ThisCall<void>(0x951A10, player, show);
+	{
+		auto original = reinterpret_cast<Show1stPerson_t>(detour.GetOverwrittenAddr());
+		if (original)
+			original(player, show);
+	}
+}
+
+static void __fastcall Hook_Show1stPerson_Focus(void* player, void*, bool show) {
+	Hook_Show1stPerson(s_show1stPersonFocusCall, player, show);
+}
+
+static void __fastcall Hook_Show1stPerson_Dialog(void* player, void*, bool show) {
+	Hook_Show1stPerson(s_show1stPersonDialogCall, player, show);
 }
 
 //site 3: FocusOnActor force-third-person branch (0x953ABF)
@@ -423,89 +454,87 @@ __declspec(naked) void Hook_SkipFallbackFOV() {
 //the heading block rotates the player toward NPC (good) but PickAnimations
 //sees the heading change and selects a walk/turn animation (bad).
 //skip just this call - heading still applies to 3D via UpdateAnimation.
-static void __fastcall Hook_SkipPickAnimations(void* actor, void* edx, float a1, float a2) {
+static void __fastcall Hook_SkipPickAnimations(void* actor, void*, float a1, float a2) {
 	if (!Settings::bDialogueCamera)
-		ThisCall<void>(0x895110, actor, a1, a2); //Actor::PickAnimations
+	{
+		auto original = reinterpret_cast<PickAnimations_t>(s_pickAnimationsCall.GetOverwrittenAddr());
+		if (original)
+			original(actor, a1, a2);
+	}
 }
 
 //site 8: SetFirstPerson(true) in heading block (0x953AC7)
 //the heading block forces 1st person every frame, which prevents the
 //3rd person model from being updated with the new rotation.
-static void __fastcall Hook_SkipSetFirstPerson(void* player, void* edx, bool bFirst) {
+static void __fastcall Hook_SkipSetFirstPerson(void* player, void*, bool bFirst) {
 	if (!Settings::bDialogueCamera)
-		ThisCall<void>(0x950110, player, bFirst); //PlayerCharacter::SetFirstPerson
+	{
+		auto original = reinterpret_cast<SetFirstPerson_t>(s_setFirstPersonCall.GetOverwrittenAddr());
+		if (original)
+			original(player, bFirst);
+	}
+}
+
+template <typename T>
+static bool InstallCallSite(Detours::CallDetour& detour, UInt32 addr, T hook, const char* name)
+{
+	if (*(UInt8*)addr != 0xE8) {
+		Log("DialogueCameraHandler: %s expected CALL at 0x%08X, found 0x%02X", name, addr, *(UInt8*)addr);
+		return false;
+	}
+	return detour.WriteRelCall(addr, hook);
 }
 
 static bool InstallDialoguePatches() {
 	if (g_patchesInstalled)
 		return true;
 
-	//site 1: FocusOnActor call to Show1stPerson
-	if (*(UInt8*)0x953124 != 0xE8) {
-		Log("DialogueCameraHandler: site 1 (0x953124) expected CALL, found 0x%02X", *(UInt8*)0x953124);
-		return false;
+	//verify every site before writing anything - partial install would suppress
+	//vanilla first-person dialogue with no replacement camera
+	struct SiteCheck { UInt32 addr; UInt8 expect; const char* name; };
+	static const SiteCheck kSites[] = {
+		{ 0x953124, 0xE8, "site 1 (FocusOnActor::Show1stPerson)" },
+		{ 0x761DEF, 0xE8, "site 2 (DialogMenu::Create::Show1stPerson)" },
+		{ 0x953ABF, 0x6A, "site 3 (force-third-person branch 1)" },
+		{ 0x762E55, 0xC6, "site 4 (DoIdle save first-person)" },
+		{ 0x9533BE, 0x0F, "site 5 (dialogue zoom conditional)" },
+		{ 0x953BB4, 0x0F, "site 6 (fallback SetFOV)" },
+		{ 0x953B2F, 0xE8, "site 7 (PickAnimations)" },
+		{ 0x953AC7, 0xE8, "site 8 (SetFirstPerson)" },
+	};
+	for (const auto& s : kSites)
+	{
+		if (*(UInt8*)s.addr != s.expect)
+		{
+			Log("DialogueCameraHandler: %s expected 0x%02X at 0x%08X, found 0x%02X - dialogue camera disabled", s.name, s.expect, s.addr, *(UInt8*)s.addr);
+			return false;
+		}
 	}
-	SafeWrite::WriteRelCall(0x953124, (UInt32)Hook_Show1stPerson);
 
-	//site 2: DialogMenu::Create call to Show1stPerson
-	if (*(UInt8*)0x761DEF != 0xE8) {
-		Log("DialogueCameraHandler: site 2 (0x761DEF) expected CALL, found 0x%02X", *(UInt8*)0x761DEF);
-		return false;
-	}
-	SafeWrite::WriteRelCall(0x761DEF, (UInt32)Hook_Show1stPerson);
+	InstallCallSite(s_show1stPersonFocusCall, 0x953124, Hook_Show1stPerson_Focus, "site 1 (FocusOnActor::Show1stPerson)");
+	InstallCallSite(s_show1stPersonDialogCall, 0x761DEF, Hook_Show1stPerson_Dialog, "site 2 (DialogMenu::Create::Show1stPerson)");
 
 	//site 3: FocusOnActor force-third-person branch (8 bytes: push 1 + mov ecx)
-	if (*(UInt8*)0x953ABF != 0x6A) {
-		Log("DialogueCameraHandler: site 3 (0x953ABF) expected 0x6A, found 0x%02X", *(UInt8*)0x953ABF);
-		return false;
-	}
 	SafeWrite::WriteRelJump(0x953ABF, (UInt32)Hook_ForceThirdPerson_Branch1);
 	SafeWrite::WriteNop(0x953AC4, 3); //pad remainder of 8-byte overwrite
 
 	//site 4: DoIdle save first-person state (7 bytes: mov byte ptr)
-	if (*(UInt8*)0x762E55 != 0xC6) {
-		Log("DialogueCameraHandler: site 4 (0x762E55) expected 0xC6, found 0x%02X", *(UInt8*)0x762E55);
-		return false;
-	}
 	SafeWrite::WriteRelJump(0x762E55, (UInt32)Hook_ForceThirdPerson_Branch2);
 	SafeWrite::WriteNop(0x762E5A, 2); //pad remainder of 7-byte overwrite
 
 	//site 5: FocusOnActor dialogue zoom conditional (6 bytes: jz near)
-	if (*(UInt8*)0x9533BE != 0x0F) {
-		Log("DialogueCameraHandler: site 5 (0x9533BE) expected 0x0F, found 0x%02X", *(UInt8*)0x9533BE);
-		return false;
-	}
 	SafeWrite::WriteRelJump(0x9533BE, (UInt32)Hook_DisableDialogueZoom);
 	SafeWrite::Write8(0x9533C3, 0x90); //pad 6th byte
 
 	//site 6: FocusOnActor fallback SetFOV (8 bytes: movzx+test+jnz)
-	if (*(UInt8*)0x953BB4 != 0x0F) {
-		Log("DialogueCameraHandler: site 6 (0x953BB4) expected 0x0F, found 0x%02X", *(UInt8*)0x953BB4);
-		return false;
-	}
 	SafeWrite::WriteRelJump(0x953BB4, (UInt32)Hook_SkipFallbackFOV);
 	SafeWrite::WriteNop(0x953BB9, 3); //pad remainder of 8-byte overwrite
 
-	//site 7: PickAnimations call in FocusOnActor heading block (5 bytes: call)
-	if (*(UInt8*)0x953B2F != 0xE8) {
-		Log("DialogueCameraHandler: site 7 (0x953B2F) expected CALL, found 0x%02X", *(UInt8*)0x953B2F);
-		return false;
-	}
-	SafeWrite::WriteRelCall(0x953B2F, (UInt32)Hook_SkipPickAnimations);
-
-	//site 8: SetFirstPerson(true) in heading block (5 bytes: call)
-	if (*(UInt8*)0x953AC7 != 0xE8) {
-		Log("DialogueCameraHandler: site 8 (0x953AC7) expected CALL, found 0x%02X", *(UInt8*)0x953AC7);
-		return false;
-	}
-	SafeWrite::WriteRelCall(0x953AC7, (UInt32)Hook_SkipSetFirstPerson);
+	InstallCallSite(s_pickAnimationsCall, 0x953B2F, Hook_SkipPickAnimations, "site 7 (PickAnimations)");
+	InstallCallSite(s_setFirstPersonCall, 0x953AC7, Hook_SkipSetFirstPerson, "site 8 (SetFirstPerson)");
 
 	g_patchesInstalled = true;
 	return true;
-}
-
-static void DisableCamera() {
-	CameraHooks::Disable();
 }
 
 typedef void* (__cdecl* GetObjectByName_t)(void* rootNode, const char* name);
@@ -611,8 +640,12 @@ static void ApplySelectedAngle(CameraAngle angle, bool forceDollyReset = false)
 }
 
 static void ApplyCameraAngle(CameraAngle angle) {
-	PlayerCharacter* player = *g_thePlayer;
+	PlayerCharacter* player = *g_thePlayerPtr;
 	if (!player || !g_dialogueTarget) return;
+
+	//a result script can disable or delete the speaker mid-dialogue, revalidate before touching it
+	if (Engine::LookupFormByID(g_dialogueTargetID) != g_dialogueTarget) return;
+	if (!*(void**)((UInt8*)g_dialogueTarget + 0x64)) return; //renderData
 
 	//use actual head positions when available, fall back to estimated
 	float px, py, pz;
@@ -740,7 +773,8 @@ static void ApplyCameraAngle(CameraAngle angle) {
 		camZ = lookZ + (camZ - lookZ) * finalClipFrac;
 	}
 
-	bool isFirstAngle = (g_baseCamX == 0 && g_baseCamY == 0 && g_baseCamZ == 0);
+	bool isFirstAngle = !g_hasPrevShot;
+	g_hasPrevShot = true;
 
 	if (!Settings::bSmoothCameraAngleInterp || isFirstAngle)
 	{
@@ -777,14 +811,14 @@ static void ApplyCameraAngle(CameraAngle angle) {
 	}
 }
 
-static void ApplyCameraNoise() {
+static void ApplyCameraNoise(float dt) {
 	float rotAmp = (g_shakeAmplitude >= 0.0f) ? g_shakeAmplitude : (float)Settings::iShakeAmplitude;
 	if (rotAmp > 15.0f) rotAmp = 15.0f;
 
 	//advance transition
 	if (g_transProgress < 1.0f)
 	{
-		g_transProgress += g_transSpeed * (1.0f / 60.0f); //assume ~60fps
+		g_transProgress += g_transSpeed * dt;
 		if (g_transProgress > 1.0f) g_transProgress = 1.0f;
 
 		float t = g_transProgress * g_transProgress * (3.0f - 2.0f * g_transProgress);
@@ -809,7 +843,7 @@ static void ApplyCameraNoise() {
 	{
 		if (g_dollyProgress < 1.0f)
 		{
-			g_dollyProgress += g_dollySpeed * 0.001f;
+			g_dollyProgress += g_dollySpeed * 0.06f * dt;
 			if (g_dollyProgress > 1.0f)
 			{
 				g_dollyProgress = 1.0f;
@@ -852,8 +886,9 @@ static void OnDialogueStart() {
 		g_dialogueTarget = nullptr;
 		return;
 	}
+	g_dialogueTargetID = g_dialogueTarget->refID;
 
-	PlayerCharacter* player = *g_thePlayer;
+	PlayerCharacter* player = *g_thePlayerPtr;
 	if (!player) return;
 
 	g_wasFirstPerson = !*(bool*)((UInt8*)player + 0x64A); //is3rdPerson
@@ -868,6 +903,7 @@ static void OnDialogueStart() {
 	g_transProgress = 1.0f;
 	g_baseCamX = g_baseCamY = g_baseCamZ = 0;
 	g_baseLookX = g_baseLookY = g_baseLookZ = 0;
+	g_hasPrevShot = false;
 	g_cameraActive = true;
 
 	g_currentAngle = SelectDialogueAngle(true);
@@ -876,9 +912,9 @@ static void OnDialogueStart() {
 
 static void OnDialogueEnd() {
 	if (g_cameraActive) {
-		DisableCamera();
+		CameraHooks::Disable();
 		if (g_wasFirstPerson) {
-			PlayerCharacter* player = *g_thePlayer;
+			PlayerCharacter* player = *g_thePlayerPtr;
 			if (player) {
 				SetFirstPerson(player, true);
 			}
@@ -886,6 +922,7 @@ static void OnDialogueEnd() {
 		g_cameraActive = false;
 	}
 	g_dialogueTarget = nullptr;
+	g_dialogueTargetID = 0;
 }
 
 void Update() {
@@ -918,7 +955,7 @@ void Update() {
 
 	//apply player heading to 3rd person NiNode - the heading block updates
 	//rotZ correctly but b3rdPerson toggling prevents the 3D from following
-	PlayerCharacter* player = *g_thePlayer;
+	PlayerCharacter* player = *g_thePlayerPtr;
 	if (player) {
 		void* node3rd = ThisCall<void*>(0x950BB0, player, 0); //GetNode(3rdPerson)
 		if (node3rd) {
@@ -928,14 +965,21 @@ void Update() {
 		}
 	}
 
-	g_noiseTime += 0.005;
-	ApplyCameraNoise();
+	const float dt = FrameDelta();
+	g_noiseTime += 0.3 * dt;
+	ApplyCameraNoise(dt);
 }
 
 bool InstallCameraHooks() {
 	if (!CameraHooks::InstallHooks())
 		return false;
-	return InstallDialoguePatches();
+	if (!InstallDialoguePatches()) {
+		//no dialogue patch was written, camera hooks stay installed but inert
+		//so dialogue behaves fully vanilla
+		CameraHooks::Disable();
+		return false;
+	}
+	return true;
 }
 
 }

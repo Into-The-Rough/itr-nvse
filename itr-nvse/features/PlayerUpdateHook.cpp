@@ -1,8 +1,9 @@
 //QuickDrop & Quick180 (single combined hook)
 
 #include "PlayerUpdateHook.h"
-#include "internal/SafeWrite.h"
+#include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "internal/CallTemplates.h"
 
 #include "internal/globals.h"
@@ -23,7 +24,8 @@ namespace PlayerUpdateHook
 
 	bool g_quickDropLastPressed = false;
 	bool g_quick180LastPressed = false;
-	uint32_t g_originalCallTarget = 0;
+	static Detours::CallDetour s_playerUpdateCall;
+	typedef void(__thiscall* PlayerUpdate_t)(void*, float);
 
 	bool GetControlState(void* input, uint32_t controlCode, KeyState state) {
 		return Engine::OSInputGlobals_GetControlState(input, controlCode, (UInt8)state);
@@ -45,10 +47,12 @@ namespace PlayerUpdateHook
 	}
 
 	void __fastcall PlayerUpdate_Hook(void* player, void* edx, float timeDelta) {
-		ThisCall<void>(g_originalCallTarget, player, timeDelta);
+		auto original = reinterpret_cast<PlayerUpdate_t>(s_playerUpdateCall.GetOverwrittenAddr());
+		if (original)
+			original(player, timeDelta);
 
 		void* osGlobals = *(void**)0x11DEA0C;
-		void* inputGlobals = *(void**)0x11F35CC;
+		void* inputGlobals = *g_inputGlobalsPtr;
 
 		if (!osGlobals) {
 			g_quickDropLastPressed = false;
@@ -95,8 +99,7 @@ namespace PlayerUpdateHook
 		g_quick180Enabled = quick180;
 		g_quick180ModifierKey = quick180ModKey;
 		g_quick180ControlID = quick180ControlID;
-		g_originalCallTarget = SafeWrite::GetRelJumpTarget(kAddr_PlayerUpdateCall);
-		SafeWrite::WriteRelCall(kAddr_PlayerUpdateCall, (UInt32)PlayerUpdate_Hook);
+		s_playerUpdateCall.WriteRelCall(kAddr_PlayerUpdateCall, PlayerUpdate_Hook);
 	}
 
 	void UpdateSettings(int quickDropModKey, int quickDropControlID,

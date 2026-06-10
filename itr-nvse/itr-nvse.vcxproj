@@ -200,6 +200,9 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="commands\ImperativeCommands.cpp" />
     <ClCompile Include="commands\StringCommands.cpp" />
     <ClCompile Include="commands\RadioCommands.cpp" />
+    <ClCompile Include="commands\ResurrectCommands.cpp" />
+    <ClCompile Include="commands\ForceCombatTargetCommands.cpp" />
+    <ClCompile Include="commands\CrouchCommands.cpp" />
     <ClCompile Include="commands\CommandTable.cpp" />
     <ClCompile Include="commands\ChallengeCommands.cpp" />
     <ClCompile Include="commands\CommandBoundsCommand.cpp" />
@@ -246,12 +249,14 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="internal\ExtraDataUtils.h" />
     <ClInclude Include="internal\FallDamageLogic.h" />
     <ClInclude Include="internal\FormatLogic.h" />
+    <ClInclude Include="internal\StringAlloc.h" />
     <ClInclude Include="commands\CommandBoundsCommand.h" />
     <ClInclude Include="commands\ToggleAllPrimitives.h" />
     <ClInclude Include="internal\BSSpinLock.h" />
     <ClInclude Include="internal\CollisionToggle.h" />
     <ClInclude Include="internal\EventDispatch.h" />
     <ClInclude Include="internal\EngineFunctions.h" />
+    <ClInclude Include="internal\GameGlobals.h" />
     <ClInclude Include="handlers\DialogueTextFilter.h" />
     <ClInclude Include="handlers\OnStealHandler.h" />
     <ClInclude Include="handlers\OnWeaponDropHandler.h" />
@@ -320,6 +325,9 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="commands\ImperativeCommands.h" />
     <ClInclude Include="commands\StringCommands.h" />
     <ClInclude Include="commands\RadioCommands.h" />
+    <ClInclude Include="commands\ResurrectCommands.h" />
+    <ClInclude Include="commands\ForceCombatTargetCommands.h" />
+    <ClInclude Include="commands\CrouchCommands.h" />
     <ClInclude Include="commands\ChallengeCommands.h" />
     <ClInclude Include="commands\DialogueCommands.h" />
     <ClInclude Include="commands\ForceSayCommand.h" />

@@ -2,6 +2,7 @@
 #include "nvse/PluginAPI.h"
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
+#include "internal/GameGlobals.h"
 
 extern const _ExtractArgs ExtractArgs;
 
@@ -16,7 +17,6 @@ constexpr UInt32 kOffset_Casino_MaxWinnings = 0x210;
 
 //PlayerCharacter
 constexpr UInt32 kOffset_Player_CasinoDataList = 0x610;
-static void* const kAddr_PlayerSingleton = (void*)0x11DEA3C;
 
 typedef void* (__cdecl*  _OperatorNew)(UInt32 size);
 typedef void (__thiscall* _CasinoStatsCtor)(void* self);
@@ -36,7 +36,7 @@ struct SimpleListNode { void* item; SimpleListNode* next; };
 
 static SimpleListNode* GetCasinoDataList()
 {
-	void* player = *(void**)kAddr_PlayerSingleton;
+	void* player = *(void**)g_thePlayerPtr;
 	if (!player) return nullptr;
 	return *(SimpleListNode**)((UInt8*)player + kOffset_Player_CasinoDataList);
 }

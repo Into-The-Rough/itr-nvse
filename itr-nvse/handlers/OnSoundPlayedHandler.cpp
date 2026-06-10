@@ -11,6 +11,7 @@
 #include "internal/Detours.h"
 #include "internal/ScopedLock.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
 
 class TESSound;
@@ -25,7 +26,7 @@ struct BSSoundHandle
 
 struct BSAudioManager
 {
-    static BSAudioManager* Get() { return (BSAudioManager*)0x11F6EF0; }
+    static BSAudioManager* Get() { return (BSAudioManager*)g_audioManager; }
 };
 
 struct QueuedSoundEvent
@@ -53,6 +54,63 @@ namespace OnSoundPlayedHandler {
     volatile LONG g_stateLockInit = 0;
     std::vector<TrackedVoiceSound> g_trackedSounds;
     DWORD g_mainThreadId = 0;
+}
+
+static constexpr const char* kSoundPlayedEvent = "ITR:OnSoundPlayed";
+static constexpr const char* kSoundCompletedEvent = "ITR:OnSoundCompleted";
+static constexpr int kProbePriority = -9999;
+static constexpr UInt32 kListenerProbeIntervalFrames = 30;
+
+static PluginHandle s_pluginHandle = kPluginHandle_Invalid;
+static bool s_probeHandlersInstalled = false;
+static volatile bool s_hasPlayedListeners = true;
+static volatile bool s_hasCompletedListeners = true;
+static UInt32 s_listenerProbeFrame = kListenerProbeIntervalFrames;
+
+static void SoundPlayedProbeHandler(TESObjectREFR*, void*) {}
+static void SoundCompletedProbeHandler(TESObjectREFR*, void*) {}
+
+static bool InstallProbeHandler(const char* eventName, NVSEEventManagerInterface::NativeEventHandler handler,
+    const char* handlerName)
+{
+    if (!g_eventManagerInterface ||
+        !g_eventManagerInterface->SetNativeEventHandlerWithPriority ||
+        !g_eventManagerInterface->RemoveNativeEventHandlerWithPriority ||
+        s_pluginHandle == kPluginHandle_Invalid)
+    {
+        return false;
+    }
+
+    g_eventManagerInterface->RemoveNativeEventHandlerWithPriority(eventName, handler, kProbePriority);
+    return g_eventManagerInterface->SetNativeEventHandlerWithPriority(
+        eventName, handler, s_pluginHandle, handlerName, kProbePriority);
+}
+
+static bool HasExternalHandlers(const char* eventName, NVSEEventManagerInterface::NativeEventHandler probeHandler) {
+    if (!s_probeHandlersInstalled || !g_eventManagerInterface || !g_eventManagerInterface->IsEventHandlerFirst)
+        return true;
+
+    return !g_eventManagerInterface->IsEventHandlerFirst(
+        eventName, probeHandler, kProbePriority,
+        nullptr, 0, nullptr, 0, nullptr, 0);
+}
+
+static void RefreshListenerState(bool force) {
+    if (!s_probeHandlersInstalled)
+        OnSoundPlayedHandler::InstallListenerProbes();
+
+    if (!s_probeHandlersInstalled) {
+        s_hasPlayedListeners = true;
+        s_hasCompletedListeners = true;
+        return;
+    }
+
+    if (!force && s_listenerProbeFrame++ < kListenerProbeIntervalFrames)
+        return;
+
+    s_listenerProbeFrame = 0;
+    s_hasPlayedListeners = HasExternalHandlers(kSoundPlayedEvent, SoundPlayedProbeHandler);
+    s_hasCompletedListeners = HasExternalHandlers(kSoundCompletedEvent, SoundCompletedProbeHandler);
 }
 
 static void EnsureStateLockInitialized()
@@ -130,15 +188,17 @@ static BSSoundHandle* __fastcall HookedGetSoundHandle(
     BSSoundHandle* arData, const char* apName,
     UInt32 aeAudioFlags, TESSound* apSound)
 {
+    bool hasPlayedListeners = s_hasPlayedListeners;
+    bool hasCompletedListeners = s_hasCompletedListeners;
     UInt32 soundFormID = ReadRefID(apSound);
     bool hasEventManager = g_eventManagerInterface != nullptr;
 
-    if (hasEventManager && apName && apName[0])
+    if (hasEventManager && hasPlayedListeners && apName && apName[0])
         QueueSoundEvent(apName, aeAudioFlags, soundFormID);
 
     BSSoundHandle* result = s_detour.GetTrampoline<GetSoundHandleByFilePath_t>()(mgr, arData, apName, aeAudioFlags, apSound);
 
-    if (hasEventManager && (aeAudioFlags & kSoundFlag_IsVoice) && apName && apName[0]) {
+    if (hasEventManager && hasCompletedListeners && (aeAudioFlags & kSoundFlag_IsVoice) && apName && apName[0]) {
         if (result && result->uiSoundID != 0 && result->uiSoundID != 0xFFFFFFFF)
             QueueVoiceTracking(result->uiSoundID, apName, aeAudioFlags, soundFormID, result);
     }
@@ -147,6 +207,17 @@ static BSSoundHandle* __fastcall HookedGetSoundHandle(
 }
 
 namespace OnSoundPlayedHandler {
+void InstallListenerProbes()
+{
+    bool playedProbe = InstallProbeHandler(kSoundPlayedEvent, SoundPlayedProbeHandler, "ITR_OnSoundPlayedProbe");
+    bool completedProbe = InstallProbeHandler(kSoundCompletedEvent, SoundCompletedProbeHandler, "ITR_OnSoundCompletedProbe");
+
+    s_probeHandlersInstalled = playedProbe && completedProbe;
+    s_listenerProbeFrame = kListenerProbeIntervalFrames;
+    s_hasPlayedListeners = true;
+    s_hasCompletedListeners = true;
+}
+
 void Update()
 {
     if (OnSoundPlayedHandler::g_stateLockInit != 2) return;
@@ -157,6 +228,8 @@ void Update()
         OnSoundPlayedHandler::g_mainThreadId = currentThreadId;
     if (currentThreadId != OnSoundPlayedHandler::g_mainThreadId)
         return;
+
+    RefreshListenerState(false);
 
     std::vector<QueuedSoundEvent> eventsToProcess;
     std::vector<TrackedVoiceSound> soundsToCheck;
@@ -172,7 +245,7 @@ void Update()
         TESForm* sourceSound = evt.soundFormID ? (TESForm*)Engine::LookupFormByID(evt.soundFormID) : nullptr;
         if (!sourceSound) continue;
 
-        g_eventManagerInterface->DispatchEvent("ITR:OnSoundPlayed", nullptr,
+        g_eventManagerInterface->DispatchEvent(kSoundPlayedEvent, nullptr,
             filePath, (int)evt.soundFlags, (TESObjectREFR*)sourceSound);
     }
 
@@ -196,7 +269,7 @@ void Update()
                 TESForm* sourceSound = tracked.soundFormID ? (TESForm*)Engine::LookupFormByID(tracked.soundFormID) : nullptr;
 
                 if (sourceSound)
-                    g_eventManagerInterface->DispatchEvent("ITR:OnSoundCompleted", nullptr,
+                    g_eventManagerInterface->DispatchEvent(kSoundCompletedEvent, nullptr,
                         tracked.filePath, (int)tracked.soundFlags, (TESObjectREFR*)sourceSound);
             }
             else
@@ -250,6 +323,7 @@ bool Init(void* nvseInterface)
 
     EnsureStateLockInitialized();
     OnSoundPlayedHandler::g_mainThreadId = GetCurrentThreadId();
+    s_pluginHandle = nvse->GetPluginHandle ? nvse->GetPluginHandle() : kPluginHandle_Invalid;
 
     //prologue: push ebp (1) + mov ebp,esp (2) + push -1 (2) = 5 bytes
     if (!s_detour.WriteRelJump(0xAE5A50, HookedGetSoundHandle, 5))

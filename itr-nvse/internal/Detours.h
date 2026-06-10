@@ -297,8 +297,14 @@ inline bool RelocateRelativeImmediate(UInt8* trampolineCode, UInt32 trampolineAd
 //hook a CALL instruction (E8), capture original target
 class CallDetour {
 	UInt32 overwritten_addr = 0;
+	UInt32 sourceAddr = 0;
+	UInt32 installedRel = 0;
+	UInt8 originalBytes[5] = {};
 public:
 	bool WriteRelCall(UInt32 src, UInt32 dst) {
+		if (sourceAddr)
+			return false;
+
 		if (*reinterpret_cast<UInt8*>(src) != 0xE8)
 			return false;
 
@@ -306,8 +312,11 @@ public:
 		if (!VirtualProtect((void*)src, 5, PAGE_EXECUTE_READWRITE, &oldProtect))
 			return false;
 
+		memcpy(originalBytes, (void*)src, sizeof(originalBytes));
 		overwritten_addr = *(UInt32*)(src + 1) + src + 5;
+		sourceAddr = src;
 		*(UInt32*)(src + 1) = dst - src - 5;
+		installedRel = dst - src - 5;
 		VirtualProtect((void*)src, 5, oldProtect, &oldProtect);
 		FlushInstructionCache(GetCurrentProcess(), (void*)src, 5);
 		return true;
@@ -319,6 +328,30 @@ public:
 	}
 
 	UInt32 GetOverwrittenAddr() const { return overwritten_addr; }
+	bool IsInstalled() const { return sourceAddr != 0; }
+
+	bool Remove() {
+		if (!sourceAddr)
+			return false;
+
+		//refuse to restore if someone re-patched the site after us
+		if (*(UInt8*)sourceAddr != 0xE8 || *(UInt32*)(sourceAddr + 1) != installedRel)
+			return false;
+
+		DWORD oldProtect;
+		if (!VirtualProtect((void*)sourceAddr, sizeof(originalBytes), PAGE_EXECUTE_READWRITE, &oldProtect))
+			return false;
+
+		memcpy((void*)sourceAddr, originalBytes, sizeof(originalBytes));
+		VirtualProtect((void*)sourceAddr, sizeof(originalBytes), oldProtect, &oldProtect);
+		FlushInstructionCache(GetCurrentProcess(), (void*)sourceAddr, sizeof(originalBytes));
+
+		sourceAddr = 0;
+		overwritten_addr = 0;
+		installedRel = 0;
+		memset(originalBytes, 0, sizeof(originalBytes));
+		return true;
+	}
 };
 
 //hook function prologue with trampoline
@@ -328,32 +361,27 @@ class JumpDetour {
 	UInt8 originalBytes[27] = {};
 	UInt32 prologueSize = 0;
 	UInt32 sourceAddr = 0;
+	UInt32 installedRel = 0;
 
-public:
-	~JumpDetour() {
-		if (trampoline) {
-			VirtualFree(trampoline, 0, MEM_RELEASE);
-		}
-	}
-
-	//src: address to hook, dst: hook function, size: bytes to copy (must be 5-27)
-	bool WriteRelJump(UInt32 src, UInt32 dst, UInt32 size, UInt8** trampolineOut = nullptr) {
+	bool WriteRelJumpInternal(UInt32 src, UInt32 dst, UInt32 size, UInt8** trampolineOut, bool chainExistingJump) {
 		if (size < 5 || size > 27) return false; //5 min for jmp, 27 max (32 - 5 for footer)
 		if (trampoline) return false; //already initialized
 
-		//reject if already hooked (starts with JMP)
-		if (*reinterpret_cast<UInt8*>(src) == 0xE9)
+		const bool existingJump = *reinterpret_cast<UInt8*>(src) == 0xE9;
+		if (existingJump && (!chainExistingJump || size != 5))
 			return false;
 
 		sourceAddr = src;
 		prologueSize = size;
 
-		//allocate executable memory for trampoline
 		trampoline = (UInt8*)VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-		if (!trampoline) return false;
+		if (!trampoline) {
+			sourceAddr = 0;
+			prologueSize = 0;
+			return false;
+		}
 
 		memcpy(originalBytes, (void*)src, size);
-		memcpy(trampoline, originalBytes, size);
 
 		auto fail = [&]() {
 			VirtualFree(trampoline, 0, MEM_RELEASE);
@@ -366,25 +394,33 @@ public:
 			return false;
 		};
 
-		for (UInt32 offset = 0; offset < size; ) {
-			detail::DecodedInstruction instruction;
-			if (!detail::DecodeInstruction(originalBytes + offset, size - offset, instruction))
-				return fail();
-			if (!detail::RelocateRelativeImmediate(trampoline + offset, (UInt32)(trampoline + offset), src + offset, instruction))
-				return fail();
-			offset += instruction.length;
+		if (existingJump) {
+			const auto previousTarget = src + 5 + *reinterpret_cast<std::int32_t*>(src + 1);
+			trampoline[0] = 0xE9;
+			*reinterpret_cast<UInt32*>(trampoline + 1) = previousTarget - (UInt32)trampoline - 5;
+			FlushInstructionCache(GetCurrentProcess(), trampoline, 5);
+		} else {
+			memcpy(trampoline, originalBytes, size);
+
+			for (UInt32 offset = 0; offset < size; ) {
+				detail::DecodedInstruction instruction;
+				if (!detail::DecodeInstruction(originalBytes + offset, size - offset, instruction))
+					return fail();
+				if (!detail::RelocateRelativeImmediate(trampoline + offset, (UInt32)(trampoline + offset), src + offset, instruction))
+					return fail();
+				offset += instruction.length;
+			}
+
+			trampoline[size] = 0xE9;
+			*(UInt32*)(trampoline + size + 1) = (src + size) - (UInt32)(trampoline + size) - 5;
+			FlushInstructionCache(GetCurrentProcess(), trampoline, size + 5);
 		}
 
-		//add jmp back to (src + size)
-		trampoline[size] = 0xE9;
-		*(UInt32*)(trampoline + size + 1) = (src + size) - (UInt32)(trampoline + size) - 5;
-		FlushInstructionCache(GetCurrentProcess(), trampoline, size + 5);
 		if (trampolineOut) {
 			*trampolineOut = trampoline;
 			MemoryBarrier();
 		}
 
-		//patch source with jmp to hook
 		DWORD oldProtect;
 		if (!VirtualProtect((void*)src, size, PAGE_EXECUTE_READWRITE, &oldProtect)) {
 			return fail();
@@ -392,6 +428,7 @@ public:
 
 		*(UInt8*)src = 0xE9;
 		*(UInt32*)(src + 1) = dst - src - 5;
+		installedRel = dst - src - 5;
 		for (UInt32 i = 5; i < size; i++)
 			*(UInt8*)(src + i) = 0x90;
 
@@ -400,13 +437,39 @@ public:
 		return true;
 	}
 
+public:
+	//frees the trampoline even after a refused remove, only safe for static-lifetime detours
+	~JumpDetour() {
+		if (trampoline) {
+			VirtualFree(trampoline, 0, MEM_RELEASE);
+		}
+	}
+
+	//src: address to hook, dst: hook function, size: bytes to copy (must be 5-27)
+	bool WriteRelJump(UInt32 src, UInt32 dst, UInt32 size, UInt8** trampolineOut = nullptr) {
+		return WriteRelJumpInternal(src, dst, size, trampolineOut, false);
+	}
+
 	template<typename T>
 	bool WriteRelJump(UInt32 src, T dst, UInt32 size, UInt8** trampolineOut = nullptr) {
 		return WriteRelJump(src, (UInt32)dst, size, trampolineOut);
 	}
 
+	bool WriteRelJumpChainable(UInt32 src, UInt32 dst, UInt32 size, UInt8** trampolineOut = nullptr) {
+		return WriteRelJumpInternal(src, dst, size, trampolineOut, true);
+	}
+
+	template<typename T>
+	bool WriteRelJumpChainable(UInt32 src, T dst, UInt32 size, UInt8** trampolineOut = nullptr) {
+		return WriteRelJumpChainable(src, (UInt32)dst, size, trampolineOut);
+	}
+
 	bool Remove() {
 		if (!trampoline || !sourceAddr || !prologueSize) return false;
+
+		//refuse to restore if someone re-patched the site after us
+		if (*(UInt8*)sourceAddr != 0xE9 || *(UInt32*)(sourceAddr + 1) != installedRel)
+			return false;
 
 		DWORD oldProtect;
 		if (!VirtualProtect((void*)sourceAddr, prologueSize, PAGE_EXECUTE_READWRITE, &oldProtect))
@@ -420,6 +483,7 @@ public:
 		trampoline = nullptr;
 		prologueSize = 0;
 		sourceAddr = 0;
+		installedRel = 0;
 		memset(originalBytes, 0, sizeof(originalBytes));
 		return true;
 	}

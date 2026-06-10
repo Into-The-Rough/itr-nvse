@@ -11,6 +11,7 @@
 #include "nvse/ParamInfos.h"
 #include <cstdio>
 #include "internal/CallTemplates.h"
+#include "internal/EngineFunctions.h"
 
 extern const _ExtractArgs ExtractArgs;
 
@@ -37,8 +38,7 @@ static void ShowChallengeNotification(UInt8* challenge, TESForm* form, UInt32 cu
 	char msg[512];
 	snprintf(msg, 512, "%s   %d\\%d\n%s", name ? name : "", currentAmount, threshold, desc ? desc : "");
 
-	((void(__cdecl*)(const char*, eEmotion, const char*, const char*, float, bool))0x7052F0) //Interface::ShowNotify
-		(msg, neutral, iconPath, nullptr, 2.0f, false);
+	Engine::QueueUIMessage(msg, neutral, iconPath, nullptr, 2.0f, false);
 }
 
 static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)

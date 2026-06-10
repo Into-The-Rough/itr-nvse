@@ -15,6 +15,7 @@
 
 #include "internal/settings.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
 #include "internal/ConsoleCommand.h"
 
@@ -102,6 +103,8 @@
 #include "commands/ImperativeCommands.h"
 #include "commands/StringCommands.h"
 #include "commands/RadioCommands.h"
+#include "commands/ForceCombatTargetCommands.h"
+#include "commands/CrouchCommands.h"
 #include "commands/ChallengeCommands.h"
 #include "commands/DialogueCommands.h"
 #include "commands/WeaponEmissiveCommands.h"
@@ -135,7 +138,6 @@ using ConsoleScriptRun_t = int(__thiscall*)(void*, void*, int, void*);
 
 static Detours::CallDetour s_consoleDispatchBatDetour;
 static Detours::CallDetour s_consoleDispatchInputDetour;
-static ConsoleScriptRun_t s_origConsoleScriptRun = nullptr;
 
 struct EventManagerDispatchInterface {
 	void* registerEvent;
@@ -160,14 +162,27 @@ static void DispatchConsoleCommandEvent(const char* fullCommand, TESObjectREFR* 
 		commandName, fullCommand, calleeRef);
 }
 
-static int __fastcall Hook_ConsoleScriptRun(void* script, void* /*edx*/, void* scriptContext, int a3, TESObjectREFR* calleeRef)
+static int ConsoleScriptRunCommon(void* script, void* scriptContext, int a3,
+	TESObjectREFR* calleeRef, ConsoleScriptRun_t orig)
 {
 	const bool prev = s_inConsoleDispatch;
 	s_inConsoleDispatch = true;
 	DispatchConsoleCommandEvent(GetScriptText(script), calleeRef);
-	const int result = s_origConsoleScriptRun(script, scriptContext, a3, calleeRef);
+	const int result = orig(script, scriptContext, a3, calleeRef);
 	s_inConsoleDispatch = prev;
 	return result;
+}
+
+static int __fastcall Hook_ConsoleScriptRun_Bat(void* script, void* /*edx*/, void* scriptContext, int a3, TESObjectREFR* calleeRef)
+{
+	return ConsoleScriptRunCommon(script, scriptContext, a3, calleeRef,
+		(ConsoleScriptRun_t)s_consoleDispatchBatDetour.GetOverwrittenAddr());
+}
+
+static int __fastcall Hook_ConsoleScriptRun_Input(void* script, void* /*edx*/, void* scriptContext, int a3, TESObjectREFR* calleeRef)
+{
+	return ConsoleScriptRunCommon(script, scriptContext, a3, calleeRef,
+		(ConsoleScriptRun_t)s_consoleDispatchInputDetour.GetOverwrittenAddr());
 }
 
 bool IsConsoleMode()
@@ -179,9 +194,8 @@ extern void Log(const char* fmt, ...);
 
 static void InitConsoleDispatchHooks()
 {
-	s_origConsoleScriptRun = (ConsoleScriptRun_t)0x5AC400;
-	const bool a = s_consoleDispatchBatDetour.WriteRelCall(0x71C3E8, (UInt32)Hook_ConsoleScriptRun);
-	const bool b = s_consoleDispatchInputDetour.WriteRelCall(0x71C846, (UInt32)Hook_ConsoleScriptRun);
+	const bool a = s_consoleDispatchBatDetour.WriteRelCall(0x71C3E8, (UInt32)Hook_ConsoleScriptRun_Bat);
+	const bool b = s_consoleDispatchInputDetour.WriteRelCall(0x71C846, (UInt32)Hook_ConsoleScriptRun_Input);
 	Log("ConsoleDispatch hooks: bat=%d input=%d", a ? 1 : 0, b ? 1 : 0);
 }
 
@@ -204,7 +218,7 @@ void Console_Print(const char* fmt, ...)
 
 PlayerCharacter* PlayerCharacter::GetSingleton()
 {
-	return *(PlayerCharacter**)0x011DEA3C;
+	return *g_thePlayerPtr;
 }
 
 PluginHandle g_pluginHandle = kPluginHandle_Invalid;
@@ -212,7 +226,6 @@ NVSEMessagingInterface* g_msgInterface = nullptr;
 NVSEConsoleInterface* g_consoleInterface = nullptr;
 NVSEArrayVarInterface* g_arrInterface = nullptr;
 NVSECommandTableInterface* g_cmdTableInterface = nullptr;
-static PlayerCharacter** g_thePlayer = (PlayerCharacter**)0x011DEA3C;
 
 static bool g_godModeExecuted = false;
 bool g_isLoadingSave = false;
@@ -392,6 +405,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				ItemModFlagSafety::Init();
 				EventDispatch::RegisterEvents();
 				OnJumpLandHandler::InstallListenerProbes();
+				OnSoundPlayedHandler::InstallListenerProbes();
 				PerkRuntimeFramework::BuildIndex();
 				g_hooksInstalled = true;
 			}
@@ -436,7 +450,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			GroundCommands::ClearState();
 			HavokCommands::ClearState();
 			GestureCommand::Reset();
-			ImperativeCommands::ClearState();
+			CrouchCommands::ClearState();
+			ForceCombatTargetCommands::ClearState();
 			OnCasinoBanHandler::ClearState();
 			OnContactHandler::ClearState();
 			OnVATSStateHandler::ClearState();
@@ -451,6 +466,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			PerkRuntimeFramework::BuildIndex();
 			OnJumpLandHandler::ClearState();
 			OnJumpLandHandler::InstallListenerProbes();
+			OnSoundPlayedHandler::InstallListenerProbes();
 			DialogueTextFilter::ClearState();
 			if (Settings::bAutoGodMode && !g_godModeExecuted)
 			{
@@ -498,7 +514,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					InlineGlyphFix::SetEnabled(Settings::bInlineGlyphFix != 0);
 					AimZoomFirstPersonOnly::SetEnabled(Settings::bAimZoomFirstPersonOnly != 0);
 
-					if (*g_thePlayer)
+					if (*g_thePlayerPtr)
 					{
 						if (Settings::bAutoGodMode && !oldGodMode)
 						{
@@ -549,7 +565,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				AltTabMute::Update();
 			GroundCommands::Update();
 			HavokCommands::Update();
-			ImperativeCommands::Update();
 			DoorPinchFix::Update();
 			GestureCommand::Update();
 			ToggleAllPrimitives::Update();
@@ -645,6 +660,7 @@ namespace ITR
 
 		EventDispatch::InitEventManager((void*)nvse);
 		ImperativeCommands::Init((void*)nvse);
+		ForceCombatTargetCommands::Init();
 		StringCommands::Init((void*)nvse);
 		RadioCommands::Init((void*)nvse);
 		RegisterHandlers(nvse);

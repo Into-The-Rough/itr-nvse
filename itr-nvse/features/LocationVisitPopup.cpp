@@ -2,7 +2,7 @@
 
 #include "LocationVisitPopup.h"
 #include "internal/CooldownTracker.h"
-#include "internal/SafeWrite.h"
+#include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
 #include <Windows.h>
 #include <vector>
@@ -28,6 +28,8 @@ namespace LocationVisitPopup
 	static CRITICAL_SECTION s_stateLock;
 	static bool s_lockInitialized = false;
 	static std::vector<PendingPopup> s_pendingPopups;
+	static Detours::JumpDetour s_markerRadiusDetour;
+	static UInt8* s_markerRadiusTrampoline = nullptr;
 
 	static void UpdateCooldowns() {
 		s_tracker.UpdateCooldowns(GetTickCount(), g_leaveThresholdMs);
@@ -130,10 +132,8 @@ namespace LocationVisitPopup
 	}
 
 	__declspec(naked) void CheckDiscoveredMarkerHook() {
-		static const UInt32 kRetnAddr = 0x7795E4;
 		__asm {
-			movzx edx, byte ptr[ebp - 0x90] //replay stolen byte read (flag) so the return path is consistent
-			test edx, edx
+			cmp byte ptr[ebp - 0x90], 0
 			jz skipCheck
 			mov eax, [ebp - 0x8C] //caller's marker entry pair
 			test eax, eax
@@ -152,9 +152,9 @@ namespace LocationVisitPopup
 			add esp, 8 //cdecl caller cleans 2 dwords
 			popfd
 			popad
-			movzx edx, byte ptr[ebp - 0x90] //re-load edx for the fallthrough; pop clobbered it
 		skipCheck:
-			jmp kRetnAddr
+			mov eax, s_markerRadiusTrampoline
+			jmp eax
 		}
 	}
 
@@ -169,9 +169,8 @@ namespace LocationVisitPopup
 		s_cooldownSeconds = cooldownSeconds;
 		g_cooldownMs = cooldownSeconds * 1000;
 		g_disableSound = disableSound;
-		SafeWrite::WriteRelJump(0x7795DD, (UInt32)CheckDiscoveredMarkerHook);
-		SafeWrite::Write8(0x7795E2, 0x90);
-		SafeWrite::Write8(0x7795E3, 0x90);
+		if (!s_markerRadiusDetour.WriteRelJump(0x7795DD, CheckDiscoveredMarkerHook, 7, &s_markerRadiusTrampoline))
+			Log("LocationVisitPopup: marker radius detour failed to install");
 	}
 
 	void UpdateSettings(int cooldownSeconds, bool disableSound)

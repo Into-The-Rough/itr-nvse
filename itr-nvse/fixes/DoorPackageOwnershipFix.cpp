@@ -5,11 +5,14 @@
 
 #include "DoorPackageOwnershipFix.h"
 #include "internal/EngineFunctions.h"
-#include "internal/SafeWrite.h"
+#include "internal/Detours.h"
 #include <cstdint>
 
 namespace DoorPackageOwnershipFix
 {
+	static Detours::CallDetour s_lockDoorsIsOwnerCall;
+	static Detours::CallDetour s_unlockDoorsIsOwnerCall;
+
 	typedef bool (__thiscall* _IsInFaction)(void* actor, void* faction);
 	static _IsInFaction IsInFaction = (_IsInFaction)0x89A9A0;
 
@@ -106,8 +109,8 @@ namespace DoorPackageOwnershipFix
 
 	void Init()
 	{
-		SafeWrite::WriteRelCall(0x90D528, (UInt32)IsAnOwner_Hook);  //LockDoorsAtLocation
-		SafeWrite::WriteRelCall(0x90D5DE, (UInt32)IsAnOwner_Hook);  //UnlockDoorsAtLocation
+		s_lockDoorsIsOwnerCall.WriteRelCall(0x90D528, IsAnOwner_Hook);  //LockDoorsAtLocation
+		s_unlockDoorsIsOwnerCall.WriteRelCall(0x90D5DE, IsAnOwner_Hook);  //UnlockDoorsAtLocation
 	}
 }
 
