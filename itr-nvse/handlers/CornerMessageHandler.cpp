@@ -166,7 +166,7 @@ bool Init(void* nvseInterface) {
     LoadIntegrationINIs();
 
     //prologue: push ebp; mov ebp, esp; push -1 = 5 bytes
-    if (!s_detour.WriteRelJump(kAddr_HUDMainMenu_ShowNotify, Hook_HUDMainMenu_ShowNotify, 5))
+    if (!s_detour.WriteRelJumpChainable(kAddr_HUDMainMenu_ShowNotify, Hook_HUDMainMenu_ShowNotify, 5))
         return false;
 
     return true;

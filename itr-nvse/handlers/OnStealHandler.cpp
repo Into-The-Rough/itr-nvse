@@ -3,14 +3,16 @@
 #include "OnStealHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/EventDispatch.h"
-#include "internal/SafeWrite.h"
+#include "internal/Detours.h"
 
 namespace OnStealHandler {
     bool g_hookInstalled = false;
 }
 
 constexpr UInt32 kAddr_StealAlarm = 0x8BFA40;
-constexpr UInt32 kAddr_StealAlarmBody = 0x8BFA45;
+static Detours::JumpDetour s_stealAlarmDetour;
+typedef void(__thiscall* StealAlarm_t)(Actor*, TESObjectREFR*, TESForm*, SInt32, UInt32, TESObjectREFR*);
+static StealAlarm_t s_stealAlarm = nullptr;
 
 static void __fastcall DispatchStealEvent(Actor* thief, TESObjectREFR* target, TESForm* item, SInt32 quantity, TESObjectREFR* owner)
 {
@@ -20,30 +22,11 @@ static void __fastcall DispatchStealEvent(Actor* thief, TESObjectREFR* target, T
             thief, target, item, owner, quantity);
 }
 
-static __declspec(naked) void StealAlarmHook()
+static void __fastcall StealAlarmHook(Actor* thief, void*, TESObjectREFR* target, TESForm* item, SInt32 quantity, UInt32 arg4, TESObjectREFR* owner)
 {
-    __asm
-    {
-        pushfd                          //save flags
-        pushad                          //save all regs (32 bytes, pushad frame starts at esp)
-        mov     ecx, [esp+18h]          //thief = saved ecx slot in pushad frame (thiscall this)
-        mov     edx, [esp+28h]          //target = stack arg1, past pushad(32)+pushfd(4)+retaddr(4)
-        mov     eax, [esp+2Ch]          //item = stack arg2
-        mov     ebx, [esp+30h]          //quantity = stack arg3
-        mov     esi, [esp+38h]          //owner = stack arg5 (arg4 at +34h is not forwarded by this hook)
-        push    esi                     //owner  (fastcall stack[2])
-        push    ebx                     //quantity  (fastcall stack[1])
-        push    eax                     //item  (fastcall stack[0])
-        call    DispatchStealEvent      //ecx=thief, edx=target already loaded
-        popad                           //restore regs (fastcall callee popped stack args)
-        popfd                           //restore flags
-
-        push    ebp                     //replay stolen prologue bytes
-        mov     ebp, esp
-        push    0FFFFFFFFh              //SEH sentinel
-        mov     eax, kAddr_StealAlarmBody
-        jmp     eax                     //resume real StealAlarm past the 5-byte jmp patch
-    }
+    DispatchStealEvent(thief, target, item, quantity, owner);
+    if (s_stealAlarm)
+        s_stealAlarm(thief, target, item, quantity, arg4, owner);
 }
 
 namespace OnStealHandler {
@@ -53,7 +36,9 @@ bool Init(void* nvseInterface)
     if (nvse->isEditor) return false;
 
     if (!g_hookInstalled) {
-        SafeWrite::WriteRelJump(kAddr_StealAlarm, (UInt32)StealAlarmHook);
+        if (!s_stealAlarmDetour.WriteRelJump(kAddr_StealAlarm, StealAlarmHook, 5))
+            return false;
+        s_stealAlarm = s_stealAlarmDetour.GetTrampoline<StealAlarm_t>();
         g_hookInstalled = true;
     }
 

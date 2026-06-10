@@ -5,9 +5,10 @@
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/GameObjects.h"
-#include "internal/SafeWrite.h"
+#include "internal/Detours.h"
 #include "internal/ScopedLock.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "internal/CallTemplates.h"
 #include "internal/settings.h"
 #include "internal/globals.h"
@@ -15,13 +16,6 @@
 #include "features/NPCDoctorsBagUse.h"
 
 extern const _ExtractArgs ExtractArgs;
-
-static bool IsGameLoading()
-{
-	void* mgr = *(void**)0x11DE134;
-	if (!mgr) return false;
-	return *(bool*)((char*)mgr + 0x26);
-}
 
 namespace NoWeaponSearch
 {
@@ -38,7 +32,13 @@ namespace NoWeaponSearch
 	}
 
 	typedef bool (__thiscall *CombatItemSearch_t)(void* combatState);
-	CombatItemSearch_t Original = (CombatItemSearch_t)0x99F6D0;
+	static Detours::CallDetour s_combatItemSearchCall;
+
+	static bool CallOriginal(void* combatState)
+	{
+		auto original = reinterpret_cast<CombatItemSearch_t>(s_combatItemSearchCall.GetOverwrittenAddr());
+		return original ? original(combatState) : true;
+	}
 
 	static bool IsDisabled_Unlocked(UInt32 refID)
 	{
@@ -57,26 +57,26 @@ namespace NoWeaponSearch
 	bool __fastcall Hook(void* combatState, void* edx)
 	{
 		if (g_inCombatItemSearch)
-			return Original(combatState);
+			return CallOriginal(combatState);
 
 		g_inCombatItemSearch = true;
 		if (IsGameLoading())
 		{
 			g_inCombatItemSearch = false;
-			return Original(combatState);
+			return CallOriginal(combatState);
 		}
 
 		void* controller = *(void**)((char*)combatState + 0x1C4);
 		if (!controller)
 		{
 			g_inCombatItemSearch = false;
-			return Original(combatState);
+			return CallOriginal(combatState);
 		}
 		Actor* actor = (Actor*)Engine::CombatController_GetPackageOwner(controller);
 		if (!actor || !*(void**)((char*)actor + 0x68) || !*(void**)((char*)actor + 0x64))
 		{
 			g_inCombatItemSearch = false;
-			return Original(combatState);
+			return CallOriginal(combatState);
 		}
 
 		if (Settings::bNPCAntidoteUse)
@@ -97,7 +97,7 @@ namespace NoWeaponSearch
 			return false;
 		}
 
-		bool result = Original(combatState);
+		bool result = CallOriginal(combatState);
 		g_inCombatItemSearch = false;
 		return result;
 	}
@@ -138,7 +138,7 @@ namespace NoWeaponSearch
 	void Init()
 	{
 		EnsureLockInit();
-		SafeWrite::WriteRelCall(0x998D50, (UInt32)Hook);
+		s_combatItemSearchCall.WriteRelCall(0x998D50, Hook);
 	}
 }
 

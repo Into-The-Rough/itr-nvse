@@ -40,6 +40,11 @@ namespace VATSHighlightDepthFix
 	static auto VATSHighlightData_SetMode = reinterpret_cast<VATSHighlightData_SetMode_t>(0x44AC20);
 	static auto DrawTargetToTexture = reinterpret_cast<DrawTargetToTexture_t>(0x800F30);
 	static auto SetupImageSpace = reinterpret_cast<SetupImageSpace_t>(0x801A60);
+	static Detours::CallDetour s_handleVATSOcclusionQueriesCall;
+	static Detours::CallDetour s_renderScenePostResolveDepthCall;
+	static Detours::CallDetour s_setupImageSpaceCall;
+	static Detours::CallDetour s_setZEnableCall;
+	static Detours::CallDetour s_setAdditionalRefModeCall;
 	static Detours::JumpDetour s_highlightAdditionalReferenceDetour;
 	static Detours::JumpDetour s_deactivateAllHighlightsDetour;
 	static ScriptCommand_t s_highlightAdditionalReference = nullptr;
@@ -157,7 +162,7 @@ namespace VATSHighlightDepthFix
 		CdeclCall(0xB97DE0, zEnable, stateDelta);
 	}
 
-	void WriteRelCallOrLog(UInt32 hookSite, UInt32 hook, UInt32 expectedTarget, const char* name)
+	void WriteRelCallOrLog(Detours::CallDetour& detour, UInt32 hookSite, UInt32 hook, UInt32 expectedTarget, const char* name)
 	{
 		if (*reinterpret_cast<UInt8*>(hookSite) != 0xE8)
 		{
@@ -173,7 +178,8 @@ namespace VATSHighlightDepthFix
 			return;
 		}
 
-		SafeWrite::WriteRelCall(hookSite, hook);
+		if (!detour.WriteRelCall(hookSite, hook))
+			Log("VATSHighlightDepthFix: %s hook site at %08X could not be detoured", name, hookSite);
 	}
 
 	void WriteScriptCommandJumpOrLog(Detours::JumpDetour& detour, UInt32 hookSite, UInt32 hook, ScriptCommand_t& original, const char* name)
@@ -373,11 +379,11 @@ namespace VATSHighlightDepthFix
 
 	void Init()
 	{
-		WriteRelCallOrLog(0x870C63, reinterpret_cast<UInt32>(Hook_TESMain_HandleVATSOcclusionQueries), 0x874AC0, "TESMain::HandleVATSOcclusionQueries");
-		WriteRelCallOrLog(0x8741DB, reinterpret_cast<UInt32>(Hook_RenderScenePostResolveDepth), 0xB6B930, "BSShaderUtil::RenderScenePostResolveDepth");
-		WriteRelCallOrLog(0x8760A9, reinterpret_cast<UInt32>(Hook_SetupImageSpace), 0x801A60, "VATSHighlightData::SetupImageSpace");
-		WriteRelCallOrLog(0xBC9C92, reinterpret_cast<UInt32>(Hook_SetZEnable), 0xB97DE0, "BSRenderState::SetZEnable");
-		WriteRelCallOrLog(0x7F3E5D, reinterpret_cast<UInt32>(Hook_VATSMenu_SetAdditionalRefMode), 0x44AC20, "VATSMenu target-list highlight reset");
+		WriteRelCallOrLog(s_handleVATSOcclusionQueriesCall, 0x870C63, reinterpret_cast<UInt32>(Hook_TESMain_HandleVATSOcclusionQueries), 0x874AC0, "TESMain::HandleVATSOcclusionQueries");
+		WriteRelCallOrLog(s_renderScenePostResolveDepthCall, 0x8741DB, reinterpret_cast<UInt32>(Hook_RenderScenePostResolveDepth), 0xB6B930, "BSShaderUtil::RenderScenePostResolveDepth");
+		WriteRelCallOrLog(s_setupImageSpaceCall, 0x8760A9, reinterpret_cast<UInt32>(Hook_SetupImageSpace), 0x801A60, "VATSHighlightData::SetupImageSpace");
+		WriteRelCallOrLog(s_setZEnableCall, 0xBC9C92, reinterpret_cast<UInt32>(Hook_SetZEnable), 0xB97DE0, "BSRenderState::SetZEnable");
+		WriteRelCallOrLog(s_setAdditionalRefModeCall, 0x7F3E5D, reinterpret_cast<UInt32>(Hook_VATSMenu_SetAdditionalRefMode), 0x44AC20, "VATSMenu target-list highlight reset");
 		WriteScriptCommandJumpOrLog(s_highlightAdditionalReferenceDetour, 0x5BB610, reinterpret_cast<UInt32>(Hook_HighlightAdditionalReference), s_highlightAdditionalReference, "Script::HighlightAdditionalReference");
 		WriteScriptCommandJumpOrLog(s_deactivateAllHighlightsDetour, 0x5BB6C0, reinterpret_cast<UInt32>(Hook_DeactivateAllHighlights), s_deactivateAllHighlights, "Cmd_DeactivateAllHighlights");
 	}

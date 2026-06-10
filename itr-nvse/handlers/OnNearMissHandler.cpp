@@ -1,6 +1,7 @@
 
 #include "OnNearMissHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/GameGlobals.h"
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/settings.h"
@@ -10,7 +11,6 @@
 
 constexpr UInt32 kAddr_ProjectileUpdate = 0x9BECC0;
 
-constexpr UInt32 kProcessManager    = 0x11E0E80;
 constexpr UInt32 kOff_NearestActors = 0x88;
 constexpr UInt32 kOff_NearestCount  = 0x150;
 constexpr UInt32 kMaxNearestActors  = 50;
@@ -105,8 +105,8 @@ static void ScanFlight(void* proj, void* shooter, TESForm* weapon, const Vec3& a
 	if (seg2 <= 0.0f) return;
 
 	UInt32 now = GetTickCount();
-	void** nearest = (void**)(kProcessManager + kOff_NearestActors);
-	UInt32 count = *(UInt32*)(kProcessManager + kOff_NearestCount);
+	void** nearest = (void**)((UInt8*)g_processManager + kOff_NearestActors);
+	UInt32 count = *(UInt32*)((UInt8*)g_processManager + kOff_NearestCount);
 	if (count > kMaxNearestActors) count = kMaxNearestActors;
 
 	for (UInt32 i = 0; i < count; ++i) {

@@ -4,7 +4,8 @@
 #include "OnPrePickUpHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/EventDispatch.h"
-#include "internal/SafeWrite.h"
+#include "internal/Detours.h"
+#include "internal/GameGlobals.h"
 
 extern void Log(const char* fmt, ...);
 
@@ -19,14 +20,21 @@ constexpr UInt32 kAddr_ActorPickUp            = 0x00891E00;
 constexpr UInt32 kAddr_AddObjecttoContainer   = 0x00574FA0;
 constexpr UInt32 kAddr_ContainerTransferItem  = 0x0075DC80;
 
-//resume after push ebp; mov ebp,esp; sub esp,N
-constexpr UInt32 kRet_PlayerPickUp            = 0x00953FF6;
-constexpr UInt32 kRet_ActorPickUp             = 0x00891E06;
-constexpr UInt32 kRet_AddObjecttoContainer    = 0x00574FA6;
-constexpr UInt32 kRet_ContainerTransferItem   = 0x0075DC89;
+static Detours::JumpDetour s_playerPickUpDetour;
+static Detours::JumpDetour s_actorPickUpDetour;
+static Detours::JumpDetour s_addObjectToContainerDetour;
+static Detours::JumpDetour s_containerTransferItemDetour;
+
+typedef void(__thiscall* PlayerPickUp_t)(TESObjectREFR*, TESObjectREFR*, SInt32, UInt8);
+typedef int(__thiscall* ActorPickUp_t)(TESObjectREFR*, TESObjectREFR*, SInt32, UInt8);
+typedef int(__thiscall* AddObjecttoContainer_t)(TESObjectREFR*, TESForm*, ExtraDataList*, SInt32);
+typedef void(__cdecl* ContainerTransferItem_t)(SInt32);
+static PlayerPickUp_t s_playerPickUp = nullptr;
+static ActorPickUp_t s_actorPickUp = nullptr;
+static AddObjecttoContainer_t s_addObjectToContainer = nullptr;
+static ContainerTransferItem_t s_containerTransferItem = nullptr;
 
 constexpr UInt32 kTESObjectREFR_BaseFormOffset = 0x20;
-static TESObjectREFR** g_thePlayer = (TESObjectREFR**)0x011DEA3C;
 static void**    g_containerMenuPtrAddr = (void**)0x011D93F8;
 static UInt32*   g_containerMenuSelAddr = (UInt32*)0x011D93FC;
 constexpr UInt32 kContainerMenu_ContainerRefOffset = 0x74;
@@ -73,65 +81,27 @@ static int __cdecl CheckPickUpObject(TESObjectREFR* picker, TESObjectREFR* itemR
 	return DispatchPrePickUp(picker, baseForm, itemRef, count) ? 1 : 0;
 }
 
-__declspec(naked) static void PlayerPickUp_Hook()
+static void __fastcall PlayerPickUp_Hook(TESObjectREFR* picker, void*, TESObjectREFR* itemRef, SInt32 count, UInt8 playSounds)
 {
-	__asm {
-		//ecx=this, [esp+4]=apObject, [+8]=count, [+0xC]=playSounds
-		push    ecx
-		mov     eax, [esp + 0x0C]
-		push    eax
-		mov     eax, [esp + 0x0C]
-		push    eax
-		mov     eax, [esp + 0x08]
-		push    eax
-		call    CheckPickUpObject
-		add     esp, 0x0C
-		pop     ecx
-		test    eax, eax
-		jz      veto
+	if (!CheckPickUpObject(picker, itemRef, count))
+		return;
 
-		push    ebp
-		mov     ebp, esp
-		sub     esp, 0x44
-		mov     eax, kRet_PlayerPickUp
-		jmp     eax
-
-	veto:
-		ret     0x0C
-	}
+	if (s_playerPickUp)
+		s_playerPickUp(picker, itemRef, count, playSounds);
 }
 
-__declspec(naked) static void ActorPickUp_Hook()
+static int __fastcall ActorPickUp_Hook(TESObjectREFR* picker, void*, TESObjectREFR* itemRef, SInt32 count, UInt8 playSounds)
 {
-	__asm {
-		push    ecx
-		mov     eax, [esp + 0x0C]
-		push    eax
-		mov     eax, [esp + 0x0C]
-		push    eax
-		mov     eax, [esp + 0x08]
-		push    eax
-		call    CheckPickUpObject
-		add     esp, 0x0C
-		pop     ecx
-		test    eax, eax
-		jz      veto
+	if (!CheckPickUpObject(picker, itemRef, count))
+		return 0;
 
-		push    ebp
-		mov     ebp, esp
-		sub     esp, 0x54
-		mov     eax, kRet_ActorPickUp
-		jmp     eax
-
-	veto:
-		ret     0x0C
-	}
+	return s_actorPickUp ? s_actorPickUp(picker, itemRef, count, playSounds) : 0;
 }
 
 //player-only filter keeps cell-load container fill and levelled-list npc init untouched
 static int __cdecl CheckAddObjecttoContainer(TESObjectREFR* this_, TESForm* item, ExtraDataList* xData, SInt32 count)
 {
-	if (!this_ || this_ != *g_thePlayer) return 1;
+	if (!this_ || this_ != *(TESObjectREFR**)g_thePlayerPtr) return 1;
 
 	TESObjectREFR* invRef = nullptr;
 	if (g_invRefCreateEntry && item)
@@ -140,34 +110,12 @@ static int __cdecl CheckAddObjecttoContainer(TESObjectREFR* this_, TESForm* item
 	return DispatchPrePickUp(this_, item, invRef, count) ? 1 : 0;
 }
 
-__declspec(naked) static void AddObjecttoContainer_Hook()
+static int __fastcall AddObjecttoContainer_Hook(TESObjectREFR* container, void*, TESForm* item, ExtraDataList* xData, SInt32 count)
 {
-	__asm {
-		//ecx=this, [esp+4]=item, [+8]=xData, [+0xC]=count
-		push    ecx
-		mov     eax, [esp + 0x10]
-		push    eax
-		mov     eax, [esp + 0x10]
-		push    eax
-		mov     eax, [esp + 0x10]
-		push    eax
-		mov     eax, [esp + 0x0C]
-		push    eax
-		call    CheckAddObjecttoContainer
-		add     esp, 0x10
-		pop     ecx
-		test    eax, eax
-		jz      veto
+	if (!CheckAddObjecttoContainer(container, item, xData, count))
+		return 0;
 
-		push    ebp
-		mov     ebp, esp
-		sub     esp, 0x0C
-		mov     eax, kRet_AddObjecttoContainer
-		jmp     eax
-
-	veto:
-		ret     0x0C
-	}
+	return s_addObjectToContainer ? s_addObjectToContainer(container, item, xData, count) : 0;
 }
 
 static int __cdecl CheckContainerTransferItem(SInt32 count)
@@ -185,7 +133,7 @@ static int __cdecl CheckContainerTransferItem(SInt32 count)
 	TESForm* item = entry->type;
 	if (!item) return 1;
 
-	TESObjectREFR* playerRef = *g_thePlayer;
+	TESObjectREFR* playerRef = *(TESObjectREFR**)g_thePlayerPtr;
 	if (!playerRef) return 1;
 
 	auto* container = *reinterpret_cast<TESObjectREFR**>((UInt8*)menu + kContainerMenu_ContainerRefOffset);
@@ -197,25 +145,26 @@ static int __cdecl CheckContainerTransferItem(SInt32 count)
 	return DispatchPrePickUp(playerRef, item, invRef, count) ? 1 : 0;
 }
 
-__declspec(naked) static void ContainerTransferItem_Hook()
+static void __cdecl ContainerTransferItem_Hook(SInt32 count)
 {
-	__asm {
-		mov     eax, [esp + 4]
-		push    eax
-		call    CheckContainerTransferItem
-		add     esp, 4
-		test    eax, eax
-		jz      veto
+	if (!CheckContainerTransferItem(count))
+		return;
 
-		push    ebp
-		mov     ebp, esp
-		sub     esp, 0x154
-		mov     eax, kRet_ContainerTransferItem
-		jmp     eax
+	if (s_containerTransferItem)
+		s_containerTransferItem(count);
+}
 
-	veto:
-		ret
+template <typename T>
+static bool InstallEntryDetour(const char* name, Detours::JumpDetour& detour, UInt32 addr, void* hook, UInt32 size, T& original)
+{
+	if (!detour.WriteRelJump(addr, hook, size))
+	{
+		Log("OnPrePickUp: %s prologue at 0x%X could not be detoured", name, addr);
+		return false;
 	}
+
+	original = detour.GetTrampoline<T>();
+	return original != nullptr;
 }
 
 bool Init(void* nvseInterface)
@@ -244,29 +193,11 @@ bool Init(void* nvseInterface)
 		g_invRefCreateEntry = reinterpret_cast<InvRefCreateEntry_t>(
 			dataInterface->GetFunc(kNVSEData_InventoryReferenceCreateEntry));
 
-	//if another plugin already patched the prologue, skip - don't corrupt their trampoline
-	auto TryInstall = [](const char* name, UInt32 addr, const UInt8* expected, UInt32 size, void* hook, UInt32 nopCount) -> bool {
-		if (memcmp((void*)addr, expected, size) != 0)
-		{
-			Log("OnPrePickUp: %s prologue at 0x%X differs from expected, skipping (another plugin hooked here?)", name, addr);
-			return false;
-		}
-		SafeWrite::WriteRelJump(addr, (UInt32)hook);
-		if (nopCount > 0) SafeWrite::WriteNop(addr + 5, nopCount);
-		return true;
-	};
-
-	//sub esp,154h is imm32 form, so 9 prologue bytes (5-byte jmp + 4 nops); others use imm8 (6 bytes)
-	static const UInt8 kPrologue_PlayerPickUp[6]    = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x44 };
-	static const UInt8 kPrologue_ActorPickUp[6]     = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x54 };
-	static const UInt8 kPrologue_AddObjectTo[6]     = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x0C };
-	static const UInt8 kPrologue_ContainerXfer[9]   = { 0x55, 0x8B, 0xEC, 0x81, 0xEC, 0x54, 0x01, 0x00, 0x00 };
-
 	int installed = 0;
-	installed += TryInstall("PlayerCharacter::PickUpObject", kAddr_PlayerPickUp,          kPrologue_PlayerPickUp,  6, (void*)PlayerPickUp_Hook,          1);
-	installed += TryInstall("Actor::PickUpObject",           kAddr_ActorPickUp,           kPrologue_ActorPickUp,   6, (void*)ActorPickUp_Hook,           1);
-	installed += TryInstall("TESObjectREFR::AddObjecttoContainer", kAddr_AddObjecttoContainer, kPrologue_AddObjectTo, 6, (void*)AddObjecttoContainer_Hook, 1);
-	installed += TryInstall("ContainerMenu::TransferItem",   kAddr_ContainerTransferItem, kPrologue_ContainerXfer, 9, (void*)ContainerTransferItem_Hook, 4);
+	installed += InstallEntryDetour("PlayerCharacter::PickUpObject", s_playerPickUpDetour, kAddr_PlayerPickUp, (void*)PlayerPickUp_Hook, 6, s_playerPickUp);
+	installed += InstallEntryDetour("Actor::PickUpObject", s_actorPickUpDetour, kAddr_ActorPickUp, (void*)ActorPickUp_Hook, 6, s_actorPickUp);
+	installed += InstallEntryDetour("TESObjectREFR::AddObjecttoContainer", s_addObjectToContainerDetour, kAddr_AddObjecttoContainer, (void*)AddObjecttoContainer_Hook, 6, s_addObjectToContainer);
+	installed += InstallEntryDetour("ContainerMenu::TransferItem", s_containerTransferItemDetour, kAddr_ContainerTransferItem, (void*)ContainerTransferItem_Hook, 9, s_containerTransferItem);
 
 	Log("OnPrePickUp: %d/4 hooks installed", installed);
 	return installed > 0;

@@ -9,8 +9,10 @@
 #include "DialogueTextFilter.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/CallTemplates.h"
+#include "internal/Detours.h"
 #include "internal/ScopedLock.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
 #include "internal/globals.h"
 
@@ -90,7 +92,6 @@ static void EnsureStateLockInitialized()
 }
 
 constexpr UInt32 kAddr_RunResult = 0x61F170;
-constexpr UInt32 kAddr_RunResultBody = 0x61F176;
 constexpr UInt32 kAddr_GetResponses = 0x61E780;
 
 static UInt32 ReadRefID(const void* form)
@@ -112,7 +113,7 @@ static bool ParseModNameFromVoicePath(const char* path, char* outName, size_t ou
 }
 
 static const char* GetModName(UInt8 modIndex) {
-	void* dh = *(void**)0x11C3F2C;
+	void* dh = *g_dataHandlerPtr;
 	if (!dh || modIndex >= 0xFF) return nullptr;
 	ModInfo* modInfo = *(ModInfo**)((UInt8*)dh + 0x21C + (modIndex * 4));
 	if (!modInfo) return nullptr;
@@ -380,45 +381,20 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 
 }
 
-static auto g_hookCallback = &HookCallback;
-static UInt32 g_chainAddr = 0;
+using RunResult_t = void(__thiscall*)(TESTopicInfo*, int, Actor*);
+static Detours::JumpDetour g_runResultDetour;
+static RunResult_t g_runResult = nullptr;
 
-static __declspec(naked) void DialogueTextHook() {
-	__asm {
-		cmp     dword ptr [esp+4], 0               //first arg: response index; 0 = main line, >0 = chunks
-		jnz     skip_filter                        //only filter on the main line
+static void __fastcall DialogueTextHook(TESTopicInfo* topicInfo, void*, int responseIndex, Actor* speaker) {
+	if (responseIndex == 0)
+		HookCallback(topicInfo, speaker);
 
-		pushad
-		pushfd
-
-		//speaker at [esp+8] before pushad(0x20)+pushfd(0x4) = [esp+0x2C]
-		push    dword ptr [esp+0x2C]               //cdecl arg2: speaker
-		push    ecx                                //cdecl arg1: InfoItem (thiscall this)
-		call    [g_hookCallback]
-		add     esp, 8
-
-		popfd
-		popad
-
-	skip_filter:
-		mov     eax, [g_chainAddr]                 //another plugin already chained here?
-		test    eax, eax
-		jnz     chain_to_previous
-
-		push    ebp                                //replay stolen prologue
-		mov     ebp, esp
-		sub     esp, 0Ch
-		mov     eax, kAddr_RunResultBody
-		jmp     eax
-
-	chain_to_previous:
-		jmp     eax                                //defer to previous chain owner
-	}
+	if (g_runResult)
+		g_runResult(topicInfo, responseIndex, speaker);
 }
 
 //SpeakSound computes the final engine duration immediately before returning it.
 constexpr UInt32 kAddr_SpeakSoundDuration = 0x8A2CD3;
-constexpr UInt32 kAddr_SpeakSoundDurationReturn = 0x8A2CD9;
 
 static void __cdecl OnSpeakConfirm(Actor* speaker, const char* voicePath, float durationSeconds) {
 	if (g_isLoadingSave) return;
@@ -466,6 +442,8 @@ static void __cdecl OnSpeakConfirm(Actor* speaker, const char* voicePath, float 
 }
 
 static auto g_speakCallback = &OnSpeakConfirm;
+static Detours::JumpDetour g_speakDurationDetour;
+static UInt8* g_speakDurationTrampoline = nullptr;
 
 static __declspec(naked) void SpeakSoundDurationHook() {
 	__asm {
@@ -481,8 +459,7 @@ static __declspec(naked) void SpeakSoundDurationHook() {
 		popfd
 		popad
 
-		fld     dword ptr [ebp-228h]
-		mov     eax, kAddr_SpeakSoundDurationReturn
+		mov     eax, g_speakDurationTrampoline
 		jmp     eax
 	}
 }
@@ -591,14 +568,17 @@ void Update()
 
 		if (confirmed) {
 			bool alreadyFallback = false;
-			for (auto it = DialogueTextFilter::g_recentFallbacks.begin();
-				 it != DialogueTextFilter::g_recentFallbacks.end(); ++it) {
-				if (it->speakerRefID == evt.speakerRefID &&
-					it->baseFormID == baseFormID &&
-					it->responseNum == evt.responseNum) {
-					alreadyFallback = true;
-					DialogueTextFilter::g_recentFallbacks.erase(it);
-					break;
+			{
+				ScopedLock lock(&g_dtfStateLock);
+				for (auto it = DialogueTextFilter::g_recentFallbacks.begin();
+					 it != DialogueTextFilter::g_recentFallbacks.end(); ++it) {
+					if (it->speakerRefID == evt.speakerRefID &&
+						it->baseFormID == baseFormID &&
+						it->responseNum == evt.responseNum) {
+						alreadyFallback = true;
+						DialogueTextFilter::g_recentFallbacks.erase(it);
+						break;
+					}
 				}
 			}
 			if (alreadyFallback) {
@@ -610,6 +590,7 @@ void Update()
 				confirmedVoicePath[0] ? confirmedVoicePath : voicePath,
 				PackEventFloatArg(durationSeconds > 0.0f ? durationSeconds : evt.duration));
 		} else if (nowTick - evt.dispatchAfterTick > 30000) {
+			//gave up waiting for speaksound confirm, drop the event
 		} else {
 			deferredEvents.push_back(evt);
 		}
@@ -661,8 +642,11 @@ void Update()
 		g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
 			reinterpret_cast<TESObjectREFR*>(speaker),
 			speaker, topic, info, textBuf, cit->voicePath, PackEventFloatArg(cit->durationSeconds));
-		DialogueTextFilter::g_recentFallbacks.push_back(
-			{cit->speakerRefID, cit->baseFormID, cit->responseNum, nowTick});
+		{
+			ScopedLock lock(&g_dtfStateLock);
+			DialogueTextFilter::g_recentFallbacks.push_back(
+				{cit->speakerRefID, cit->baseFormID, cit->responseNum, nowTick});
+		}
 
 		cit = confirmedSpeaks.erase(cit);
 	}
@@ -698,19 +682,26 @@ bool Init(void* nvseInterface) {
 	EnsureStateLockInitialized();
 	DialogueTextFilter::g_mainThreadId = 0;
 
-	UInt8 firstByte = *(UInt8*)kAddr_RunResult;
-	if (firstByte == 0xE9)
-		g_chainAddr = SafeWrite::GetRelJumpTarget(kAddr_RunResult);
+	bool runResultHooked = false;
+	if (*(UInt8*)kAddr_RunResult == 0xE9)
+		runResultHooked = g_runResultDetour.WriteRelJumpChainable(kAddr_RunResult, DialogueTextHook, 5);
 	else
-		g_chainAddr = 0;
-
-	SafeWrite::WriteRelJump(kAddr_RunResult, (UInt32)DialogueTextHook);
-	SafeWrite::Write8(kAddr_RunResult + 5, 0x90);
+		runResultHooked = g_runResultDetour.WriteRelJump(kAddr_RunResult, DialogueTextHook, 6);
+	if (!runResultHooked) {
+		Log("DialogueTextFilter: failed to install RunResult detour");
+		return false;
+	}
+	g_runResult = g_runResultDetour.GetTrampoline<RunResult_t>();
+	if (!g_runResult) {
+		Log("DialogueTextFilter: RunResult trampoline missing");
+		g_runResultDetour.Remove();
+		return false;
+	}
 
 	static const UInt8 expectedSpeakDurationBytes[] = { 0xD9, 0x85, 0xD8, 0xFD, 0xFF, 0xFF };
 	if (memcmp((void*)kAddr_SpeakSoundDuration, expectedSpeakDurationBytes, sizeof(expectedSpeakDurationBytes)) == 0) {
-		SafeWrite::WriteRelJump(kAddr_SpeakSoundDuration, (UInt32)SpeakSoundDurationHook);
-		SafeWrite::WriteNop(kAddr_SpeakSoundDuration + 5, 1);
+		if (!g_speakDurationDetour.WriteRelJump(kAddr_SpeakSoundDuration, SpeakSoundDurationHook, sizeof(expectedSpeakDurationBytes), &g_speakDurationTrampoline))
+			Log("DialogueTextFilter: failed to install SpeakSound duration detour");
 	}
 	DialogueTextFilter::g_hookInstalled = true;
 

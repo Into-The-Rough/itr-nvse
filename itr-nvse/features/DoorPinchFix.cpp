@@ -3,6 +3,7 @@
 #include "internal/CollisionToggle.h"
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "nvse/GameForms.h"
 #include "nvse/GameObjects.h"
 
@@ -36,7 +37,6 @@ namespace
 	GetOpenState_t GetOpenState = reinterpret_cast<GetOpenState_t>(0x47B250);
 	GetTeleport_t GetTeleport = reinterpret_cast<GetTeleport_t>(0x568E50);
 	GetSlidingDoor_t GetSlidingDoor = reinterpret_cast<GetSlidingDoor_t>(0x518080);
-	PlayerCharacter** g_player = reinterpret_cast<PlayerCharacter**>(0x11DEA3C);
 
 	bool g_enabled = false;
 	bool g_hookInstalled = false;
@@ -99,7 +99,7 @@ namespace
 		if (GetSlidingDoor(doorRef->baseForm))
 			return false;
 
-		PlayerCharacter* player = g_player ? *g_player : nullptr;
+		PlayerCharacter* player = *g_thePlayerPtr;
 		if (!player || !player->parentCell || doorRef->parentCell != player->parentCell)
 			return false;
 

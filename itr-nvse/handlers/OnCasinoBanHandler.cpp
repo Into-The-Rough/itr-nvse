@@ -6,9 +6,9 @@
 #include "OnCasinoBanHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
 
-static void** g_thePlayer = (void**)0x011DEA3C;
 constexpr UInt32 kOffset_Player_CasinoDataList = 0x610;
 constexpr UInt32 kOffset_Casino_MaxWinnings = 0x210;
 
@@ -42,7 +42,7 @@ namespace OnCasinoBanHandler {
 void Update()
 {
 	if (!g_eventManagerInterface) return;
-	void* player = g_thePlayer ? *g_thePlayer : nullptr;
+	void* player = *(void**)g_thePlayerPtr;
 	if (!player) return;
 
 	auto* list = *(SimpleListNode**)((UInt8*)player + kOffset_Player_CasinoDataList);

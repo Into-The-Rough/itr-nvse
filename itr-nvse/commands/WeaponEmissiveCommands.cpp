@@ -5,6 +5,7 @@
 
 extern const _ExtractArgs ExtractArgs;
 #include "internal/globals.h"
+#include "internal/GameGlobals.h"
 
 namespace
 {
@@ -22,7 +23,7 @@ namespace
 
 	static void* GetPlayer1stPersonNode()
 	{
-		void* player = *(void**)0x11DEA3C;
+		void* player = *(void**)g_thePlayerPtr;
 		if (!player) return nullptr;
 		return *(void**)((UInt8*)player + 0x694);
 	}

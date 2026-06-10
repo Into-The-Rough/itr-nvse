@@ -2,15 +2,17 @@
 
 #include "OnWeaponDropHandler.h"
 #include "internal/NVSEMinimal.h"
+#include "internal/EngineFunctions.h"
 #include "internal/EventDispatch.h"
+#include "internal/Detours.h"
 
 namespace OnWeaponDropHandler {
     bool g_hookInstalled = false;
-    static thread_local Actor* s_actor = nullptr;
 }
 
-constexpr UInt32 kAddr_TryDropWeapon = 0x89F580;
-constexpr UInt32 kAddr_TryDropWeaponBody = 0x89F586;
+static Detours::JumpDetour s_tryDropWeaponDetour;
+using TryDropWeapon_t = int(__thiscall*)(Actor*);
+static TryDropWeapon_t s_originalTryDropWeapon = nullptr;
 
 static TESObjectWEAP* GetActorCurrentWeapon(Actor* actor)
 {
@@ -29,14 +31,8 @@ static TESObjectWEAP* GetActorCurrentWeapon(Actor* actor)
     return (TESObjectWEAP*)(*(UInt32*)(itemChange + 0x08));
 }
 
-static void __cdecl SaveDropActor(Actor* actor)
+static void DispatchWeaponDropEvent(Actor* actor)
 {
-    OnWeaponDropHandler::s_actor = actor;
-}
-
-static void __cdecl DispatchWeaponDropEvent()
-{
-    auto* actor = OnWeaponDropHandler::s_actor;
     if (!actor) return;
 
     auto* weapon = GetActorCurrentWeapon(actor);
@@ -48,28 +44,10 @@ static void __cdecl DispatchWeaponDropEvent()
             actor, weapon);
 }
 
-static __declspec(naked) void TryDropWeaponHook()
+static int __fastcall TryDropWeaponHook(Actor* actor, void*)
 {
-    __asm
-    {
-        push    ecx                             //stash thiscall this (actor)
-        push    ecx                             //cdecl arg for SaveDropActor
-        call    SaveDropActor
-        add     esp, 4
-        pop     ecx                             //restore actor for the stolen prologue below
-
-        pushad
-        pushfd
-        call    DispatchWeaponDropEvent
-        popfd
-        popad
-
-        push    ebp                             //replay stolen prologue of TryDropWeapon
-        mov     ebp, esp
-        sub     esp, 3Ch
-        mov     eax, kAddr_TryDropWeaponBody
-        jmp     eax                             //resume real function past the 6-byte jmp patch
-    }
+    DispatchWeaponDropEvent(actor);
+    return s_originalTryDropWeapon ? s_originalTryDropWeapon(actor) : 0;
 }
 
 namespace OnWeaponDropHandler {
@@ -79,8 +57,9 @@ bool Init(void* nvseInterface)
     if (nvse->isEditor) return false;
 
     if (!g_hookInstalled) {
-        SafeWrite::WriteRelJump(kAddr_TryDropWeapon, (UInt32)TryDropWeaponHook);
-        SafeWrite::Write8(kAddr_TryDropWeapon + 5, 0x90);
+        if (!s_tryDropWeaponDetour.WriteRelJump((UInt32)Engine::Actor_TryDropWeapon, TryDropWeaponHook, 6))
+            return false;
+        s_originalTryDropWeapon = s_tryDropWeaponDetour.GetTrampoline<TryDropWeapon_t>();
         g_hookInstalled = true;
     }
 

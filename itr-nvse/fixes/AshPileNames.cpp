@@ -9,13 +9,15 @@
 
 #include "internal/globals.h"
 #include "internal/ExtraDataUtils.h"
-#include "internal/SafeWrite.h"
+#include "internal/Detours.h"
+#include "internal/GameGlobals.h"
 namespace Settings { extern int bAshPileNames; }
 
 namespace AshPileNames
 {
 	static bool s_hookInstalled = false;
-	static UInt32 s_originalCallTarget = 0;
+	static bool s_initFailed = false;
+	static Detours::CallDetour s_getBaseFullNameCall;
 
 	static const UInt32 kAddr_HookSite = 0x776F66; //call GetBaseFullName in SetHUDCrosshairStrings
 
@@ -50,20 +52,6 @@ namespace AshPileNames
 		return nullptr;
 	}
 
-	static bool IsGameLoading()
-	{
-		void* mgr = *(void**)0x11DE134;
-		if (!mgr) return false;
-		return *(bool*)((char*)mgr + 0x26);
-	}
-
-	static UInt32 ReadCallTarget(UInt32 addr)
-	{
-		UInt8* p = (UInt8*)addr;
-		if (p[0] != 0xE8) return 0;
-		return addr + 5 + *(SInt32*)(addr + 1);
-	}
-
 	typedef const char* (__thiscall* GetBaseFullName_t)(TESObjectREFR* apRef);
 
 	static const char* __fastcall Hook_GetBaseFullName(TESObjectREFR* thisRef, void* edx)
@@ -78,9 +66,10 @@ namespace AshPileNames
 				return actorName;
 		}
 
-		if (!s_originalCallTarget)
+		auto original = reinterpret_cast<GetBaseFullName_t>(s_getBaseFullNameCall.GetOverwrittenAddr());
+		if (!original)
 			return "";
-		return ((GetBaseFullName_t)s_originalCallTarget)(thisRef);
+		return original(thisRef);
 	}
 
 	void Init()
@@ -88,20 +77,19 @@ namespace AshPileNames
 		if (s_hookInstalled || !Settings::bAshPileNames)
 			return;
 
-		s_originalCallTarget = ReadCallTarget(kAddr_HookSite);
-		if (!s_originalCallTarget)
+		if (!s_getBaseFullNameCall.WriteRelCall(kAddr_HookSite, Hook_GetBaseFullName))
 		{
 			Log("AshPileNames failed: expected call opcode at 0x%08X", kAddr_HookSite);
+			s_initFailed = true;
 			return;
 		}
 
-		SafeWrite::WriteRelCall(kAddr_HookSite, (UInt32)Hook_GetBaseFullName);
 		s_hookInstalled = true;
 	}
 
 	void Update()
 	{
-		if (!s_hookInstalled && Settings::bAshPileNames)
+		if (!s_hookInstalled && !s_initFailed && Settings::bAshPileNames)
 			Init();
 	}
 }

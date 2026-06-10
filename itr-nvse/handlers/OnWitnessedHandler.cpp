@@ -8,9 +8,10 @@
 #include "internal/EngineFunctions.h"
 #include "internal/WitnessScan.h"
 #include "internal/globals.h"
+#include "internal/GameGlobals.h"
 #include <vector>
 
-static Actor* GetPlayerActor() { return *reinterpret_cast<Actor**>(0x11DEA3C); }
+static Actor* GetPlayerActor() { return *(Actor**)g_thePlayerPtr; }
 
 constexpr UInt32 kAddr_AddtoActorKnowList = 0x9EB9C0;
 constexpr UInt32 kAddr_TrespassAlarm      = 0x8C0EC0;

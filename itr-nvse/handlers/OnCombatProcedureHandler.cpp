@@ -21,8 +21,6 @@ namespace OnCombatProcedureHandler {
     CRITICAL_SECTION g_stateLock;
     volatile LONG g_stateLockInit = 0;
     DWORD g_mainThreadId = 0;
-    static UInt32 s_trampolineActionAddr = 0;
-    static UInt32 s_trampolineMovementAddr = 0;
 }
 
 static void EnsureStateLockInitialized()
@@ -32,6 +30,9 @@ static void EnsureStateLockInitialized()
 
 static Detours::JumpDetour s_actionDetour;
 static Detours::JumpDetour s_movementDetour;
+typedef int(__thiscall* SetProcedure_t)(void*, void*);
+static SetProcedure_t s_setActionProcedure = nullptr;
+static SetProcedure_t s_setMovementProcedure = nullptr;
 
 static Actor* GetPackageOwner(void* combatController)
 {
@@ -93,6 +94,7 @@ static UInt32 GetProcedureType(void* procedure)
     return (UInt32)-1;
 }
 
+//candidate for listener-probe gating like onsoundplayed
 static void __cdecl QueueCombatProcedureEvent(void* combatController, void* procedure, UInt32 isActionProcedure)
 {
     if (!combatController || !procedure) return;
@@ -143,38 +145,20 @@ void Update()
 }
 }
 
-static __declspec(naked) void Hook_SetActionProcedure()
+static int __fastcall Hook_SetActionProcedure(void* combatController, void*, void* procedure)
 {
-    __asm {
-        mov eax, [esp+4]                                                   //procType arg (before any push)
-        pushad
-        pushfd
-        push 1                                                             //isActionProcedure = true
-        push eax                                                           //procType
-        push ecx                                                           //actor (thiscall this)
-        call QueueCombatProcedureEvent
-        add esp, 12                                                        //cdecl cleanup 3 dwords
-        popfd
-        popad
-        jmp dword ptr [OnCombatProcedureHandler::s_trampolineActionAddr]   //tail into trampoline replaying stolen prologue
-    }
+    QueueCombatProcedureEvent(combatController, procedure, 1);
+    if (s_setActionProcedure)
+        return s_setActionProcedure(combatController, procedure);
+    return 0;
 }
 
-static __declspec(naked) void Hook_SetMovementProcedure()
+static int __fastcall Hook_SetMovementProcedure(void* combatController, void*, void* procedure)
 {
-    __asm {
-        mov eax, [esp+4]                                                     //procType arg
-        pushad
-        pushfd
-        push 0                                                               //isActionProcedure = false
-        push eax
-        push ecx
-        call QueueCombatProcedureEvent
-        add esp, 12
-        popfd
-        popad
-        jmp dword ptr [OnCombatProcedureHandler::s_trampolineMovementAddr]
-    }
+    QueueCombatProcedureEvent(combatController, procedure, 0);
+    if (s_setMovementProcedure)
+        return s_setMovementProcedure(combatController, procedure);
+    return 0;
 }
 
 namespace OnCombatProcedureHandler {
@@ -189,22 +173,22 @@ bool Init(void* nvseInterface)
     //both functions: push ebp; mov ebp,esp; sub esp,10h = 6 bytes
     if (!s_actionDetour.WriteRelJump(0x980110, Hook_SetActionProcedure, 6))
         return false;
-    OnCombatProcedureHandler::s_trampolineActionAddr = s_actionDetour.GetOverwrittenAddr();
-    if (!OnCombatProcedureHandler::s_trampolineActionAddr) {
+    s_setActionProcedure = s_actionDetour.GetTrampoline<SetProcedure_t>();
+    if (!s_setActionProcedure) {
         s_actionDetour.Remove();
         return false;
     }
 
     if (!s_movementDetour.WriteRelJump(0x9801B0, Hook_SetMovementProcedure, 6)) {
         s_actionDetour.Remove();
-        OnCombatProcedureHandler::s_trampolineActionAddr = 0;
+        s_setActionProcedure = nullptr;
         return false;
     }
-    OnCombatProcedureHandler::s_trampolineMovementAddr = s_movementDetour.GetOverwrittenAddr();
-    if (!OnCombatProcedureHandler::s_trampolineMovementAddr) {
+    s_setMovementProcedure = s_movementDetour.GetTrampoline<SetProcedure_t>();
+    if (!s_setMovementProcedure) {
         s_movementDetour.Remove();
         s_actionDetour.Remove();
-        OnCombatProcedureHandler::s_trampolineActionAddr = 0;
+        s_setActionProcedure = nullptr;
         return false;
     }
 

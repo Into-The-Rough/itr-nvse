@@ -3,6 +3,7 @@
 #include "AltTabMute.h"
 #include "internal/globals.h"
 #include <Windows.h>
+#include "internal/GameGlobals.h"
 
 namespace AltTabMute
 {
@@ -15,7 +16,7 @@ namespace AltTabMute
 		UInt8 pad004[0x13C];
 		float volumes[kNumVolumeChannels];
 
-		static BSAudioManager* Get() { return (BSAudioManager*)0x11F6EF0; }
+		static BSAudioManager* Get() { return (BSAudioManager*)g_audioManager; }
 	};
 
 	static HWND g_gameWindow = nullptr;
@@ -52,20 +53,23 @@ namespace AltTabMute
 
 	void Update()
 	{
+		static UInt32 s_findAttempts = 0;
 		if (!g_gameWindow)
-			g_gameWindow = FindWindowA(nullptr, "Fallout: New Vegas");
-
-		if (g_gameWindow)
 		{
-			bool currentlyInFocus = (GetForegroundWindow() == g_gameWindow);
-			if (currentlyInFocus != g_wasInFocus)
-			{
-				if (!currentlyInFocus)
-					OnFocusLost();
-				else
-					OnFocusGained();
-				g_wasInFocus = currentlyInFocus;
-			}
+			if (s_findAttempts >= 600) return; //title never matched, stop scanning every frame
+			++s_findAttempts;
+			g_gameWindow = FindWindowA(nullptr, "Fallout: New Vegas");
+			if (!g_gameWindow) return;
+		}
+
+		bool currentlyInFocus = (GetForegroundWindow() == g_gameWindow);
+		if (currentlyInFocus != g_wasInFocus)
+		{
+			if (!currentlyInFocus)
+				OnFocusLost();
+			else
+				OnFocusGained();
+			g_wasInFocus = currentlyInFocus;
 		}
 	}
 }

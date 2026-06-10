@@ -8,11 +8,13 @@
 #include "nvse/GameObjects.h"
 #include "internal/CallTemplates.h"
 #include "internal/SafeWrite.h"
+#include "internal/Detours.h"
+#include "internal/EngineFunctions.h"
 #include "internal/globals.h"
+#include "internal/GameGlobals.h"
 
 #include <cstdarg>
 #include <cmath>
-#include <cstring>
 #include <unordered_map>
 #include <vector>
 
@@ -68,6 +70,8 @@ namespace
 	constexpr UInt32 kAddr_TES_DrawSphere = 0xC56680;
 	constexpr UInt32 kAddr_Load3D_PrimitiveCullCall = 0x56B4DC;
 	constexpr UInt32 kAddr_Load3D_DoorTravelCullCall = 0x56BAC8;
+	Detours::CallDetour s_load3DPrimitiveCullCall;
+	Detours::CallDetour s_load3DDoorTravelCullCall;
 	constexpr UInt32 kAddr_gs_bPrimitivesOn = 0x11CA2DC;
 	constexpr UInt32 kAddr_g_TES = 0x11DEA10;
 	constexpr UInt32 kAddr_NiAlphaProperty_Create = 0xA5CEB0;
@@ -85,7 +89,6 @@ namespace
 	constexpr UInt32 kNiFlag_AlwaysDraw = 0x00000800;
 	constexpr UInt32 kNiFlag_IgnoreFade = 0x00008000;
 	constexpr UInt32 kRefreshIntervalMs = 1000;
-	constexpr UInt32 kDebugLogIntervalMs = 2000;
 	constexpr float kOverlayLifetimeSeconds = 3.0f;
 	constexpr float kMaxOverlayDistance = 4096.0f;
 	enum CellNode : UInt32
@@ -191,7 +194,6 @@ namespace
 	static std::unordered_map<UInt32, DebugNodeState> s_debugNodeStates;
 	static bool s_enabled = false;
 	static UInt32 s_lastRefreshMs = 0;
-	static UInt32 s_lastDebugLogMs = 0;
 	static void* s_alphaProperty = nullptr;
 
 	TESView* GetTES()
@@ -201,7 +203,7 @@ namespace
 
 	TESObjectREFR* GetPlayer()
 	{
-		return *reinterpret_cast<TESObjectREFR**>(0x11DEA3C);
+		return *g_thePlayerPtr;
 	}
 
 	UInt8* GetPrimitivesSetting()
@@ -322,14 +324,8 @@ namespace
 		return { 0.10f, 0.95f, 1.0f, 1.0f };
 	}
 
-	float GetOverlayDiameter(bool hasPrimitive, bool isMarker)
+	float GetOverlayDiameter(bool, bool)
 	{
-		if (hasPrimitive && isMarker)
-			return 8.0f;
-		if (hasPrimitive)
-			return 8.0f;
-		if (isMarker)
-			return 8.0f;
 		return 8.0f;
 	}
 
@@ -610,50 +606,6 @@ namespace
 		}
 	}
 
-	void DebugLogCounts(const char* stage, const RefreshCounts& counts)
-	{
-		char logPath[MAX_PATH];
-		if (!GetModuleFileNameA(nullptr, logPath, MAX_PATH))
-			return;
-
-		char* lastSlash = strrchr(logPath, '\\');
-		if (!lastSlash)
-			return;
-
-		strcpy_s(lastSlash + 1, MAX_PATH - (lastSlash + 1 - logPath), "nvse.log");
-
-		HANDLE file = CreateFileA(logPath, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-		if (file == INVALID_HANDLE_VALUE)
-			return;
-
-		char buffer[512];
-		const int length = _snprintf_s(buffer, sizeof(buffer), _TRUNCATE,
-			"itr-nvse: TAP [%s] enabled=%d cells=%u primitiveRefs=%u primitive3D=%u markerRefs=%u marker3D=%u overlayCandidates=%u overlays=%u outOfRange=%u no3D=%u stateMiss=%u throttled=%u createFail=%u nearest=%.0f",
-			stage,
-			s_enabled ? 1 : 0,
-			counts.cells,
-			counts.primitiveRefs,
-			counts.primitiveRefs3D,
-			counts.markerRefs,
-			counts.markerRefs3D,
-			counts.overlayCandidates,
-			counts.overlayRefs,
-			counts.overlayOutOfRange,
-			counts.overlayNo3D,
-			counts.overlayStateMisses,
-			counts.overlayThrottled,
-			counts.overlayCreateFails,
-			counts.nearestRefDistance);
-		if (length > 0)
-		{
-			DWORD written = 0;
-			WriteFile(file, buffer, length, &written, nullptr);
-			WriteFile(file, "\r\n", 2, &written, nullptr);
-		}
-
-		CloseHandle(file);
-	}
-
 	void RestoreVisuals(TESObjectREFR* refr)
 	{
 		if (!refr)
@@ -805,6 +757,17 @@ namespace
 			ThisCall<void>(kAddr_NiAVObject_SetAppCulled, node, shouldCull);
 	}
 
+	bool InstallLoad3DCall(Detours::CallDetour& detour, UInt32 addr, void* hook)
+	{
+		if (*reinterpret_cast<UInt8*>(addr) != 0xE8)
+		{
+			Log("ToggleAllPrimitives: site 0x%08X expected CALL, found 0x%02X",
+				addr, *reinterpret_cast<UInt8*>(addr));
+			return false;
+		}
+		return detour.WriteRelCall(addr, hook);
+	}
+
 	void InstallLoad3DFixes()
 	{
 		static bool s_attempted = false;
@@ -812,25 +775,8 @@ namespace
 			return;
 		s_attempted = true;
 
-		if (*reinterpret_cast<UInt8*>(kAddr_Load3D_PrimitiveCullCall) == 0xE8)
-		{
-			SafeWrite::WriteRelCall(kAddr_Load3D_PrimitiveCullCall, reinterpret_cast<UInt32>(Load3D_PrimitiveCullHook));
-		}
-		else
-		{
-			Log("ToggleAllPrimitives: site 0x%08X expected CALL, found 0x%02X",
-				kAddr_Load3D_PrimitiveCullCall, *reinterpret_cast<UInt8*>(kAddr_Load3D_PrimitiveCullCall));
-		}
-
-		if (*reinterpret_cast<UInt8*>(kAddr_Load3D_DoorTravelCullCall) == 0xE8)
-		{
-			SafeWrite::WriteRelCall(kAddr_Load3D_DoorTravelCullCall, reinterpret_cast<UInt32>(Load3D_DoorTravelCullHook));
-		}
-		else
-		{
-			Log("ToggleAllPrimitives: site 0x%08X expected CALL, found 0x%02X",
-				kAddr_Load3D_DoorTravelCullCall, *reinterpret_cast<UInt8*>(kAddr_Load3D_DoorTravelCullCall));
-		}
+		InstallLoad3DCall(s_load3DPrimitiveCullCall, kAddr_Load3D_PrimitiveCullCall, Load3D_PrimitiveCullHook);
+		InstallLoad3DCall(s_load3DDoorTravelCullCall, kAddr_Load3D_DoorTravelCullCall, Load3D_DoorTravelCullHook);
 	}
 }
 
@@ -851,7 +797,6 @@ bool Cmd_ToggleAllPrimitives_Execute(COMMAND_ARGS)
 	{
 		s_enabled = true;
 		s_lastRefreshMs = 0;
-		s_lastDebugLogMs = 0;
 		counts = RefreshEnabledState(tes);
 	}
 	else
@@ -861,29 +806,15 @@ bool Cmd_ToggleAllPrimitives_Execute(COMMAND_ARGS)
 		SetPrimitivesVisible(tes, false);
 		counts = RefreshLoadedRefs(tes, false);
 		s_debugNodeStates.clear();
-		s_lastDebugLogMs = 0;
 	}
 
 	*result = enable ? 1.0 : 0.0;
-	DebugLogCounts(enable ? "command-enable" : "command-disable", counts);
 
 	if (IsConsoleMode())
 	{
-		Console_Print("ToggleAllPrimitives >> %s cells=%u primitiveRefs=%u primitive3D=%u markerRefs=%u marker3D=%u overlayCandidates=%u overlays=%u outOfRange=%u no3D=%u stateMiss=%u throttled=%u createFail=%u nearest=%.0f",
+		Console_Print("ToggleAllPrimitives >> %s primitives=%u markers=%u overlays=%u",
 			enable ? "enabled" : "disabled",
-			counts.cells,
-			counts.primitiveRefs,
-			counts.primitiveRefs3D,
-			counts.markerRefs,
-			counts.markerRefs3D,
-			counts.overlayCandidates,
-			counts.overlayRefs,
-			counts.overlayOutOfRange,
-			counts.overlayNo3D,
-			counts.overlayStateMisses,
-			counts.overlayThrottled,
-			counts.overlayCreateFails,
-			counts.nearestRefDistance);
+			counts.primitiveRefs, counts.markerRefs, counts.overlayRefs);
 	}
 
 	return true;
@@ -904,12 +835,12 @@ namespace ToggleAllPrimitives
 
 		if (TESView* tes = GetTES())
 		{
-			const RefreshCounts counts = RefreshEnabledState(tes);
-			if (!s_lastDebugLogMs || now - s_lastDebugLogMs >= kDebugLogIntervalMs)
+			for (auto it = s_debugNodeStates.begin(); it != s_debugNodeStates.end();)
 			{
-				DebugLogCounts("update", counts);
-				s_lastDebugLogMs = now;
+				if (!Engine::LookupFormByID(it->first)) it = s_debugNodeStates.erase(it);
+				else ++it;
 			}
+			RefreshEnabledState(tes);
 		}
 	}
 
@@ -918,7 +849,6 @@ namespace ToggleAllPrimitives
 		s_enabled = false;
 		s_debugNodeStates.clear();
 		s_lastRefreshMs = 0;
-		s_lastDebugLogMs = 0;
 	}
 
 	void RegisterCommands(void* nvsePtr)

@@ -22,8 +22,6 @@ static bool g_bCompatMode = true;
 static bool g_bShowFactionName = true;
 static bool g_bShowNameOnlyCrime = true;
 
-static void* g_lastRef = nullptr;
-
 static void* GetRefOwner(void* ref, bool* outIsFaction)
 {
 	if (!ref) return nullptr;
@@ -179,48 +177,28 @@ void Update()
 
 	void* ref = *(void**)((UInt8*)hud + 0x1B8); //crosshairRef
 	if (!ref)
-	{
-		g_lastRef = nullptr;
 		return;
-	}
 
 	UInt8 refType = *(UInt8*)((UInt8*)ref + kOffset_TESForm_TypeID);
 
 	if (refType == 0x3B) //Actor
-	{
-		g_lastRef = ref;
 		return;
-	}
 
 	bool isFaction = false;
 	void* owner = GetRefOwner(ref, &isFaction);
 	if (!owner)
-	{
-		g_lastRef = ref;
 		return;
-	}
 
 	const char* ownerName = GetOwnerName(owner);
 	if (!ownerName || !*ownerName)
-	{
-		g_lastRef = ref;
 		return;
-	}
 
 	UInt32 ownerRefID = *(UInt32*)((UInt8*)owner + 0x0C); //TESForm::refID
 	if (ownerRefID == 0x7)
-	{
-		g_lastRef = ref;
 		return;
-	}
 
 	if (g_bShowNameOnlyCrime && !IsCrime(ref))
-	{
-		g_lastRef = ref;
 		return;
-	}
-
-	g_lastRef = ref;
 
 	//get original item name from global buffer
 	const char* itemName = (const char*)0x11D9C48; //crosshairRefName

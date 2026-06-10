@@ -9,6 +9,10 @@
 #include "nvse/GameAPI.h"
 #include "nvse/GameForms.h"
 #include "nvse/GameObjects.h"
+#include "nvse/GameExtraData.h"
+#include "internal/GameGlobals.h"
+#include "internal/EngineFunctions.h"
+#include "internal/globals.h"
 #include <cstring>
 #include <cctype>
 
@@ -17,6 +21,8 @@ static NVSEStringVarInterface* g_strInterface = nullptr;
 DEFINE_COMMAND_PLUGIN(GetPlayingRadioTrack, "Returns TESSound or TESTopicInfo for the playing radio track", 0, 0, NULL)
 DEFINE_COMMAND_PLUGIN(GetPlayingRadioTrackFileName, "Returns file path of the playing radio track", 0, 0, NULL)
 DEFINE_COMMAND_PLUGIN(GetPlayingRadioText, "Returns dialogue text of playing radio voice line", 0, 0, NULL)
+DEFINE_COMMAND_PLUGIN(ChangeRadioTrack, "Forces active radio station to advance to next track", 0, 0, nullptr);
+DEFINE_COMMAND_PLUGIN(IsRadioPlaying, "Returns 1 if any pip-boy or ambient radio is currently playing", 0, 0, nullptr);
 
 //internal structs
 struct VoiceResponse
@@ -123,14 +129,30 @@ struct SoundMap
 	}
 };
 
+struct ExtraRadioDataLite //kExtraData_RadioData (0x68)
+{
+	UInt8 pad00[0x10];
+	UInt32 rangeType;
+	float staticPerc;
+	TESObjectREFR* positionRef;
+};
+
+using GetRadioEntryFromActivator_t = RadioEntry* (__cdecl*)(void*);
+using DisableNPCRadio_t = void(__cdecl*)(Actor*);
+using SetNPCRadio_t = void(__cdecl*)(Actor*, TESObjectREFR*);
+
 //game globals
 static RadioEntry** g_currentRadio = (RadioEntry**)0x11DD42C;
 static char* g_currentSong = (char*)0x11DD448;
 static tList<DynamicRadio>* g_dynamicRadios = (tList<DynamicRadio>*)0x11DD58C;
+static UInt8* g_radioEnabled = reinterpret_cast<UInt8*>(0x11DD434);
+static GetRadioEntryFromActivator_t s_getRadioEntryFromActivator = reinterpret_cast<GetRadioEntryFromActivator_t>(0x832830);
+static DisableNPCRadio_t s_disableNPCRadio = reinterpret_cast<DisableNPCRadio_t>(0x835980);
+static SetNPCRadio_t s_setNPCRadio = reinterpret_cast<SetNPCRadio_t>(0x835810);
 
 static SoundMap* GetPlayingSoundsMap()
 {
-	return (SoundMap*)(0x11F6EF0 + 0x54);
+	return (SoundMap*)((UInt8*)g_audioManager + 0x54);
 }
 
 static const char* GetSoundFilePath(UInt32 soundKey)
@@ -216,7 +238,7 @@ static TESSound* FindSoundByPath(const char* runtimePath)
 	NormalizePath(runtimePath, normalized, sizeof(normalized));
 	if (!normalized[0]) return nullptr;
 
-	UInt8* dataHandler = *(UInt8**)0x11C3F2C;
+	UInt8* dataHandler = (UInt8*)*g_dataHandlerPtr;
 	if (!dataHandler) return nullptr;
 
 	auto* soundList = (tList<TESSound>*)(dataHandler + 0xD0);
@@ -373,6 +395,191 @@ bool Cmd_GetPlayingRadioText_Execute(COMMAND_ARGS)
 	return true;
 }
 
+//resolve TalkingActivator or Activator->radioStation from a base form
+static void* ResolveRadioActivator(TESForm* baseForm)
+{
+	if (!baseForm) return nullptr;
+	if (baseForm->typeID == kFormType_TalkingActivator)
+		return baseForm;
+	if (baseForm->typeID == kFormType_Activator)
+	{
+		auto* actBase = static_cast<TESObjectACTI*>(baseForm);
+		if (actBase->radioStation)
+			return actBase->radioStation;
+		return baseForm;
+	}
+	return nullptr;
+}
+
+static void StopRadioSound(SoundKey* key)
+{
+	SoundKey copy = *key;
+	Engine::BSSoundHandle_Stop(&copy);
+	key->soundKey = 0xFFFFFFFF;
+}
+
+static bool AdvanceDynamicRadios(double* result)
+{
+	if (!g_dynamicRadios)
+		return false;
+
+	UInt32 stoppedCount = 0, advancedCount = 0, reseatCount = 0;
+
+	for (auto iter = g_dynamicRadios->Begin(); !iter.End(); ++iter)
+	{
+		DynamicRadio* dr = iter.Get();
+		if (!dr || !dr->isActive)
+			continue;
+
+		TESObjectREFR* stationRef = nullptr;
+		Actor* sourceActor = nullptr;
+		void* activator = nullptr;
+
+		if (dr->ref)
+		{
+			stationRef = dr->ref;
+			TESForm* baseForm = dr->ref->baseForm;
+			if (baseForm)
+			{
+				UInt8 baseType = baseForm->typeID;
+				if (baseType == kFormType_NPC || baseType == kFormType_Creature)
+					sourceActor = static_cast<Actor*>(dr->ref);
+				activator = ResolveRadioActivator(baseForm);
+			}
+
+			auto* xRadio = reinterpret_cast<ExtraRadioDataLite*>(
+				Engine::BaseExtraList_GetByType(&dr->ref->extraDataList, kExtraData_RadioData));
+			if (xRadio && xRadio->positionRef)
+			{
+				stationRef = xRadio->positionRef;
+				activator = ResolveRadioActivator(stationRef->baseForm);
+			}
+		}
+
+		bool advancedThisRadio = false;
+		if (activator)
+		{
+			RadioEntry* entry = s_getRadioEntryFromActivator(activator);
+			if (entry)
+			{
+				entry->data.soundTimeRemaining = 1;
+				advancedCount++;
+				advancedThisRadio = true;
+			}
+		}
+
+		UInt32 soundKey = dr->sound.soundKey;
+		UInt32 staticKey = dr->radioStaticSound.soundKey;
+
+		if (soundKey && soundKey != 0xFFFFFFFF)
+		{
+			StopRadioSound(&dr->sound);
+			stoppedCount++;
+		}
+		if (staticKey && staticKey != 0xFFFFFFFF)
+		{
+			StopRadioSound(&dr->radioStaticSound);
+			stoppedCount++;
+		}
+
+		//if station entry couldn't be advanced directly, reseat the radio
+		if (!advancedThisRadio && stationRef)
+		{
+			Actor* reseatActor = sourceActor ? sourceActor : PlayerCharacter::GetSingleton();
+			if (reseatActor && s_disableNPCRadio && s_setNPCRadio)
+			{
+				s_disableNPCRadio(reseatActor);
+				s_setNPCRadio(reseatActor, stationRef);
+				reseatCount++;
+			}
+		}
+	}
+
+	if (stoppedCount || advancedCount || reseatCount)
+	{
+		if (IsConsoleMode())
+			Console_Print("ChangeRadioTrack >> stopped=%d advanced=%d reseat=%d",
+				stoppedCount, advancedCount, reseatCount);
+		*result = 1;
+		return true;
+	}
+
+	if (IsConsoleMode())
+		Console_Print("ChangeRadioTrack >> no active ambient radio");
+	return false;
+}
+
+static bool AdvanceCurrentRadioTrack(double* result)
+{
+	*result = 0;
+
+	if (!g_currentRadio)
+		return true;
+
+	UInt8 radioEnabled = g_radioEnabled ? *g_radioEnabled : 0;
+	RadioEntry* radio = radioEnabled ? *g_currentRadio : nullptr;
+
+	//pip-boy radio disabled or no entry - try ambient/dynamic radios
+	if (!radio)
+	{
+		AdvanceDynamicRadios(result);
+		return true;
+	}
+
+	//force one tick remaining so the engine advances to next track
+	radio->data.soundTimeRemaining = 1;
+	*result = 1;
+	return true;
+}
+
+bool Cmd_ChangeRadioTrack_Execute(COMMAND_ARGS)
+{
+	return AdvanceCurrentRadioTrack(result);
+}
+
+bool Cmd_IsRadioPlaying_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+
+	if (g_currentSong[0])
+	{
+		*result = 1;
+		return true;
+	}
+
+	if (g_radioEnabled && *g_radioEnabled && g_currentRadio && *g_currentRadio)
+	{
+		if ((*g_currentRadio)->data.soundTimeRemaining)
+		{
+			*result = 1;
+			return true;
+		}
+	}
+
+	if (!g_dynamicRadios)
+		return true;
+
+	for (auto iter = g_dynamicRadios->Begin(); !iter.End(); ++iter)
+	{
+		DynamicRadio* dr = iter.Get();
+		if (!dr)
+			continue;
+
+		if (!dr->isActive)
+			continue;
+
+		UInt32 soundKey = dr->sound.soundKey;
+		UInt32 staticKey = dr->radioStaticSound.soundKey;
+		if ((soundKey && soundKey != 0xFFFFFFFF) || (staticKey && staticKey != 0xFFFFFFFF))
+		{
+			*result = 1;
+			return true;
+		}
+	}
+
+	return true;
+}
+
 namespace RadioCommands {
 void Init(void* nvse)
 {
@@ -391,5 +598,17 @@ void RegisterCommands2(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterTypedCommand(&kCommandInfo_GetPlayingRadioText, kRetnType_String);
+}
+
+void RegisterCommands3(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_IsRadioPlaying);
+}
+
+void RegisterCommands4(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_ChangeRadioTrack);
 }
 }

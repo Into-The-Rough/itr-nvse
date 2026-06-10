@@ -1,6 +1,9 @@
 #include "PerkRuntimeFramework.h"
 
 #include "internal/CallTemplates.h"
+#include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
+#include "internal/StringAlloc.h"
 #include "internal/globals.h"
 #include "nvse/CommandTable.h"
 #include "nvse/GameAPI.h"
@@ -24,28 +27,11 @@ extern const _ExtractArgs ExtractArgs;
 extern NVSEArrayVarInterface* g_arrInterface;
 extern void Log(const char* fmt, ...);
 
-char* CopyCString(const char* src)
-{
-	using FormHeapAllocate_t = void* (__cdecl*)(UInt32);
-	const auto FormHeapAllocate = reinterpret_cast<FormHeapAllocate_t>(0x401000);
-
-	const size_t size = src ? strlen(src) : 0;
-	auto* result = static_cast<char*>(FormHeapAllocate(static_cast<UInt32>(size + 1)));
-	if (!result)
-		return nullptr;
-
-	result[size] = 0;
-	if (size)
-		memcpy(result, src, size);
-	return result;
-}
-
 namespace
 {
 	using Array = NVSEArrayVarInterface::Array;
 	using Element = NVSEArrayVarInterface::Element;
 
-	constexpr UInt32 kDataHandler = 0x011C3F2C;
 	constexpr UInt32 kConditionFlag_OR = 0x01;
 	constexpr UInt32 kConditionFlag_UseGlobal = 0x04;
 
@@ -494,10 +480,10 @@ namespace
 		descriptor.runOn = condition->runOn;
 		descriptor.runOnReference = condition->reference;
 		descriptor.comparison = (condition->type >> 5) & 0x07;
-		descriptor.comparisonValue = condition->comparisonValue.value;
 		descriptor.isOr = (condition->type & kConditionFlag_OR) != 0;
 		descriptor.usesGlobalComparison = (condition->type & kConditionFlag_UseGlobal) != 0;
-		descriptor.comparisonGlobal = nullptr;
+		descriptor.comparisonValue = descriptor.usesGlobalComparison ? 0.0f : condition->comparisonValue.value;
+		descriptor.comparisonGlobal = descriptor.usesGlobalComparison ? reinterpret_cast<TESGlobal*>(condition->comparisonValue.global) : nullptr;
 
 		switch (descriptor.rawFunctionId)
 		{
@@ -706,9 +692,10 @@ namespace
 
 	Array* CreateStringMap(Script* scriptObj, const std::vector<const char*>& keys, const std::vector<Element>& values)
 	{
-		if (!g_arrInterface || keys.empty())
-			return g_arrInterface ? g_arrInterface->CreateStringMap(nullptr, nullptr, 0, scriptObj) : nullptr;
-
+		if (!g_arrInterface)
+			return nullptr;
+		if (keys.empty())
+			return g_arrInterface->CreateStringMap(nullptr, nullptr, 0, scriptObj);
 		return g_arrInterface->CreateStringMap(const_cast<const char**>(keys.data()), values.data(), static_cast<UInt32>(keys.size()), scriptObj);
 	}
 
@@ -846,10 +833,9 @@ namespace
 	{
 		switch (comparison)
 		{
+			case 0:
 			case 2:
 			case 3:
-				return current < required ? required - current : 0.0;
-			case 0:
 				return current < required ? required - current : 0.0;
 			default:
 				return 0.0;
@@ -1264,7 +1250,7 @@ namespace
 	{
 		std::vector<const char*> keys;
 		std::vector<Element> values;
-		auto* perkForm = reinterpret_cast<TESForm*(__cdecl*)(UInt32)>(0x4839C0)(descriptor.perkFormID);
+		auto* perkForm = (TESForm*)Engine::LookupFormByID(descriptor.perkFormID);
 
 		AddStringMapValue(keys, values, "source", Element(SourceName(descriptor.source)));
 		AddStringMapValue(keys, values, "perk", Element(perkForm));
@@ -2467,7 +2453,7 @@ namespace PerkRuntimeFramework
 		g_perks.clear();
 		g_perksByFormID.clear();
 
-		auto** dataHandlerPtr = reinterpret_cast<DataHandler**>(kDataHandler);
+		auto** dataHandlerPtr = reinterpret_cast<DataHandler**>(g_dataHandlerPtr);
 		if (!*dataHandlerPtr)
 			return;
 

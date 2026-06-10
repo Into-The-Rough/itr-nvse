@@ -5,6 +5,7 @@
 #include "handlers/CornerMessageHandler.h"
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"
+#include "internal/EngineFunctions.h"
 #include "internal/FormatLogic.h"
 #include "internal/SafeWrite.h"
 #include <cstdio>
@@ -20,8 +21,6 @@ namespace ELMO
 		kEmotion_Happy = 1,
 	};
 
-	typedef bool (*_QueueUIMessage)(const char* msg, UInt32 emotion, const char* ddsPath, const char* soundName, float msgTime, bool maybeNextToDisplay);
-	static const _QueueUIMessage QueueUIMsg = (_QueueUIMessage)0x007052F0;
 	static constexpr UInt32 kObjectiveDisplayedCall = 0x5EC653;
 	static constexpr UInt32 kObjectiveCompletedCall = 0x5EC6BA;
 	static constexpr UInt32 kObjectiveReminderCall = 0x77377E;
@@ -31,6 +30,7 @@ namespace ELMO
 	static Detours::CallDetour s_objectiveDisplayedCall;
 	static Detours::CallDetour s_objectiveCompletedCall;
 	static Detours::CallDetour s_objectiveReminderCall;
+	static Detours::JumpDetour s_reputationPopupDetour;
 	static bool s_objectiveHooksInstalled = false;
 
 	const char* __cdecl FormatReputationMessage(const char* factionName, const char* repTitle, const char* repDesc)
@@ -67,7 +67,7 @@ namespace ELMO
 		auto soundPath = GetINIString(wasPositive ? 0x11CBCB0 : 0x11CBA30);
 
 		CornerMessageHandler::TrackMessageMeta(message, kReputationDisplayTime, kCornerMeta_ReputationChange);
-		QueueUIMsg(message, kEmotion_Neutral, iconPath, soundPath, kReputationDisplayTime, false);
+		Engine::QueueUIMessage(message, kEmotion_Neutral, iconPath, soundPath, kReputationDisplayTime, false);
 	}
 
 	void __cdecl ShowAsCornerMessage(const char* text, UInt32 isCompleted, UInt32 isReminder)
@@ -75,7 +75,7 @@ namespace ELMO
 		if (text) {
 			const int metaType = isCompleted ? kCornerMeta_ObjectiveCompleted : kCornerMeta_ObjectiveDisplayed;
 			CornerMessageHandler::TrackMessageMeta(text, kObjectiveDisplayTime, metaType);
-			QueueUIMsg(text, GetObjectiveEmotion(isCompleted, isReminder), nullptr, nullptr, kObjectiveDisplayTime, false);
+			Engine::QueueUIMessage(text, GetObjectiveEmotion(isCompleted, isReminder), nullptr, nullptr, kObjectiveDisplayTime, false);
 		}
 	}
 
@@ -185,11 +185,16 @@ namespace ELMO
 			InstallObjectiveHooks();
 
 		if (suppressReputation) {
-			SafeWrite::WriteRelJump(0x6155F0, (UInt32)ReputationPopup_Hook);
+			if (!s_reputationPopupDetour.WriteRelJump(0x6155F0, ReputationPopup_Hook, 9))
+				Log("ELMO: failed to install reputation popup detour");
 			SafeWrite::WriteRelJump(0x615F4A, (UInt32)ReputationCornerMessage_Hook_AddRep);
+			SafeWrite::Write8(0x615F4F, 0x90);
 			SafeWrite::WriteRelJump(0x61598B, (UInt32)ReputationCornerMessage_Hook_AddRepExact);
+			SafeWrite::Write8(0x615990, 0x90);
 			SafeWrite::WriteRelJump(0x615C43, (UInt32)ReputationCornerMessage_Hook_RemRepExact);
+			SafeWrite::Write8(0x615C48, 0x90);
 			SafeWrite::WriteRelJump(0x616242, (UInt32)ReputationCornerMessage_Hook_RemRep);
+			SafeWrite::Write8(0x616247, 0x90);
 		}
 	}
 }

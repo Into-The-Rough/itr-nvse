@@ -1,5 +1,6 @@
 #include "DetectionSoundCommands.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameObjects.h"
 #include "nvse/GameForms.h"
@@ -57,9 +58,6 @@ namespace
 	constexpr UInt32 kTopic_PLAYERFIREWEAPON = 0x000000CB;
 	constexpr UInt32 kDefaultAlertTimerMs = 4000;
 	void* kGMST_fActorAlertSoundTimer = reinterpret_cast<void*>(0x11CD8D8);
-
-	void* g_processManager = reinterpret_cast<void*>(0x11E0E80);
-	Actor** g_thePlayer = reinterpret_cast<Actor**>(0x011DEA3C);
 
 	struct ForcedAlert
 	{
@@ -176,7 +174,7 @@ namespace
 
 	void AlertActorForSound(Actor* actor, UInt32 flags)
 	{
-		Actor* player = g_thePlayer ? *g_thePlayer : nullptr;
+		Actor* player = *g_thePlayerPtr;
 		if (!actor || actor == player || (flags & kFlag_NoAlert))
 			return;
 
@@ -295,7 +293,7 @@ namespace
 		if (!actor || !topic)
 			return;
 
-		Actor* player = g_thePlayer ? *g_thePlayer : nullptr;
+		Actor* player = *g_thePlayerPtr;
 		if (player && topic->refID == kTopic_PLAYERFIREWEAPON)
 			AddPlayerAction(player, kPlayerAction_FireWeapon, 2.0f, nullptr);
 
@@ -309,7 +307,7 @@ namespace
 		if (!actor || !seenActors.insert(actor->refID).second)
 			return 0;
 
-		Actor* player = g_thePlayer ? *g_thePlayer : nullptr;
+		Actor* player = *g_thePlayerPtr;
 		if (actor == player && ((flags & kFlag_SkipPlayer) || !(flags & kFlag_IncludePlayer)))
 			return 0;
 
@@ -369,8 +367,8 @@ namespace
 			}
 		}
 
-		if (g_thePlayer && *g_thePlayer)
-			heardCount += ProcessAnonymousSoundForActor(*g_thePlayer, location, radiusSq, soundLevel, flags, responseTopic, seenActors, seenGroups);
+		if (*g_thePlayerPtr)
+			heardCount += ProcessAnonymousSoundForActor(*g_thePlayerPtr, location, radiusSq, soundLevel, flags, responseTopic, seenActors, seenGroups);
 
 		return heardCount;
 	}
@@ -380,7 +378,7 @@ namespace
 		if (thisObj && thisObj->parentCell)
 			return thisObj->parentCell;
 
-		Actor* player = g_thePlayer ? *g_thePlayer : nullptr;
+		Actor* player = *g_thePlayerPtr;
 		return player ? player->parentCell : nullptr;
 	}
 }

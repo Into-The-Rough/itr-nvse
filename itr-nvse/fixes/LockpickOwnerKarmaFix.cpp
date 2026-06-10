@@ -3,6 +3,7 @@
 #include "LockpickOwnerKarmaFix.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "internal/Detours.h"
 
 namespace LockpickOwnerKarmaFix
@@ -16,7 +17,7 @@ namespace LockpickOwnerKarmaFix
 		if (!g_enabled || !owner)
 			return owner;
 
-		void* player = *(void**)0x11DEA3C;
+		void* player = *(void**)g_thePlayerPtr;
 		if (player && Engine::TESObjectREFR_IsAnOwner(ref, player, true))
 			return nullptr;
 

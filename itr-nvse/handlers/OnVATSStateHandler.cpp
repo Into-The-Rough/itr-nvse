@@ -8,13 +8,13 @@
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 
 constexpr UInt32 kAddr_VATS_SetMode             = 0x9C6C30;
 constexpr UInt32 kAddr_StartKillcamForActor     = 0x93E530;
 constexpr UInt32 kAddr_ForceEndKillCam          = 0x93E770;
 constexpr UInt32 kAddr_VATSSingleton            = 0x011F2250;
 constexpr UInt32 kAddr_VATSMenuCurrentTarget    = 0x011F21CC;
-constexpr UInt32 kAddr_PlayerSingleton          = 0x011DEA3C;
 
 constexpr UInt32 kVATS_eMode_Offset      = 0x08;
 constexpr UInt32 kVATS_NumKills_Offset   = 0x3C;
@@ -34,7 +34,7 @@ typedef void (__thiscall* StartKillcamForActor_t)(void*, void*, float, char, int
 typedef void (__thiscall* ForceEndKillCam_t)(void*, int, bool);
 
 static float ReadKillCamTimer() {
-	void* player = *(void**)kAddr_PlayerSingleton;
+	void* player = *(void**)g_thePlayerPtr;
 	if (!player) return 0.0f;
 	return *(float*)((UInt8*)player + kPlayer_KillCamTimer_Offset);
 }

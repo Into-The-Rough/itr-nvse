@@ -9,6 +9,7 @@
 #include "nvse/GameObjects.h"
 #include "nvse/ParamInfos.h"
 #include "internal/CallTemplates.h"
+#include "internal/EngineFunctions.h"
 #include <cstring>
 #include <cstdio>
 #include <windows.h>
@@ -128,7 +129,7 @@ bool SayTopic(Actor* speaker, TESTopic* topic, Actor* target)
 	if (speaker->typeID != kFormType_ACHR && speaker->typeID != kFormType_ACRE)
 		return false;
 
-	if (!ThisCall<void*>(0x8D8520, speaker) || !speaker->GetNiNode())
+	if (!Engine::Actor_GetProcess(speaker) || !speaker->GetNiNode())
 		return false;
 
 	BSSoundHandle soundHandle;
@@ -146,7 +147,7 @@ bool ForceSay(Actor* speaker, TESTopic* topic, Actor* target)
 	if (speaker->typeID != kFormType_ACHR && speaker->typeID != kFormType_ACRE)
 		return false;
 
-	void* process = ThisCall<void*>(0x8D8520, speaker); //MobileObject::GetCurrentProcess
+	void* process = Engine::Actor_GetProcess(speaker);
 	if (!process)
 		return false;
 	if (!speaker->GetNiNode())

@@ -1,5 +1,6 @@
 #include "CenterOnCellAltCommand.h"
 #include "internal/CallTemplates.h"
+#include "internal/GameGlobals.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/GameObjects.h"
@@ -23,7 +24,6 @@ namespace
 
 	using CenterOnCell_t = bool(__thiscall*)(TESObjectREFR*, char*, void*);
 
-	PlayerCharacter** g_thePlayer = reinterpret_cast<PlayerCharacter**>(0x011DEA3C);
 	const auto CenterOnCell = reinterpret_cast<CenterOnCell_t>(0x93DB60);
 
 	bool s_pending = false;
@@ -36,7 +36,7 @@ namespace
 
 	PlayerCharacter* GetPlayer()
 	{
-		return g_thePlayer ? *g_thePlayer : nullptr;
+		return *g_thePlayerPtr;
 	}
 
 	bool IsMainMenuCOC()

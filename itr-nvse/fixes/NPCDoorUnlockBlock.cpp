@@ -6,6 +6,7 @@
 #include "common/ITypes.h"
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 
 #include "internal/globals.h"
 
@@ -21,7 +22,7 @@ namespace NPCDoorUnlockBlock
 
 	inline void* GetPlayer()
 	{
-		return *(void**)0x11DEA3C;
+		return *(void**)g_thePlayerPtr;
 	}
 
 	bool __cdecl CanActorIgnoreLock_Hook(void* doorRef, void* actor, bool activate, bool movement)
