@@ -116,8 +116,13 @@ static bool __fastcall Hook_HUDMainMenu_ShowNotify(
 ) {
     int metaType = ConsumeMessageMeta(text, displayTime);
 
-    if (text && text[0])
+    //a handler that itself shows a corner message would re-enter this hook
+    static bool s_inDispatch = false;
+    if (text && text[0] && !s_inDispatch) {
+        s_inDispatch = true;
         DispatchCornerMessage(text, emotion, iconPath, soundPath, displayTime, metaType);
+        s_inDispatch = false;
+    }
 
     typedef bool(__thiscall* ShowNotify_t)(void*, const char*, UInt32, const char*, const char*, float, bool);
     const char* trampolineSound = g_suppressSound ? "" : soundPath;
