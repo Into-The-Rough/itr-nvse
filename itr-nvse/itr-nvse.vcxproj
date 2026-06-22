@@ -78,10 +78,10 @@
     </Link>
     <PostBuildEvent>
       <Message>Copying DLL and PDB to mod folder...</Message>
-      <Command>copy "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
-if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"
-copy "$(TargetPath)" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
-if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"</Command>
+      <Command>if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" copy "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
+if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"
+if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" copy "$(TargetPath)" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
+if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -110,10 +110,10 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     </Link>
     <PostBuildEvent>
       <Message>Copying DLL and PDB to mod folder...</Message>
-      <Command>copy "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
-if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"
-copy "$(TargetPath)" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
-if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"</Command>
+      <Command>if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" copy "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
+if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"
+if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" copy "$(TargetPath)" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
+if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -194,6 +194,8 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClCompile Include="features\NoWeaponSearch.cpp" />
     <ClCompile Include="features\PerkRuntimeFramework.cpp" />
     <ClCompile Include="features\EyeMeshOverride.cpp" />
+    <ClCompile Include="features\RaceEyeCommands.cpp" />
+    <ClCompile Include="features\WeatherChangeEvent.cpp" />
     <ClCompile Include="features\PlayerUpdateHook.cpp" />
     <ClCompile Include="features\NPCAntidoteUse.cpp" />
     <ClCompile Include="features\NPCDoctorsBagUse.cpp" />
@@ -318,6 +320,8 @@ if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D
     <ClInclude Include="features\DoorPinchFix.h" />
     <ClInclude Include="features\PerkRuntimeFramework.h" />
     <ClInclude Include="features\EyeMeshOverride.h" />
+    <ClInclude Include="features\RaceEyeCommands.h" />
+    <ClInclude Include="features\WeatherChangeEvent.h" />
     <ClInclude Include="features\AimZoomFirstPersonOnly.h" />
     <ClInclude Include="features\PlayerUpdateHook.h" />
     <ClInclude Include="features\NPCAntidoteUse.h" />
