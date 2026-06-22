@@ -31,6 +31,7 @@ namespace CombatItemUse
 			EnterCriticalSection(&cs);
 			DWORD now = GetTickCount();
 			DWORD cooldownMs = (DWORD)(cooldownSec * 1000.0f);
+			int freeSlot = -1;
 			for (int i = 0; i < count; i++)
 			{
 				if (refIDs[i] == refID)
@@ -44,12 +45,24 @@ namespace CombatItemUse
 					LeaveCriticalSection(&cs);
 					return true;
 				}
+				if (freeSlot < 0 && (now - values[i]) >= cooldownMs)
+					freeSlot = i; //expired entry, reusable once the pool fills
 			}
 			if (count < kMax)
 			{
 				refIDs[count] = refID;
 				values[count] = now;
 				count++;
+			}
+			else if (freeSlot >= 0)
+			{
+				refIDs[freeSlot] = refID;
+				values[freeSlot] = now;
+			}
+			else
+			{
+				LeaveCriticalSection(&cs);
+				return false; //all slots within cooldown, too many actors at once
 			}
 			LeaveCriticalSection(&cs);
 			return true;
