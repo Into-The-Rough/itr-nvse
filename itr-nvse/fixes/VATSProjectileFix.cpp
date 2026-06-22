@@ -51,7 +51,7 @@ namespace VATSProjectileFix
 	static bool __fastcall VATSMenuUpdate_Hook(void* pThis)
 	{
 		auto original = reinterpret_cast<VATSMenuUpdate_t>(s_vatsMenuUpdateCall.GetOverwrittenAddr());
-		bool result = original ? original(pThis) : false;
+		bool result = original(pThis);
 		if (!result) return result;
 
 		void** ppTargetRef = (void**)0x11F21CC;

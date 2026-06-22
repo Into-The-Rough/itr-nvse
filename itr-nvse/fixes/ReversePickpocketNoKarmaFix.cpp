@@ -37,7 +37,7 @@ namespace ReversePickpocketNoKarmaFix
 	static bool CallOriginal(Detours::CallDetour& detour, void* menu, void* actor, UInt32 count)
 	{
 		auto original = reinterpret_cast<TryPickpocket_t>(detour.GetOverwrittenAddr());
-		return original ? original(menu, actor, count) : false;
+		return original(menu, actor, count);
 	}
 
 	static bool Hook_TryPickpocket(Detours::CallDetour& detour, void* menu, void* actor, UInt32 count)

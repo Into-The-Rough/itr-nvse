@@ -67,8 +67,6 @@ namespace AshPileNames
 		}
 
 		auto original = reinterpret_cast<GetBaseFullName_t>(s_getBaseFullNameCall.GetOverwrittenAddr());
-		if (!original)
-			return "";
 		return original(thisRef);
 	}
 

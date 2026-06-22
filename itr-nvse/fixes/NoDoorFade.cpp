@@ -18,8 +18,7 @@ namespace NoDoorFade
 	void __fastcall Hook_FadeOut(void* process, void* edx, void* actor, void* doorRef, bool teleport)
 	{
 		auto original = reinterpret_cast<FadeOut_t>(s_fadeOutCall.GetOverwrittenAddr());
-		if (original)
-			original(process, actor, doorRef, teleport);
+		original(process, actor, doorRef, teleport);
 
 		//if enabled, immediately zero alpha so fade completes next frame
 		if (g_enabled && teleport)
