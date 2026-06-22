@@ -10,7 +10,7 @@ extern void Log(const char* fmt, ...);
 static ParamInfo kParams_DamageActorValueAlt[3] = {
 	{"avCode", kParamType_ActorValue, 0},
 	{"amount", kParamType_Float, 0},
-	{"attacker", kParamType_AnyForm, 1},
+	{"attacker", kParamType_ObjectRef, 1},
 };
 
 DEFINE_COMMAND_PLUGIN(DamageActorValueAlt, "DamageActorValue with attacker for kill attribution", 1, 3, kParams_DamageActorValueAlt);
@@ -20,6 +20,9 @@ bool Cmd_DamageActorValueAlt_Execute(COMMAND_ARGS)
 	*result = 0;
 	if (!thisObj) return true;
 
+	UInt8 typeID = *((UInt8*)thisObj + 4);
+	if (typeID != 0x3B && typeID != 0x3C) return true; //ACHR/ACRE only, slot 0x3AC isn't on other vtables
+
 	UInt32 avCode = 0;
 	float amount = 0.0f;
 	TESObjectREFR* attackerRef = nullptr;
@@ -27,6 +30,12 @@ bool Cmd_DamageActorValueAlt_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &avCode, &amount, &attackerRef))
 	{
 		return true;
+	}
+
+	if (attackerRef)
+	{
+		UInt8 atkType = *((UInt8*)attackerRef + 4);
+		if (atkType != 0x3B && atkType != 0x3C) attackerRef = nullptr; //non-actor issuer would misread +0xA4
 	}
 
 	//increment fPlayerDamageDealt (process+0xAC) BEFORE damage so Actor::Kill sees it for XP
