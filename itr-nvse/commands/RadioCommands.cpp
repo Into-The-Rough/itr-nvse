@@ -300,21 +300,6 @@ static UInt32 ExtractFormIDFromVoicePath(const char* path)
 typedef TESTopicInfoResponse** (__thiscall *_GetResponses)(TESTopicInfo*, UInt32);
 static _GetResponses GetResponses = (_GetResponses)0x61E780;
 
-//form lookup
-static TESForm* FormLookup(UInt32 refID)
-{
-	struct Entry { Entry* next; UInt32 key; TESForm* form; };
-	UInt8* map = *(UInt8**)0x11C54C0;
-	if (!map) return nullptr;
-	UInt32 numBuckets = *(UInt32*)(map + 4);
-	Entry** buckets = *(Entry***)(map + 8);
-	if (!buckets || !numBuckets) return nullptr;
-	for (Entry* e = buckets[refID % numBuckets]; e; e = e->next)
-		if (e->key == refID) return e->form;
-	return nullptr;
-}
-
-//command implementations
 bool Cmd_GetPlayingRadioTrack_Execute(COMMAND_ARGS)
 {
 	*result = 0;
@@ -339,7 +324,7 @@ bool Cmd_GetPlayingRadioTrack_Execute(COMMAND_ARGS)
 	UInt32 formID = ExtractFormIDFromVoicePath(path);
 	if (formID)
 	{
-		TESForm* form = FormLookup(formID);
+		TESForm* form = (TESForm*)Engine::LookupFormByID(formID);
 		if (form)
 			*(UInt32*)result = form->refID;
 	}
@@ -349,6 +334,7 @@ bool Cmd_GetPlayingRadioTrack_Execute(COMMAND_ARGS)
 
 bool Cmd_GetPlayingRadioTrackFileName_Execute(COMMAND_ARGS)
 {
+	if (!g_strInterface) return true;
 	const char* path = GetPlayingTrackPath();
 	g_strInterface->Assign(PASS_COMMAND_ARGS, path ? path : "");
 	return true;
@@ -356,6 +342,7 @@ bool Cmd_GetPlayingRadioTrackFileName_Execute(COMMAND_ARGS)
 
 bool Cmd_GetPlayingRadioText_Execute(COMMAND_ARGS)
 {
+	if (!g_strInterface) return true;
 	const char* empty = "";
 
 	const char* path = GetPlayingTrackPath();
@@ -372,7 +359,7 @@ bool Cmd_GetPlayingRadioText_Execute(COMMAND_ARGS)
 		return true;
 	}
 
-	TESForm* form = FormLookup(formID);
+	TESForm* form = (TESForm*)Engine::LookupFormByID(formID);
 	if (!form || form->typeID != kFormType_INFO)
 	{
 		g_strInterface->Assign(PASS_COMMAND_ARGS, empty);
