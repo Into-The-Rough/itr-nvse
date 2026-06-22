@@ -394,7 +394,7 @@ DEFINE_COMMAND_PLUGIN(RagdollLimb, "jolt one limb of an already-ragdolling actor
 bool Cmd_IsRigidBodyAtRest_Execute(COMMAND_ARGS)
 {
 	*result = 0;
-	char nodeName[0x80] = {};
+	char nodeName[0x200] = {};
 	UInt32 recursive = 1;
 	if (!ExtractArgs(EXTRACT_ARGS, &nodeName, &recursive)) return true;
 
