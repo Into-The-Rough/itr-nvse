@@ -39,6 +39,7 @@
 #include "features/PreventWeaponSwitch.h"
 #include "features/PerkRuntimeFramework.h"
 #include "features/EyeMeshOverride.h"
+#include "features/RaceEyeCommands.h"
 #include "features/AimZoomFirstPersonOnly.h"
 #include "handlers/DialogueCameraHandler.h"
 #include "commands/GroundCommands.h"
@@ -208,4 +209,7 @@ void RegisterAllCommands(void* nvsePtr)
 
 	nvse->SetOpcodeBase(0x410E);
 	GestureCommand::RegisterCommands(nvse); //Gesture
+
+	nvse->SetOpcodeBase(0x410F);
+	RaceEyeCommands::RegisterCommands(nvse); //AddRaceEye, RemoveRaceEye, ClearRaceEyes
 }
