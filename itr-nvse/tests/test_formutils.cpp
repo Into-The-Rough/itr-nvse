@@ -1,6 +1,7 @@
 //tests for internal/FormUtils.h
 
 #include "test.h"
+#define FORMUTILS_TEST_MIRROR_ENGINE
 #include "../internal/FormUtils.h"
 
 using namespace FormUtils;
@@ -49,6 +50,48 @@ TEST(FormUtils_IsInventoryItem_AlchemyItem)
 TEST(FormUtils_IsInventoryItem_Note)
 {
 	ASSERT(IsInventoryItemType(0x31));
+	return true;
+}
+
+TEST(FormUtils_IsInventoryItem_Light)
+{
+	ASSERT(IsInventoryItemType(0x1E));
+	return true;
+}
+
+TEST(FormUtils_IsInventoryItem_ConstructibleObject)
+{
+	ASSERT(IsInventoryItemType(0x32));
+	return true;
+}
+
+TEST(FormUtils_IsInventoryItem_LeveledItem)
+{
+	ASSERT(IsInventoryItemType(0x34));
+	return true;
+}
+
+TEST(FormUtils_IsInventoryItem_WeaponMods)
+{
+	ASSERT(IsInventoryItemType(0x67));
+	return true;
+}
+
+TEST(FormUtils_IsInventoryItem_CasinoChip)
+{
+	ASSERT(IsInventoryItemType(0x6C));
+	return true;
+}
+
+TEST(FormUtils_IsInventoryItem_CaravanCard)
+{
+	ASSERT(IsInventoryItemType(0x73));
+	return true;
+}
+
+TEST(FormUtils_IsInventoryItem_FactionCurrency)
+{
+	ASSERT(IsInventoryItemType(0x74));
 	return true;
 }
 
