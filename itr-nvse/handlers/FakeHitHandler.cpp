@@ -474,10 +474,13 @@ static bool Cmd_FakeHit_Execute(COMMAND_ARGS) {
 
 	if (!extractArgs(EXTRACT_ARGS_EX, &attacker, &damage, &weaponForm, &hitLocation, &flags, &bSkipOnHit)) return true;
 
+	if (attacker && !IsActorTypeID(*((UInt8*)attacker + 4))) attacker = nullptr; //non-actor attacker would be misused as Actor* in damage/crime paths
+
 	Actor* target = (Actor*)thisObj;
 	if (!target->baseProcess) return true;
 
-	TESObjectWEAP* weapon = weaponForm ? (TESObjectWEAP*)weaponForm : nullptr;
+	if (weaponForm && *((UInt8*)weaponForm + 4) != 0x28) weaponForm = nullptr; //weapon only, reads weapon+0x108/+0x24C, garbage on any other form
+	TESObjectWEAP* weapon = (TESObjectWEAP*)weaponForm;
 	if (damage < 0.0f) damage = weapon ? (float)weapon->attackDmg : 1.0f;
 
 	auto hitData = BuildHitData(target, attacker, weapon, damage, 0.0f, 0.0f, hitLocation, flags);
@@ -503,10 +506,13 @@ static bool Cmd_FakeHitEx_Execute(COMMAND_ARGS) {
 
 	if (!extractArgs(EXTRACT_ARGS_EX, &attacker, &damage, &fatigueDmg, &limbDmg, &weaponForm, &hitLocation, &flags, &bSkipOnHit)) return true;
 
+	if (attacker && !IsActorTypeID(*((UInt8*)attacker + 4))) attacker = nullptr; //non-actor attacker would be misused as Actor* in damage/crime paths
+
 	Actor* target = (Actor*)thisObj;
 	if (!target->baseProcess) return true;
 
-	TESObjectWEAP* weapon = weaponForm ? (TESObjectWEAP*)weaponForm : nullptr;
+	if (weaponForm && *((UInt8*)weaponForm + 4) != 0x28) weaponForm = nullptr; //weapon only, reads weapon+0x108/+0x24C, garbage on any other form
+	TESObjectWEAP* weapon = (TESObjectWEAP*)weaponForm;
 
 	auto hitData = BuildHitData(target, attacker, weapon, damage, fatigueDmg, limbDmg, hitLocation, flags);
 	ApplyHit(target, attacker, &hitData, damage, fatigueDmg, limbDmg, hitLocation, weapon, bSkipOnHit != 0);
