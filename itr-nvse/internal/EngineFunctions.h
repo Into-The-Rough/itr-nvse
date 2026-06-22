@@ -93,6 +93,10 @@ inline auto TESObjectREFR_GetOwnerRawForm = (void*(__thiscall*)(void*))0x567790;
 //extra data
 inline auto BaseExtraList_GetByType = (void*(__thiscall*)(void*, UInt32))0x410220;
 
+//collision flags - ref-targeted Script::ToggleCollision uses these
+inline auto TESForm_GetNoCollision = (bool(__thiscall*)(TESForm*))0x50D4A0;
+inline auto TESForm_SetNoCollision = (void(__thiscall*)(TESForm*, bool))0x693EF0;
+
 //form lookup
 inline auto LookupFormByID = (void*(__cdecl*)(unsigned int))0x4839C0;
 

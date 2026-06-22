@@ -236,7 +236,6 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="handlers\OnVATSStateHandler.cpp" />
     <ClCompile Include="handlers\OnCasinoBanHandler.cpp" />
     <ClCompile Include="handlers\OnPrePickUpHandler.cpp" />
-    <ClCompile Include="internal\CollisionToggle.cpp" />
     <ClCompile Include="internal\EventDispatch.cpp" />
     <ClCompile Include="internal\WitnessScan.cpp" />
   </ItemGroup>
@@ -254,7 +253,6 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="commands\CommandBoundsCommand.h" />
     <ClInclude Include="commands\ToggleAllPrimitives.h" />
     <ClInclude Include="internal\BSSpinLock.h" />
-    <ClInclude Include="internal\CollisionToggle.h" />
     <ClInclude Include="internal\EventDispatch.h" />
     <ClInclude Include="internal\EngineFunctions.h" />
     <ClInclude Include="internal\GameGlobals.h" />
