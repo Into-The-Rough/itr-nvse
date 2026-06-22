@@ -53,4 +53,4 @@ inline bool ExtractCommandName(const char* line, char* out, std::size_t outSize)
 	return true;
 }
 
-} // namespace ConsoleCommand
+}

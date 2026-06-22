@@ -17,6 +17,8 @@ class BGSEntryPointPerkEntry;
 
 enum { kFormType_BGSPerk = 0x81 };
 
+constexpr UInt32 kVtbl_BGSEntryPointPerkEntry = 0x1046D0C;
+
 template <typename T>
 struct tListNode {
     T* data;
@@ -100,7 +102,7 @@ void BuildEntryMap()
         while (node && node->data) {
             BGSPerkEntry* entry = node->data;
 
-            if (*(UInt32*)entry == 0x1046D0C)
+            if (*(UInt32*)entry == kVtbl_BGSEntryPointPerkEntry)
                 (*buildMap)[(UInt32)entry] = perk;
 
             node = node->next;
