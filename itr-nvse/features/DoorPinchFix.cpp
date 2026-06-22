@@ -1,6 +1,5 @@
 #include "DoorPinchFix.h"
 
-#include "internal/CollisionToggle.h"
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
@@ -67,6 +66,21 @@ namespace
 		return openState == kOpenState_Opening || openState == kOpenState_Closing;
 	}
 
+	bool IsCollisionDisabled(TESObjectREFR* ref)
+	{
+		return ref && Engine::TESForm_GetNoCollision(ref);
+	}
+
+	void SetCollisionEnabled(TESObjectREFR* ref, bool enabled)
+	{
+		if (!ref)
+			return;
+
+		const bool noCollision = !enabled;
+		if (Engine::TESForm_GetNoCollision(ref) != noCollision)
+			Engine::TESForm_SetNoCollision(ref, noCollision);
+	}
+
 	void TrackDoor(TESObjectREFR* ref)
 	{
 		const UInt32 refID = ref ? ref->refID : 0;
@@ -80,7 +94,7 @@ namespace
 	{
 		auto* ref = reinterpret_cast<TESObjectREFR*>(Engine::LookupFormByID(refID));
 		if (IsDoorRef(ref))
-			CollisionToggle::SetEnabled(ref, true);
+			SetCollisionEnabled(ref, true);
 	}
 
 	void RestoreAll()
@@ -115,10 +129,10 @@ namespace
 			return;
 		if (!IsDoorMoving(GetOpenState(itemActivated)))
 			return;
-		if (IsTracked(itemActivated->refID) || CollisionToggle::IsDisabled(itemActivated))
+		if (IsTracked(itemActivated->refID) || IsCollisionDisabled(itemActivated))
 			return;
 
-		CollisionToggle::SetEnabled(itemActivated, false);
+		SetCollisionEnabled(itemActivated, false);
 		TrackDoor(itemActivated);
 	}
 }
@@ -166,13 +180,13 @@ namespace DoorPinchFix
 
 			if (!shouldRestore)
 			{
-				CollisionToggle::SetEnabled(ref, false);
+				SetCollisionEnabled(ref, false);
 				++it;
 				continue;
 			}
 
 			if (IsDoorRef(ref))
-				CollisionToggle::SetEnabled(ref, true);
+				SetCollisionEnabled(ref, true);
 			it = g_disabledDoors.erase(it);
 		}
 	}
