@@ -14,6 +14,7 @@ namespace
 	static const _GetObjectByName GetObjectByName = (_GetObjectByName)0x4AAE30;
 
 	struct EmissiveOriginal {
+		void* node;
 		float r, g, b, mult;
 	};
 
@@ -71,6 +72,7 @@ namespace
 			if (s_count < 64)
 			{
 				auto& orig = s_originals[s_count++];
+				orig.node = node;
 				orig.r = *(float*)(matProp + 0x28);
 				orig.g = *(float*)(matProp + 0x2C);
 				orig.b = *(float*)(matProp + 0x30);
@@ -118,6 +120,32 @@ namespace
 			if (childData[i])
 				TraverseSetEmissive(childData[i], r, g, b, emitMult);
 		}
+	}
+
+	//verify the live geometry still matches the cache (same nodes, same order) before restoring
+	static bool TraverseVerify(void* node, UInt32& idx)
+	{
+		if (!node) return true;
+
+		if (IsGeometry(node))
+		{
+			if (idx >= s_count || s_originals[idx].node != node) return false;
+			idx++;
+			return true;
+		}
+
+		if (!IsNiNode(node)) return true;
+
+		UInt8* n = (UInt8*)node;
+		void** childData = *(void***)(n + 0xA0);
+		UInt16 childCount = *(UInt16*)(n + 0xA6);
+		if (!childData) return true;
+		for (UInt16 i = 0; i < childCount; i++)
+		{
+			if (childData[i] && !TraverseVerify(childData[i], idx))
+				return false;
+		}
+		return true;
 	}
 
 	//traverse and restore originals by index (matching traversal order)
@@ -216,9 +244,14 @@ namespace
 			return true;
 		}
 
-		//traverse live nodes, apply cached original values by index
-		UInt32 idx = 0;
-		TraverseRestore(weaponNode, idx);
+		//only restore if the live model is still the one we cached - a weapon switch
+		//rebuilds the geometry, and restoring by index would corrupt the new model
+		UInt32 vidx = 0;
+		if (TraverseVerify(weaponNode, vidx) && vidx == s_count)
+		{
+			UInt32 idx = 0;
+			TraverseRestore(weaponNode, idx);
+		}
 
 		s_active = false;
 		s_count = 0;
