@@ -1154,7 +1154,8 @@ void RegisterCommands7(void* nvsePtr)
 }
 
 //RefillAmmo - adds ammo to actor's inventory and fills their clip
-//ported from ShowOff-NVSE RefillPlayerAmmo, generalized for any actor
+//based on RefillPlayerAmmo from ShowOff-NVSE by Demorome, generalized for any actor
+//ShowOff-NVSE: use permitted with credit (https://github.com/Demorome/ShowOff-NVSE)
 typedef double (__thiscall *_GetRegenRate)(void*, bool);
 static const _GetRegenRate GetWeaponRegenRate = (_GetRegenRate)0x709430;
 
