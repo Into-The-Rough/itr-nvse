@@ -209,11 +209,6 @@ namespace
 		return !s_merchantRefID || (merchant && merchant->refID == s_merchantRefID);
 	}
 
-	bool SameForm(TESForm* lhs, TESForm* rhs)
-	{
-		return lhs && rhs && lhs == rhs;
-	}
-
 	bool FormListContains(BGSListForm* list, TESForm* item, std::unordered_set<UInt32>& visited)
 	{
 		if (!list || !item)
@@ -224,7 +219,7 @@ namespace
 		for (auto* node = list->list.Head(); node && node->Item(); node = node->Next())
 		{
 			auto* form = node->Item();
-			if (SameForm(form, item))
+			if (form == item)
 				return true;
 			if (form && form->typeID == kFormType_ListForm &&
 				FormListContains(static_cast<BGSListForm*>(form), item, visited))
@@ -297,15 +292,14 @@ namespace
 
 	void __cdecl Hook_Close()
 	{
-		if (s_origClose)
-			s_origClose();
+		s_origClose();
 		if (!s_openingFilteredMenu)
 			BarterCommands::ClearState();
 	}
 
 	bool __cdecl Hook_ShouldHideItem(ExtraContainerChanges::EntryData* entry)
 	{
-		const bool hidden = s_origShouldHideItem ? s_origShouldHideItem(entry) : false;
+		const bool hidden = s_origShouldHideItem(entry);
 		if (hidden || !IsActive())
 			return hidden;
 
@@ -327,8 +321,7 @@ namespace
 			return;
 		}
 
-		if (s_origTransferItem)
-			s_origTransferItem(count);
+		s_origTransferItem(count);
 	}
 
 	void* __fastcall Hook_ProcessTransaction(void* menu, void*)
@@ -339,7 +332,7 @@ namespace
 			return menu;
 		}
 
-		return s_origProcessTransaction ? s_origProcessTransaction(menu) : menu;
+		return s_origProcessTransaction(menu);
 	}
 
 	static ParamInfo kParams_ShowBarterMenuWhitelist[2] = {

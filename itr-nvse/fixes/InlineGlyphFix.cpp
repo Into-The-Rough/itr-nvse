@@ -158,9 +158,6 @@ namespace InlineGlyphFix
 
 	void __fastcall Hook_AddButton(void* font, void*, int iconIdx, void* triShape, NiPoint3* cursor)
 	{
-		if (!s_origAddButton)
-			return;
-
 		void* tile = GetActiveTile();
 		if (!s_installed || !tile || !cursor)
 		{

@@ -46,14 +46,11 @@ namespace SlowMotionPhysicsFix
 			}
 		}
 		auto original = reinterpret_cast<HavokWorldFloatFn>(s_setFrameTimeMarkerCall.GetOverwrittenAddr());
-		if (original)
-			original(hkpWorld, delta);
+		original(hkpWorld, delta);
 	}
 
 	void __fastcall Hook_StepDeltaTime(void* hkpWorld, void* edx, float stepTime) {
 		auto original = reinterpret_cast<HavokWorldFloatFn>(s_stepDeltaTimeCall.GetOverwrittenAddr());
-		if (!original)
-			return;
 
 		if (IsVATSActive()) {
 			original(hkpWorld, stepTime);

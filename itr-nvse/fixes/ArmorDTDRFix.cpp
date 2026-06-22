@@ -29,12 +29,9 @@ namespace ArmorDTDRFix
 
 	static Detours::JumpDetour s_detour;
 	static ResetArmorRating_t s_originalResetArmorRating = nullptr;
-	static bool s_disabled = false;
 
 	void __fastcall Hook_ResetArmorRating(void* character, void* edx) {
-		if (!character || s_disabled || !s_originalResetArmorRating) return;
-
-		s_originalResetArmorRating(character);
+		s_originalResetArmorRating(character); //trampoline is valid whenever this hook is live
 
 		//baseProcess is uninitialized during Character::Character construction
 		//refID is 0 until the form is fully created, skip cache dirtying for half-constructed actors
@@ -54,7 +51,6 @@ namespace ArmorDTDRFix
 			s_originalResetArmorRating = s_detour.GetTrampoline<ResetArmorRating_t>();
 			if (!s_originalResetArmorRating) {
 				Log("ArmorDTDRFix failed: trampoline not created");
-				s_disabled = true;
 				s_detour.Remove();
 				return;
 			}
