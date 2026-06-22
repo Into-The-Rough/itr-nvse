@@ -1,5 +1,6 @@
 #include "ContainerCommands.h"
 #include "internal/CallTemplates.h"
+#include "internal/EngineFunctions.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/GameObjects.h"
@@ -11,28 +12,12 @@ extern const _ExtractArgs ExtractArgs;
 
 namespace
 {
-	static bool BaseExtraListHasType(const BaseExtraList* list, UInt32 type)
-	{
-		if (!list)
-			return false;
-
-		const UInt32 index = type >> 3;
-		const UInt8 bitMask = 1 << (type & 7);
-		return (list->m_presenceBitfield[index] & bitMask) != 0;
-	}
-
 	static BSExtraData* BaseExtraListGetByType(BaseExtraList* list, UInt32 type)
 	{
-		if (!list || !BaseExtraListHasType(list, type))
+		if (!list)
 			return nullptr;
 
-		for (auto* extra = list->m_data; extra; extra = extra->next)
-		{
-			if (extra->type == type)
-				return extra;
-		}
-
-		return nullptr;
+		return static_cast<BSExtraData*>(Engine::BaseExtraList_GetByType(list, type));
 	}
 
 	static bool IsVisibleInventoryForm(TESForm* form, bool includeUnresolvedLeveled)
@@ -88,7 +73,7 @@ namespace
 		for (auto* node = entry->extendData->Head(); node && node->Item(); node = node->Next())
 		{
 			auto* extraList = node->Item();
-			if (extraList && BaseExtraListHasType(extraList, extraType))
+			if (BaseExtraListGetByType(extraList, extraType))
 				return true;
 		}
 

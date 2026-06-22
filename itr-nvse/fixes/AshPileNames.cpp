@@ -8,8 +8,8 @@
 #include <cstdint>
 
 #include "internal/globals.h"
-#include "internal/ExtraDataUtils.h"
 #include "internal/Detours.h"
+#include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
 namespace Settings { extern int bAshPileNames; }
 
@@ -24,7 +24,7 @@ namespace AshPileNames
 	static BSExtraData* GetExtraDataByType(BaseExtraList* list, UInt32 type)
 	{
 		if (!list) return nullptr;
-		return ExtraDataUtils::GetExtraDataByType(list->m_data, list->m_presenceBitfield, sizeof(list->m_presenceBitfield), type);
+		return static_cast<BSExtraData*>(Engine::BaseExtraList_GetByType(list, type));
 	}
 
 	static const char* GetActorNameFromAshPile(TESObjectREFR* ashPileRef)
