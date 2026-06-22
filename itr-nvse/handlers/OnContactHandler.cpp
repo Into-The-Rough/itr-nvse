@@ -94,9 +94,20 @@ typedef void* (__cdecl *_bhkNiCollisionObject_Getbhk)(void* worldObj);
 static const _bhkNiCollisionObject_Getbhk bhkNiCollisionObject_Getbhk = (_bhkNiCollisionObject_Getbhk)0x4B5A20;
 
 static bool HasAnyWatchSnapshot();
-static bool ShouldQueueCandidateLocked(UInt32 refID);
+static bool ShouldQueueCandidateLocked(UInt32 refID, UInt32 baseID = 0);
 
-static UInt32 ResolveCollidableToRefID(void* collidable) {
+//reads refID and (optionally) the base formID straight off the resolved ref, no form-table lookup
+static UInt32 RefrToRefIDBase(void* refr, UInt32* outBaseID) {
+	UInt32 refID = *(UInt32*)((UInt8*)refr + 0x0C);
+	if (outBaseID) {
+		void* baseForm = *(void**)((UInt8*)refr + 0x20);
+		*outBaseID = baseForm ? *(UInt32*)((UInt8*)baseForm + 0x0C) : 0;
+	}
+	return refID;
+}
+
+static UInt32 ResolveCollidableToRefID(void* collidable, UInt32* outBaseID = nullptr) {
+	if (outBaseID) *outBaseID = 0;
 	if (!collidable) return 0;
 	void* root = getRoot(collidable);
 	if (!root) return 0;
@@ -108,7 +119,7 @@ static UInt32 ResolveCollidableToRefID(void* collidable) {
 			void* niNode = *(void**)((UInt8*)collObj + 0x08);
 			if (niNode) {
 				void* refr = FindReferenceFor3D(niNode);
-				if (refr) return *(UInt32*)((UInt8*)refr + 0x0C);
+				if (refr) return RefrToRefIDBase(refr, outBaseID);
 			}
 		}
 	}
@@ -121,7 +132,7 @@ static UInt32 ResolveCollidableToRefID(void* collidable) {
 		void* niNode = *(void**)((UInt8*)collObj + 0x08);
 		if (niNode) {
 			void* refr = FindReferenceFor3D(niNode);
-			if (refr) return *(UInt32*)((UInt8*)refr + 0x0C);
+			if (refr) return RefrToRefIDBase(refr, outBaseID);
 		}
 	}
 
@@ -161,15 +172,16 @@ static void __fastcall Hook_ContactPointAdded(void* listener, void* edx, void* e
 		if (!HasAnyWatchSnapshot()) return;
 	}
 
-	UInt32 refA = ResolveCollidableToRefID(bodyA);
-	UInt32 refB = ResolveCollidableToRefID(bodyB);
+	UInt32 baseA = 0, baseB = 0;
+	UInt32 refA = ResolveCollidableToRefID(bodyA, &baseA);
+	UInt32 refB = ResolveCollidableToRefID(bodyB, &baseB);
 
 	ScopedLock lock(&g_contactLock);
 	if (!HasAnyWatchSnapshot()) return;
 	if (refA == refB) return;
-	if (ShouldQueueCandidateLocked(refA))
+	if (ShouldQueueCandidateLocked(refA, baseA))
 		QueueEvent(refA, refB, kChannel_RigidBody, true);
-	if (ShouldQueueCandidateLocked(refB))
+	if (ShouldQueueCandidateLocked(refB, baseB))
 		QueueEvent(refB, refA, kChannel_RigidBody, true);
 }
 
@@ -222,8 +234,15 @@ static bool HasAnyWatchSnapshot() {
 	return !g_watchedSnapshot.empty() || !g_watchedBaseSnapshot.empty();
 }
 
-static bool ShouldQueueCandidateLocked(UInt32 refID) {
-	return refID && (g_watchedSnapshot.count(refID) || !g_watchedBaseSnapshot.empty());
+static bool ShouldQueueCandidateLocked(UInt32 refID, UInt32 baseID) {
+	if (!refID) return false;
+	if (g_watchedSnapshot.count(refID)) return true;
+	if (g_watchedBaseSnapshot.empty()) return false;
+	//hot path (rigid body) resolves baseID off the refr so we can filter precisely and avoid the flood.
+	//cold paths (char proxy, phantom) pass 0 - queue and let the main thread filter by base via
+	//IsRefWatchedOnMain, never call the form table from the Havok thread under this lock.
+	if (!baseID) return true;
+	return g_watchedBaseSnapshot.count(baseID) != 0;
 }
 
 static void* GetActorController(void* form) {
@@ -261,8 +280,8 @@ static void CollectLoadedDeadActors(std::vector<DeadActorCandidate>& out) {
 	auto* pm = reinterpret_cast<ProcessManagerLite*>(g_processManager);
 	if (!pm || !pm->objects.data) return;
 
-	std::unordered_set<UInt32> seenRefIDs;
-	seenRefIDs.reserve(32);
+	static std::unordered_set<UInt32> seenRefIDs; //main thread only, reused to avoid per-frame churn
+	seenRefIDs.clear();
 
 	UInt32 upper = pm->objects.firstFreeEntry;
 	for (int bucket = 0; bucket < 2; bucket++) {
@@ -294,8 +313,8 @@ static void AddWatchedActorCandidate(TESObjectREFR* actor, std::unordered_set<UI
 }
 
 static void CollectLoadedWatchedActors(std::vector<WatchedActorCandidate>& out) {
-	std::unordered_set<UInt32> seenRefIDs;
-	seenRefIDs.reserve(g_watchedRefIDs.size() + 16);
+	static std::unordered_set<UInt32> seenRefIDs; //main thread only, reused to avoid per-frame churn
+	seenRefIDs.clear();
 
 	for (auto refID : g_watchedRefIDs) {
 		auto* actor = (TESObjectREFR*)Engine::LookupFormByID(refID);
@@ -340,16 +359,19 @@ static bool ShouldSynthesizeDeadActorContact(TESObjectREFR* watched, const DeadA
 static void PollDeadActorProximityContacts() {
 	if (g_watchedRefIDs.empty() && g_watchedBaseFormIDs.empty()) return;
 
-	std::vector<DeadActorCandidate> deadActors;
+	//main thread only, reused across frames to avoid per-frame heap churn while watches are active
+	static std::vector<DeadActorCandidate> deadActors;
+	deadActors.clear();
 	CollectLoadedDeadActors(deadActors);
 	if (deadActors.empty()) return;
 
-	std::vector<WatchedActorCandidate> watchedActors;
+	static std::vector<WatchedActorCandidate> watchedActors;
+	watchedActors.clear();
 	CollectLoadedWatchedActors(watchedActors);
 	if (watchedActors.empty()) return;
 
-	std::unordered_set<ContactPair, ContactPairHash> currentPairs;
-	currentPairs.reserve(deadActors.size() * 2);
+	static std::unordered_set<ContactPair, ContactPairHash> currentPairs;
+	currentPairs.clear();
 
 	for (const auto& watchedActor : watchedActors) {
 		for (const auto& deadActor : deadActors) {
@@ -358,8 +380,10 @@ static void PollDeadActorProximityContacts() {
 		}
 	}
 
-	std::vector<ContactPair> begins;
-	std::vector<ContactPair> stale;
+	static std::vector<ContactPair> begins;
+	static std::vector<ContactPair> stale;
+	begins.clear();
+	stale.clear();
 
 	for (const auto& pair : currentPairs) {
 		if (g_activeContacts.find(pair) == g_activeContacts.end())

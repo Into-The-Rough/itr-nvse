@@ -88,6 +88,7 @@
 #include "features/QuickReadNote.h"
 #include "features/VATSExtender.h"
 #include "features/VATSHighlightDepthFix.h"
+#include "features/WeatherChangeEvent.h"
 #include "features/CameraOverride.h"
 #include "features/CompanionNoBlock.h"
 #include "features/DoorPinchFix.h"
@@ -404,6 +405,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				AimZoomFirstPersonOnly::Init(Settings::bAimZoomFirstPersonOnly != 0);
 				ItemModFlagSafety::Init();
 				EventDispatch::RegisterEvents();
+				WeatherChangeEvent::Init();
 				OnJumpLandHandler::InstallListenerProbes();
 				OnSoundPlayedHandler::InstallListenerProbes();
 				PerkRuntimeFramework::BuildIndex();
@@ -433,6 +435,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			DoorPinchFix::ClearState();
 			OnJumpLandHandler::ClearState();
 			DialogueTextFilter::ClearState();
+			OnEffectHandler::ClearState();
 			break;
 
 		case NVSEMessagingInterface::kMessage_NewGame:
@@ -468,6 +471,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OnJumpLandHandler::InstallListenerProbes();
 			OnSoundPlayedHandler::InstallListenerProbes();
 			DialogueTextFilter::ClearState();
+			OnEffectHandler::ClearState();
 			if (Settings::bAutoGodMode && !g_godModeExecuted)
 			{
 				*(UInt8*)0x11E07BA = 1;
@@ -552,6 +556,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OnJumpLandHandler::Update();
 			OnCasinoBanHandler::Update();
 			OnCombatProcedureHandler::Update();
+			OnNearMissHandler::Update();
+			OnEffectHandler::Update();
 			CompanionNoBlock::Update();
 			OnContactHandler::Update();
 			OnMenuFilterChangeHandler::Update();
