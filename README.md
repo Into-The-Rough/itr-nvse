@@ -42,7 +42,6 @@ ReloadPluginConfig itr-nvse
 ## Documentation
 
 - [FEATURES.md](FEATURES.md): features, commands, and event handlers
-- [docs/HOOK_REGISTRY.md](docs/HOOK_REGISTRY.md): runtime hook and patch inventory
 - [THIRD_PARTY.md](THIRD_PARTY.md): bundled third-party code notes
 - [LICENSE](LICENSE): project license
 
