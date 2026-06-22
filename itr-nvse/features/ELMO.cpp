@@ -187,14 +187,24 @@ namespace ELMO
 		if (suppressReputation) {
 			if (!s_reputationPopupDetour.WriteRelJump(0x6155F0, ReputationPopup_Hook, 9))
 				Log("ELMO: failed to install reputation popup detour");
-			SafeWrite::WriteRelJump(0x615F4A, (UInt32)ReputationCornerMessage_Hook_AddRep);
-			SafeWrite::Write8(0x615F4F, 0x90);
-			SafeWrite::WriteRelJump(0x61598B, (UInt32)ReputationCornerMessage_Hook_AddRepExact);
-			SafeWrite::Write8(0x615990, 0x90);
-			SafeWrite::WriteRelJump(0x615C43, (UInt32)ReputationCornerMessage_Hook_RemRepExact);
-			SafeWrite::Write8(0x615C48, 0x90);
-			SafeWrite::WriteRelJump(0x616242, (UInt32)ReputationCornerMessage_Hook_RemRep);
-			SafeWrite::Write8(0x616247, 0x90);
+
+			//each site is mov ecx,[ebp+disp32] (8B 8D xx FE FF FF), stomped with jmp+nop
+			struct RepHook { UInt32 site; void (*fn)(); UInt8 disp; };
+			static const RepHook kRepHooks[] = {
+				{ 0x615F4A, ReputationCornerMessage_Hook_AddRep,      0xD8 },
+				{ 0x61598B, ReputationCornerMessage_Hook_AddRepExact, 0xF0 },
+				{ 0x615C43, ReputationCornerMessage_Hook_RemRepExact, 0xF0 },
+				{ 0x616242, ReputationCornerMessage_Hook_RemRep,      0xD8 },
+			};
+			for (const auto& h : kRepHooks) {
+				const UInt8* p = reinterpret_cast<const UInt8*>(h.site);
+				if (p[0] != 0x8B || p[1] != 0x8D || p[2] != h.disp || p[3] != 0xFE || p[4] != 0xFF || p[5] != 0xFF) {
+					Log("ELMO: reputation hook site %08X mismatch (%02X %02X %02X), skipping", h.site, p[0], p[1], p[2]);
+					continue;
+				}
+				SafeWrite::WriteRelJump(h.site, (UInt32)h.fn);
+				SafeWrite::Write8(h.site + 5, 0x90);
+			}
 		}
 	}
 }
