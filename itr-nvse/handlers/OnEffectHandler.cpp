@@ -3,12 +3,15 @@
 //scripts get the source spell/potion, unlike xNVSE OnMagicEffectHit.
 
 #include <Windows.h>
+#include <vector>
 
 #include "OnEffectHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/EngineFunctions.h"
+#include "internal/ScopedLock.h"
+#include "internal/globals.h"
 
 class Actor;
 class TESForm;
@@ -62,25 +65,44 @@ void* MagicTargetToActor(void* magicTarget)
 	return (char*)magicTarget - kMagicTargetOffset_InActor;
 }
 
-void Dispatch(const char* name, void* target, void* magicItem, void* caster, void* effectItem)
-{
-	if (!g_eventManagerInterface || !target || !magicItem) return;
+struct QueuedEffectEvent {
+	const char* name;
+	UInt32 targetRefID;
+	UInt32 magicItemFormID;
+	int effectIndex;
+	UInt32 casterRefID;
+};
 
-	UInt32 formID = MagicItem_GetMagicItemFormID(magicItem);
-	if (!formID) return;
-	void* parentForm = Engine::LookupFormByID(formID);
-	if (!parentForm) return;
+//AddTarget/RemoveEffect run on the AI linear task thread, so resolve to ids while live and
+//re-resolve on the main loop - never touch the form table or run scripts off-main
+static std::vector<QueuedEffectEvent> s_pending;
+static CRITICAL_SECTION s_lock;
+static volatile LONG s_lockInit = 0;
+constexpr size_t kMaxQueued = 256;
+
+void QueueEffectEvent(const char* name, void* thisTgt, void* magicItem, void* caster, void* effectItem)
+{
+	void* target = MagicTargetToActor(thisTgt);
+	if (!target || !magicItem) return;
+
+	UInt32 magicItemFormID = MagicItem_GetMagicItemFormID(magicItem);
+	if (!magicItemFormID) return;
 
 	int index = effectItem
 		? (int)MagicItem_GetEffectItemIndex((char*)magicItem + kMI_EffectItemList, effectItem)
 		: 0;
 	void* casterActor = caster ? MagicCaster_GetCasterStatsObject(caster) : nullptr;
 
-	g_eventManagerInterface->DispatchEvent(name, nullptr,
-		(TESForm*)target,
-		(TESForm*)parentForm,
+	QueuedEffectEvent e{ name,
+		*(UInt32*)((char*)target + kTESForm_FormID),
+		magicItemFormID,
 		index,
-		(TESForm*)casterActor);
+		casterActor ? *(UInt32*)((char*)casterActor + kTESForm_FormID) : 0 };
+
+	InitCriticalSectionOnce(&s_lockInit, &s_lock);
+	ScopedLock lock(&s_lock);
+	if (s_pending.size() >= kMaxQueued) return;
+	s_pending.push_back(e);
 }
 
 char __fastcall Hooked_AddTarget(void* thisTgt, void* /*edx*/,
@@ -90,11 +112,8 @@ char __fastcall Hooked_AddTarget(void* thisTgt, void* /*edx*/,
 		thisTgt, caster, parent, effect, extraFlag);
 
 	if (result == 1 && effect) {
-		void* target = MagicTargetToActor(thisTgt);
-		if (target) {
-			void* effectItem = *(void**)((char*)effect + kAE_pEffect);
-			Dispatch("ITR:OnEffectApplied", target, parent, caster, effectItem);
-		}
+		void* effectItem = *(void**)((char*)effect + kAE_pEffect);
+		QueueEffectEvent("ITR:OnEffectApplied", thisTgt, parent, caster, effectItem);
 	}
 	return result;
 }
@@ -102,15 +121,13 @@ char __fastcall Hooked_AddTarget(void* thisTgt, void* /*edx*/,
 void __fastcall Hooked_RemoveEffect(void* thisTgt, void* /*edx*/,
 	void* effect, bool actuallyRemove)
 {
+	//resolve while the effect (and its caster) is still live, before the trampoline frees it
 	if (actuallyRemove && effect) {
-		void* target = MagicTargetToActor(thisTgt);
-		if (target) {
-			void* parent     = *(void**)((char*)effect + kAE_pSpell);
-			void* effectItem = *(void**)((char*)effect + kAE_pEffect);
-			void* caster     = *(void**)((char*)effect + kAE_pCaster);
-			if (parent)
-				Dispatch("ITR:OnEffectRemoved", target, parent, caster, effectItem);
-		}
+		void* parent     = *(void**)((char*)effect + kAE_pSpell);
+		void* effectItem = *(void**)((char*)effect + kAE_pEffect);
+		void* caster     = *(void**)((char*)effect + kAE_pCaster);
+		if (parent)
+			QueueEffectEvent("ITR:OnEffectRemoved", thisTgt, parent, caster, effectItem);
 	}
 
 	s_detourRemoveEffect.GetTrampoline<_MagicTarget_RemoveEffect>()(
@@ -135,6 +152,36 @@ bool Init(void* nvseInterface)
 		return false;
 
 	return true;
+}
+
+void ClearState()
+{
+	InitCriticalSectionOnce(&s_lockInit, &s_lock);
+	ScopedLock lock(&s_lock);
+	s_pending.clear();
+}
+
+void Update()
+{
+	if (!g_eventManagerInterface || g_isLoadingSave) return;
+	InitCriticalSectionOnce(&s_lockInit, &s_lock);
+
+	std::vector<QueuedEffectEvent> batch;
+	{
+		ScopedLock lock(&s_lock);
+		if (s_pending.empty()) return;
+		batch.swap(s_pending);
+	}
+
+	for (const auto& e : batch) {
+		void* target = Engine::LookupFormByID(e.targetRefID);
+		if (!target) continue;
+		void* parentForm = Engine::LookupFormByID(e.magicItemFormID);
+		if (!parentForm) continue;
+		void* caster = e.casterRefID ? Engine::LookupFormByID(e.casterRefID) : nullptr;
+		g_eventManagerInterface->DispatchEvent(e.name, nullptr,
+			(TESForm*)target, (TESForm*)parentForm, e.effectIndex, (TESForm*)caster);
+	}
 }
 
 }

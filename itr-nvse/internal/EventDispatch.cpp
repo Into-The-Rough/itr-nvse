@@ -130,6 +130,9 @@ void RegisterEvents()
 	g_eventManagerInterface->RegisterEvent("ITR:OnEffectApplied", 4, effectAppliedParams, F::kFlag_FlushOnLoad);
 	g_eventManagerInterface->RegisterEvent("ITR:OnEffectRemoved", 4, effectAppliedParams, F::kFlag_FlushOnLoad);
 
+	static P weatherParams[] = { P::eParamType_Int, P::eParamType_AnyForm, P::eParamType_AnyForm };
+	g_eventManagerInterface->RegisterEvent("ITR:OnWeatherChange", 3, weatherParams, F::kFlag_FlushOnLoad);
+
 	g_eventManagerInterface->RegisterEvent("ITR:OnVATSEnter", 1, oneForm, F::kFlag_FlushOnLoad);
 	g_eventManagerInterface->RegisterEvent("ITR:OnVATSLeave", 1, oneInt, F::kFlag_FlushOnLoad);
 	g_eventManagerInterface->RegisterEvent("ITR:OnKillCamStart", 1, oneForm, F::kFlag_FlushOnLoad);

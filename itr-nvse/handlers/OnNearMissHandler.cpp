@@ -2,12 +2,14 @@
 #include "OnNearMissHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/GameGlobals.h"
+#include "internal/EngineFunctions.h"
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/settings.h"
 #include <Windows.h>
 #include <math.h>
 #include <unordered_map>
+#include <vector>
 
 constexpr UInt32 kAddr_ProjectileUpdate = 0x9BECC0;
 
@@ -19,16 +21,22 @@ constexpr UInt32 kProj_ImpactList = 0x88; //tList<ImpactData>, one entry per con
 constexpr UInt32 kProj_SourceWeap = 0xF8;
 constexpr UInt32 kProj_SourceRef  = 0xFC;
 constexpr UInt32 kRefr_Position   = 0x30;
+constexpr UInt32 kForm_ID         = 0x0C;
 
 constexpr float kActorBodyHeight = 128.0f;
 
 struct Vec3 { float x, y, z; };
+
+//projectile update runs on the main thread but inside the mobile-object iteration, so we
+//queue refIDs here and dispatch from the main loop to keep scripts off the live list
+struct QueuedNearMiss { UInt32 victimID; UInt32 shooterID; UInt32 weaponID; float dist; };
 
 typedef int (__thiscall* ProjectileUpdate_t)(void*, int);
 
 static Detours::JumpDetour s_detour;
 static std::unordered_map<UInt64, UInt32> s_lastFire;
 static std::unordered_map<void*, Vec3> s_lastPos;
+static std::vector<QueuedNearMiss> s_pending;
 
 static void GetRefPos(void* ref, Vec3* out) {
 	const float* p = (const float*)((UInt8*)ref + kRefr_Position);
@@ -124,11 +132,12 @@ static void ScanFlight(void* proj, void* shooter, TESForm* weapon, const Vec3& a
 		const float d2 = SegSegDistSq(a, b, feet, head);
 		if (d2 > r2 || ProjectileHitActor(proj, actor) || !PassesCooldown(shooter, actor, now)) continue;
 
-		g_eventManagerInterface->DispatchEvent(
-			"ITR:OnNearMiss", nullptr,
-			(TESForm*)actor, (TESForm*)shooter, weapon,
-			PackEventFloatArg(sqrtf(d2))
-		);
+		s_pending.push_back({
+			*(UInt32*)((UInt8*)actor + kForm_ID),
+			shooter ? *(UInt32*)((UInt8*)shooter + kForm_ID) : 0,
+			weapon ? *(UInt32*)((UInt8*)weapon + kForm_ID) : 0,
+			sqrtf(d2)
+		});
 	}
 }
 
@@ -168,5 +177,21 @@ bool Init(void* nvseInterface) {
 
 	//prologue: push ebx; mov ebx,esp; push ecx; and esp,~0xF; add esp,4 = 1+2+1+3+3 = 10
 	return s_detour.WriteRelJump(kAddr_ProjectileUpdate, HookProjectileUpdate, 10);
+}
+
+void Update() {
+	if (s_pending.empty() || !g_eventManagerInterface) {
+		s_pending.clear();
+		return;
+	}
+	std::vector<QueuedNearMiss> batch;
+	batch.swap(s_pending);
+	for (const auto& e : batch) {
+		TESForm* victim = (TESForm*)Engine::LookupFormByID(e.victimID);
+		if (!victim) continue;
+		TESForm* shooter = e.shooterID ? (TESForm*)Engine::LookupFormByID(e.shooterID) : nullptr;
+		TESForm* weapon = e.weaponID ? (TESForm*)Engine::LookupFormByID(e.weaponID) : nullptr;
+		g_eventManagerInterface->DispatchEvent("ITR:OnNearMiss", nullptr, victim, shooter, weapon, PackEventFloatArg(e.dist));
+	}
 }
 }
