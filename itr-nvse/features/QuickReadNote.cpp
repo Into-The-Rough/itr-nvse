@@ -184,6 +184,7 @@ namespace QuickReadNote
 	constexpr UInt32 kMapMenu_holotapeSubtitles = 0xA8;
 	constexpr UInt32 kMapMenu_isHolotapeVoicePlaying = 0xBC;
 	constexpr UInt32 kMapMenu_noteList_head = 0x164;
+	constexpr UInt32 kAddr_InDialogueOrHolotapePlaying = 0x11DCFA4; //engine flag, true while dialogue/holotape audio plays
 
 	struct ListBoxItem {
 		Tile* tile;
@@ -223,7 +224,7 @@ namespace QuickReadNote
 		}
 		g_noHolotapeStopSound = false;
 		BSWin32Audio::GetSingleton()->FadeOutDialogueSound();
-		*(UInt8*)0x11DCFA4 = false;
+		*(UInt8*)kAddr_InDialogueOrHolotapePlaying = false;
 		ClearHUDSubtitles();
 	}
 
@@ -297,7 +298,7 @@ namespace QuickReadNote
 			} else {
 				g_noHolotapeStopSound = true;
 			}
-			*(UInt8*)0x11DCFA4 = true;
+			*(UInt8*)kAddr_InDialogueOrHolotapePlaying = true;
 			BSWin32Audio::GetSingleton()->FadeInDialogueSound();
 		}
 	}
@@ -548,7 +549,7 @@ namespace QuickReadNote
 	char __cdecl OnQueueUIMessageHook(char* msg, UInt32 emotion, char* imagePath,
 		char* soundName, float time, char instantEnd) {
 		if (msg && g_pendingNote) {
-			const char* controlName = (g_controlID <= 27) ? kControlNames[g_controlID] : "Key";
+			const char* controlName = (g_controlID >= 0 && g_controlID <= 27) ? kControlNames[g_controlID] : "Key";
 			const char* action = (g_pendingNoteType == 0 || g_pendingNoteType == 3) ? "listen" : "view";
 			snprintf(s_modifiedMessage, sizeof(s_modifiedMessage), "%s. Press %s to %s.", msg, controlName, action);
 			msg = s_modifiedMessage;
