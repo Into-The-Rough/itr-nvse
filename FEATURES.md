@@ -130,6 +130,15 @@
 - ITR:OnWitnessed - fires per witness per crime (witness, perpetrator, crimeType, victim, detectionValue). Filterable on witness/perpetrator/victim refs/formlists/factions and on crimeType equality.
 - ITR:OnImpactDataSpawn - fires when a projectile resolves ImpactData on a non-actor hit (impactData, x, y, z, normalX, normalY, normalZ, projectile, target, weapon, material)
 - ITR:OnSprayDecal - fires per blood spray decal placement during limb sever/explode (impactData, x, y, z, normalX, normalY, normalZ)
+- ITR:OnWoundSpray - fires per wound blood spray on an actor (actor, impactData, x, y, z, dx, dy, dz, hitLocation, source, weapon)
+- ITR:OnNearMiss - fires when a projectile passes near an actor without hitting (actor, shooter, weapon, distance)
+- ITR:OnCasinoBan - fires when the player is banned from a casino (casino)
+- ITR:OnEffectApplied - fires when a magic effect is applied (target, magicItem, effectItemIndex, caster). magicItem is the parent spell/ingestible; effectItemIndex selects the effect within it
+- ITR:OnEffectRemoved - fires when a magic effect is removed (target, magicItem, effectItemIndex, caster)
+- ITR:OnVATSEnter - fires when VATS is entered (target)
+- ITR:OnVATSLeave - fires when VATS is left (reason)
+- ITR:OnKillCamStart - fires when a kill cam begins (target)
+- ITR:OnKillCamEnd - fires when a kill cam ends (target)
 
 ## Features
 
@@ -144,6 +153,8 @@
 - NoWeaponSearch - disable weapon search for specific actors (per-actor)
 - NPCAntidoteUse - NPCs use antidotes when poisoned in combat (configurable cooldown)
 - NPCDoctorsBagUse - NPCs use doctor's bags when crippled in combat (configurable cooldown)
+- DoorPinchFix - temporarily disable non-load door collision after an open/close so actors aren't pinched
+- CompanionNoBlock - stop the player and current companion from physically blocking each other
 - ELMO - convert quest objectives and reputation popups to corner messages
 - MessageBoxQuickClose - quick close message boxes with Enter/Space
 - OwnerNameInfo - show item owner on crosshair prompt
@@ -177,6 +188,9 @@
 - NavMeshInfoCrashFix - fix crash in NavMesh info processing
 - InitHavokCrashFix - fix crash during Havok physics initialization
 - DetectionFollowerCrashFix - fix null dereference in BuildFollowerListRecursive during cell transitions
+- GetLineOfSightCrashFix - fix crash from a null node in the line-of-sight check
+- LockpickOwnerKarmaFix - no karma loss picking a lock you already own
+- InlineGlyphFix - correct inline control-glyph sizing/placement in UI text
 - ConsoleLogCleaner - delete console log on startup
 
 ## Configuration
