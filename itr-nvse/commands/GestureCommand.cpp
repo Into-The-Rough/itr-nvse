@@ -28,6 +28,7 @@ namespace GestureCommand
 		float cycleTime = 0.4f;
 		float baseRot[9] = {};
 		void* headBone = nullptr;
+		void* root = nullptr;
 		bool hasBaseRot = false;
 	};
 
@@ -153,14 +154,18 @@ namespace GestureCommand
 			auto* form = (TESObjectREFR*)Engine::LookupFormByID(g.refID);
 			if (!form) { ClearGesture(g); continue; }
 
-			void* headBone = FindHeadBone(form);
-			if (!headBone) { ClearGesture(g); continue; }
-
-			if (g.headBone != headBone)
+			//re-scan for the bone only when the skeleton root changes, the name lookup is the costly part
+			void* root = GetRootNode(form);
+			if (!root) { ClearGesture(g); continue; }
+			if (root != g.root)
 			{
-				g.headBone = headBone;
+				g.root = root;
+				g.headBone = GetObjectByName(root, "Bip01 Head");
 				g.hasBaseRot = false;
 			}
+
+			void* headBone = g.headBone;
+			if (!headBone) { ClearGesture(g); continue; }
 
 			float* localRot = (float*)((UInt8*)headBone + 0x34);
 			if (!g.hasBaseRot)
