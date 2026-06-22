@@ -14,6 +14,10 @@ origins are documented here for clarity.
 - `VATSSpeechFix` (prevents voice/dialogue audio from slowing during VATS) is
   ported directly from SoundFilteringSoftware.
 
+- `RefillAmmo` (commands/ImperativeCommands.cpp) is based on `RefillPlayerAmmo`
+  from ShowOff-NVSE by Demorome, generalized to any actor. ShowOff-NVSE permits
+  code reuse with credit. https://github.com/Demorome/ShowOff-NVSE
+
 ## External SDKs / Headers
 
 - This project is built against the xNVSE / NVSE plugin SDK and related modding
