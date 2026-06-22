@@ -1,4 +1,4 @@
-//Requires restart after hook install.
+//requires restart after hook install
 
 #include "MessageBoxQuickClose.h"
 #include "internal/SafeWrite.h"

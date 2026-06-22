@@ -126,4 +126,4 @@ inline void ComposePoseFromBase(const float* base, uint8_t type, float angleRad,
 		ApplyLocalRoll(out, angleRad);
 }
 
-}  // namespace GestureMath
+}

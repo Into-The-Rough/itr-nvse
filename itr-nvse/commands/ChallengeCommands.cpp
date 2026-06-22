@@ -56,21 +56,18 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 
 	UInt8* challenge = (UInt8*)form;
 
-	//get flags
 	UInt32 flags = *(UInt32*)(challenge + 0x70); //bit 1=completed, bit 2=flag4, bit 3=norecur
 	UInt32 dataFlags = *(UInt32*)(challenge + 0x5C); //data.flags - bit 1=recurring
 	bool isCompleted = (flags & 2) != 0;
 	bool isRecurring = (dataFlags & 2) != 0;
 	bool isNoRecur = (flags & 8) != 0;
 
-	//check if already completed (and not recurring)
 	if (isCompleted && !isRecurring)
 	{
 		*result = 0;
 		return true;
 	}
 
-	//get challenge data
 	UInt32 threshold = *(UInt32*)(challenge + 0x58); //data.threshold
 	UInt32 oldAmount = *(UInt32*)(challenge + kOffset_Challenge_Amount);
 	UInt32 challengeType = *(UInt32*)(challenge + 0x54); //data.type
@@ -91,7 +88,6 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 		UInt32 interval = *(UInt32*)(challenge + 0x60); //data.interval
 		if (interval == 0) interval = 100; //default
 
-		//check if we crossed an interval boundary
 		UInt32 oldIntervals = oldAmount / interval;
 		UInt32 newIntervals = newAmount / interval;
 		if (newIntervals > oldIntervals)
@@ -100,10 +96,8 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 		}
 	}
 
-	//check for completion (crossed threshold)
 	if (oldAmount < threshold && newAmount >= threshold)
 	{
-		//run completion script if present
 		Script* completionScript = *(Script**)(challenge + 0x74); //SNAM completion script
 		if (completionScript)
 		{
@@ -118,14 +112,11 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 			CdeclCall(0x4D5C60, kMiscStat_ChallengesCompleted); //IncPCMiscStat
 		}
 
-		//show completion notification and play sound
 		ShowChallengeNotification(challenge, form, threshold, threshold);
 		CdeclCall(0x706F30, 21); //PlayMenuSound
 
-		//handle completion vs recurring
 		if (!isRecurring || isNoRecur)
 		{
-			//mark as completed
 			ThisStdCall(0x5F6000, form, 1); //TESChallenge::ToggleIsCompleted
 			CdeclCall(0x5F5880); //InitChallengesList
 		}

@@ -1,4 +1,4 @@
-//Extends VATS target highlighting beyond the vanilla limit.
+//extends VATS target highlighting beyond the vanilla limit
 
 #include "VATSExtender.h"
 #include "nvse/GameForms.h"

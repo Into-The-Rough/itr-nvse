@@ -1066,8 +1066,6 @@ void RegisterCommands6(void* nvsePtr)
 	nvse->RegisterCommand(&kCommandInfo_SetRaceAlt);
 }
 
-//--- SetOnContactWatch / GetOnContactWatch ---
-
 }
 
 #include "handlers/OnContactHandler.h"

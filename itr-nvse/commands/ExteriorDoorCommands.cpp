@@ -94,6 +94,8 @@ namespace
 		std::priority_queue<OpenEntry, std::vector<OpenEntry>, std::greater<OpenEntry>> open;
 	};
 
+	//holds raw door/cell/worldspace pointers, valid only because load doors are persistent refs
+	//and ClearCache runs on PostLoadGame/NewGame before any cached pointer is reused
 	static RouteCache s_routeCache;
 
 	static void* TravelSpaceKey(const TravelSpace& s)
