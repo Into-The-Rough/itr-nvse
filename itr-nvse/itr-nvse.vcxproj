@@ -248,7 +248,6 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="internal\StringMatch.h" />
     <ClInclude Include="internal\UIMinimal.h" />
     <ClInclude Include="internal\CooldownTracker.h" />
-    <ClInclude Include="internal\ExtraDataUtils.h" />
     <ClInclude Include="internal\FallDamageLogic.h" />
     <ClInclude Include="internal\FormatLogic.h" />
     <ClInclude Include="internal\StringAlloc.h" />

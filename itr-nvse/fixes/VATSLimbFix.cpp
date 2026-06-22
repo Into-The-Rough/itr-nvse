@@ -4,7 +4,7 @@
 #include "VATSLimbFix.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/Detours.h"
-#include "internal/ExtraDataUtils.h"
+#include "internal/EngineFunctions.h"
 #include <cstring>
 
 #include "internal/globals.h"
@@ -59,7 +59,7 @@ namespace VATSLimbFix
 
 	BSExtraData* GetExtraDataByType(BaseExtraList* list, uint8_t type) {
 		if (!list) return nullptr;
-		return ExtraDataUtils::GetExtraDataByType(list->head, list->presentBits, sizeof(list->presentBits), type);
+		return static_cast<BSExtraData*>(Engine::BaseExtraList_GetByType(list, type));
 	}
 
 	uint16_t GetDismemberMask(LimbFixREFR* ref) {
