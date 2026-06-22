@@ -430,7 +430,7 @@ namespace
 			return name;
 
 		char buf[32];
-		sprintf_s(buf, "AV%u", av);
+		snprintf(buf, sizeof(buf), "AV%u", av);
 		return buf;
 	}
 
@@ -1192,7 +1192,7 @@ namespace
 		switch (descriptor.kind)
 		{
 			case Kind::OwnedMaxRank:
-				sprintf_s(buf, "Already owned at max rank %.0f/%.0f",
+				snprintf(buf, sizeof(buf), "Already owned at max rank %.0f/%.0f",
 				          evaluated.currentValue,
 				          evaluated.requiredValue);
 				return buf;
@@ -1213,14 +1213,14 @@ namespace
 			case Kind::ActorValue:
 			case Kind::BaseActorValue:
 			case Kind::PermanentActorValue:
-				sprintf_s(buf, "%s %.0f/%.0f, missing %.0f",
+				snprintf(buf, sizeof(buf), "%s %.0f/%.0f, missing %.0f",
 				          FormatAVName(descriptor.argValue).c_str(),
 				          evaluated.currentValue,
 				          evaluated.requiredValue,
 				          evaluated.missingValue);
 				return buf;
 			case Kind::Level:
-				sprintf_s(buf, "Level %.0f/%.0f, missing %.0f",
+				snprintf(buf, sizeof(buf), "Level %.0f/%.0f, missing %.0f",
 				          evaluated.currentValue,
 				          evaluated.requiredValue,
 				          evaluated.missingValue);
@@ -1228,13 +1228,13 @@ namespace
 			case Kind::HasPerk:
 			{
 				const std::string name = FormName(descriptor.argForm);
-				sprintf_s(buf, "Requires %s", name.empty() ? "perk" : name.c_str());
+				snprintf(buf, sizeof(buf), "Requires %s", name.empty() ? "perk" : name.c_str());
 				return buf;
 			}
 			case Kind::ItemCount:
 			{
 				const std::string name = FormName(descriptor.argForm);
-				sprintf_s(buf, "%s %.0f/%.0f, missing %.0f",
+				snprintf(buf, sizeof(buf), "%s %.0f/%.0f, missing %.0f",
 				          name.empty() ? "Item" : name.c_str(),
 				          evaluated.currentValue,
 				          evaluated.requiredValue,
@@ -2068,7 +2068,7 @@ namespace
 			default:
 			{
 				char buf[32];
-				sprintf_s(buf, "%u", descriptor.argValue);
+				snprintf(buf, sizeof(buf), "%u", descriptor.argValue);
 				return buf;
 			}
 		}
