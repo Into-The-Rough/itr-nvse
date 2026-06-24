@@ -1,8 +1,11 @@
 //allows sleeping in owned beds with consequences
 
 #include "OwnedBeds.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 #include "internal/GameGlobals.h"
 #include "internal/Detours.h"
 
@@ -17,7 +20,7 @@ namespace OwnedBeds
 	static bool g_playerWarnedAboutBed = false;
 
 	inline UInt8 GetFormType(void* form) {
-		return *((UInt8*)form + 4);
+		return TESFormGetTypeID(static_cast<TESForm*>(form));
 	}
 
 	typedef void* (__cdecl *_GetTopic)(UInt32 type, int index);
@@ -89,4 +92,3 @@ namespace OwnedBeds
 		g_enabled = enabled;
 	}
 }
-

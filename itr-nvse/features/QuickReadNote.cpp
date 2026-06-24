@@ -9,6 +9,8 @@
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
+#include "internal/DialogueLayout.h"
+#include "internal/MenuLayout.h"
 
 #include "internal/globals.h"
 #include "internal/CallTemplates.h"
@@ -111,79 +113,26 @@ namespace QuickReadNote
 		void FadeOutDialogueSound() { ThisCall<void>(0xAD8650, this); }
 	};
 
-	struct BSString {
-		char* str;
-		UInt16 len;
-		UInt16 bufLen;
-		const char* c_str() const { return str ? str : ""; }
-	};
+	static bool ConversationFirstItem(ConversationView* conversation) {
+		return ThisCall<bool>(0x83B9A0, conversation);
+	}
 
-	struct DialogueResponse {
-		BSString strResponseText; //0x00
-		UInt32 uiEmotionType; //0x08
-		UInt32 uiEmotionValue; //0x0C
-		BSString strVoiceFilePath; //0x10
-		void* pSpeakerAnimation;
-		void* pListenerAnimation;
-		void* pSound;
-		UInt8 ucFlags;
-		UInt8 pad25[3];
-		UInt32 uiResponseNumber;
-	};
-	static_assert(offsetof(DialogueResponse, strResponseText) == 0x00);
-	static_assert(offsetof(DialogueResponse, strVoiceFilePath) == 0x10);
+	static DialogueItemView* ConversationGetCurrentItem(ConversationView* conversation) {
+		return ThisCall<DialogueItemView*>(0x83C820, conversation);
+	}
 
-	template <class T> struct BSSimpleList {
-		T item;
-		BSSimpleList<T>* next;
-	};
+	static bool DialogueItemFirstResponse(DialogueItemView* item) {
+		return ThisCall<bool>(0x83C7B0, item);
+	}
 
-	struct DialogueItem {
-		BSSimpleList<DialogueResponse*> kResponses;
-		BSSimpleList<DialogueResponse*>* pCurrentResponse;
-		void* pTopicInfo;
-		void* pTopic;
-		void* pQuest;
-		void* pSpeaker;
-		bool FirstResponse() {
-			pCurrentResponse = &kResponses;
-			return kResponses.item != nullptr;
-		}
-		bool NextResponse() {
-			if (pCurrentResponse && pCurrentResponse->next) {
-				pCurrentResponse = pCurrentResponse->next;
-				return pCurrentResponse->item != nullptr;
-			}
-			return false;
-		}
-		DialogueResponse* GetCurrentItem() const {
-			return pCurrentResponse ? pCurrentResponse->item : nullptr;
-		}
-	};
+	static bool DialogueItemNextResponse(DialogueItemView* item) {
+		return ThisCall<bool>(0x83C7E0, item);
+	}
 
-	struct Conversation {
-		BSSimpleList<DialogueItem*> kDialogueItems;
-		BSSimpleList<DialogueItem*>* pCurrentItem;
-		bool FirstItem() {
-			pCurrentItem = &kDialogueItems;
-			return kDialogueItems.item != nullptr;
-		}
-		DialogueItem* GetCurrentItem() const {
-			return pCurrentItem ? pCurrentItem->item : nullptr;
-		}
-	};
+	static DialogueResponseView* DialogueItemGetCurrentItem(DialogueItemView* item) {
+		return ThisCall<DialogueResponseView*>(0x83C820, item);
+	}
 
-	struct Character {
-		UInt8 pad00[0x08];
-		UInt32 flags;
-		UInt8 pad0C[0x1BC];
-	};
-
-	constexpr UInt32 kMapMenu_currentNote = 0x90;
-	constexpr UInt32 kMapMenu_holotapeDialogues = 0x98;
-	constexpr UInt32 kMapMenu_holotapeSubtitles = 0xA8;
-	constexpr UInt32 kMapMenu_isHolotapeVoicePlaying = 0xBC;
-	constexpr UInt32 kMapMenu_noteList_head = 0x164;
 	constexpr UInt32 kAddr_InDialogueOrHolotapePlaying = 0x11DCFA4; //engine flag, true while dialogue/holotape audio plays
 
 	struct ListBoxItem {
@@ -205,17 +154,18 @@ namespace QuickReadNote
 	}
 
 	static void StopHolotape(void* map) {
-		SoundList** currentSound = (SoundList**)((UInt8*)map + 0xB8); //currentHolotapeDialogueSound
-		if (*currentSound && (*currentSound)->data.IsPlaying())
-			(*currentSound)->data.Stop();
-		SoundList* dialogues = (SoundList*)((UInt8*)map + kMapMenu_holotapeDialogues);
+		auto* mapView = MapMenuAsView(map);
+		auto* currentSound = static_cast<SoundList*>(mapView->currentHolotapeDialogueSound);
+		if (currentSound && currentSound->data.IsPlaying())
+			currentSound->data.Stop();
+		auto* dialogues = reinterpret_cast<SoundList*>(mapView->holotapeDialogues);
 		dialogues->FreeAll();
-		BSSimpleArrayChar* subtitles = (BSSimpleArrayChar*)((UInt8*)map + kMapMenu_holotapeSubtitles);
+		auto* subtitles = reinterpret_cast<BSSimpleArrayChar*>(mapView->holotapeSubtitles);
 		ThisCall<void>(0x7A1C30, subtitles, 1);
-		*currentSound = nullptr;
-		*(float*)((UInt8*)map + 0xC0) = 0.0f; //holotapeTotalTime
-		*(UInt32*)((UInt8*)map + 0xC4) = 0; //holotapePlayStartTime
-		*(UInt8*)((UInt8*)map + kMapMenu_isHolotapeVoicePlaying) = 0;
+		mapView->currentHolotapeDialogueSound = nullptr;
+		mapView->holotapeTotalTime = 0.0f;
+		mapView->holotapePlayStartTime = 0;
+		mapView->isHolotapeVoicePlaying = 0;
 		if (!g_noHolotapeStopSound) {
 			BSSoundHandle handle = BSWin32Audio::GetSingleton()->GetSoundHandleByEditorName(
 				"UIPipBoyHolotapeStop",
@@ -231,56 +181,55 @@ namespace QuickReadNote
 	static void PlayHolotape(BGSNote* note, bool playStartStopSound) {
 		void* map = g_mapMenuPtr;
 		if (!map) return;
+		auto* mapView = MapMenuAsView(map);
 
-		UInt8* isPlaying = (UInt8*)((UInt8*)map + kMapMenu_isHolotapeVoicePlaying);
-		SoundList* dialogues = (SoundList*)((UInt8*)map + kMapMenu_holotapeDialogues);
-		BSSimpleArrayChar* subtitles = (BSSimpleArrayChar*)((UInt8*)map + kMapMenu_holotapeSubtitles);
+		UInt8* isPlaying = &mapView->isHolotapeVoicePlaying;
+		auto* dialogues = reinterpret_cast<SoundList*>(mapView->holotapeDialogues);
+		auto* subtitles = reinterpret_cast<BSSimpleArrayChar*>(mapView->holotapeSubtitles);
 
 		if (*isPlaying)
 			StopHolotape(map);
 
-		UInt8 noteType = *(UInt8*)((UInt8*)note + 0x7C);
-		if (noteType == 0) { //kSound
-			void* voice = *(void**)((UInt8*)note + 0x6C);
-			UInt32 voiceRefID = voice ? *(UInt32*)((UInt8*)voice + 0xC) : 0;
+		UInt8 noteType = BGSNoteGetType(note);
+		if (noteType == kBGSNoteType_Sound) {
+			UInt32 voiceRefID = BGSNoteGetVoiceRefID(note);
 			if (voiceRefID) {
 				BSSoundHandle sound = BSWin32Audio::GetSingleton()->GetSoundHandleByFormID(
 					voiceRefID, BSWin32Audio::kAudioFlags_2D | BSWin32Audio::kAudioFlags_100);
 				dialogues->Append(&sound);
 				*isPlaying = true;
 			}
-		} else if (noteType == 3) { //kVoice
-			Character* character = (Character*)GameHeapAlloc(sizeof(Character));
+		} else if (noteType == kBGSNoteType_Voice) {
+			CharacterView* character = (CharacterView*)GameHeapAlloc(sizeof(CharacterView));
 			ThisCall<void>(0x8D1F40, character, false);
 			character->flags |= 0x00004000;
-			void* speaker = *(void**)((UInt8*)note + 0x70);
-			ThisCall<void>(0x575690, character, speaker);
+			ThisCall<void>(0x575690, character, BGSNoteGetSpeaker(note));
 
-			void* voice = *(void**)((UInt8*)note + 0x6C);
-			Conversation* pConversation = (Conversation*)GameHeapAlloc(sizeof(Conversation));
+			void* voice = BGSNoteGetVoice(note);
+			ConversationView* pConversation = (ConversationView*)GameHeapAlloc(sizeof(ConversationView));
 			ThisCall<void>(0x83B850, pConversation, character, *(void**)g_thePlayerPtr, voice);
 
 			UInt32 audioFlags = *(UInt32*)0x7974CA;
-			pConversation->FirstItem();
-			if (DialogueItem* currentItem = pConversation->GetCurrentItem()) {
-				if (currentItem->FirstResponse()) {
+			ConversationFirstItem(pConversation);
+			if (DialogueItemView* currentItem = ConversationGetCurrentItem(pConversation)) {
+				if (DialogueItemFirstResponse(currentItem)) {
 					*isPlaying = true;
 					do {
-						currentItem = pConversation->GetCurrentItem();
-						DialogueResponse* currentResponse = currentItem->GetCurrentItem();
+						currentItem = ConversationGetCurrentItem(pConversation);
+						DialogueResponseView* currentResponse = DialogueItemGetCurrentItem(currentItem);
 						if (!currentResponse) break;
-						BSString* voiceLineStr = &currentResponse->strResponseText;
+						DialogueStringView* voiceLineStr = &currentResponse->responseText;
 						ThisCall<void>(0x7A1AC0, subtitles, voiceLineStr);
-						void* topicInfo = currentItem->pTopicInfo;
+						void* topicInfo = currentItem->currentTopicInfo;
 						DialogueTextFilter::Suppress(true);
 						ThisCall<void>(0x61F170, topicInfo, 0, character);
 						DialogueTextFilter::Suppress(false);
 						BSSoundHandle toPlay = BSWin32Audio::GetSingleton()->GetSoundHandleByFilePath(
-							currentResponse->strVoiceFilePath.c_str(), audioFlags, nullptr);
+							currentResponse->voiceFileName.c_str(), audioFlags, nullptr);
 						toPlay.SetVolume(0.9f);
 						dialogues->Append(&toPlay);
 						ThisCall<void>(0x61F170, topicInfo, 1, character);
-					} while (currentItem->NextResponse());
+					} while (DialogueItemNextResponse(currentItem));
 				}
 			}
 			ThisCall<void>(0x83B8D0, pConversation); //~Conversation
@@ -376,12 +325,12 @@ namespace QuickReadNote
 
 		UInt32 selectedTrait = Engine::Tile_TextToTrait("_selected");
 
-		//noteList at 0x160 is ListBox which has vtable at +0, list at +4, selected at +10
-		ListBoxItem* firstData = *(ListBoxItem**)((UInt8*)mapMenu + kMapMenu_noteList_head);
-		ListNode* nextNode = *(ListNode**)((UInt8*)mapMenu + kMapMenu_noteList_head + 4);
-		Tile** selectedPtr = (Tile**)((UInt8*)mapMenu + 0x170); //noteList selected
-		BGSNote** currentNotePtr = (BGSNote**)((UInt8*)mapMenu + kMapMenu_currentNote);
-		Tile* dataPanelTile = *(Tile**)((UInt8*)mapMenu + 0x5C); //tiles[13] data panel
+		auto* mapView = MapMenuAsView(mapMenu);
+		ListBoxItem* firstData = static_cast<ListBoxItem*>(mapView->noteList.headData);
+		ListNode* nextNode = static_cast<ListNode*>(mapView->noteList.headNext);
+		Tile** selectedPtr = reinterpret_cast<Tile**>(&mapView->noteList.selected);
+		BGSNote** currentNotePtr = &mapView->currentNote;
+		Tile* dataPanelTile = static_cast<Tile*>(mapView->dataPanelTile);
 
 		Tile* foundTile = nullptr;
 
@@ -420,13 +369,14 @@ namespace QuickReadNote
 	static void SwitchToMiscTab() {
 		void* mapMenu = g_mapMenuPtr;
 		if (!mapMenu) return;
-		void* tiles17 = *(void**)((UInt8*)mapMenu + 0x6C); //tiles[17]
+		auto* mapView = MapMenuAsView(mapMenu);
+		void* tiles17 = mapView->tabLineTile;
 		if (!tiles17) return;
 		UInt32 traitID = *(UInt32*)0x11DA360;
 		if (traitID == 0 || traitID == 0xFFFFFFFF)
 			traitID = Engine::Tile_TextToTrait("_CurrentTab");
 		ThisCall<void>(0x700320, tiles17, traitID, 3);
-		*(UInt8*)((UInt8*)mapMenu + 0x80) = 0x23; //currentTab = misc
+		mapView->currentTab = 0x23; //misc
 		((void(__cdecl*)())0x79ABA0)();
 
 		if (g_noteToSelect) {
@@ -445,9 +395,9 @@ namespace QuickReadNote
 
 	static void ShowNoteMenu(BGSNote* note) {
 		if (!note) return;
-		UInt8 noteType = *(UInt8*)((UInt8*)note + 0x7C);
-		if (noteType == 1) { //kText
-			void* noteText = *(void**)((UInt8*)note + 0x6C);
+		UInt8 noteType = BGSNoteGetType(note);
+		if (noteType == kBGSNoteType_Text) {
+			void* noteText = BGSNoteGetTextSource(note);
 			if (noteText) {
 				void** vtable = *(void***)noteText;
 				typedef const char*(__thiscall* GetFn)(void*, void*, UInt32);
@@ -459,18 +409,18 @@ namespace QuickReadNote
 						ShowMessageBox(displayText, 0, 0, nullptr, 0, 0x17, 0, 0, "OK", "View Full", NULL);
 					else
 						ShowMessageBox(displayText, 0, 0, nullptr, 0, 0x17, 0, 0, "OK", NULL);
-					*(UInt8*)((UInt8*)note + 0x7D) = 1;
+					BGSNoteMarkRead(note);
 				}
 			}
-		} else if (noteType == 0 || noteType == 3) { //kSound or kVoice
+		} else if (noteType == kBGSNoteType_Sound || noteType == kBGSNoteType_Voice) {
 			void* map = g_mapMenuPtr;
 			if (map) {
 				PlayHolotape(note, true);
-				*(BGSNote**)((UInt8*)map + kMapMenu_currentNote) = note;
-				*(UInt8*)((UInt8*)note + 0x7D) = 1;
+				MapMenuAsView(map)->currentNote = note;
+				BGSNoteMarkRead(note);
 			}
-		} else if (noteType == 2) { //kImage
-			*(UInt8*)((UInt8*)note + 0x7D) = 1;
+		} else if (noteType == kBGSNoteType_Image) {
+			BGSNoteMarkRead(note);
 		}
 	}
 
@@ -487,7 +437,7 @@ namespace QuickReadNote
 		if (wasOurMessage) {
 			void* im = InterfaceManager_Singleton;
 			if (im) {
-				UInt8 buttonIndex = *(UInt8*)((UInt8*)im + 0xE4); //msgBoxButton
+				UInt8 buttonIndex = InterfaceManagerAsView(im)->msgBoxButton;
 				if (buttonIndex == 1) {
 					g_openPipBoyPending = true;
 					g_noteToSelect = noteToOpen;
@@ -513,7 +463,7 @@ namespace QuickReadNote
 	void __cdecl OnNoteAddedCallback(BGSNote* note) {
 		if (note) {
 			g_pendingNote = note;
-			g_pendingNoteType = *(UInt8*)((UInt8*)note + 0x7C);
+			g_pendingNoteType = BGSNoteGetType(note);
 			g_noteAddedTime = GetTickCount();
 			g_controlWasPressed = false;
 		}
@@ -606,8 +556,7 @@ namespace QuickReadNote
 		if (!input) return;
 		bool isPressed = input->GetControlState(g_controlID, 0);
 		if (isPressed && !g_controlWasPressed) {
-			//typeID 0x31 = BGSNote
-			if (*(UInt8*)((UInt8*)g_pendingNote + 4) == 0x31)
+			if (BGSNoteIsNoteForm(g_pendingNote))
 				ShowNoteMenu(g_pendingNote);
 			g_pendingNote = nullptr;
 		}
@@ -620,4 +569,3 @@ namespace QuickReadNote
 		g_maxLines = maxLines;
 	}
 }
-

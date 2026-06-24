@@ -1,5 +1,4 @@
 //prevents voice/dialogue sounds from slowing down during VATS
-//ported directly from SoundFilteringSoftware
 
 #include "VATSSpeechFix.h"
 #include "nvse/PluginAPI.h"
@@ -22,7 +21,6 @@ namespace VATSSpeechFix
 		constexpr UInt32 kAudioFlags_IgnoreTimescale = 0x200000;
 	}
 
-	//exact struct from SoundFilteringSoftware
 	class BSGameSound
 	{
 	public:

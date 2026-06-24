@@ -5,9 +5,11 @@
 #include "internal/Detours.h"
 #include "internal/CallTemplates.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 #include "internal/GameGlobals.h"
 #include "internal/globals.h"
 #include "internal/Mat3.h"
+#include "internal/NiLayout.h"
 #include "internal/settings.h"
 #include "PerlinNoise.hpp"
 #include <cmath>
@@ -364,11 +366,11 @@ typedef void(__thiscall* PickAnimations_t)(void*, float, float);
 
 struct DialogueVec3 { float x, y, z; };
 
-static void ClearPlayerDialogueMovement(void* player)
+static void ClearPlayerDialogueMovement(PlayerCharacter* player)
 {
 	if (!player) return;
 
-	void* mover = *(void**)((UInt8*)player + 0x190);
+	void* mover = player->actorMover;
 	if (!mover) return;
 
 	DialogueVec3 zero = {};
@@ -481,7 +483,7 @@ static void __fastcall Hook_SkipPickAnimations(void* actor, void*, float a1, flo
 
 	if (!g_playerMovementSettled && (g_inDialogue || g_MenuVisibilityArray[kMenuType_Dialogue]))
 	{
-		ClearPlayerDialogueMovement(actor);
+		ClearPlayerDialogueMovement(static_cast<PlayerCharacter*>(actor));
 		original(actor, a1, a2);
 		g_playerMovementSettled = true;
 	}
@@ -567,9 +569,7 @@ static GetObjectByName_t GetObjectByName = (GetObjectByName_t)0x4AAE30;
 static bool GetHeadPos(TESObjectREFR* ref, float& outX, float& outY, float& outZ)
 {
 	if (!ref) return false;
-	void* renderData = *(void**)((UInt8*)ref + 0x64);
-	if (!renderData) return false;
-	void* rootNode = *(void**)((UInt8*)renderData + 0x14);
+	void* rootNode = TESObjectREFRGetNiNodeRaw(ref);
 	if (!rootNode) return false;
 
 	//try head bone, fall back to neck
@@ -577,7 +577,7 @@ static bool GetHeadPos(TESObjectREFR* ref, float& outX, float& outY, float& outZ
 	if (!bone) bone = GetObjectByName(rootNode, "Bip01 Neck1");
 	if (!bone) return false;
 
-	float* worldPos = (float*)((UInt8*)bone + 0x8C);
+	float* worldPos = NiAVObjectAsView(bone)->world.translate;
 	outX = worldPos[0];
 	outY = worldPos[1];
 	outZ = worldPos[2];
@@ -669,7 +669,7 @@ static void ApplyCameraAngle(CameraAngle angle) {
 
 	//a result script can disable or delete the speaker mid-dialogue, revalidate before touching it
 	if (Engine::LookupFormByID(g_dialogueTargetID) != g_dialogueTarget) return;
-	if (!*(void**)((UInt8*)g_dialogueTarget + 0x64)) return; //renderData
+	if (!g_dialogueTarget->renderState) return;
 
 	//use actual head positions when available, fall back to estimated
 	float px, py, pz;
@@ -915,7 +915,7 @@ static void OnDialogueStart() {
 	PlayerCharacter* player = *g_thePlayerPtr;
 	if (!player) return;
 
-	g_wasFirstPerson = !*(bool*)((UInt8*)player + 0x64C); //bThirdPerson
+	g_wasFirstPerson = !player->bThirdPerson;
 	if (g_wasFirstPerson) {
 		SetFirstPerson(player, false);
 	}

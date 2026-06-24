@@ -4,13 +4,13 @@
 //banned" after the baseline snapshot counts as a transition.
 
 #include "OnCasinoBanHandler.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 #include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
-
-constexpr UInt32 kOffset_Player_CasinoDataList = 0x610;
-constexpr UInt32 kOffset_Casino_MaxWinnings = 0x210;
 
 struct SimpleListNode { void* item; SimpleListNode* next; };
 struct CasinoStats { UInt32 casinoRefID; UInt32 earnings; UInt32 unk08; };
@@ -42,19 +42,19 @@ namespace OnCasinoBanHandler {
 void Update()
 {
 	if (!g_eventManagerInterface) return;
-	void* player = *(void**)g_thePlayerPtr;
+	PlayerCharacter* player = *g_thePlayerPtr;
 	if (!player) return;
 
-	auto* list = *(SimpleListNode**)((UInt8*)player + kOffset_Player_CasinoDataList);
+	auto* list = reinterpret_cast<SimpleListNode*>(PlayerCharacterGetCasinoDataList(player));
 
 	for (SimpleListNode* n = list; n; n = n->next) {
 		auto* entry = (CasinoStats*)n->item;
 		if (!entry) continue;
 
-		void* casino = Engine::LookupFormByID(entry->casinoRefID);
+		auto* casino = static_cast<TESForm*>(Engine::LookupFormByID(entry->casinoRefID));
 		if (!casino) continue;
 
-		UInt32 max = *(UInt32*)((UInt8*)casino + kOffset_Casino_MaxWinnings);
+		UInt32 max = TESCasinoGetMaxWinnings(casino);
 		bool nowBanned = entry->earnings >= max;
 		auto* tracked = GetTracked(entry->casinoRefID);
 		if (!tracked) {

@@ -4,16 +4,11 @@
 #include "OnMenuFilterChangeHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/EventDispatch.h"
+#include "internal/MenuLayout.h"
 
 constexpr UInt32 kMenuType_Container = 1008;
 constexpr UInt32 kMenuType_Barter = 1053;
 constexpr UInt32 kMenuType_Recipe = 1077;
-
-constexpr UInt32 kOffset_InventoryMenu_Filter = 0x84;
-constexpr UInt32 kOffset_ContainerMenu_LeftFilter = 0x8C;
-constexpr UInt32 kOffset_ContainerMenu_RightFilter = 0x90;
-constexpr UInt32 kOffset_BarterMenu_LeftFilter = 0x9C;
-constexpr UInt32 kOffset_BarterMenu_RightFilter = 0xA0;
 
 static UInt32 g_lastInventoryFilter = 0xFFFFFFFF;
 static UInt32 g_lastContainerLeftFilter = 0xFFFFFFFF;
@@ -41,10 +36,10 @@ void Update() {
     void* invMenu = *(void**)0x11D9EA4;
     if (invMenu) {
         if (invMenu != g_lastInventoryMenu) {
-            g_lastInventoryFilter = *(UInt32*)((UInt8*)invMenu + kOffset_InventoryMenu_Filter);
+            g_lastInventoryFilter = InventoryMenuGetFilter(invMenu);
             g_lastInventoryMenu = invMenu;
         } else {
-            UInt32 currentFilter = *(UInt32*)((UInt8*)invMenu + kOffset_InventoryMenu_Filter);
+            UInt32 currentFilter = InventoryMenuGetFilter(invMenu);
             if (currentFilter != g_lastInventoryFilter && g_lastInventoryFilter != 0xFFFFFFFF)
                 DispatchFilterChangeEvent(1002, g_lastInventoryFilter, currentFilter, 0);
             g_lastInventoryFilter = currentFilter;
@@ -57,12 +52,12 @@ void Update() {
     void* contMenu = *(void**)0x11D93F8;
     if (contMenu) {
         if (contMenu != g_lastContainerMenu) {
-            g_lastContainerLeftFilter = *(UInt32*)((UInt8*)contMenu + kOffset_ContainerMenu_LeftFilter);
-            g_lastContainerRightFilter = *(UInt32*)((UInt8*)contMenu + kOffset_ContainerMenu_RightFilter);
+            g_lastContainerLeftFilter = ContainerMenuGetLeftFilter(contMenu);
+            g_lastContainerRightFilter = ContainerMenuGetRightFilter(contMenu);
             g_lastContainerMenu = contMenu;
         } else {
-            UInt32 leftFilter = *(UInt32*)((UInt8*)contMenu + kOffset_ContainerMenu_LeftFilter);
-            UInt32 rightFilter = *(UInt32*)((UInt8*)contMenu + kOffset_ContainerMenu_RightFilter);
+            UInt32 leftFilter = ContainerMenuGetLeftFilter(contMenu);
+            UInt32 rightFilter = ContainerMenuGetRightFilter(contMenu);
             if (leftFilter != g_lastContainerLeftFilter && g_lastContainerLeftFilter != 0xFFFFFFFF)
                 DispatchFilterChangeEvent(kMenuType_Container, g_lastContainerLeftFilter, leftFilter, 0);
             if (rightFilter != g_lastContainerRightFilter && g_lastContainerRightFilter != 0xFFFFFFFF)
@@ -79,12 +74,12 @@ void Update() {
     void* bartMenu = *(void**)0x11D8FA4;
     if (bartMenu) {
         if (bartMenu != g_lastBarterMenu) {
-            g_lastBarterLeftFilter = *(UInt32*)((UInt8*)bartMenu + kOffset_BarterMenu_LeftFilter);
-            g_lastBarterRightFilter = *(UInt32*)((UInt8*)bartMenu + kOffset_BarterMenu_RightFilter);
+            g_lastBarterLeftFilter = BarterMenuGetLeftFilter(bartMenu);
+            g_lastBarterRightFilter = BarterMenuGetRightFilter(bartMenu);
             g_lastBarterMenu = bartMenu;
         } else {
-            UInt32 leftFilter = *(UInt32*)((UInt8*)bartMenu + kOffset_BarterMenu_LeftFilter);
-            UInt32 rightFilter = *(UInt32*)((UInt8*)bartMenu + kOffset_BarterMenu_RightFilter);
+            UInt32 leftFilter = BarterMenuGetLeftFilter(bartMenu);
+            UInt32 rightFilter = BarterMenuGetRightFilter(bartMenu);
             if (leftFilter != g_lastBarterLeftFilter && g_lastBarterLeftFilter != 0xFFFFFFFF)
                 DispatchFilterChangeEvent(kMenuType_Barter, g_lastBarterLeftFilter, leftFilter, 0);
             if (rightFilter != g_lastBarterRightFilter && g_lastBarterRightFilter != 0xFFFFFFFF)

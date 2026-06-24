@@ -4,6 +4,7 @@
 #include "OnMenuSideChangeHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/EventDispatch.h"
+#include "internal/MenuLayout.h"
 
 constexpr UInt32 kMenuType_Container = 1008;
 constexpr UInt32 kMenuType_Barter = 1053;
@@ -14,13 +15,7 @@ static void* g_lastContainerMenu = nullptr;
 static void* g_lastBarterMenu = nullptr;
 
 static UInt32 GetCurrentSide(void* menu, UInt32 menuType) {
-    UInt32 activeListOffset = (menuType == kMenuType_Container) ? 0xF8 : 0x108;
-    UInt32 leftListOffset = (menuType == kMenuType_Container) ? 0x98 : 0xA8;
-
-    UInt32 activeList = *(UInt32*)((UInt8*)menu + activeListOffset);
-    UInt32 leftList = (UInt32)menu + leftListOffset;
-
-    return (activeList == leftList) ? 0 : 1;
+    return (menuType == kMenuType_Container) ? ContainerMenuGetCurrentSide(menu) : BarterMenuGetCurrentSide(menu);
 }
 
 static void DispatchSideChangeEvent(UInt32 menuID, UInt32 oldSide, UInt32 newSide) {

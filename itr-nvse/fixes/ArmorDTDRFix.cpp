@@ -3,8 +3,11 @@
 //NOT hot-reloadable - requires game restart
 
 #include "ArmorDTDRFix.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/Detours.h"
+#include "internal/GameLayout.h"
 
 #include "internal/globals.h"
 #include "internal/CallTemplates.h"
@@ -13,17 +16,6 @@ namespace ArmorDTDRFix
 {
 	//HighProcess::DirtyCachedActorValues
 	constexpr uint32_t kAddr_DirtyCachedActorValues = 0x900780;
-
-	struct BaseProcess {
-		char pad[0x28];
-		uint32_t processLevel; //0=High, 1=MiddleHigh, 2=MiddleLow, 3=Low
-	};
-	static_assert(offsetof(BaseProcess, processLevel) == 0x28);
-
-	struct Actor {
-		char pad[0x68];
-		BaseProcess* baseProcess;
-	};
 
 	typedef void(__thiscall* ResetArmorRating_t)(void*);
 
@@ -35,10 +27,10 @@ namespace ArmorDTDRFix
 
 		//baseProcess is uninitialized during Character::Character construction
 		//refID is 0 until the form is fully created, skip cache dirtying for half-constructed actors
-		uint32_t refID = *(uint32_t*)((char*)character + 0x0C);
-		if (!refID) return;
+		auto* actor = reinterpret_cast<Actor*>(character);
+		if (!actor->refID) return;
 
-		BaseProcess* process = ((Actor*)character)->baseProcess;
+		BaseProcess* process = actor->baseProcess;
 		if (process && process->processLevel == 0) {
 			ThisCall(kAddr_DirtyCachedActorValues, process, 76); //kAV_DamageThreshold
 			ThisCall(kAddr_DirtyCachedActorValues, process, 18); //kAV_DamageResistance
@@ -60,4 +52,3 @@ namespace ArmorDTDRFix
 		}
 	}
 }
-

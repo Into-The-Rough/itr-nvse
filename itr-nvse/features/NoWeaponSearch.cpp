@@ -9,7 +9,7 @@
 #include "internal/ScopedLock.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
-#include "internal/CallTemplates.h"
+#include "internal/GameLayout.h"
 #include "internal/settings.h"
 #include "internal/globals.h"
 #include "features/NPCAntidoteUse.h"
@@ -66,14 +66,14 @@ namespace NoWeaponSearch
 			return CallOriginal(combatState);
 		}
 
-		void* controller = *(void**)((char*)combatState + 0x1C4);
+		void* controller = CombatStateGetCombatController(combatState);
 		if (!controller)
 		{
 			g_inCombatItemSearch = false;
 			return CallOriginal(combatState);
 		}
 		Actor* actor = (Actor*)Engine::CombatController_GetPackageOwner(controller);
-		if (!actor || !*(void**)((char*)actor + 0x68) || !*(void**)((char*)actor + 0x64))
+		if (!actor || !actor->baseProcess || !actor->renderState)
 		{
 			g_inCombatItemSearch = false;
 			return CallOriginal(combatState);
@@ -142,11 +142,6 @@ namespace NoWeaponSearch
 	}
 }
 
-inline bool IsActorRef(TESObjectREFR* ref) {
-	if (!ref) return false;
-	return ThisCall<bool>(*(UInt32*)(*(UInt32*)ref + 0x100), ref);
-}
-
 static ParamInfo kParams_SetNoWeaponSearch[1] = {
 	{"disable", kParamType_Integer, 0}
 };
@@ -158,7 +153,7 @@ bool Cmd_SetNoWeaponSearch_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &disable))
 		return true;
 
-	if (IsActorRef(thisObj))
+	if (Engine::TESObjectREFR_IsActor(thisObj))
 	{
 		NoWeaponSearch::Set((Actor*)thisObj, disable != 0);
 		*result = 1;
@@ -169,7 +164,7 @@ bool Cmd_SetNoWeaponSearch_Execute(COMMAND_ARGS)
 bool Cmd_GetNoWeaponSearch_Execute(COMMAND_ARGS)
 {
 	*result = 0;
-	if (IsActorRef(thisObj))
+	if (Engine::TESObjectREFR_IsActor(thisObj))
 		*result = NoWeaponSearch::Get((Actor*)thisObj) ? 1 : 0;
 	return true;
 }

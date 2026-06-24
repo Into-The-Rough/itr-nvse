@@ -1,8 +1,8 @@
 //dead actors inherit cell/zone ownership so looting corpses can be stealing
 
 #include "OwnedCorpses.h"
-#include "internal/NVSEMinimal.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 #include "internal/globals.h"
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"
@@ -15,26 +15,21 @@ namespace OwnedCorpses
 
 	//find best faction from dead actor's base form
 	//prefers factions with reputation records (real social factions, not sniffer/utility)
-	static void* GetBestFaction(void* ref)
+	static TESFaction* GetBestFaction(TESObjectREFR* ref)
 	{
-		void* baseForm = *(void**)((char*)ref + 0x20);
-		if (!baseForm) return nullptr;
+		if (!ref || !ref->baseForm) return nullptr;
 
-		//tList<FactionListData> at TESActorBase+0x5C
-		struct FactionEntry { void* faction; UInt8 rank; };
-		struct FactionNode { FactionEntry* item; FactionNode* next; };
-
-		auto* node = (FactionNode*)((char*)baseForm + 0x5C);
-		void* fallback = nullptr;
+		auto* actorBase = static_cast<TESActorBase*>(ref->baseForm);
+		auto* node = actorBase->baseData.factionList.Head();
+		TESFaction* fallback = nullptr;
 
 		while (node && node->item)
 		{
-			void* faction = node->item->faction;
+			TESFaction* faction = node->item->faction;
 			if (faction)
 			{
 				if (!fallback) fallback = faction;
-				//TESFaction::reputation at +0x38, non-null = real social faction
-				if (*(void**)((char*)faction + 0x38))
+				if (faction->reputation)
 					return faction;
 			}
 			node = node->next;
@@ -70,13 +65,13 @@ namespace OwnedCorpses
 	{
 		void* owner = ThisCall<void*>(0x567770, ref); //GetMyOwner (ExtraOwnership)
 
-		bool isActor = ThisCall<bool>(*(UInt32*)(*(UInt32*)ref + 0x100), ref); //vtable+0x100
+		bool isActor = Engine::TESObjectREFR_IsActor(static_cast<TESObjectREFR*>(ref));
 		if (isActor)
 		{
 			if (!g_enabled)
 				return owner;
 
-			bool isDead = ThisCall<bool>(*(UInt32*)(*(UInt32*)ref + 0x22C), ref, 0); //vtable+0x22C
+			bool isDead = Engine::Actor_IsDead(static_cast<Actor*>(ref), false);
 			if (!isDead)
 				return owner;
 
@@ -87,11 +82,16 @@ namespace OwnedCorpses
 			void* zoneOwner = GetZoneOrCellOwner(ref);
 			if (zoneOwner) return zoneOwner;
 
-			return GetBestFaction(ref);
+			return GetBestFaction(static_cast<TESObjectREFR*>(ref));
 		}
 
 		//non-actor: full vanilla fallback chain via trampoline
 		return g_detour.GetTrampoline<void*(__thiscall*)(void*)>()(ref);
+	}
+
+	static bool __fastcall IsDeadForStealAlarm(Actor* actor, void*)
+	{
+		return Engine::Actor_IsDead(actor, false);
 	}
 
 	//StealAlarm witness hook
@@ -110,11 +110,8 @@ namespace OwnedCorpses
 			cmp g_enabled, 0
 			je useAsWitness
 
-			//call IsDead(0) via vtable+0x22C
-			push 0
 			mov ecx, edx
-			mov eax, [ecx]
-			call [eax + 0x22C]
+			call IsDeadForStealAlarm
 			test al, al
 			jnz factionSearch //dead - find a real witness
 

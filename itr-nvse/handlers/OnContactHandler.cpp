@@ -3,14 +3,19 @@
 //g_activeContacts coalesces multiple contact points for the same watched pair.
 
 #include "OnContactHandler.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
 #include "internal/ScopedLock.h"
 #include "internal/Detours.h"
+#include "internal/GameLayout.h"
+#include "internal/HavokLayout.h"
 #include <vector>
 #include <algorithm>
+#include <cstddef>
 #include <unordered_set>
 #include <unordered_map>
 
@@ -96,12 +101,12 @@ static const _bhkNiCollisionObject_Getbhk bhkNiCollisionObject_Getbhk = (_bhkNiC
 static bool HasAnyWatchSnapshot();
 static bool ShouldQueueCandidateLocked(UInt32 refID, UInt32 baseID = 0);
 
-//reads refID and (optionally) the base formID straight off the resolved ref, no form-table lookup
-static UInt32 RefrToRefIDBase(void* refr, UInt32* outBaseID) {
-	UInt32 refID = *(UInt32*)((UInt8*)refr + 0x0C);
+//Reads refID and base formID straight off the resolved ref, no form-table lookup.
+static UInt32 RefrToRefIDBase(TESObjectREFR* refr, UInt32* outBaseID) {
+	UInt32 refID = refr->refID;
 	if (outBaseID) {
-		void* baseForm = *(void**)((UInt8*)refr + 0x20);
-		*outBaseID = baseForm ? *(UInt32*)((UInt8*)baseForm + 0x0C) : 0;
+		TESForm* baseForm = refr->baseForm;
+		*outBaseID = baseForm ? baseForm->refID : 0;
 	}
 	return refID;
 }
@@ -116,22 +121,21 @@ static UInt32 ResolveCollidableToRefID(void* collidable, UInt32* outBaseID = nul
 	if (rigidBody) {
 		void* collObj = GetbhkCollisionObject(rigidBody);
 		if (collObj) {
-			void* niNode = *(void**)((UInt8*)collObj + 0x08);
+			void* niNode = reinterpret_cast<BhkCollisionObjectView*>(collObj)->niNode;
 			if (niNode) {
-				void* refr = FindReferenceFor3D(niNode);
+				auto* refr = reinterpret_cast<TESObjectREFR*>(FindReferenceFor3D(niNode));
 				if (refr) return RefrToRefIDBase(refr, outBaseID);
 			}
 		}
 	}
 
-	//hkpCollidable is embedded at hkpWorldObject+0x10, so worldObj = root - 0x10
-	void* worldObj = (void*)((UInt8*)root - 0x10);
+	void* worldObj = HkpWorldObjectFromCollidableRoot(root);
 	//Use bhkNiCollisionObject_Getbhk here; the manual wrapper walk is not reliable for phantoms.
 	void* collObj = bhkNiCollisionObject_Getbhk(worldObj);
 	if (collObj) {
-		void* niNode = *(void**)((UInt8*)collObj + 0x08);
+		void* niNode = reinterpret_cast<BhkCollisionObjectView*>(collObj)->niNode;
 		if (niNode) {
-			void* refr = FindReferenceFor3D(niNode);
+			auto* refr = reinterpret_cast<TESObjectREFR*>(FindReferenceFor3D(niNode));
 			if (refr) return RefrToRefIDBase(refr, outBaseID);
 		}
 	}
@@ -141,7 +145,7 @@ static UInt32 ResolveCollidableToRefID(void* collidable, UInt32* outBaseID = nul
 
 static UInt32 ResolveWorldObjToRefID(void* worldObj) {
 	if (!worldObj) return 0;
-	void* collidable = (void*)((UInt8*)worldObj + 0x10);
+	void* collidable = static_cast<UInt8*>(worldObj) + kHkpWorldObject_Collidable;
 	return ResolveCollidableToRefID(collidable);
 }
 
@@ -163,9 +167,9 @@ typedef void (__thiscall *_FOCollisionListener_contactPointAdded)(void*, void*);
 static void __fastcall Hook_ContactPointAdded(void* listener, void* edx, void* event) {
 	s_rigidBodyDetour.GetTrampoline<_FOCollisionListener_contactPointAdded>()(listener, event);
 
-	//hkpContactPointAddedEvent: m_bodyA at +0x00, m_bodyB at +0x04
-	void* bodyA = *(void**)((UInt8*)event + 0x00);
-	void* bodyB = *(void**)((UInt8*)event + 0x04);
+	auto* contactEvent = reinterpret_cast<HkpContactPointAddedEventView*>(event);
+	void* bodyA = contactEvent->bodyA;
+	void* bodyB = contactEvent->bodyB;
 
 	{
 		ScopedLock lock(&g_contactLock);
@@ -186,28 +190,27 @@ static void __fastcall Hook_ContactPointAdded(void* listener, void* edx, void* e
 }
 
 static bool IsActorTypeID(UInt8 typeID) {
-	return typeID == 0x3B || typeID == 0x3C;
+	return typeID == kFormType_ACHR || typeID == kFormType_ACRE;
 }
 
-static bool IsDeadActor(void* actor) {
-	return actor && (*(UInt32*)((UInt8*)actor + 0x108) == 2);
+static bool IsDeadActor(Actor* actor) {
+	return actor && actor->lifeState == 2;
 }
 
-static bool HasLoadedRootNode(void* ref) {
+static bool HasLoadedRootNode(TESObjectREFR* ref) {
 	if (!ref) return false;
-	void* renderState = *(void**)((UInt8*)ref + 0x64);
-	return renderState && (*(void**)((UInt8*)renderState + 0x14) != nullptr);
+	return ref->renderState && ref->renderState->niNode;
 }
 
-static float GetRefPosX(void* ref) { return *(float*)((UInt8*)ref + 0x30); }
-static float GetRefPosY(void* ref) { return *(float*)((UInt8*)ref + 0x34); }
-static float GetRefPosZ(void* ref) { return *(float*)((UInt8*)ref + 0x38); }
-static UInt32 GetRefID(void* ref) { return *(UInt32*)((UInt8*)ref + 0x0C); }
+static float GetRefPosX(TESObjectREFR* ref) { return ref->posX; }
+static float GetRefPosY(TESObjectREFR* ref) { return ref->posY; }
+static float GetRefPosZ(TESObjectREFR* ref) { return ref->posZ; }
+static UInt32 GetRefID(TESObjectREFR* ref) { return ref ? ref->refID : 0; }
 
 static UInt32 GetBaseFormID(TESObjectREFR* ref) {
 	if (!ref) return 0;
-	void* baseForm = *(void**)((UInt8*)ref + 0x20);
-	return baseForm ? *(UInt32*)((UInt8*)baseForm + 0x0C) : 0;
+	TESForm* baseForm = ref->baseForm;
+	return baseForm ? baseForm->refID : 0;
 }
 
 static UInt32 GetBaseFormID(UInt32 refID) {
@@ -245,11 +248,12 @@ static bool ShouldQueueCandidateLocked(UInt32 refID, UInt32 baseID) {
 	return g_watchedBaseSnapshot.count(baseID) != 0;
 }
 
-static void* GetActorController(void* form) {
-	void* process = *(void**)((UInt8*)form + 0x68);
+static BhkCharacterControllerView* GetActorController(Actor* actor) {
+	BaseProcess* process = actor ? actor->baseProcess : nullptr;
 	if (!process) return nullptr;
-	if (*(UInt32*)((UInt8*)process + 0x28) > 1) return nullptr;
-	return *(void**)((UInt8*)process + 0x138);
+	if (process->processLevel > 1) return nullptr;
+	return reinterpret_cast<BhkCharacterControllerView*>(
+		reinterpret_cast<ProcessControllerView*>(process)->characterController);
 }
 
 static bool HasRealContactPair(UInt32 watchedRefID, UInt32 otherRefID) {
@@ -269,13 +273,6 @@ static void DispatchContactEventDirect(UInt32 watchedRefID, UInt32 otherRefID, U
 	g_eventManagerInterface->DispatchEvent(eventName, watched, (TESForm*)other, (int)channel);
 }
 
-struct ProcessManagerLite {
-	UInt32 unk000;
-	struct { void** vtbl; void** data; UInt16 capacity; UInt16 firstFreeEntry; UInt16 numObjs; UInt16 growSize; } objects;
-	UInt32 beginOffsets[4];
-	UInt32 endOffsets[4];
-};
-
 static void CollectLoadedDeadActors(std::vector<DeadActorCandidate>& out) {
 	auto* pm = reinterpret_cast<ProcessManagerLite*>(g_processManager);
 	if (!pm || !pm->objects.data) return;
@@ -290,9 +287,9 @@ static void CollectLoadedDeadActors(std::vector<DeadActorCandidate>& out) {
 		if (begin > upper) begin = upper;
 		if (end > upper) end = upper;
 		for (UInt32 i = begin; i < end; i++) {
-			auto* actor = (TESObjectREFR*)pm->objects.data[i];
+			auto* actor = reinterpret_cast<Actor*>(pm->objects.data[i]);
 			if (!actor) continue;
-			if (!IsActorTypeID(*(UInt8*)((UInt8*)actor + 0x04))) continue;
+			if (!IsActorTypeID(actor->typeID)) continue;
 			UInt32 refID = GetRefID(actor);
 			if (!refID || !seenRefIDs.emplace(refID).second) continue;
 			if (!IsDeadActor(actor) || !HasLoadedRootNode(actor)) continue;
@@ -305,7 +302,7 @@ static void AddWatchedActorCandidate(TESObjectREFR* actor, std::unordered_set<UI
 	std::vector<WatchedActorCandidate>& out)
 {
 	if (!actor) return;
-	if (!IsActorTypeID(*(UInt8*)((UInt8*)actor + 0x04))) return;
+	if (!IsActorTypeID(actor->typeID)) return;
 	UInt32 refID = GetRefID(actor);
 	if (!refID || !seenRefIDs.emplace(refID).second) return;
 	if (!IsRefWatchedOnMain(actor)) return;
@@ -343,7 +340,7 @@ static bool ShouldSynthesizeDeadActorContact(TESObjectREFR* watched, const DeadA
 	if (!watched || !deadActor.ref) return false;
 	if (GetRefID(watched) == deadActor.refID) return false;
 	if (!HasLoadedRootNode(watched)) return false;
-	if (IsDeadActor(watched)) return false;
+	if (IsDeadActor(reinterpret_cast<Actor*>(watched))) return false;
 
 	float dx = GetRefPosX(watched) - deadActor.posX;
 	float dy = GetRefPosY(watched) - deadActor.posY;
@@ -416,33 +413,28 @@ static void PollContactEnd() {
 		if (it->first.channel != kChannel_RigidBody && it->first.channel != kChannel_CharProxy)
 			continue;
 
-		auto* form = (TESObjectREFR*)Engine::LookupFormByID(it->first.refA);
+		auto* form = reinterpret_cast<TESObjectREFR*>(Engine::LookupFormByID(it->first.refA));
 		if (!form) { stale.push_back(it->first); continue; }
 
-		UInt8 typeID = *((UInt8*)form + 0x04);
-		if (typeID != 0x3B && typeID != 0x3C) {
+		if (!IsActorTypeID(form->typeID)) {
 			stale.push_back(it->first);
 			continue;
 		}
 
-		void* ctrl = GetActorController(form);
+		BhkCharacterControllerView* ctrl = GetActorController(reinterpret_cast<Actor*>(form));
 		if (!ctrl) { stale.push_back(it->first); continue; }
 
-		void** bodies = *(void***)((UInt8*)ctrl + 0x3B4);
-		UInt32 count = *(UInt32*)((UInt8*)ctrl + 0x3B8);
-
 		bool found = false;
-		for (UInt32 i = 0; i < count && bodies; i++) {
-			if (!bodies[i]) continue;
-			UInt32 contactRefID = ResolveWorldObjToRefID(bodies[i]);
+		auto& contactBodies = ctrl->proxy.pointCollector.contactBodies;
+		for (SInt32 i = 0; i < contactBodies.size && contactBodies.data; i++) {
+			if (!contactBodies.data[i]) continue;
+			UInt32 contactRefID = ResolveWorldObjToRefID(contactBodies.data[i]);
 			if (contactRefID == it->first.refB) { found = true; break; }
 		}
 
 		if (!found) {
-			void* bodyUnderFeet = *(void**)((UInt8*)ctrl + 0x60C);
-			UInt8 noContact = *((UInt8*)ctrl + 0x608);
-			if (!noContact && bodyUnderFeet) {
-				UInt32 feetRefID = ResolveWorldObjToRefID(bodyUnderFeet);
+			if (!ctrl->noContact && ctrl->bodyUnderFeet) {
+				UInt32 feetRefID = ResolveWorldObjToRefID(ctrl->bodyUnderFeet);
 				if (feetRefID == it->first.refB) found = true;
 			}
 		}
@@ -476,8 +468,8 @@ static void __fastcall Hook_CharProxyContactAdded(void* proxy, void* edx, void* 
 		if (!actorRefID) return;
 	}
 
-	//hkpRootCdPoint: m_rootCollidableB at +0x48 (verified from bhkCharacterListener disasm)
-	void* otherCollidable = *(void**)((UInt8*)point + 0x48);
+	auto* rootPoint = reinterpret_cast<HkpRootCdPointView*>(point);
+	void* otherCollidable = rootPoint->rootCollidableB;
 	UInt32 otherRefID = ResolveCollidableToRefID(otherCollidable);
 
 	ScopedLock lock(&g_contactLock);
@@ -501,7 +493,7 @@ typedef void (__thiscall *_phantomOverlap)(void*, void*);
 
 static void PhantomOverlapCommon(void* phantom, void* cdBody, bool isAdd) {
 	void* rootCollidable = cdBody ? getRoot(cdBody) : nullptr;
-	void* bodyWorldObj = rootCollidable ? (void*)((UInt8*)rootCollidable - 0x10) : nullptr;
+	void* bodyWorldObj = HkpWorldObjectFromCollidableRoot(rootCollidable);
 	UInt32 mappedPhantomRefID = 0;
 	UInt32 mappedBodyRefID = 0;
 
@@ -549,14 +541,13 @@ static void __fastcall Hook_CachingRemove(void* phantom, void* edx, void* cdBody
 	PhantomOverlapCommon(phantom, cdBody, false);
 }
 
-static void MapActorPhantom(void* form, UInt32 refID,
+static void MapActorPhantom(Actor* actor, UInt32 refID,
 	std::unordered_map<void*, UInt32>& phantomMap)
 {
-	void* ctrl = GetActorController(form);
+	BhkCharacterControllerView* ctrl = GetActorController(actor);
 	if (!ctrl) return;
-	void* chrPhantom = *(void**)((UInt8*)ctrl + 0x594);
-	if (!chrPhantom) return;
-	void* havokPhantom = *(void**)((UInt8*)chrPhantom + 0x08);
+	BhkCharacterPhantomView* chrPhantom = ctrl->characterPhantom;
+	void* havokPhantom = chrPhantom ? chrPhantom->havokPhantom : nullptr;
 	if (havokPhantom) phantomMap[havokPhantom] = refID;
 }
 
@@ -565,15 +556,15 @@ static void RebuildProxyMap() {
 	std::unordered_map<void*, UInt32> newPhantomMap;
 
 	for (auto refID : g_watchedRefIDs) {
-		auto* form = (TESObjectREFR*)Engine::LookupFormByID(refID);
+		auto* form = reinterpret_cast<TESObjectREFR*>(Engine::LookupFormByID(refID));
 		if (!form) continue;
-		UInt8 typeID = *((UInt8*)form + 0x04);
-		if (typeID != 0x3B && typeID != 0x3C) continue;
-		void* ctrl = GetActorController(form);
+		if (!IsActorTypeID(form->typeID)) continue;
+		auto* actor = reinterpret_cast<Actor*>(form);
+		BhkCharacterControllerView* ctrl = GetActorController(actor);
 		if (!ctrl) continue;
-		void* proxy = *(void**)((UInt8*)ctrl + 0x08);
+		void* proxy = ctrl->proxy.serializable.hkObject;
 		if (proxy) newProxyMap[proxy] = refID;
-		MapActorPhantom(form, refID, newPhantomMap);
+		MapActorPhantom(actor, refID, newPhantomMap);
 	}
 
 	auto* pm = reinterpret_cast<ProcessManagerLite*>(g_processManager);
@@ -585,33 +576,32 @@ static void RebuildProxyMap() {
 			if (begin > upper) begin = upper;
 			if (end > upper) end = upper;
 			for (UInt32 i = begin; i < end; i++) {
-				void* actor = pm->objects.data[i];
+				auto* actor = reinterpret_cast<Actor*>(pm->objects.data[i]);
 				if (!actor) continue;
-				UInt8 typeID = *((UInt8*)actor + 0x04);
-				if (typeID != 0x3B && typeID != 0x3C) continue;
-				UInt32 refID = *(UInt32*)((UInt8*)actor + 0x0C);
+				if (!IsActorTypeID(actor->typeID)) continue;
+				UInt32 refID = actor->refID;
 				if (!refID) continue;
-				if (IsRefWatchedOnMain((TESObjectREFR*)actor)) {
-					void* ctrl = GetActorController(actor);
+				if (IsRefWatchedOnMain(actor)) {
+					BhkCharacterControllerView* ctrl = GetActorController(actor);
 					if (ctrl) {
-						void* proxy = *(void**)((UInt8*)ctrl + 0x08);
+						void* proxy = ctrl->proxy.serializable.hkObject;
 						if (proxy) newProxyMap[proxy] = refID;
 					}
 				}
 				MapActorPhantom(actor, refID, newPhantomMap);
 			}
 		}
-		void** playerPtr = (void**)g_thePlayerPtr;
-		if (*playerPtr) {
-			UInt32 playerRefID = *(UInt32*)((UInt8*)*playerPtr + 0x0C);
-			if (IsRefWatchedOnMain((TESObjectREFR*)*playerPtr)) {
-				void* ctrl = GetActorController(*playerPtr);
+		if (*g_thePlayerPtr) {
+			auto* player = static_cast<Actor*>(*g_thePlayerPtr);
+			UInt32 playerRefID = player->refID;
+			if (IsRefWatchedOnMain(player)) {
+				BhkCharacterControllerView* ctrl = GetActorController(player);
 				if (ctrl) {
-					void* proxy = *(void**)((UInt8*)ctrl + 0x08);
+					void* proxy = ctrl->proxy.serializable.hkObject;
 					if (proxy) newProxyMap[proxy] = playerRefID;
 				}
 			}
-			MapActorPhantom(*playerPtr, playerRefID, newPhantomMap);
+			MapActorPhantom(player, playerRefID, newPhantomMap);
 		}
 	}
 
@@ -698,29 +688,23 @@ void Update()
 			UInt32 refID = watchedActor.refID;
 			auto* form = watchedActor.ref;
 			if (!form) continue;
-			UInt8 typeID = *((UInt8*)form + 0x04);
-			if (typeID != 0x3B && typeID != 0x3C) continue;
+			if (!IsActorTypeID(form->typeID)) continue;
 
-			void* process = *(void**)((UInt8*)form + 0x68);
-			if (!process) continue;
-			if (*(UInt32*)((UInt8*)process + 0x28) > 1) continue;
-			void* ctrl = *(void**)((UInt8*)process + 0x138);
+			auto* actor = reinterpret_cast<Actor*>(form);
+			BhkCharacterControllerView* ctrl = GetActorController(actor);
 			if (!ctrl) continue;
 
 			//Collect seed events first so handlers cannot mutate watch state mid-scan.
-			void** bodies = *(void***)((UInt8*)ctrl + 0x3B4);
-			UInt32 count = *(UInt32*)((UInt8*)ctrl + 0x3B8);
-			for (UInt32 i = 0; i < count && bodies; i++) {
-				if (!bodies[i]) continue;
-				UInt32 otherRefID = ResolveWorldObjToRefID(bodies[i]);
+			auto& contactBodies = ctrl->proxy.pointCollector.contactBodies;
+			for (SInt32 i = 0; i < contactBodies.size && contactBodies.data; i++) {
+				if (!contactBodies.data[i]) continue;
+				UInt32 otherRefID = ResolveWorldObjToRefID(contactBodies.data[i]);
 				if (otherRefID && otherRefID != refID)
 					seedEvents.push_back({refID, otherRefID, kChannel_CharProxy, true});
 			}
 
-			UInt8 noContact = *((UInt8*)ctrl + 0x608);
-			void* bodyUnderFeet = *(void**)((UInt8*)ctrl + 0x60C);
-			if (!noContact && bodyUnderFeet) {
-				UInt32 feetRefID = ResolveWorldObjToRefID(bodyUnderFeet);
+			if (!ctrl->noContact && ctrl->bodyUnderFeet) {
+				UInt32 feetRefID = ResolveWorldObjToRefID(ctrl->bodyUnderFeet);
 				if (feetRefID && feetRefID != refID)
 					seedEvents.push_back({refID, feetRefID, kChannel_CharProxy, true});
 			}

@@ -6,10 +6,14 @@
 #include <cstdint>
 
 #include "OnJumpLandHandler.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
+#include "internal/GameLayout.h"
+#include "internal/HavokLayout.h"
 
 enum HkCharState : UInt32 {
 	kHkState_OnGround = 0,
@@ -19,23 +23,6 @@ enum HkCharState : UInt32 {
 	kHkState_Flying = 4,
 	kHkState_Swimming = 5,
 	kHkState_Projectile = 6,
-};
-
-template <typename T>
-struct NiTArrayLite {
-	void** vtbl;
-	T* data;
-	UInt16 capacity;
-	UInt16 firstFreeEntry;
-	UInt16 numObjs;
-	UInt16 growSize;
-};
-
-struct ProcessManagerLite {
-	UInt32 unk000;
-	NiTArrayLite<void*> objects;
-	UInt32 beginOffsets[4];
-	UInt32 endOffsets[4];
 };
 
 struct TrackedEntry {
@@ -75,27 +62,27 @@ struct UpdateGuard {
 	~UpdateGuard() { s_inUpdate = false; }
 };
 
-static UInt32 ReadState(const void* charCtrl) {
-	return charCtrl ? *(const UInt32*)((const UInt8*)charCtrl + 0x3F0) : 0xFFFFFFFF;
+static UInt32 ReadState(const BhkCharacterControllerView* charCtrl) {
+	return charCtrl ? charCtrl->chrContext.hkState : 0xFFFFFFFF;
 }
 
-static float ReadFallTime(const void* charCtrl) {
-	return charCtrl ? *(const float*)((const UInt8*)charCtrl + 0x548) : 0.0f;
+static float ReadFallTime(const BhkCharacterControllerView* charCtrl) {
+	return charCtrl ? charCtrl->fallTime : 0.0f;
 }
 
-static void* GetCharController(void* actor) {
+static BhkCharacterControllerView* GetCharController(Actor* actor) {
 	if (!actor) return nullptr;
 
-	UInt8 typeID = *((UInt8*)actor + 4);
-	if (typeID != 0x3B && typeID != 0x3C) return nullptr;
+	if (actor->typeID != kFormType_ACHR && actor->typeID != kFormType_ACRE)
+		return nullptr;
 
-	void* process = *(void**)((UInt8*)actor + 0x68);
+	BaseProcess* process = actor->baseProcess;
 	if (!process) return nullptr;
 
-	UInt32 processLevel = *(UInt32*)((UInt8*)process + 0x28);
-	if (processLevel > 1) return nullptr;
+	if (process->processLevel > 1) return nullptr;
 
-	return *(void**)((UInt8*)process + 0x138);
+	return reinterpret_cast<BhkCharacterControllerView*>(
+		reinterpret_cast<ProcessControllerView*>(process)->characterController);
 }
 
 static void EnsureReserved() {
@@ -123,12 +110,12 @@ static void QueueEdgeEvents(UInt32 refID, UInt32 prevState, float prevFallTime, 
 		s_pending.push_back({2, refID, prevFallTime});
 }
 
-static void ProcessActor(void* actor) {
+static void ProcessActor(Actor* actor) {
 	if (!actor) return;
-	void* ctrl = GetCharController(actor);
+	BhkCharacterControllerView* ctrl = GetCharController(actor);
 	if (!ctrl) return;
 
-	UInt32 refID = *(UInt32*)((UInt8*)actor + 0x0C);
+	UInt32 refID = actor->refID;
 	if (!refID) return;
 
 	auto it = FindTracked(refID);
@@ -166,12 +153,11 @@ static void ProcessActorsFromProcessManager() {
 		auto** objArray = processManager->objects.data + begin;
 		auto** arrEnd = processManager->objects.data + end;
 		for (; objArray < arrEnd; ++objArray)
-			ProcessActor(*objArray);
+			ProcessActor(reinterpret_cast<Actor*>(*objArray));
 	}
 
-	void* player = *(void**)g_thePlayerPtr;
-	if (player)
-		ProcessActor(player);
+	if (*g_thePlayerPtr)
+		ProcessActor(static_cast<Actor*>(*g_thePlayerPtr));
 }
 
 static bool InstallProbeHandler(const char* eventName, NVSEEventManagerInterface::NativeEventHandler handler,
@@ -226,16 +212,15 @@ static void AdvanceFrameTag() {
 
 static void DispatchPendingEvents() {
 	for (const auto& evt : s_pending) {
-		void* actor = Engine::LookupFormByID(evt.refID);
+		auto* actor = reinterpret_cast<TESObjectREFR*>(Engine::LookupFormByID(evt.refID));
 		if (!actor) continue;
 
 		if (evt.type == 1)
 			g_eventManagerInterface->DispatchEvent(kJumpStartEvent,
-				reinterpret_cast<TESObjectREFR*>(actor), (TESForm*)actor);
+				actor, static_cast<TESForm*>(actor));
 		else
 			g_eventManagerInterface->DispatchEvent(kActorLandedEvent,
-				reinterpret_cast<TESObjectREFR*>(actor),
-				(TESForm*)actor, PackEventFloatArg(evt.fallTime));
+				actor, static_cast<TESForm*>(actor), PackEventFloatArg(evt.fallTime));
 	}
 
 	s_pending.clear();

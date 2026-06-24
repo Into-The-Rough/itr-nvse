@@ -7,12 +7,15 @@
 #include <Windows.h>
 
 #include "OnSoundPlayedHandler.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/Detours.h"
 #include "internal/ScopedLock.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
+#include "internal/GameLayout.h"
 
 class TESSound;
 
@@ -118,9 +121,9 @@ static void EnsureStateLockInitialized()
     InitCriticalSectionOnce(&OnSoundPlayedHandler::g_stateLockInit, &OnSoundPlayedHandler::g_stateLock);
 }
 
-static UInt32 ReadRefID(const void* form)
+static UInt32 ReadRefID(const TESForm* form)
 {
-    return form ? *(const UInt32*)((const UInt8*)form + 0x0C) : 0;
+    return form ? form->refID : 0;
 }
 
 typedef BSSoundHandle* (__thiscall* GetSoundHandleByFilePath_t)(

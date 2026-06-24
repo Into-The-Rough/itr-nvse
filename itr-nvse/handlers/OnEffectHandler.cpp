@@ -6,31 +6,17 @@
 #include <vector>
 
 #include "OnEffectHandler.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 #include "internal/ScopedLock.h"
 #include "internal/globals.h"
 
-class Actor;
-class TESForm;
-
 namespace {
-
-//ActiveEffect layout - verified from ActiveEffect::ActiveEffect at 0x803D30
-constexpr UInt32 kAE_pSpell  = 0x08;  //MagicItem*
-constexpr UInt32 kAE_pEffect = 0x0C;  //EffectItem*
-constexpr UInt32 kAE_pCaster = 0x28;  //MagicCaster*
-
-//EffectItemList subobject GetEffectItemIndex wants, not the form base (engine: 0x823523)
-constexpr UInt32 kMI_EffectItemList = 0x0C;
-
-//TESForm::refID - standard FNV layout
-constexpr UInt32 kTESForm_FormID = 0x0C;
-
-//MagicTarget is embedded at +0x94 in Actor - verified in CheckAddEffect at 0x823651
-constexpr UInt32 kMagicTargetOffset_InActor = 0x94;
 
 constexpr UInt32 kAddr_MagicTarget_AddTarget        = 0x8230F0;
 constexpr UInt32 kAddr_MagicTarget_RemoveEffect     = 0x8251C0;
@@ -38,12 +24,11 @@ constexpr UInt32 kAddr_MagicCaster_GetCasterStats   = 0x815410;
 constexpr UInt32 kAddr_MagicItem_GetEffectIndex     = 0x406E70;
 constexpr UInt32 kAddr_MagicItem_GetMagicItemFormID = 0x40A1E0;
 
-using _MagicCaster_GetCasterStatsObject = void*  (__thiscall*)(void*);
-using _MagicItem_GetEffectItemIndex     = char   (__thiscall*)(void*, void*);
-using _MagicItem_GetMagicItemFormID     = UInt32 (__thiscall*)(void*);
-using _MagicTarget_IsActor              = bool   (__thiscall*)(void*);
-using _MagicTarget_AddTarget            = char   (__thiscall*)(void*, void*, void*, void*, bool);
-using _MagicTarget_RemoveEffect         = void   (__thiscall*)(void*, void*, bool);
+using _MagicCaster_GetCasterStatsObject = void*  (__thiscall*)(MagicCaster*);
+using _MagicItem_GetEffectItemIndex     = char   (__thiscall*)(EffectItemList*, EffectItem*);
+using _MagicItem_GetMagicItemFormID     = UInt32 (__thiscall*)(MagicItem*);
+using _MagicTarget_AddTarget            = char   (__thiscall*)(MagicTarget*, MagicCaster*, MagicItem*, ActiveEffect*, bool);
+using _MagicTarget_RemoveEffect         = void   (__thiscall*)(MagicTarget*, ActiveEffect*, bool);
 
 const auto MagicCaster_GetCasterStatsObject =
 	reinterpret_cast<_MagicCaster_GetCasterStatsObject>(kAddr_MagicCaster_GetCasterStats);
@@ -54,16 +39,6 @@ const auto MagicItem_GetMagicItemFormID =
 
 Detours::JumpDetour s_detourAddTarget;
 Detours::JumpDetour s_detourRemoveEffect;
-
-//MagicTarget* -> owning Actor* via vtable slot 3 (MagicTargetIsActor); null if not an actor
-void* MagicTargetToActor(void* magicTarget)
-{
-	if (!magicTarget) return nullptr;
-	void** vtbl = *(void***)magicTarget;
-	if (!((_MagicTarget_IsActor)vtbl[3])(magicTarget))
-		return nullptr;
-	return (char*)magicTarget - kMagicTargetOffset_InActor;
-}
 
 struct QueuedEffectEvent {
 	const char* name;
@@ -80,24 +55,24 @@ static CRITICAL_SECTION s_lock;
 static volatile LONG s_lockInit = 0;
 constexpr size_t kMaxQueued = 256;
 
-void QueueEffectEvent(const char* name, void* thisTgt, void* magicItem, void* caster, void* effectItem)
+void QueueEffectEvent(const char* name, MagicTarget* thisTgt, MagicItem* magicItem, MagicCaster* caster, EffectItem* effectItem)
 {
-	void* target = MagicTargetToActor(thisTgt);
+	Actor* target = MagicTargetToActor(thisTgt);
 	if (!target || !magicItem) return;
 
 	UInt32 magicItemFormID = MagicItem_GetMagicItemFormID(magicItem);
 	if (!magicItemFormID) return;
 
 	int index = effectItem
-		? (int)MagicItem_GetEffectItemIndex((char*)magicItem + kMI_EffectItemList, effectItem)
+		? (int)MagicItem_GetEffectItemIndex(MagicItemGetEffectList(magicItem), effectItem)
 		: 0;
-	void* casterActor = caster ? MagicCaster_GetCasterStatsObject(caster) : nullptr;
+	auto* casterActor = static_cast<Actor*>(caster ? MagicCaster_GetCasterStatsObject(caster) : nullptr);
 
 	QueuedEffectEvent e{ name,
-		*(UInt32*)((char*)target + kTESForm_FormID),
+		target->refID,
 		magicItemFormID,
 		index,
-		casterActor ? *(UInt32*)((char*)casterActor + kTESForm_FormID) : 0 };
+		casterActor ? casterActor->refID : 0 };
 
 	InitCriticalSectionOnce(&s_lockInit, &s_lock);
 	ScopedLock lock(&s_lock);
@@ -105,29 +80,25 @@ void QueueEffectEvent(const char* name, void* thisTgt, void* magicItem, void* ca
 	s_pending.push_back(e);
 }
 
-char __fastcall Hooked_AddTarget(void* thisTgt, void* /*edx*/,
-	void* caster, void* parent, void* effect, bool extraFlag)
+char __fastcall Hooked_AddTarget(MagicTarget* thisTgt, void* /*edx*/,
+	MagicCaster* caster, MagicItem* parent, ActiveEffect* effect, bool extraFlag)
 {
 	const char result = s_detourAddTarget.GetTrampoline<_MagicTarget_AddTarget>()(
 		thisTgt, caster, parent, effect, extraFlag);
 
 	if (result == 1 && effect) {
-		void* effectItem = *(void**)((char*)effect + kAE_pEffect);
-		QueueEffectEvent("ITR:OnEffectApplied", thisTgt, parent, caster, effectItem);
+		QueueEffectEvent("ITR:OnEffectApplied", thisTgt, parent, caster, effect->effectItem);
 	}
 	return result;
 }
 
-void __fastcall Hooked_RemoveEffect(void* thisTgt, void* /*edx*/,
-	void* effect, bool actuallyRemove)
+void __fastcall Hooked_RemoveEffect(MagicTarget* thisTgt, void* /*edx*/,
+	ActiveEffect* effect, bool actuallyRemove)
 {
 	//resolve while the effect (and its caster) is still live, before the trampoline frees it
 	if (actuallyRemove && effect) {
-		void* parent     = *(void**)((char*)effect + kAE_pSpell);
-		void* effectItem = *(void**)((char*)effect + kAE_pEffect);
-		void* caster     = *(void**)((char*)effect + kAE_pCaster);
-		if (parent)
-			QueueEffectEvent("ITR:OnEffectRemoved", thisTgt, parent, caster, effectItem);
+		if (effect->magicItem)
+			QueueEffectEvent("ITR:OnEffectRemoved", thisTgt, effect->magicItem, effect->caster, effect->effectItem);
 	}
 
 	s_detourRemoveEffect.GetTrampoline<_MagicTarget_RemoveEffect>()(

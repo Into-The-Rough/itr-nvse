@@ -6,6 +6,7 @@
 #include "DoorPackageOwnershipFix.h"
 #include "internal/EngineFunctions.h"
 #include "internal/Detours.h"
+#include "internal/GameLayout.h"
 #include <cstdint>
 
 namespace DoorPackageOwnershipFix
@@ -13,95 +14,57 @@ namespace DoorPackageOwnershipFix
 	static Detours::CallDetour s_lockDoorsIsOwnerCall;
 	static Detours::CallDetour s_unlockDoorsIsOwnerCall;
 
-	typedef bool (__thiscall* _IsInFaction)(void* actor, void* faction);
+	typedef bool (__thiscall* _IsInFaction)(Actor* actor, TESForm* faction);
 	static _IsInFaction IsInFaction = (_IsInFaction)0x89A9A0;
 
-	inline UInt8 GetFormTypeDirect(void* form) {
-		return form ? *(UInt8*)((char*)form + 0x04) : 0;
-	}
-
-	//TESObjectREFR::parentCell is at offset 0x40
-	inline void* GetParentCellDirect(void* refr)
-	{
-		return *(void**)((char*)refr + 0x40);
-	}
-
-	//TESObjectCELL flags2 at offset 0x26 - values 5 or 6 mean loaded
-	inline bool IsCellLoaded(void* cell)
+	inline bool IsCellLoaded(TESObjectCELL* cell)
 	{
 		if (!cell) return false;
-		UInt8 flags2 = *(UInt8*)((char*)cell + 0x26);
-		return (flags2 >= 5);
+		return cell->flags2 >= 5;
 	}
 
-	//read cell owner directly from ExtraDataList without function calls
-	//runs on AI thread - no lock on the ExtraData linked list. if main thread
-	//modifies cell ownership mid-traversal (rare), a freed node could crash.
-	//accepted: cell ownership changes mid-gameplay are extremely uncommon.
-	void* GetCellOwnerDirect(void* cell)
+	TESForm* GetCellOwner(TESObjectCELL* cell)
 	{
 		if (!cell) return nullptr;
-
-		void* extraHead = *(void**)((char*)cell + 0x28 + 0x04);
-
-		//traverse linked list
-		void* current = extraHead;
-		while (current)
-		{
-			UInt8 type = *(UInt8*)((char*)current + 0x04);
-			if (type == 0x21) //ExtraOwnership
-			{
-				return *(void**)((char*)current + 0x0C);
-			}
-			current = *(void**)((char*)current + 0x08);
-		}
-
-		return nullptr; //no owner
-	}
-
-	inline void* GetBaseForm(void* refr)
-	{
-		return refr ? *(void**)((char*)refr + 0x20) : nullptr;
+		auto* ownership = static_cast<ExtraOwnership*>(
+			Engine::BaseExtraList_GetByType(&cell->extraDataList, kExtraData_Ownership));
+		return ownership ? ownership->owner : nullptr;
 	}
 
 	//check if actor owns the cell (or is in the owning faction)
-	bool ActorOwnsCell(void* actor, void* cellOwner)
+	bool ActorOwnsCell(Actor* actor, TESForm* cellOwner)
 	{
 		if (!actor || !cellOwner) return true; //safe default
 
-		//check if cell owner is a faction
-		UInt8 ownerType = GetFormTypeDirect(cellOwner);
-		if (ownerType == 0x06) //kFormType_Faction
+		if (cellOwner->typeID == kFormType_Faction)
 		{
 			return IsInFaction(actor, cellOwner);
 		}
 
 		//cell owner is an NPC - check if actor's base form matches
 		//actor is a reference, owner is a base form
-		void* actorBase = GetBaseForm(actor);
+		TESForm* actorBase = actor->baseForm;
 		if (!actorBase) return true;
 
-		UInt32 actorBaseID = *(UInt32*)((char*)actorBase + 0x0C);
-		UInt32 ownerID = *(UInt32*)((char*)cellOwner + 0x0C);
-		return actorBaseID == ownerID;
+		return actorBase->refID == cellOwner->refID;
 	}
 
 	//replacement IsAnOwner that also checks cell ownership for doors
-	bool __fastcall IsAnOwner_Hook(void* refr, void* edx, void* actor, bool checkFaction)
+	bool __fastcall IsAnOwner_Hook(TESObjectREFR* refr, void* edx, Actor* actor, bool checkFaction)
 	{
 		bool originalResult = Engine::TESObjectREFR_IsAnOwner(refr, actor, checkFaction);
 
 		if (!originalResult) return false;
 
-		void* explicitOwner = Engine::TESObjectREFR_GetOwnerRawForm(refr);
+		TESForm* explicitOwner = static_cast<TESForm*>(Engine::TESObjectREFR_GetOwnerRawForm(refr));
 		if (explicitOwner) return true;
 
-		void* cell = GetParentCellDirect(refr);
+		TESObjectCELL* cell = refr ? refr->parentCell : nullptr;
 		if (!cell) return true; //no cell = allow
 
 		if (!IsCellLoaded(cell)) return true; //cell not loaded = skip check, allow
 
-		void* cellOwner = GetCellOwnerDirect(cell);
+		TESForm* cellOwner = GetCellOwner(cell);
 		if (!cellOwner) return true; //no cell owner = anyone can use
 
 		return ActorOwnsCell(actor, cellOwner);
@@ -113,4 +76,3 @@ namespace DoorPackageOwnershipFix
 		s_unlockDoorsIsOwnerCall.WriteRelCall(0x90D5DE, IsAnOwner_Hook);  //UnlockDoorsAtLocation
 	}
 }
-

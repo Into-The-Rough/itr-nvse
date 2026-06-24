@@ -2,14 +2,17 @@
 //once any handler vetoes, later handlers can't un-veto.
 
 #include "OnPrePickUpHandler.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"
+#include "internal/GameLayout.h"
 #include "internal/GameGlobals.h"
 
 extern void Log(const char* fmt, ...);
 
-class ExtraDataList;
+struct ExtraDataList;
 
 namespace OnPrePickUpHandler {
 
@@ -34,12 +37,8 @@ static ActorPickUp_t s_actorPickUp = nullptr;
 static AddObjecttoContainer_t s_addObjectToContainer = nullptr;
 static ContainerTransferItem_t s_containerTransferItem = nullptr;
 
-constexpr UInt32 kTESObjectREFR_BaseFormOffset = 0x20;
 static void**    g_containerMenuPtrAddr = (void**)0x011D93F8;
 static UInt32*   g_containerMenuSelAddr = (UInt32*)0x011D93FC;
-constexpr UInt32 kContainerMenu_ContainerRefOffset = 0x74;
-constexpr UInt32 kContainerMenu_PlayerListOffset   = 0x98;
-constexpr UInt32 kContainerMenu_CurrentItemsOffset = 0xF8;
 
 typedef TESObjectREFR* (__stdcall *InvRefCreateEntry_t)(TESObjectREFR* container, TESForm* itemForm, SInt32 countDelta, ExtraDataList* xData);
 static InvRefCreateEntry_t g_invRefCreateEntry = nullptr;
@@ -77,7 +76,7 @@ static bool DispatchPrePickUp(TESObjectREFR* picker, TESForm* baseForm, TESObjec
 static int __cdecl CheckPickUpObject(TESObjectREFR* picker, TESObjectREFR* itemRef, SInt32 count)
 {
 	if (!itemRef) return 1;
-	TESForm* baseForm = *(TESForm**)((UInt8*)itemRef + kTESObjectREFR_BaseFormOffset);
+	TESForm* baseForm = TESObjectREFRGetBaseForm(itemRef);
 	return DispatchPrePickUp(picker, baseForm, itemRef, count) ? 1 : 0;
 }
 
@@ -123,8 +122,8 @@ static int __cdecl CheckContainerTransferItem(SInt32 count)
 	void* menu = *g_containerMenuPtrAddr;
 	if (!menu) return 1;
 
-	void* currentItems = *(void**)((UInt8*)menu + kContainerMenu_CurrentItemsOffset);
-	void* playerList = (UInt8*)menu + kContainerMenu_PlayerListOffset;
+	void* currentItems = ContainerMenuGetCurrentItems(menu);
+	void* playerList = ContainerMenuGetLeftItems(menu);
 	if (currentItems == playerList) return 1;     //PUT direction
 
 	UInt32 selRaw = *g_containerMenuSelAddr;
@@ -136,7 +135,7 @@ static int __cdecl CheckContainerTransferItem(SInt32 count)
 	TESObjectREFR* playerRef = *(TESObjectREFR**)g_thePlayerPtr;
 	if (!playerRef) return 1;
 
-	auto* container = *reinterpret_cast<TESObjectREFR**>((UInt8*)menu + kContainerMenu_ContainerRefOffset);
+	auto* container = ContainerMenuGetContainerRef(menu);
 
 	TESObjectREFR* invRef = nullptr;
 	if (g_invRefCreateEntry && container)

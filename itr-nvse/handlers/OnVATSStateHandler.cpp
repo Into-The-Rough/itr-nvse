@@ -4,21 +4,20 @@
 //  ITR:OnKillCamEnd   - PlayerCharacter::ForceEndKillCam
 
 #include "OnVATSStateHandler.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
+#include "internal/GameLayout.h"
 
 constexpr UInt32 kAddr_VATS_SetMode             = 0x9C6C30;
 constexpr UInt32 kAddr_StartKillcamForActor     = 0x93E530;
 constexpr UInt32 kAddr_ForceEndKillCam          = 0x93E770;
 constexpr UInt32 kAddr_VATSSingleton            = 0x011F2250;
 constexpr UInt32 kAddr_VATSMenuCurrentTarget    = 0x011F21CC;
-
-constexpr UInt32 kVATS_eMode_Offset      = 0x08;
-constexpr UInt32 kVATS_NumKills_Offset   = 0x3C;
-constexpr UInt32 kPlayer_KillCamTimer_Offset = 0xE18;
 
 constexpr UInt32 kVATSMode_None     = 0;
 constexpr UInt32 kVATSMode_Playback = 4;
@@ -34,17 +33,16 @@ typedef void (__thiscall* StartKillcamForActor_t)(void*, void*, float, char, int
 typedef void (__thiscall* ForceEndKillCam_t)(void*, int, bool);
 
 static float ReadKillCamTimer() {
-	void* player = *(void**)g_thePlayerPtr;
-	if (!player) return 0.0f;
-	return *(float*)((UInt8*)player + kPlayer_KillCamTimer_Offset);
+	auto* player = static_cast<PlayerCharacter*>(*(void**)g_thePlayerPtr);
+	return PlayerCharacterGetKillCamTimer(player);
 }
 
 static void __fastcall Hook_VATSSetMode(void* this_, void* edx, UInt32 aeMode, bool abForce) {
-	UInt32 oldMode = *(UInt32*)((UInt8*)this_ + kVATS_eMode_Offset);
+	UInt32 oldMode = VATSCameraDataGetMode(this_);
 
 	s_setModeDetour.GetTrampoline<VATS_SetMode_t>()(this_, aeMode, abForce);
 
-	UInt32 newMode = *(UInt32*)((UInt8*)this_ + kVATS_eMode_Offset);
+	UInt32 newMode = VATSCameraDataGetMode(this_);
 	if (oldMode == newMode || !g_eventManagerInterface) return;
 
 	if (newMode == kVATSMode_Playback)
@@ -56,7 +54,7 @@ static void __fastcall Hook_VATSSetMode(void* this_, void* edx, UInt32 aeMode, b
 	{
 		//case 0 of SetMode does not zero numKills, so it still holds the count
 		//from the just-finished sequence
-		int numKills = *(int*)((UInt8*)this_ + kVATS_NumKills_Offset);
+		int numKills = static_cast<int>(VATSCameraDataGetNumKills(this_));
 		g_eventManagerInterface->DispatchEvent("ITR:OnVATSLeave", nullptr, numKills);
 	}
 }
@@ -69,9 +67,9 @@ static void __fastcall Hook_StartKillcamForActor(void* this_, void* edx, void* t
 	float newTimer = ReadKillCamTimer();
 	if (oldTimer > 0.0f || newTimer <= 0.0f || !target || !g_eventManagerInterface) return;
 
-	//refID at TESForm+0x0C
-	g_currentKillCamTargetID = *(UInt32*)((UInt8*)target + 0x0C);
-	g_eventManagerInterface->DispatchEvent("ITR:OnKillCamStart", nullptr, (TESForm*)target);
+	auto* targetForm = static_cast<TESForm*>(target);
+	g_currentKillCamTargetID = targetForm->refID;
+	g_eventManagerInterface->DispatchEvent("ITR:OnKillCamStart", nullptr, targetForm);
 }
 
 static void __fastcall Hook_ForceEndKillCam(void* this_, void* edx, int a2, bool a3) {
