@@ -12,24 +12,28 @@
 #include <cstdio>
 #include "internal/CallTemplates.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 
 extern const _ExtractArgs ExtractArgs;
 
-constexpr UInt32 kOffset_Challenge_Amount = 0x6C; //current progress
 constexpr UInt32 kAddr_TESChallenge_IncrementAmount = 0x5F60E0;
+constexpr UInt32 kChallengeFlag_Completed = 2;
+constexpr UInt32 kChallengeFlag_NoRecur = 8;
+constexpr UInt32 kChallengeDataFlag_Recurring = 2;
+constexpr UInt32 kChallengeType_MiscStat = 11;
 constexpr UInt32 kMiscStat_ChallengesCompleted = 27;
 
 //TESDescription::Get is at vtable[4] (after 4 BaseFormComponent virtuals)
 typedef const char* (__thiscall *_TESDescriptionGet)(void*, TESForm*, UInt32);
 
 //helper to show challenge notification
-static void ShowChallengeNotification(UInt8* challenge, TESForm* form, UInt32 currentAmount, UInt32 threshold)
+static void ShowChallengeNotification(TESChallengeView* challenge, TESForm* form, UInt32 currentAmount, UInt32 threshold)
 {
-	void* fullNameObj = challenge + 0x18; //TESFullName
+	void* fullNameObj = &challenge->fullName;
 	const char* name = (const char*)ThisStdCall(0x408DA0, fullNameObj); //TESFullName::GetName
 
 	//get description via vtable[4] - TESDescription::Get(overrideForm, chunkID)
-	void* descObj = challenge + 0x24; //TESDescription
+	void* descObj = &challenge->description;
 	void** descVtbl = *(void***)descObj;
 	const char* desc = ((_TESDescriptionGet)descVtbl[4])(descObj, nullptr, 0x43534544); //'DESC' chunk ID
 
@@ -54,13 +58,13 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 	if (!form || form->typeID != kFormType_Challenge)
 		return true;
 
-	UInt8* challenge = (UInt8*)form;
+	TESChallengeView* challenge = TESChallengeAsView(form);
 
-	UInt32 flags = *(UInt32*)(challenge + 0x70); //bit 1=completed, bit 2=flag4, bit 3=norecur
-	UInt32 dataFlags = *(UInt32*)(challenge + 0x5C); //data.flags - bit 1=recurring
-	bool isCompleted = (flags & 2) != 0;
-	bool isRecurring = (dataFlags & 2) != 0;
-	bool isNoRecur = (flags & 8) != 0;
+	UInt32 flags = challenge->challengeFlags;
+	UInt32 dataFlags = challenge->data.flags;
+	bool isCompleted = (flags & kChallengeFlag_Completed) != 0;
+	bool isRecurring = (dataFlags & kChallengeDataFlag_Recurring) != 0;
+	bool isNoRecur = (flags & kChallengeFlag_NoRecur) != 0;
 
 	if (isCompleted && !isRecurring)
 	{
@@ -68,16 +72,16 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 		return true;
 	}
 
-	UInt32 threshold = *(UInt32*)(challenge + 0x58); //data.threshold
-	UInt32 oldAmount = *(UInt32*)(challenge + kOffset_Challenge_Amount);
-	UInt32 challengeType = *(UInt32*)(challenge + 0x54); //data.type
-	UInt16 value1 = *(UInt16*)(challenge + 0x64); //data.value1
+	UInt32 threshold = challenge->data.threshold;
+	UInt32 oldAmount = challenge->amount;
+	UInt32 challengeType = challenge->data.type;
+	UInt16 value1 = challenge->data.value1;
 
 	//increment the amount, clamp to 0 to prevent unsigned wrap triggering completion
 	SInt32 signedOld = (SInt32)oldAmount;
 	SInt32 signedNew = signedOld + amount;
 	if (signedNew < 0) signedNew = 0;
-	*(UInt32*)(challenge + kOffset_Challenge_Amount) = (UInt32)signedNew;
+	challenge->amount = (UInt32)signedNew;
 	ThisStdCall(0x5F5800, form); //TESChallenge::MarkCountAsModified
 
 	UInt32 newAmount = (UInt32)signedNew;
@@ -85,7 +89,7 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 	//show progress notification at interval boundaries (vanilla behaviour)
 	if (newAmount < threshold)
 	{
-		UInt32 interval = *(UInt32*)(challenge + 0x60); //data.interval
+		UInt32 interval = challenge->data.interval;
 		if (interval == 0) interval = 100; //default
 
 		UInt32 oldIntervals = oldAmount / interval;
@@ -98,7 +102,7 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 
 	if (oldAmount < threshold && newAmount >= threshold)
 	{
-		Script* completionScript = *(Script**)(challenge + 0x74); //SNAM completion script
+		Script* completionScript = reinterpret_cast<Script*>(challenge->completionScript);
 		if (completionScript)
 		{
 			PlayerCharacter* player = PlayerCharacter::GetSingleton();
@@ -107,7 +111,7 @@ static bool Cmd_ModChallenge_Execute(COMMAND_ARGS)
 		}
 
 		//increment challenges completed stat (unless this IS a challenges completed MiscStat challenge)
-		if (challengeType != 11 || value1 != kMiscStat_ChallengesCompleted) //11=MiscStat type
+		if (challengeType != kChallengeType_MiscStat || value1 != kMiscStat_ChallengesCompleted)
 		{
 			CdeclCall(0x4D5C60, kMiscStat_ChallengesCompleted); //IncPCMiscStat
 		}

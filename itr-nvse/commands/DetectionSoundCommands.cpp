@@ -1,9 +1,8 @@
 #include "DetectionSoundCommands.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
+#include "internal/GameLayout.h"
 #include "nvse/PluginAPI.h"
-#include "nvse/GameObjects.h"
-#include "nvse/GameForms.h"
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
 
@@ -24,7 +23,6 @@ namespace
 	using SetAlert_t = void(__thiscall*)(Actor*, bool);
 	using GetAlert_t = bool(__thiscall*)(Actor*);
 	using EvaluatePackage_t = void(__thiscall*)(Actor*, bool, bool);
-	using GetCombatController_t = void* (__thiscall*)(Actor*);
 	using AddCombatSearchLocation_t = void(__thiscall*)(void*, void*, float, UInt32);
 	using CombatGroupHasSearch_t = bool(__thiscall*)(void*);
 	using CombatGroupGetNumTargets_t = UInt32(__thiscall*)(void*);
@@ -38,7 +36,6 @@ namespace
 	const auto SetAlert = reinterpret_cast<SetAlert_t>(0x8A5E40);
 	const auto GetAlert = reinterpret_cast<GetAlert_t>(0x8A5E80);
 	const auto EvaluatePackage = reinterpret_cast<EvaluatePackage_t>(0x8A6CE0);
-	const auto GetCombatController = reinterpret_cast<GetCombatController_t>(0x8A02D0);
 	const auto AddCombatSearchLocation = reinterpret_cast<AddCombatSearchLocation_t>(0x98BFB0);
 	const auto CombatGroupHasSearch = reinterpret_cast<CombatGroupHasSearch_t>(0x97EF30);
 	const auto CombatGroupGetNumTargets = reinterpret_cast<CombatGroupGetNumTargets_t>(0x5A4320);
@@ -74,25 +71,6 @@ namespace
 	std::vector<ForcedAlert> g_forcedAlerts;
 	std::vector<PendingBark> g_pendingBarks;
 
-	template <typename T>
-	struct NiTArrayLite
-	{
-		void** vtbl;
-		T* data;
-		UInt16 capacity;
-		UInt16 firstFreeEntry;
-		UInt16 numObjs;
-		UInt16 growSize;
-	};
-
-	struct ProcessManagerLite
-	{
-		UInt32 unk000;
-		NiTArrayLite<void*> objects;
-		UInt32 beginOffsets[4];
-		UInt32 endOffsets[4];
-	};
-
 	struct BGSWorldLocationLite
 	{
 		float x;
@@ -108,12 +86,12 @@ namespace
 		return typeID == kFormType_ACHR || typeID == kFormType_ACRE;
 	}
 
-	bool IsHearingProcess(void* process)
+	bool IsHearingProcess(BaseProcess* process)
 	{
 		if (!process)
 			return false;
 
-		UInt32 processLevel = *reinterpret_cast<UInt32*>(reinterpret_cast<UInt8*>(process) + 0x28);
+		UInt32 processLevel = process->processLevel;
 		return processLevel == kProcessLevelHigh || processLevel == kProcessLevelMiddleHigh;
 	}
 
@@ -122,7 +100,7 @@ namespace
 		if (!source)
 			return false;
 
-		void* process = Engine::Actor_GetProcess(source);
+		auto* process = static_cast<BaseProcess*>(Engine::Actor_GetProcess(source));
 		if (!process)
 			return false;
 
@@ -162,11 +140,11 @@ namespace
 		if (!actor)
 			return nullptr;
 
-		void* controller = GetCombatController(actor);
+		void* controller = Engine::Actor_GetCombatController(actor);
 		if (!controller)
 			return nullptr;
 
-		return *reinterpret_cast<void**>(reinterpret_cast<UInt8*>(controller) + 0x80);
+		return CombatControllerGetCombatGroup(controller);
 	}
 
 	bool IsTemporaryAlertTracked(UInt32 refID);
@@ -311,7 +289,7 @@ namespace
 		if (actor == player && ((flags & kFlag_SkipPlayer) || !(flags & kFlag_IncludePlayer)))
 			return 0;
 
-		if (!actor->parentCell || !IsHearingProcess(Engine::Actor_GetProcess(actor)))
+		if (!actor->parentCell || !IsHearingProcess(static_cast<BaseProcess*>(Engine::Actor_GetProcess(actor))))
 			return 0;
 
 		if (ShouldRequireSameCell(location, flags) && actor->parentCell != location.cellOrWorld)

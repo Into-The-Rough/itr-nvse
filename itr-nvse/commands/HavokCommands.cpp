@@ -8,6 +8,7 @@
 #include "nvse/ParamInfos.h"
 #include "internal/CallTemplates.h"
 #include "internal/EngineFunctions.h"
+#include "internal/HavokLayout.h"
 #include <cmath>
 #include <cstring>
 
@@ -66,12 +67,6 @@ namespace
 
 	static QueuedRagdollMotion s_ragdollMotions[kMaxRagdollMotions] = {};
 
-	bool IsActorRef(TESObjectREFR* ref)
-	{
-		if (!ref) return false;
-		return ThisCall<bool>(*(UInt32*)(*(UInt32*)ref + 0x100), ref);
-	}
-
 	float LengthSq(const Vec3& v)
 	{
 		return v.x * v.x + v.y * v.y + v.z * v.z;
@@ -87,40 +82,23 @@ namespace
 		return ref ? ref->GetNiNode() : nullptr;
 	}
 
-	bool IsMobileRigidBody(void* hkpRigidBody)
-	{
-		UInt8 motionType = *(UInt8*)((UInt8*)hkpRigidBody + 0xE8);
-		return (motionType & 2) != 0;
-	}
-
-	bool IsRigidBodyActive(void* hkpRigidBody)
-	{
-		void* simulationIsland = *(void**)((UInt8*)hkpRigidBody + 0xCC);
-		if (!simulationIsland)
-			return false;
-
-		UInt8 flags = *(UInt8*)((UInt8*)simulationIsland + 0x26);
-		UInt8 activeState = (flags >> 2) & 3;
-		return activeState != 0;
-	}
-
 	void __cdecl CountRigidBodyState(void* collisionObject, HavokObjectRecData* data)
 	{
 		if (!collisionObject || !data) return;
 
-		void* worldObject = *(void**)((UInt8*)collisionObject + 0x10);
+		void* worldObject = BhkCollisionObjectAsView(collisionObject)->worldObject;
 		if (!worldObject) return;
 
-		void* hkpObject = *(void**)((UInt8*)worldObject + 0x08);
+		void* hkpObject = BhkWorldObjectGetHavokObject(worldObject);
 		if (!hkpObject) return;
 
-		if (*(UInt8*)((UInt8*)hkpObject + 0x28) != 1)
+		if (HkpWorldObjectAsView(hkpObject)->collisionType != kHkpWorldObject_CollisionTypeRigidBody)
 			return;
-		if (!IsMobileRigidBody(hkpObject))
+		if (!HkpRigidBodyIsMobile(hkpObject))
 			return;
 
 		data->mobileBodyCount++;
-		if (IsRigidBodyActive(hkpObject))
+		if (HkpRigidBodyIsActive(hkpObject))
 			data->activeBodyCount++;
 	}
 
@@ -297,11 +275,10 @@ namespace
 		return (UInt8)limb;
 	}
 
-	//actor+0xAC is the bhkRagdollController
 	//non-null means the ragdoll bodies are available
 	bool HasRagdollController(TESObjectREFR* ref)
 	{
-		return ref && *(void**)((UInt8*)ref + 0xAC) != nullptr;
+		return ref && static_cast<Actor*>(ref)->ragDollController != nullptr;
 	}
 
 	bool QueueRagdollMotion(UInt32 refID, UInt8 limb, const Vec3& linear, float spin, float duration, UInt32 flags)
@@ -425,7 +402,7 @@ bool Cmd_Ragdoll_Execute(COMMAND_ARGS)
 
 	if (!ExtractArgs(EXTRACT_ARGS, &limb, &x, &y, &z, &spin, &duration, &flags))
 		return true;
-	if (!thisObj || !IsActorRef(thisObj))
+	if (!Engine::TESObjectREFR_IsActor(thisObj))
 		return true;
 
 	Actor* actor = (Actor*)thisObj;
@@ -471,7 +448,7 @@ bool Cmd_RagdollLimb_Execute(COMMAND_ARGS)
 
 	if (!ExtractArgs(EXTRACT_ARGS, &limb, &x, &y, &z))
 		return true;
-	if (!thisObj || !IsActorRef(thisObj))
+	if (!Engine::TESObjectREFR_IsActor(thisObj))
 		return true;
 	if (!HasRagdollController(thisObj)) //no-op unless already ragdolling
 		return true;
@@ -523,7 +500,7 @@ void Update()
 			continue;
 
 		auto* ref = (TESObjectREFR*)Engine::LookupFormByID(motion.refID);
-		if (!ref || !IsActorRef(ref))
+		if (!Engine::TESObjectREFR_IsActor(ref))
 		{
 			memset(&motion, 0, sizeof(motion));
 			continue;

@@ -1,4 +1,5 @@
 #include "ActorValueCommands.h"
+#include "internal/GameLayout.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/CommandTable.h"
 #include "nvse/GameAPI.h"
@@ -6,6 +7,12 @@
 
 extern const _ExtractArgs ExtractArgs;
 extern void Log(const char* fmt, ...);
+
+static bool IsActorRef(TESForm* form)
+{
+	if (!form) return false;
+	return form->typeID == kFormType_ACHR || form->typeID == kFormType_ACRE;
+}
 
 static ParamInfo kParams_DamageActorValueAlt[3] = {
 	{"avCode", kParamType_ActorValue, 0},
@@ -20,8 +27,7 @@ bool Cmd_DamageActorValueAlt_Execute(COMMAND_ARGS)
 	*result = 0;
 	if (!thisObj) return true;
 
-	UInt8 typeID = *((UInt8*)thisObj + 4);
-	if (typeID != 0x3B && typeID != 0x3C) return true; //ACHR/ACRE only, slot 0x3AC isn't on other vtables
+	if (!IsActorRef(thisObj)) return true; //slot 0x3AC isn't on other vtables
 
 	UInt32 avCode = 0;
 	float amount = 0.0f;
@@ -34,15 +40,14 @@ bool Cmd_DamageActorValueAlt_Execute(COMMAND_ARGS)
 
 	if (attackerRef)
 	{
-		UInt8 atkType = *((UInt8*)attackerRef + 4);
-		if (atkType != 0x3B && atkType != 0x3C) attackerRef = nullptr; //non-actor issuer would misread +0xA4
+		if (!IsActorRef(attackerRef)) attackerRef = nullptr; //non-actor issuer would misread +0xA4
 	}
 
-	//increment fPlayerDamageDealt (process+0xAC) BEFORE damage so Actor::Kill sees it for XP
+	//increment fPlayerDamageDealt before damage so Actor::Kill sees it for XP
 	if (avCode == 0x10 && amount > 0.0f && attackerRef) {
-		void* process = *(void**)((UInt8*)thisObj + 0x68);
-		if (process)
-			*(float*)((UInt8*)process + 0xAC) += amount;
+		BaseProcess* process = static_cast<Actor*>(thisObj)->baseProcess;
+		if (auto* damageDealt = LowProcessGetDamageDealtCounter(process))
+			*damageDealt += amount;
 	}
 
 	//0x3AC takes a signed delta; negative health deltas apply damage.

@@ -7,8 +7,10 @@
 #include "nvse/GameObjects.h"
 #include "internal/GestureMath.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 #include "internal/CallTemplates.h"
 #include "internal/globals.h"
+#include "internal/NiLayout.h"
 #include <cstring>
 
 extern const _ExtractArgs ExtractArgs;
@@ -39,9 +41,7 @@ namespace GestureCommand
 
 	static void* GetRootNode(TESObjectREFR* ref)
 	{
-		void* renderData = *(void**)((UInt8*)ref + 0x64);
-		if (!renderData) return nullptr;
-		return *(void**)((UInt8*)renderData + 0x14);
+		return TESObjectREFRGetNiNodeRaw(ref);
 	}
 
 	static void MatMul33(float* out, const float* a, const float* b)
@@ -62,29 +62,29 @@ namespace GestureCommand
 
 	static void PropagateTransforms(void* node)
 	{
-		auto* n = (UInt8*)node;
-		auto* p = *(UInt8**)(n + 0x18);
+		auto* n = NiAVObjectAsView(node);
+		auto* p = NiAVObjectAsView(n->parent);
 		if (p)
 		{
-			float* pwr = (float*)(p + 0x68);
-			float* lr = (float*)(n + 0x34);
-			float* wr = (float*)(n + 0x68);
+			float* pwr = p->world.rotate;
+			float* lr = n->local.rotate;
+			float* wr = n->world.rotate;
 			MatMul33(wr, pwr, lr);
 
-			float ps = *(float*)(p + 0x98);
-			float sx = *(float*)(n + 0x58) * ps;
-			float sy = *(float*)(n + 0x5C) * ps;
-			float sz = *(float*)(n + 0x60) * ps;
-			*(float*)(n + 0x8C) = *(float*)(p + 0x8C) + pwr[0] * sx + pwr[1] * sy + pwr[2] * sz;
-			*(float*)(n + 0x90) = *(float*)(p + 0x90) + pwr[3] * sx + pwr[4] * sy + pwr[5] * sz;
-			*(float*)(n + 0x94) = *(float*)(p + 0x94) + pwr[6] * sx + pwr[7] * sy + pwr[8] * sz;
-			*(float*)(n + 0x98) = ps * *(float*)(n + 0x64);
+			float ps = p->world.scale;
+			float sx = n->local.translate[0] * ps;
+			float sy = n->local.translate[1] * ps;
+			float sz = n->local.translate[2] * ps;
+			n->world.translate[0] = p->world.translate[0] + pwr[0] * sx + pwr[1] * sy + pwr[2] * sz;
+			n->world.translate[1] = p->world.translate[1] + pwr[3] * sx + pwr[4] * sy + pwr[5] * sz;
+			n->world.translate[2] = p->world.translate[2] + pwr[6] * sx + pwr[7] * sy + pwr[8] * sz;
+			n->world.scale = ps * n->local.scale;
 		}
 
 		if (IsNiNode(node))
 		{
-			UInt16 count = *(UInt16*)(n + 0xA6);
-			auto** children = *(void***)(n + 0xA0);
+			UInt16 count = NiNodeGetChildLimit(node);
+			void** children = NiNodeGetChildData(node);
 			if (children && count > 0 && count < 512)
 				for (UInt16 i = 0; i < count; i++)
 					if (children[i]) PropagateTransforms(children[i]);
@@ -118,7 +118,7 @@ namespace GestureCommand
 		if (!headBone)
 			return;
 
-		float* localRot = reinterpret_cast<float*>(reinterpret_cast<UInt8*>(headBone) + 0x34);
+		float* localRot = NiAVObjectAsView(headBone)->local.rotate;
 		GestureMath::CopyMat3(localRot, g.baseRot);
 		PropagateTransforms(headBone);
 	}
@@ -167,7 +167,7 @@ namespace GestureCommand
 			void* headBone = g.headBone;
 			if (!headBone) { ClearGesture(g); continue; }
 
-			float* localRot = (float*)((UInt8*)headBone + 0x34);
+			float* localRot = NiAVObjectAsView(headBone)->local.rotate;
 			if (!g.hasBaseRot)
 			{
 				GestureMath::CopyMat3(g.baseRot, localRot);
@@ -223,11 +223,6 @@ namespace GestureCommand
 	}
 }
 
-inline bool IsActorRef(TESObjectREFR* ref) {
-	if (!ref) return false;
-	return ThisCall<bool>(*(UInt32*)(*(UInt32*)ref + 0x100), ref);
-}
-
 static ParamInfo kParams_Gesture[] = {
 	{"type", kParamType_String, 0},
 	{"amplitude", kParamType_Float, 0},
@@ -245,7 +240,7 @@ bool Cmd_Gesture_Execute(COMMAND_ARGS)
 
 	if (!ExtractArgs(EXTRACT_ARGS, &type, &amplitude, &duration, &speed))
 		return true;
-	if (!thisObj || !IsActorRef(thisObj)) return true;
+	if (!Engine::TESObjectREFR_IsActor(thisObj)) return true;
 
 	UInt8 gestureType = 0;
 	if (_stricmp(type, "nod") == 0) gestureType = 1;

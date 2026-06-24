@@ -9,11 +9,9 @@
 #define FORMUTILS_USE_NVSE_TYPES
 #include "internal/FormUtils.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
-#include "nvse/GameForms.h"
-#include "nvse/GameObjects.h"
-#include "nvse/GameExtraData.h"
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
 
@@ -25,14 +23,7 @@ using namespace FormUtils;
 namespace
 {
 	constexpr UInt8  kXData_WeaponModFlags = 0x8D;
-	constexpr UInt32 kVtbl_ExtraWeaponModFlags = 0x010159A4;
-	constexpr UInt32 kVtbl_ExtraDataList = 0x010143E8;
 	constexpr UInt32 kNVSEData_InventoryReferenceGetForRefID = 2;
-
-	typedef void* (__cdecl* _FormHeapAlloc)(UInt32);
-	typedef void  (__cdecl* _FormHeapFree)(void*);
-	static const _FormHeapAlloc FormHeapAlloc = (_FormHeapAlloc)0x401000;
-	static const _FormHeapFree  FormHeapFree = (_FormHeapFree)0x401030;
 
 	//xnvse inventory reference layout
 	struct InvRef
@@ -46,70 +37,32 @@ namespace
 	typedef InvRef* (*InvRefGetForID_t)(UInt32 refID);
 	static InvRefGetForID_t g_invRefGetForID = nullptr;
 
-	//base extra list helpers
-	static bool ListHasType(BaseExtraList* list, UInt32 type)
+	static BSExtraData* GetExtraData(BaseExtraList* list, UInt32 type)
 	{
-		if (!list) return false;
-		return (list->m_presenceBitfield[type >> 3] & (1 << (type % 8))) != 0;
-	}
-
-	static void ListMarkType(BaseExtraList* list, UInt32 type, bool cleared)
-	{
-		if (!list) return;
-		UInt8& flag = list->m_presenceBitfield[type >> 3];
-		if (cleared) flag &= ~(1 << (type % 8));
-		else         flag |= (1 << (type % 8));
-	}
-
-	static BSExtraData* ListGetByType(BaseExtraList* list, UInt32 type)
-	{
-		if (!ListHasType(list, type)) return nullptr;
-		for (BSExtraData* iter = list->m_data; iter; iter = iter->next)
-			if (iter->type == type) return iter;
-		return nullptr;
-	}
-
-	static void ListAdd(BaseExtraList* list, BSExtraData* toAdd)
-	{
-		if (!list || !toAdd || ListHasType(list, toAdd->type)) return;
-		toAdd->next = list->m_data;
-		list->m_data = toAdd;
-		ListMarkType(list, toAdd->type, false);
-	}
-
-	static void ListRemoveFree(BaseExtraList* list, BSExtraData* toRemove)
-	{
-		if (!list || !toRemove || !ListHasType(list, toRemove->type)) return;
-		bool removed = false;
-		if (list->m_data == toRemove) { list->m_data = toRemove->next; removed = true; }
-		else for (BSExtraData* iter = list->m_data; iter; iter = iter->next)
-			if (iter->next == toRemove) { iter->next = toRemove->next; removed = true; break; }
-		if (!removed) return;
-		ListMarkType(list, toRemove->type, true);
-		FormHeapFree(toRemove);
+		return list ? static_cast<BSExtraData*>(Engine::BaseExtraList_GetByType(list, type)) : nullptr;
 	}
 
 	static BSExtraData* CreateWeaponModFlags(UInt32 flags)
 	{
-		UInt8* x = (UInt8*)FormHeapAlloc(0x10);
-		memset(x, 0, 0x10);
-		*(UInt32*)x = kVtbl_ExtraWeaponModFlags;
-		x[0x04] = kXData_WeaponModFlags;     //extra data type
-		*(UInt32*)(x + 0x0C) = flags;        //installed-slot bitmask, read as a byte by sub_424940
-		return (BSExtraData*)x;
+		auto* x = static_cast<ExtraWeaponModFlagsView*>(Engine::FormHeap_Allocate(sizeof(ExtraWeaponModFlagsView)));
+		if (!x) return nullptr;
+		Engine::ExtraWeaponModFlags_Ctor(x, static_cast<UInt8>(flags));
+		return reinterpret_cast<BSExtraData*>(x);
 	}
 
 	static ExtraDataList* CreateExtraDataList()
 	{
-		ExtraDataList* list = (ExtraDataList*)FormHeapAlloc(sizeof(ExtraDataList));
-		memset(list, 0, sizeof(ExtraDataList));
-		*(UInt32*)list = kVtbl_ExtraDataList;
+		auto* list = static_cast<ExtraDataList*>(Engine::FormHeap_Allocate(sizeof(ExtraDataList)));
+		if (!list) return nullptr;
+		Engine::ExtraDataList_Ctor(list);
 		return list;
 	}
 
 	static ExtraContainerChanges::ExtendDataList* CreateExtendDataList()
 	{
-		auto* list = (ExtraContainerChanges::ExtendDataList*)FormHeapAlloc(sizeof(ExtraContainerChanges::ExtendDataList));
+		auto* list = static_cast<ExtraContainerChanges::ExtendDataList*>(
+			Engine::FormHeap_Allocate(sizeof(ExtraContainerChanges::ExtendDataList)));
+		if (!list) return nullptr;
 		memset(list, 0, sizeof(ExtraContainerChanges::ExtendDataList));
 		return list;
 	}
@@ -122,7 +75,8 @@ namespace
 		if (!head->item) { head->item = xData; head->next = nullptr; return; }
 		Node* node = head;
 		while (node->next) node = node->next;
-		Node* newNode = (Node*)FormHeapAlloc(sizeof(Node));
+		Node* newNode = static_cast<Node*>(Engine::FormHeap_Allocate(sizeof(Node)));
+		if (!newNode) return;
 		memset(newNode, 0, sizeof(Node));
 		newNode->item = xData;
 		node->next = newNode;
@@ -140,7 +94,9 @@ namespace
 		}
 		if (!create) return nullptr;
 		ExtraDataList* xData = CreateExtraDataList();
+		if (!xData) return nullptr;
 		if (!entry->extendData) entry->extendData = CreateExtendDataList();
+		if (!entry->extendData) return nullptr;
 		AppendExtendData(entry->extendData, xData);
 		return xData;
 	}
@@ -171,13 +127,14 @@ namespace
 			xData = &thisObj->extraDataList;
 		}
 
-		BSExtraData* x = ListGetByType(xData, kXData_WeaponModFlags);
 		if (flags) {
-			if (x) *(UInt32*)((char*)x + 0x0C) = flags;
-			else   ListAdd(xData, CreateWeaponModFlags(flags));
+			BSExtraData* x = GetExtraData(xData, kXData_WeaponModFlags);
+			if (x) reinterpret_cast<ExtraWeaponModFlagsView*>(x)->flags = static_cast<UInt8>(flags);
+			else if (auto* created = CreateWeaponModFlags(flags))
+				Engine::BaseExtraList_AddExtra(xData, created);
 		}
-		else if (x) {
-			ListRemoveFree(xData, x);
+		else {
+			Engine::BaseExtraList_RemoveByType(xData, kXData_WeaponModFlags);
 		}
 
 		*result = 1;
@@ -199,8 +156,8 @@ namespace
 			xData = &thisObj->extraDataList;
 		if (!xData) return true;
 
-		BSExtraData* x = ListGetByType(xData, kXData_WeaponModFlags);
-		if (x) *result = *(UInt8*)((char*)x + 0x0C);
+		BSExtraData* x = GetExtraData(xData, kXData_WeaponModFlags);
+		if (x) *result = reinterpret_cast<ExtraWeaponModFlagsView*>(x)->flags;
 		return true;
 	}
 }

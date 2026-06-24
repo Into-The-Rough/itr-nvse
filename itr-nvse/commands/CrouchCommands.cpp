@@ -6,6 +6,8 @@
 #include "CrouchCommands.h"
 #include "internal/Detours.h"
 #include "internal/ScopedLock.h"
+#include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/GameObjects.h"
@@ -39,9 +41,6 @@ static bool IsActorRef(TESObjectREFR* ref)
 	return ref->baseForm->typeID == kFormType_Creature || ref->baseForm->typeID == kFormType_NPC;
 }
 
-typedef void* (__thiscall *_GetCombatController)(Actor*);
-static const _GetCombatController GetCombatController = (_GetCombatController)0x8A02D0;
-
 typedef void (__thiscall *_SetShouldSneak)(void*, bool);
 typedef void (__thiscall *_SetMovementFlag)(Actor*, UInt32);
 static _SetShouldSneak OrigSetShouldSneak = nullptr;
@@ -57,7 +56,7 @@ static void __fastcall Hook_SetMovementFlag(Actor* actor, void* edx, UInt32 flag
 //trampoline for CombatController::SetShouldSneak - forces false for disabled actors
 static void __fastcall Hook_SetShouldSneak(void* cc, void* edx, bool shouldSneak) {
 	if (shouldSneak) {
-		Actor* owner = *(Actor**)((UInt8*)cc + 0xBC);
+		Actor* owner = CombatControllerGetPackageOwner(cc);
 		if (owner && IsCrouchDisabled(owner->refID))
 			shouldSneak = false;
 	}
@@ -106,10 +105,10 @@ bool Cmd_ForceCrouch_Execute(COMMAND_ARGS)
 
 	if (!InstallCrouchHooks()) return true;
 
-	void* cc = GetCombatController(actor);
+	void* cc = Engine::Actor_GetCombatController(actor);
 	if (cc)
 		OrigSetShouldSneak(cc, (bool)crouch);
-	*(UInt8*)((UInt8*)actor + 0x125) = crouch ? 1 : 0; //bForceSneak
+	ActorSetForceSneak(actor, crouch ? 1 : 0);
 	//read-modify-write to preserve other movement bits
 	UInt32 flags = GetMoveFlags(actor);
 	if (crouch)
@@ -145,10 +144,10 @@ bool Cmd_DisableCrouching_Execute(COMMAND_ARGS)
 			g_crouchDisabledActors.insert(actor->refID);
 		}
 		//force stand immediately
-		void* cc = GetCombatController(actor);
+		void* cc = Engine::Actor_GetCombatController(actor);
 		if (cc)
 			OrigSetShouldSneak(cc, false);
-		*(UInt8*)((UInt8*)actor + 0x125) = 0;
+		ActorSetForceSneak(actor, 0);
 	} else {
 		ScopedLock lock(&g_crouchLock);
 		g_crouchDisabledActors.erase(actor->refID);

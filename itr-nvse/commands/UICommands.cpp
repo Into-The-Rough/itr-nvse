@@ -6,37 +6,14 @@
 extern const _ExtractArgs ExtractArgs;
 #include "internal/globals.h"
 #include "internal/CallTemplates.h"
+#include "internal/MenuLayout.h"
 
 #include <cmath>
 #include <cstring>
 
 namespace
 {
-	struct NiTArray_TileMenu
-	{
-		void* vtbl;
-		void** data;
-		UInt16 capacity;
-		UInt16 firstFreeEntry;
-		UInt16 numValidEntries;
-		UInt16 growSize;
-	};
-
-	struct TileString
-	{
-		char* m_data;
-		UInt16 m_dataLen;
-		UInt16 m_bufLen;
-	};
-
-	struct TileNode
-	{
-		TileNode* next;
-		TileNode* prev;
-		void* data;
-	};
-
-	static NiTArray_TileMenu* g_TileMenuArray = reinterpret_cast<NiTArray_TileMenu*>(0x11F3508);
+	static TileMenuArrayView* g_TileMenuArray = reinterpret_cast<TileMenuArrayView*>(0x11F3508);
 
 	constexpr UInt32 kTileType_Image = 0x386;
 	constexpr UInt32 kTileType_Radial = 0x38C;
@@ -49,16 +26,14 @@ namespace
 	constexpr UInt32 kAddr_TileShaderProperty_SetTexOffset = 0x77A450;
 	constexpr UInt32 kAddr_BSShaderProperty_ClearRenderPasses = 0xBAA000;
 
-	constexpr UInt32 kTileShaderProperty_Rotates = 0x91;
-
 	static const char* GetTileName(void* tile)
 	{
-		return tile ? reinterpret_cast<TileString*>(reinterpret_cast<UInt8*>(tile) + 0x20)->m_data : nullptr;
+		return TileGetName(tile);
 	}
 
-	static TileNode* GetFirstChild(void* tile)
+	static TileNodeView* GetFirstChild(void* tile)
 	{
-		return tile ? *reinterpret_cast<TileNode**>(reinterpret_cast<UInt8*>(tile) + 0x04) : nullptr;
+		return TileGetFirstChild(tile);
 	}
 
 	static UInt32 GetTileType(void* tile)
@@ -89,7 +64,7 @@ namespace
 
 	static bool ShaderRotates(void* shader)
 	{
-		return *reinterpret_cast<UInt8*>(reinterpret_cast<UInt8*>(shader) + kTileShaderProperty_Rotates) != 0;
+		return TileShaderPropertyUsesTextureMorph(shader);
 	}
 
 	static void InvalidateRenderPasses(void* shader)

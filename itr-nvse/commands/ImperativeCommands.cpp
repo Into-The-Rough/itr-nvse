@@ -6,13 +6,9 @@
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
 #include "internal/CallTemplates.h"
+#include "internal/GameLayout.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
-#include "nvse/GameObjects.h"
-#include "nvse/GameForms.h"
-#include "nvse/GameData.h"
-#include "nvse/GameProcess.h"
-#include "nvse/GameExtraData.h"
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
 #include <vector>
@@ -509,7 +505,7 @@ bool Cmd_GetAvailableRecipes_Execute(COMMAND_ARGS)
 
 		if (recipe->reqSkill != (UInt32)-1 && recipe->reqSkillLevel > 0)
 		{
-			void* actorValueOwner = (void*)((UInt8*)player + 0xA4);
+			void* actorValueOwner = ActorGetActorValueOwner(player);
 			SInt32 playerSkill = GetActorValue(actorValueOwner, recipe->reqSkill);
 			if (playerSkill < (SInt32)recipe->reqSkillLevel)
 				continue;
@@ -554,12 +550,8 @@ bool Cmd_GetAvailableRecipes_Execute(COMMAND_ARGS)
 	return true;
 }
 
-typedef void* (__thiscall *_GetCombatController)(Actor*);
 typedef void* (__thiscall *_GetCombatTargetForActor)(void* combatGroup, Actor* target);
-typedef bool (__thiscall *_ActorIsDead)(Actor*, bool);
-static const _GetCombatController GetCombatController = (_GetCombatController)0x8A02D0;
 static const _GetCombatTargetForActor GetCombatTargetForActor = (_GetCombatTargetForActor)0x9865D0;
-static const _ActorIsDead ActorIsDead = (_ActorIsDead)0x8844F0;
 
 #ifdef _DEBUG
 //debug command to dump CombatTarget memory for offset verification
@@ -590,15 +582,14 @@ bool Cmd_DumpCombatTarget_Execute(COMMAND_ARGS)
 	Actor* observer = (Actor*)thisObj;
 
 	//get combat controller via direct function call
-	void* combatController = GetCombatController(observer);
+	void* combatController = Engine::Actor_GetCombatController(observer);
 	if (!combatController)
 	{
 		Console_Print("DumpCombatTarget >> Observer has no combat controller");
 		return true;
 	}
 
-	//combatGroup is at offset 0x80 in CombatController
-	void* combatGroup = *(void**)((UInt8*)combatController + 0x80);
+	void* combatGroup = CombatControllerGetCombatGroup(combatController);
 	if (!combatGroup)
 	{
 		Console_Print("DumpCombatTarget >> No combat group");
@@ -614,40 +605,22 @@ bool Cmd_DumpCombatTarget_Execute(COMMAND_ARGS)
 
 	Console_Print("DumpCombatTarget >> CombatTarget at %p", combatTarget);
 
-	//try to interpret known fields
-	UInt8* bytes = (UInt8*)combatTarget;
-	Actor** pTarget = (Actor**)bytes;
-	Console_Print("  +00 pTarget: %p (expected %p)", *pTarget, target);
+	auto* combatTargetView = CombatTargetAsView(combatTarget);
+	Console_Print("  +00 pTarget: %p (expected %p)", combatTargetView->target, target);
+	Console_Print("  +04 detectionLevel: %d", combatTargetView->detectionLevel);
 
-	SInt32 detectionLevel = *(SInt32*)(bytes + 0x04);
-	Console_Print("  +04 detectionLevel: %d", detectionLevel);
+	auto printLocation = [](const char* label, const BGSWorldLocationView& location) {
+		Console_Print(label, location.x, location.y, location.z);
+	};
+	printLocation("  +08 kLastSeenLocation: %.1f, %.1f, %.1f", combatTargetView->lastSeenLocation);
+	printLocation("  +18 kDetectedLocation: %.1f, %.1f, %.1f", combatTargetView->detectedLocation);
+	printLocation("  +28 kLastFullyVisibleLocation: %.1f, %.1f, %.1f", combatTargetView->lastFullyVisibleLocation);
+	printLocation("  +38 kInitialTargetLocation: %.1f, %.1f, %.1f", combatTargetView->initialTargetLocation);
 
-	//BGSWorldLocation at +08 (kLastSeenLocation) - 0x10 bytes
-	float* lastSeenPos = (float*)(bytes + 0x08);
-	Console_Print("  +08 kLastSeenLocation: %.1f, %.1f, %.1f", lastSeenPos[0], lastSeenPos[1], lastSeenPos[2]);
+	Console_Print("  +48 searchCount: %d, attackerCount: %d", combatTargetView->searchCount, combatTargetView->attackerCount);
+	Console_Print("  +4C inLOSCount: %d, inFullLOSCount: %d", combatTargetView->inLOSCount, combatTargetView->inFullLOSCount);
 
-	//BGSWorldLocation at +18 (kDetectedLocation)
-	float* detectedPos = (float*)(bytes + 0x18);
-	Console_Print("  +18 kDetectedLocation: %.1f, %.1f, %.1f", detectedPos[0], detectedPos[1], detectedPos[2]);
-
-	//BGSWorldLocation at +28 (kLastFullyVisibleLocation)
-	float* fullyVisPos = (float*)(bytes + 0x28);
-	Console_Print("  +28 kLastFullyVisibleLocation: %.1f, %.1f, %.1f", fullyVisPos[0], fullyVisPos[1], fullyVisPos[2]);
-
-	//BGSWorldLocation at +38 (kInitialTargetLocation)
-	float* initialPos = (float*)(bytes + 0x38);
-	Console_Print("  +38 kInitialTargetLocation: %.1f, %.1f, %.1f", initialPos[0], initialPos[1], initialPos[2]);
-
-	//counts at +48
-	UInt16 searchCount = *(UInt16*)(bytes + 0x48);
-	UInt16 attackerCount = *(UInt16*)(bytes + 0x4A);
-	UInt8 inLOSCount = *(UInt8*)(bytes + 0x4C);
-	UInt8 inFullLOSCount = *(UInt8*)(bytes + 0x4D);
-	Console_Print("  +48 searchCount: %d, attackerCount: %d", searchCount, attackerCount);
-	Console_Print("  +4C inLOSCount: %d, inFullLOSCount: %d", inLOSCount, inFullLOSCount);
-
-	//timestamps at +50, +54, +58, +5C, +60, +64
-	float* timestamps = (float*)(bytes + 0x50);
+	float* timestamps = combatTargetView->timestamps;
 	Console_Print("  +50 timestamps: %.2f, %.2f, %.2f, %.2f, %.2f, %.2f",
 		timestamps[0], timestamps[1], timestamps[2], timestamps[3], timestamps[4], timestamps[5]);
 
@@ -664,21 +637,21 @@ static void* GetCombatTargetData(Actor* observer, Actor* target)
 {
 	if (!observer || !target) return nullptr;
 
-	void* combatController = GetCombatController(observer);
+	void* combatController = Engine::Actor_GetCombatController(observer);
 	if (!combatController) return nullptr;
 
-	void* combatGroup = *(void**)((UInt8*)combatController + 0x80);
+	void* combatGroup = CombatControllerGetCombatGroup(combatController);
 	if (!combatGroup) return nullptr;
 
 	return GetCombatTargetForActor(combatGroup, target);
 }
 
-//helper to create position array from CombatTarget offset
-static bool CreatePositionArray(COMMAND_ARGS, void* combatTarget, UInt32 offset)
+//helper to create position array from CombatTarget location
+static bool CreatePositionArray(COMMAND_ARGS, const BGSWorldLocationView* location)
 {
-	if (!combatTarget || !g_arrInterface) return false;
+	if (!location || !g_arrInterface) return false;
 
-	float* pos = (float*)((UInt8*)combatTarget + offset);
+	const float* pos = BGSWorldLocationGetPosition(*location);
 
 	NVSEArrayVarInterface::Array* arr = g_arrInterface->CreateArray(nullptr, 0, scriptObj);
 	g_arrInterface->AppendElement(arr, NVSEArrayVarInterface::Element(pos[0]));
@@ -706,7 +679,7 @@ bool Cmd_GetTargetLastSeenLocation_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &target) || !IsActorRef(thisObj)) return true;
 
 	void* ct = GetCombatTargetData((Actor*)thisObj, target);
-	CreatePositionArray(PASS_COMMAND_ARGS, ct, 0x08);
+	CreatePositionArray(PASS_COMMAND_ARGS, CombatTargetGetLastSeenLocation(ct));
 	return true;
 }
 
@@ -717,7 +690,7 @@ bool Cmd_GetTargetDetectedLocation_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &target) || !IsActorRef(thisObj)) return true;
 
 	void* ct = GetCombatTargetData((Actor*)thisObj, target);
-	CreatePositionArray(PASS_COMMAND_ARGS, ct, 0x18);
+	CreatePositionArray(PASS_COMMAND_ARGS, CombatTargetGetDetectedLocation(ct));
 	return true;
 }
 
@@ -728,7 +701,7 @@ bool Cmd_GetTargetLastFullyVisibleLocation_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &target) || !IsActorRef(thisObj)) return true;
 
 	void* ct = GetCombatTargetData((Actor*)thisObj, target);
-	CreatePositionArray(PASS_COMMAND_ARGS, ct, 0x28);
+	CreatePositionArray(PASS_COMMAND_ARGS, CombatTargetGetLastFullyVisibleLocation(ct));
 	return true;
 }
 
@@ -739,7 +712,7 @@ bool Cmd_GetTargetInitialLocation_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &target) || !IsActorRef(thisObj)) return true;
 
 	void* ct = GetCombatTargetData((Actor*)thisObj, target);
-	CreatePositionArray(PASS_COMMAND_ARGS, ct, 0x38);
+	CreatePositionArray(PASS_COMMAND_ARGS, CombatTargetGetInitialLocation(ct));
 	return true;
 }
 
@@ -864,30 +837,22 @@ bool Cmd_ForceReload_Execute(COMMAND_ARGS)
 	if (!thisObj || !IsActorRef(thisObj)) return true;
 
 	Actor* actor = (Actor*)thisObj;
-	if (ActorIsDead(actor, false)) return true;
+	if (Engine::Actor_IsDead(actor, false)) return true;
 
-	UInt32 pProcess = *(UInt32*)((UInt8*)actor + 0x68);
-	if (!pProcess) return true;
+	BaseProcess* process = actor->baseProcess;
+	if (!process) return true;
 
-	UInt32 processLevel = *(UInt32*)(pProcess + 0x28);
-	if (processLevel != 0) return true;
+	if (process->processLevel != 0) return true;
 
 	if (!thisObj->GetNiNode()) return true;
 
-	UInt32 vtable = *(UInt32*)pProcess;
-	if (!vtable) return true;
-
-	typedef UInt32 (__thiscall *GetCurrentWeapon_t)(UInt32);
-	GetCurrentWeapon_t GetCurrentWeapon = (GetCurrentWeapon_t)(*(UInt32*)(vtable + 82 * 4));
-	UInt32 weaponInfo = GetCurrentWeapon(pProcess);
+	BaseProcess::WeaponInfo* weaponInfo = process->GetWeaponInfo();
 	if (!weaponInfo) return true;
 
-	TESObjectWEAP* weapon = (TESObjectWEAP*)(*(UInt32*)(weaponInfo + 0x08));
+	TESObjectWEAP* weapon = weaponInfo->weapon;
 	if (!weapon) return true;
 
-	typedef UInt32 (__thiscall *GetAmmoInfo_t)(UInt32);
-	GetAmmoInfo_t GetAmmoInfo = (GetAmmoInfo_t)(*(UInt32*)(vtable + 83 * 4));
-	UInt32 ammoInfo = GetAmmoInfo(pProcess);
+	BaseProcess::AmmoInfo* ammoInfo = process->GetAmmoInfo();
 
 	void* invChanges = nullptr;
 	TESForm* correctAmmo = nullptr;
@@ -900,19 +865,17 @@ bool Cmd_ForceReload_Execute(COMMAND_ARGS)
 	}
 
 	if (!ammoInfo && correctAmmo && invChanges) {
-		void* newEntry = GetInventoryItem(invChanges, correctAmmo, 0);
+		auto* newEntry = reinterpret_cast<BaseProcess::AmmoInfo*>(GetInventoryItem(invChanges, correctAmmo, 0));
 		if (newEntry) {
-			typedef void (__thiscall *SetAmmoInfo_t)(UInt32, void*);
-			SetAmmoInfo_t SetAmmoInfo = (SetAmmoInfo_t)(*(UInt32*)(vtable + 90 * 4));
-			*(SInt32*)((UInt8*)newEntry + 0x04) = 0;
-			SetAmmoInfo(pProcess, newEntry);
+			newEntry->count = 0;
+			BaseProcessSetAmmoInfo(process, newEntry);
 		}
 	}
 	else if (ammoInfo) {
-		*(SInt32*)(ammoInfo + 0x04) = 0;
+		ammoInfo->count = 0;
 	}
 
-	bool hasExtendedMag = ItemChangeHasWeaponMod((void*)weaponInfo, 11);
+	bool hasExtendedMag = ItemChangeHasWeaponMod(weaponInfo, 11);
 	char reloadResult = ActorReload(actor, weapon, 2, hasExtendedMag);
 	*result = reloadResult ? 1 : 0;
 
@@ -1162,7 +1125,7 @@ static const _GetRegenRate GetWeaponRegenRate = (_GetRegenRate)0x709430;
 typedef SInt32 (__thiscall *_GetClipSize)(void*, bool);
 static const _GetClipSize GetClipSize = (_GetClipSize)0x4FE160;
 
-typedef void* (__thiscall *_GetDefaultAmmo)(void*);
+typedef TESForm* (__thiscall *_GetDefaultAmmo)(BGSAmmoForm*);
 static const _GetDefaultAmmo GetDefaultAmmo = (_GetDefaultAmmo)0x474920;
 
 static ParamInfo kParams_RefillAmmo[1] = {
@@ -1180,61 +1143,50 @@ bool Cmd_RefillAmmo_Execute(COMMAND_ARGS)
 	if (!thisObj || !IsActorRef(thisObj)) return true;
 
 	Actor* actor = (Actor*)thisObj;
-	if (ActorIsDead(actor, false)) return true;
+	if (Engine::Actor_IsDead(actor, false)) return true;
 
-	UInt32 pProcess = *(UInt32*)((UInt8*)actor + 0x68);
-	if (!pProcess) return true;
-	if (*(UInt32*)(pProcess + 0x28) != 0) return true; //must be HighProcess
+	BaseProcess* process = actor->baseProcess;
+	if (!process) return true;
+	if (process->processLevel != 0) return true; //must be HighProcess
 
-	UInt32 vtable = *(UInt32*)pProcess;
-	if (!vtable) return true;
-
-	//vtable[82] = GetCurrentWeapon
-	typedef UInt32 (__thiscall *GetCurrentWeapon_t)(UInt32);
-	UInt32 weaponInfo = ((GetCurrentWeapon_t)(*(UInt32*)(vtable + 82 * 4)))(pProcess);
+	BaseProcess::WeaponInfo* weaponInfo = process->GetWeaponInfo();
 	if (!weaponInfo) return true;
 
-	void* weapon = *(void**)(weaponInfo + 0x08);
+	TESObjectWEAP* weapon = weaponInfo->weapon;
 	if (!weapon) return true;
 
 	//reject regen weapons
-	bool hasRegen = ItemChangeHasWeaponMod((void*)weaponInfo, 6); //kWeaponModEffect_RegenerateAmmo
+	bool hasRegen = ItemChangeHasWeaponMod(weaponInfo, 6); //kWeaponModEffect_RegenerateAmmo
 	if (hasRegen && GetWeaponRegenRate(weapon, true) > 0.0)
 		return true;
 
-	bool hasExtendedClip = ItemChangeHasWeaponMod((void*)weaponInfo, 2); //kWeaponModEffect_IncreaseClipCapacity
+	bool hasExtendedClip = ItemChangeHasWeaponMod(weaponInfo, 2); //kWeaponModEffect_IncreaseClipCapacity
 
-	//vtable[83] = GetAmmoInfo
-	typedef UInt32 (__thiscall *GetAmmoInfo_t)(UInt32);
-	UInt32 ammoInfo = ((GetAmmoInfo_t)(*(UInt32*)(vtable + 83 * 4)))(pProcess);
+	BaseProcess::AmmoInfo* ammoInfo = process->GetAmmoInfo();
 
 	if (ammoInfo)
 	{
-		void* ammoForm = *(void**)(ammoInfo + 0x08);
+		TESAmmo* ammoForm = ammoInfo->ammo;
 		if (!ammoForm) return true;
 
-		//AddItem via vtable[0x64]
-		typedef void (__thiscall *AddItem_t)(void*, void*, void*, UInt32);
-		((AddItem_t)(*(UInt32*)(*(UInt32*)actor + 0x64 * 4)))(actor, ammoForm, nullptr, count);
+		actor->AddItem(ammoForm, nullptr, count);
 
 		SInt32 clipMax = GetClipSize(weapon, hasExtendedClip);
-		SInt32 currentCount = *(SInt32*)(ammoInfo + 0x04);
+		SInt32 currentCount = ammoInfo->count;
 		SInt32 toAdd = clipMax - currentCount;
 		if (toAdd > count) toAdd = count;
-		if (toAdd > 0) *(SInt32*)(ammoInfo + 0x04) = currentCount + toAdd;
+		if (toAdd > 0) ammoInfo->count = currentCount + toAdd;
 	}
 	else
 	{
 		//no ammo loaded, find default ammo from weapon form
-		//BGSAmmoForm at TESObjectWEAP+0xA4
-		void* defaultAmmo = GetDefaultAmmo((char*)weapon + 0xA4);
+		TESForm* defaultAmmo = GetDefaultAmmo(TESObjectWEAPGetAmmoForm(weapon));
 		if (!defaultAmmo) return true;
 
-		typedef void (__thiscall *AddItem_t)(void*, void*, void*, UInt32);
-		((AddItem_t)(*(UInt32*)(*(UInt32*)actor + 0x64 * 4)))(actor, defaultAmmo, nullptr, count);
+		actor->AddItem(defaultAmmo, nullptr, count);
 
 		//force reload since weapon was empty
-		ActorReload(actor, (TESObjectWEAP*)weapon, 2, hasExtendedClip);
+		ActorReload(actor, weapon, 2, hasExtendedClip);
 	}
 
 	*result = 1;
