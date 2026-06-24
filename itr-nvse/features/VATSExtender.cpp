@@ -9,6 +9,7 @@
 #include "internal/globals.h"
 #include "internal/EngineFunctions.h"
 #include "internal/CallTemplates.h"
+#include "internal/MenuLayout.h"
 
 namespace VATSExtender
 {
@@ -27,7 +28,7 @@ namespace VATSExtender
 	{
 		void* im = *g_interfaceManager;
 		if (!im) return nullptr;
-		return (void*)((UInt8*)im + 0x1DC);
+		return InterfaceManagerGetVATSHighlightData(im);
 	}
 
 	void ClearOverflow()
@@ -37,7 +38,7 @@ namespace VATSExtender
 
 	void CheckForReset(void* vatsData)
 	{
-		UInt32 vanillaCount = *(UInt32*)((UInt8*)vatsData + 0x0C);
+		UInt32 vanillaCount = VATSHighlightDataGetRefCount(vatsData);
 		if (vanillaCount == 0 && g_lastVanillaCount > 0)
 		{
 			ClearOverflow();
@@ -149,4 +150,3 @@ namespace VATSExtender
 		s_renderSceneCall.WriteRelCall(0x801993, Hook_RenderScene);
 	}
 }
-

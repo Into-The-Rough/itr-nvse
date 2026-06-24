@@ -3,6 +3,8 @@
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"
 #include "internal/globals.h"
+#include "internal/MenuLayout.h"
+#include "internal/NiLayout.h"
 
 #include <Windows.h>
 #include <cstring>
@@ -82,23 +84,21 @@ namespace VATSHighlightDepthFix
 
 	bool HasAdditionalRefs(void* vatsData)
 	{
-		if (!vatsData) return false;
-		return *reinterpret_cast<UInt32*>(vatsData) != 0 &&
-			*reinterpret_cast<SInt32*>(static_cast<UInt8*>(vatsData) + 0x0C) > 0;
+		return VATSHighlightDataHasRefs(vatsData);
 	}
 
 	void AddRefNiObject(void* object)
 	{
 		if (object)
-			InterlockedIncrement(reinterpret_cast<volatile LONG*>(static_cast<UInt8*>(object) + 4));
+			InterlockedIncrement(reinterpret_cast<volatile LONG*>(&NiRefObjectAsView(object)->refCount));
 	}
 
 	void ReleaseNiObject(void* object)
 	{
 		if (!object) return;
-		if (InterlockedDecrement(reinterpret_cast<volatile LONG*>(static_cast<UInt8*>(object) + 4)) == 0)
+		if (InterlockedDecrement(reinterpret_cast<volatile LONG*>(&NiRefObjectAsView(object)->refCount)) == 0)
 		{
-			auto vtbl = *reinterpret_cast<UInt32**>(object);
+			auto vtbl = static_cast<UInt32*>(NiRefObjectAsView(object)->vtbl);
 			reinterpret_cast<void(__thiscall*)(void*)>(vtbl[1])(object);
 		}
 	}
@@ -110,14 +110,12 @@ namespace VATSHighlightDepthFix
 
 	void* GetDepthStencil(void* renderTargetGroup)
 	{
-		if (!renderTargetGroup) return nullptr;
-		return *reinterpret_cast<void**>(static_cast<UInt8*>(renderTargetGroup) + 0x20);
+		return NiRenderTargetGroupGetDepthStencil(renderTargetGroup);
 	}
 
 	UInt32 GetMSAAPref(void* rendererData)
 	{
-		if (!rendererData) return 0;
-		return *reinterpret_cast<UInt32*>(static_cast<UInt8*>(rendererData) + 0x10);
+		return NiRenderTargetRendererDataGetMSAAPref(rendererData);
 	}
 
 	bool IsDepthCompatible(void* targetGroup, void* depth)
@@ -126,13 +124,13 @@ namespace VATSHighlightDepthFix
 
 		UInt32 targetWidth = ThisCall<UInt32>(0xEE8490, targetGroup, 0);
 		UInt32 targetHeight = ThisCall<UInt32>(0xEE84B0, targetGroup, 0);
-		UInt32 depthWidth = *reinterpret_cast<UInt32*>(static_cast<UInt8*>(depth) + 0x08);
-		UInt32 depthHeight = *reinterpret_cast<UInt32*>(static_cast<UInt8*>(depth) + 0x0C);
+		UInt32 depthWidth = Ni2DBufferGetWidth(depth);
+		UInt32 depthHeight = Ni2DBufferGetHeight(depth);
 		if (!targetWidth || !targetHeight || depthWidth < targetWidth || depthHeight < targetHeight)
 			return false;
 
 		void* targetColorRendererData = ThisCall<void*>(0xEE86E0, targetGroup, 0);
-		void* depthRendererData = *reinterpret_cast<void**>(static_cast<UInt8*>(depth) + 0x10);
+		void* depthRendererData = Ni2DBufferGetRendererData(depth);
 		return GetMSAAPref(targetColorRendererData) == GetMSAAPref(depthRendererData);
 	}
 

@@ -4,10 +4,13 @@
 #include <unordered_map>
 #include <cstring>
 #include <cstdio>
+#include <cstddef>
 #include <Windows.h>
 
 #include "DialogueTextFilter.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"
 #include "internal/ScopedLock.h"
@@ -15,32 +18,7 @@
 #include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
 #include "internal/globals.h"
-
-class TESTopicInfo;
-class TESTopic;
-class TESQuest;
-
-struct String {
-	char*   m_data;
-	UInt16  m_dataLen;
-	UInt16  m_bufLen;
-
-	const char* CStr() const { return m_data ? m_data : ""; }
-};
-
-struct TESTopicInfoResponse {
-	UInt8   pad00[0x18];
-	String  responseText;           //0x18
-	void*   speakerAnimation;       //0x20 (SNAM)
-	void*   listenerAnimation;      //0x24 (LNAM)
-	TESTopicInfoResponse* next;     //0x28
-};
-static_assert(offsetof(TESTopicInfoResponse, responseText) == 0x18);
-
-struct ModInfo {
-	UInt8 pad00[0x20];
-	char name[0x100];
-};
+#include "internal/GameLayout.h"
 
 struct QueuedDialogueEvent
 {
@@ -94,9 +72,14 @@ static void EnsureStateLockInitialized()
 constexpr UInt32 kAddr_RunResult = 0x61F170;
 constexpr UInt32 kAddr_GetResponses = 0x61E780;
 
-static UInt32 ReadRefID(const void* form)
+static UInt32 ReadRefID(const TESForm* form)
 {
-	return form ? *(const UInt32*)((const UInt8*)form + 0x0C) : 0;
+	return form ? form->refID : 0;
+}
+
+static const char* StringCStr(const String& str)
+{
+	return str.m_data ? str.m_data : "";
 }
 
 static bool ParseModNameFromVoicePath(const char* path, char* outName, size_t outSize) {
@@ -113,11 +96,11 @@ static bool ParseModNameFromVoicePath(const char* path, char* outName, size_t ou
 }
 
 static const char* GetModName(UInt8 modIndex) {
-	void* dh = *g_dataHandlerPtr;
+	auto* dh = reinterpret_cast<DataHandler*>(*g_dataHandlerPtr);
 	if (!dh || modIndex >= 0xFF) return nullptr;
-	ModInfo* modInfo = *(ModInfo**)((UInt8*)dh + 0x21C + (modIndex * 4));
+	ModInfo* modInfo = dh->modList.loadedMods[modIndex];
 	if (!modInfo) return nullptr;
-	return (const char*)((UInt8*)modInfo + 0x20);
+	return modInfo->name;
 }
 
 static UInt8 FindModIndex(const char* modName) {
@@ -131,43 +114,32 @@ static UInt8 FindModIndex(const char* modName) {
 	return 0xFF;
 }
 
-static const char* GetFormEditorID(void* form) {
-	if (!form) return nullptr;
-	void** vtable = *(void***)form;
-	if (!vtable) return nullptr;
-	typedef const char* (__thiscall *GetEditorIDFn)(void*);
-	GetEditorIDFn fn = (GetEditorIDFn)vtable[0x4C];
-	return fn ? fn(form) : nullptr;
-}
-
-static void* GetActorVoiceType(Actor* actor) {
+static BGSVoiceType* GetActorVoiceType(Actor* actor) {
 	if (!actor) return nullptr;
-	void* baseForm = *(void**)((UInt8*)actor + 0x20);
+	TESForm* baseForm = actor->baseForm;
 	if (!baseForm) return nullptr;
 
-	//offsets are TESNPC-specific; TESCreature has different layout
-	UInt8 baseType = *(UInt8*)((UInt8*)baseForm + 0x04);
-	if (baseType != 0x2A) return nullptr;
+	if (baseForm->typeID != kFormType_NPC) return nullptr;
 
-	void* voiceType = *(void**)((UInt8*)baseForm + 0x50);
-	if (voiceType) {
-		UInt8 vtTypeID = *(UInt8*)((UInt8*)voiceType + 0x04);
-		if (vtTypeID == 0x5D) return voiceType;
-	}
+	auto* npc = static_cast<TESNPC*>(baseForm);
+	BGSVoiceType* voiceType = npc->baseData.voiceType;
+	if (voiceType && voiceType->typeID == kFormType_VoiceType) return voiceType;
 
-	voiceType = *(void**)((UInt8*)baseForm + 0x94);
-	if (voiceType) {
-		UInt8 vtTypeID = *(UInt8*)((UInt8*)voiceType + 0x04);
-		if (vtTypeID == 0x5D) return voiceType;
-	}
+	voiceType = TESActorBaseGetLegacyVoiceTypeFallback(baseForm);
+	if (voiceType && voiceType->typeID == kFormType_VoiceType) return voiceType;
 
 	return nullptr;
 }
 
-static const char* GetVoiceTypeEditorID(void* voiceType) {
+static const char* GetVoiceTypeEditorID(BGSVoiceType* voiceType) {
 	if (!voiceType) return nullptr;
-	String* editorIDStr = (String*)((UInt8*)voiceType + 0x1C);
-	return editorIDStr ? editorIDStr->CStr() : nullptr;
+	auto* view = reinterpret_cast<BGSVoiceTypeEditorIDView*>(voiceType);
+	return StringCStr(view->editorID);
+}
+
+static TESTopic* GetTopicInfoParentTopic(TESTopicInfo* topicInfo)
+{
+	return TESTopicInfoGetParentTopic(topicInfo);
 }
 
 static bool BuildVoicePath(char* outPath, size_t outSize,
@@ -177,23 +149,23 @@ static bool BuildVoicePath(char* outPath, size_t outSize,
 	if (!outPath || !topicInfo || !speaker) return false;
 	outPath[0] = '\0';
 
-	UInt32 formID = *(UInt32*)((UInt8*)topicInfo + 0x0C);
+	UInt32 formID = topicInfo->refID;
 	UInt8 modIndex = (UInt8)(formID >> 24);
 	UInt32 baseFormID = formID & 0x00FFFFFF;
 
 	const char* modName = GetModName(modIndex);
 	if (!modName || !*modName) return false;
 
-	void* voiceType = GetActorVoiceType(speaker);
+	BGSVoiceType* voiceType = GetActorVoiceType(speaker);
 	const char* voiceTypeID = voiceType ? GetVoiceTypeEditorID(voiceType) : nullptr;
 	if (!voiceTypeID || !*voiceTypeID) return false;
 
-	void* quest = *(void**)((UInt8*)topicInfo + 0x48);
-	const char* questID = GetFormEditorID(quest);
+	auto* quest = reinterpret_cast<TESQuest*>(topicInfo->unk48);
+	const char* questID = Engine::TESForm_GetEditorID(quest);
 	if (!questID) questID = "";
 
-	void* topic = *(void**)((UInt8*)topicInfo + 0x50);
-	const char* topicID = GetFormEditorID(topic);
+	TESTopic* topic = GetTopicInfoParentTopic(topicInfo);
+	const char* topicID = Engine::TESForm_GetEditorID(topic);
 	if (!topicID) topicID = "";
 
 	if (responseNum == 0) responseNum = 1;
@@ -266,24 +238,22 @@ void Suppress(bool suppress) {
 //Ignore topicInfo mismatches unless SpeakSound already confirmed the line.
 static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt32 speakerRefID) {
 	//talking activators reach this hook too - skip non-actors before walking MobileObject
-	void* baseForm = *(void**)((UInt8*)speaker + 0x20);
+	TESForm* baseForm = speaker->baseForm;
 	if (!baseForm) return false;
-	UInt8 baseType = *(UInt8*)((UInt8*)baseForm + 0x04);
-	if (baseType != 0x2A && baseType != 0x2B) return false; //NPC / Creature
+	UInt8 baseType = baseForm->typeID;
+	if (baseType != kFormType_NPC && baseType != kFormType_Creature) return false;
 
-	void* baseProcess = *(void**)((UInt8*)speaker + 0x68); //MobileObject+0x68
-	if (!baseProcess) return false;
+	BaseProcess* process = speaker->baseProcess;
+	if (!process) return false;
 
-	int processLevel = *(int*)((UInt8*)baseProcess + 0x28); //BaseProcess+0x28
-	if (processLevel != 0) return false; //not HighProcess
+	if (process->processLevel != 0) return false;
 
-	void* queuedGreet = *(void**)((UInt8*)baseProcess + 0x3E4); //HighProcess+0x3E4 = pQueuedGreetTopic (DialogueItem*)
-	if (!queuedGreet) {
+	auto* dialogueItem = reinterpret_cast<DialogueItem*>(HighProcessGetQueuedGreetTopic(process));
+	if (!dialogueItem) {
 		return false;
 	}
 
-	void* activeTopicInfo = *(void**)((UInt8*)queuedGreet + 0x0C); //DialogueItem+0x0C = pTopicInfo
-	UInt32 activeInfoRefID = activeTopicInfo ? ReadRefID(activeTopicInfo) : 0;
+	UInt32 activeInfoRefID = ReadRefID(dialogueItem->currentTopicInfo);
 
 	if (activeInfoRefID && activeInfoRefID != topicInfoRefID) {
 		//A spoken queued greet means pQueuedGreetTopic is stale, not conflicting.
@@ -300,16 +270,14 @@ static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt3
 	return false;
 }
 
-static bool IsActorRef(void* form) {
+static bool IsActorRef(TESForm* form) {
 	if (!form) return false;
-	UInt8 typeID = *(UInt8*)((UInt8*)form + 0x04);
-	return typeID == 0x3B || typeID == 0x3C; //ACHR / ACRE
+	return form->typeID == kFormType_ACHR || form->typeID == kFormType_ACRE;
 }
 
-static bool IsWorldRef(void* form) {
+static bool IsWorldRef(TESForm* form) {
 	if (!form) return false;
-	UInt8 typeID = *(UInt8*)((UInt8*)form + 0x04);
-	return typeID >= 0x3A && typeID <= 0x3C; //TESObjectREFR / ACHR / ACRE
+	return form->typeID >= kFormType_Reference && form->typeID <= kFormType_ACRE;
 }
 
 static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
@@ -333,7 +301,7 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 	//strlen * fNoticeTextTimePerCharacter (setting at 0x11D2178, float at +0x04)
 	float timePerChar = *(float*)(0x11D2178 + 0x04);
 	if (timePerChar <= 0.0f) timePerChar = 0.08f;
-	UInt32 topicRefID = ReadRefID(*(void**)((UInt8*)topicInfo + 0x50));
+	UInt32 topicRefID = ReadRefID(GetTopicInfoParentTopic(topicInfo));
 	DWORD queueStartTick = GetTickCount();
 	UInt8 fallbackResponseNum = 1;
 	UInt32 queuedCount = 0;
@@ -343,7 +311,7 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 	constexpr size_t kMaxQueuedDialogueEvents = 256;
 
 	for (TESTopicInfoResponse* response = *ppResponse; response; response = response->next, ++fallbackResponseNum) {
-		const char* text = response->responseText.CStr();
+		const char* text = StringCStr(response->responseText);
 		size_t textLen = text ? strlen(text) : 0;
 		float duration = (float)textLen * timePerChar;
 		if (duration < 2.0f) duration = 2.0f;
@@ -352,7 +320,7 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 			if (DialogueTextFilter::g_pendingEvents.size() >= kMaxQueuedDialogueEvents)
 				break;
 
-			UInt8 responseNum = *(UInt8*)((UInt8*)response + 0x0C);
+			UInt8 responseNum = response->data.responseNumber;
 			if (responseNum == 0) responseNum = fallbackResponseNum;
 
 			bool isDuplicate = false;
@@ -622,7 +590,7 @@ void Update()
 			UInt8 rn = 1;
 			for (auto* r = *ppResp; r; r = r->next, rn++) {
 				if (rn == cit->responseNum) {
-					const char* src = r->responseText.CStr();
+					const char* src = StringCStr(r->responseText);
 					if (src && *src) {
 						strncpy_s(textBuf, sizeof(textBuf), src, _TRUNCATE);
 						gotText = true;
@@ -637,7 +605,7 @@ void Update()
 			continue;
 		}
 
-		TESTopic* topic = *reinterpret_cast<TESTopic**>((UInt8*)info + 0x50);
+		TESTopic* topic = GetTopicInfoParentTopic(info);
 
 		g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
 			reinterpret_cast<TESObjectREFR*>(speaker),

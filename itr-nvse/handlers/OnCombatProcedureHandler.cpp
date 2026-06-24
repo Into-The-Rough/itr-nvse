@@ -4,11 +4,14 @@
 #include <Windows.h>
 
 #include "OnCombatProcedureHandler.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/Detours.h"
 #include "internal/ScopedLock.h"
 #include "internal/EngineFunctions.h"
 #include "internal/EventDispatch.h"
+#include "internal/GameLayout.h"
 
 struct QueuedCombatEvent {
     UInt32 actorRefID;
@@ -40,9 +43,9 @@ static Actor* GetPackageOwner(void* combatController)
     return (Actor*)Engine::CombatController_GetPackageOwner(combatController);
 }
 
-static UInt32 ReadRefID(const void* form)
+static UInt32 ReadRefID(const TESForm* form)
 {
-    return form ? *(const UInt32*)((const UInt8*)form + 0x0C) : 0;
+    return form ? form->refID : 0;
 }
 
 static UInt32 s_vtableMap[13] = {0};

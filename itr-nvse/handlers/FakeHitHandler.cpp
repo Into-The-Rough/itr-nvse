@@ -1,9 +1,11 @@
-//ported from FakeHitNVSE - kept self-contained to avoid header conflicts
-
 #include "FakeHitHandler.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
+#include "internal/GameLayout.h"
+#include "internal/NiLayout.h"
 #include <Windows.h>
 #include <cstdio>
 #include <cstring>
@@ -20,32 +22,6 @@ struct NiPoint3 {
 		if (len > 0.0001f) { x /= len; y /= len; z /= len; }
 	}
 };
-
-struct NiColor { float r, g, b; };
-struct NiNode { void* vtbl; };
-
-struct TESForm {
-	void* vtbl;
-	UInt32 typeID;
-	UInt32 flags;
-	UInt32 refID;
-};
-
-struct TESObjectCELL;
-
-struct TESObjectREFR {
-	void* vtbl;
-	UInt8 pad04[0x30 - 4];
-	float posX, posY, posZ;
-	UInt8 pad3C[0x40 - 0x3C];
-	TESObjectCELL* parentCell;
-	UInt8 pad44[0x68 - 0x44];
-	UInt32 GetRefID() { return *(UInt32*)((UInt8*)this + 0x0C); }
-};
-
-struct Actor;
-struct TESObjectWEAP;
-struct BaseProcess;
 
 struct ActorHitData {
 	Actor* source;
@@ -71,43 +47,11 @@ struct ActorHitData {
 	SInt32 unk60;
 };
 
-struct BGSTextureSet;
-struct TESObjectCELL;
-
-struct DecalInfo {
-	float minWidth, maxWidth, minHeight, maxHeight, depth, shininess, parallaxScale;
-	UInt8 parallaxPasses, flags;
-	UInt8 pad1E[2];
-	struct { UInt8 r, g, b, a; } color;
-};
-
-struct BGSImpactData {
-	void* vtbl;
-	UInt32 typeID, flags, refID;
-	UInt8 pad10[0x30 - 0x10];
-	float effectDuration;
-	UInt8 effectOrientation;
-	UInt8 pad35[3];
-	float angleThreshold, placementRadius;
-	UInt8 soundLevel;
-	UInt8 pad41[3];
-	UInt8 noDecalData;
-	UInt8 pad45[3];
-	BGSTextureSet* textureSet;
-	void* sound1;
-	void* sound2;
-	DecalInfo decalInfo;
-};
-
-struct BGSImpactDataSet {
-	void* vtbl;
-	UInt32 typeID, flags, refID;
-	UInt8 pad10[0x1C - 0x10];
-	BGSImpactData* impactDatas[12];
-};
-static_assert(offsetof(BGSImpactDataSet, impactDatas) == 0x1C);
-
 enum MaterialType { kMaterial_Organic = 6 };
+
+struct DecalColor {
+	float r, g, b;
+};
 
 struct Decal {
 	enum Type { kDecalType_Skinned = 2 };
@@ -115,89 +59,48 @@ struct Decal {
 	void* actor;
 	NiNode* node;
 	UInt32 unk2C;
-	BGSTextureSet* textureSet;
+	TESTexture* textureSet;
 	SInt32 index;
 	float width, height, depth, rng44;
 	TESObjectCELL* parentCell;
 	float parallaxScale;
 	NiNode* skinnedDecal;
 	float specular, epsilon, placementRadius;
-	NiColor vertexColor;
+	DecalColor vertexColor;
 	UInt32 hitLocationFlags;
 	UInt8 whichUVQuadrant, byte71, byte72, isParallax, isAlphaTest, alphaBlend, parallaxPasses, modelSpace, forceFade, twoSided;
 	UInt8 pad7A[2];
 };
 
-struct TESObjectWEAP {
-	UInt8 pad00[0x108];
-	UInt16 attackDmg;
-	UInt8 pad10A[0x1C4 - 0x10A];
-	UInt8 weaponSkill;
-	UInt8 pad1C5[0x24C - 0x1C5];
-	BGSImpactDataSet* impactDataSet;
-};
-static_assert(offsetof(TESObjectWEAP, attackDmg) == 0x108);
-static_assert(offsetof(TESObjectWEAP, weaponSkill) == 0x1C4);
-static_assert(offsetof(TESObjectWEAP, impactDataSet) == 0x24C);
-
-struct BaseProcess {
-	void* vtbl;
-	UInt32 unk04[9];
-	UInt32 processLevel;
-	void CopyHitData(ActorHitData* hitData) {
-		((void (__thiscall*)(BaseProcess*, ActorHitData*))((*(void***)this)[0x1DD]))(this, hitData);
-	}
-	//slot 0x1DE - resets the hitData240 contents. without this an actor knocked
-	//down by FakeHit keeps stale last-hit data and skips its getup animation
-	void ResetHitData() {
-		((void (__thiscall*)(BaseProcess*))((*(void***)this)[0x1DE]))(this);
-	}
-};
-
-struct Actor {
-	UInt8 pad00[0x40];
-	TESObjectCELL* parentCell;
-	UInt8 pad44[0x68 - 0x44];
-	BaseProcess* baseProcess;
-	UInt32 GetRefID() { return *(UInt32*)((UInt8*)this + 0x0C); }
-	NiPoint3* GetPos() { return (NiPoint3*)((UInt8*)this + 0x30); }
-	TESObjectWEAP* GetEquippedWeapon() { return ((TESObjectWEAP* (__thiscall*)(Actor*))0x88D440)(this); }
-	void DamageHealthAndFatigue(float healthDmg, float fatigueDmg, Actor* source) {
-		((void (__thiscall*)(Actor*, float, float, Actor*))((*(void***)this)[0xCE]))(this, healthDmg, fatigueDmg, source);
-	}
-	void DamageActorValue(UInt32 avCode, float damage, Actor* attacker) {
-		((void (__thiscall*)(Actor*, UInt32, float, Actor*))((*(void***)this)[0xEB]))(this, avCode, damage, attacker);
-	}
-	NiNode* GetNiNode() {
-		void* renderData = *(void**)((UInt8*)this + 0x64);
-		if (!renderData) return nullptr;
-		return *(NiNode**)((UInt8*)renderData + 0x14);
-	}
-};
-static_assert(offsetof(Actor, parentCell) == 0x40);
-static_assert(offsetof(Actor, baseProcess) == 0x68);
-
-struct BGSBodyPart {
-	UInt8 pad00[0x63];
-	UInt8 actorValue;	//0x63 - this part's limb condition AV
-};
-
-struct BGSBodyPartData {
-	UInt8 pad00[0x34];
-	BGSBodyPart* bodyParts[15];	//0x34 - indexed directly by hitLocation 0..14
-};
-static_assert(offsetof(BGSBodyPartData, bodyParts) == 0x34);
-
-//GetBodyPartData is vtable slot 96 on the base form - TESActorBase (NPC, via
-//race) at 0x5F0F80, TESCreature at 0x5FA2E0. dispatching the virtual covers both
+//GetBodyPartData dispatches through TESActorBase; NPCs route via race and creatures directly.
 static BGSBodyPartData* GetActorBodyPartData(Actor* actor) {
-	void* baseForm = *(void**)((char*)actor + 0x20);	//TESObjectREFR::baseForm
-	if (!baseForm) return nullptr;
-	return ((BGSBodyPartData* (__thiscall*)(void*))((*(void***)baseForm)[96]))(baseForm);
+	if (!actor || !actor->baseForm) return nullptr;
+	UInt8 typeID = actor->baseForm->typeID;
+	if (typeID != kFormType_NPC && typeID != kFormType_Creature) return nullptr;
+	return static_cast<TESActorBase*>(actor->baseForm)->GetBodyPartData();
 }
 
-struct BSString { const char* m_data; UInt16 m_dataLen, m_bufLen; };
-struct TESSound { void* vtbl; UInt32 typeID, flags, refID; };
+static void CopyHitData(BaseProcess* process, ActorHitData* hitData) {
+	((void (__thiscall*)(BaseProcess*, ActorHitData*))((*(void***)process)[0x1DD]))(process, hitData);
+}
+
+//slot 0x1DE resets hitData240. Without this, knockdown can leave stale last-hit data.
+static void ResetHitData(BaseProcess* process) {
+	((void (__thiscall*)(BaseProcess*))((*(void***)process)[0x1DE]))(process);
+}
+
+static void DamageHealthAndFatigue(Actor* actor, float healthDmg, float fatigueDmg, Actor* source) {
+	((void (__thiscall*)(Actor*, float, float, Actor*))((*(void***)actor)[0xCE]))(actor, healthDmg, fatigueDmg, source);
+}
+
+static void DamageActorValue(Actor* actor, UInt32 avCode, float damage, Actor* attacker) {
+	((void (__thiscall*)(Actor*, UInt32, float, Actor*))((*(void***)actor)[0xEB]))(actor, avCode, damage, attacker);
+}
+
+static NiPoint3 GetRefPos(TESObjectREFR* ref) {
+	return { ref->posX, ref->posY, ref->posZ };
+}
+
 struct Sound {
 	UInt32 soundKey;
 	UInt8 byte04;
@@ -228,6 +131,14 @@ static void** g_decalManager = (void**)0x11C57F8;
 //material 0-31 to an impactDatas slot via 0x58E8F0. null if the weapon has no set
 typedef BGSImpactData* (__thiscall* GetWeaponImpactData_t)(TESObjectWEAP*, UInt32);
 static GetWeaponImpactData_t GetWeaponImpactData = (GetWeaponImpactData_t)0x522BA0;
+
+static BGSImpactData* GetOrganicImpactData(TESObjectWEAP* weapon) {
+	return weapon ? GetWeaponImpactData(weapon, kMaterial_Organic) : nullptr;
+}
+
+static const char* GetImpactModelPath(BGSImpactData* impactData) {
+	return impactData ? impactData->model.nifPath.m_data : nullptr;
+}
 
 static const char* GetBodyPartNodeName(SInt32 loc) {
 	switch (loc) {
@@ -265,61 +176,63 @@ static bool GetBoneWorldPosition(Actor* actor, const char* boneName, NiPoint3* o
 	if (!rootNode) return false;
 	void* bone = GetObjectByName(rootNode, boneName);
 	if (!bone) return false;
-	NiPoint3* worldPos = (NiPoint3*)((UInt8*)bone + 0x8C);
-	*outPos = *worldPos;
+	float* worldPos = NiAVObjectAsView(bone)->world.translate;
+	outPos->x = worldPos[0];
+	outPos->y = worldPos[1];
+	outPos->z = worldPos[2];
 	return true;
 }
 
-static void PlaceBloodEffect(Actor* target, Actor* attacker, TESObjectWEAP* weapon, SInt32 hitLocation) {
-	if (!target || !target->parentCell || !weapon || !weapon->impactDataSet) return;
-	BGSImpactData* impactData = weapon->impactDataSet->impactDatas[kMaterial_Organic];
-	if (!impactData) return;
-
-	BSString* nifPath = (BSString*)((UInt8*)impactData + 0x1C);
-	const char* modelPath = nifPath->m_data;
-	if (!modelPath || !modelPath[0]) return;
-
+static NiPoint3 GetBodyImpactPosition(Actor* target, SInt32 hitLocation) {
 	NiPoint3 effectPos;
-	if (!GetBoneWorldPosition(target, GetBodyPartNodeName(hitLocation), &effectPos) &&
-		!GetBoneWorldPosition(target, GetBodyPartNodeNameAlt(hitLocation), &effectPos)) {
-		NiPoint3* p = target->GetPos();
-		effectPos.x = p->x; effectPos.y = p->y; effectPos.z = p->z + GetBodyPartZOffset(hitLocation);
+	if (GetBoneWorldPosition(target, GetBodyPartNodeName(hitLocation), &effectPos) ||
+		GetBoneWorldPosition(target, GetBodyPartNodeNameAlt(hitLocation), &effectPos)) {
+		return effectPos;
 	}
 
-	NiPoint3 effectRot = {0, 1, 0};
+	NiPoint3 refPos = GetRefPos(target);
+	return { refPos.x, refPos.y, refPos.z + GetBodyPartZOffset(hitLocation) };
+}
+
+static NiPoint3 GetImpactDirection(Actor* attacker, const NiPoint3& effectPos) {
+	NiPoint3 effectRot = { 0, 1, 0 };
 	if (attacker) {
-		NiPoint3* ap = attacker->GetPos();
-		effectRot.x = ap->x - effectPos.x; effectRot.y = ap->y - effectPos.y; effectRot.z = ap->z - effectPos.z;
+		NiPoint3 attackerPos = GetRefPos(attacker);
+		effectRot.x = attackerPos.x - effectPos.x;
+		effectRot.y = attackerPos.y - effectPos.y;
+		effectRot.z = attackerPos.z - effectPos.z;
 		effectRot.Normalize();
 	}
+	return effectRot;
+}
 
-	LoadTempEffectParticle(target->parentCell, impactData->effectDuration, modelPath, effectRot, effectPos, 1.0f, 7, nullptr);
+static void PlaceBloodEffect(Actor* target, Actor* attacker, TESObjectWEAP* weapon, SInt32 hitLocation) {
+	if (!target || !target->parentCell) return;
+	BGSImpactData* impactData = GetOrganicImpactData(weapon);
+	if (!impactData) return;
+
+	const char* modelPath = GetImpactModelPath(impactData);
+	if (!modelPath || !modelPath[0]) return;
+
+	NiPoint3 effectPos = GetBodyImpactPosition(target, hitLocation);
+	NiPoint3 effectRot = GetImpactDirection(attacker, effectPos);
+
+	LoadTempEffectParticle(target->parentCell, impactData->data.effectDuration, modelPath, effectRot, effectPos, 1.0f, 7, nullptr);
 }
 
 static void PlaceSkinnedBloodDecal(Actor* target, Actor* attacker, TESObjectWEAP* weapon, SInt32 hitLocation) {
-	if (!target || !target->parentCell || !weapon || !weapon->impactDataSet) return;
-	BGSImpactData* impactData = weapon->impactDataSet->impactDatas[kMaterial_Organic];
+	if (!target || !target->parentCell) return;
+	BGSImpactData* impactData = GetOrganicImpactData(weapon);
 	if (!impactData || !impactData->textureSet) return;
 
 	NiNode* actorNode = target->GetNiNode();
 	void* decalMgr = *g_decalManager;
 	if (!actorNode || !decalMgr) return;
 
-	NiPoint3 effectPos;
-	if (!GetBoneWorldPosition(target, GetBodyPartNodeName(hitLocation), &effectPos) &&
-		!GetBoneWorldPosition(target, GetBodyPartNodeNameAlt(hitLocation), &effectPos)) {
-		NiPoint3* p = target->GetPos();
-		effectPos.x = p->x; effectPos.y = p->y; effectPos.z = p->z + GetBodyPartZOffset(hitLocation);
-	}
+	NiPoint3 effectPos = GetBodyImpactPosition(target, hitLocation);
+	NiPoint3 effectRot = GetImpactDirection(attacker, effectPos);
 
-	NiPoint3 effectRot = {0, 1, 0};
-	if (attacker) {
-		NiPoint3* ap = attacker->GetPos();
-		effectRot.x = ap->x - effectPos.x; effectRot.y = ap->y - effectPos.y; effectRot.z = ap->z - effectPos.z;
-		effectRot.Normalize();
-	}
-
-	DecalInfo* di = &impactData->decalInfo;
+	DecalData* di = &impactData->decalData;
 	Decal decal;
 	memset(&decal, 0, sizeof(Decal));
 	decal.worldPos = effectPos; decal.rotation = effectRot; decal.point18 = effectRot;
@@ -327,11 +240,11 @@ static void PlaceSkinnedBloodDecal(Actor* target, Actor* attacker, TESObjectWEAP
 	decal.index = -1; decal.width = di->maxWidth; decal.height = di->maxHeight;
 	decal.depth = di->depth > 0 ? di->depth : 48.0f; decal.rng44 = 1.0f;
 	decal.parentCell = target->parentCell; decal.parallaxScale = di->parallaxScale;
-	decal.specular = di->shininess; decal.epsilon = impactData->angleThreshold;
-	decal.placementRadius = impactData->placementRadius;
-	decal.vertexColor.r = di->color.r / 255.0f;
-	decal.vertexColor.g = di->color.g / 255.0f;
-	decal.vertexColor.b = di->color.b / 255.0f;
+	decal.specular = di->shininess; decal.epsilon = impactData->data.angleThreshold;
+	decal.placementRadius = impactData->data.placementRadius;
+	decal.vertexColor.r = di->color.red / 255.0f;
+	decal.vertexColor.g = di->color.green / 255.0f;
+	decal.vertexColor.b = di->color.blue / 255.0f;
 	decal.hitLocationFlags = (1 << hitLocation);
 	decal.isParallax = (di->flags & 1) ? 1 : 0;
 	decal.isAlphaTest = (di->flags & 4) ? 1 : 0;
@@ -343,19 +256,14 @@ static void PlaceSkinnedBloodDecal(Actor* target, Actor* attacker, TESObjectWEAP
 }
 
 static void PlayImpactSound(Actor* target, TESObjectWEAP* weapon, SInt32 hitLocation) {
-	if (!target || !weapon || !weapon->impactDataSet) return;
-	BGSImpactData* impactData = weapon->impactDataSet->impactDatas[kMaterial_Organic];
+	if (!target) return;
+	BGSImpactData* impactData = GetOrganicImpactData(weapon);
 	if (!impactData) return;
 
-	NiPoint3 effectPos;
-	if (!GetBoneWorldPosition(target, GetBodyPartNodeName(hitLocation), &effectPos) &&
-		!GetBoneWorldPosition(target, GetBodyPartNodeNameAlt(hitLocation), &effectPos)) {
-		NiPoint3* p = target->GetPos();
-		effectPos.x = p->x; effectPos.y = p->y; effectPos.z = p->z + GetBodyPartZOffset(hitLocation);
-	}
+	NiPoint3 effectPos = GetBodyImpactPosition(target, hitLocation);
 
 	NiNode* actorNode = target->GetNiNode();
-	TESSound* sound1 = (TESSound*)impactData->sound1;
+	TESSound* sound1 = impactData->sound1;
 	if (sound1 && sound1->refID) {
 		Sound snd;
 		InitSoundForm(g_audioManager, &snd, sound1->refID, 0x102);
@@ -365,7 +273,7 @@ static void PlayImpactSound(Actor* target, TESObjectWEAP* weapon, SInt32 hitLoca
 			Engine::BSSoundHandle_Play(&snd, false);
 		}
 	}
-	TESSound* sound2 = (TESSound*)impactData->sound2;
+	TESSound* sound2 = impactData->sound2;
 	if (sound2 && sound2->refID) {
 		Sound snd2;
 		InitSoundForm(g_audioManager, &snd2, sound2->refID, 0x102);
@@ -378,15 +286,19 @@ static void PlayImpactSound(Actor* target, TESObjectWEAP* weapon, SInt32 hitLoca
 }
 
 static bool IsActorTypeID(UInt8 typeID) {
-	return typeID == 0x3B || typeID == 0x3C;
+	return typeID == kFormType_ACHR || typeID == kFormType_ACRE;
+}
+
+static bool IsWeaponForm(TESForm* form) {
+	return form && form->typeID == kFormType_Weapon;
 }
 
 //0x5AC750 - fires OnHit/OnHitWith script blocks and NVSE events
-typedef bool (__cdecl* MarkScriptEvent_t)(TESForm* eventSource, void* extraDataList, UInt32 eventMask);
+typedef bool (__cdecl* MarkScriptEvent_t)(TESForm* eventSource, BaseExtraList* extraDataList, UInt32 eventMask);
 static MarkScriptEvent_t MarkScriptEvent = (MarkScriptEvent_t)0x5AC750;
 
-static void* GetExtraDataList(void* ref) {
-	return (void*)((UInt8*)ref + 0x44);
+static BaseExtraList* GetExtraDataList(TESObjectREFR* ref) {
+	return ref ? &ref->extraDataList : nullptr;
 }
 
 static ActorHitData BuildHitData(Actor* target, Actor* attacker, TESObjectWEAP* weapon,
@@ -405,10 +317,10 @@ static ActorHitData BuildHitData(Actor* target, Actor* attacker, TESObjectWEAP* 
 	hitData.limbDmg = limbDmg;
 	hitData.weapon = weapon;
 	hitData.weapHealthPerc = weapon ? 1.0f : 0.0f;
-	NiPoint3* tp = target->GetPos();
-	hitData.impactPos.x = tp->x;
-	hitData.impactPos.y = tp->y;
-	hitData.impactPos.z = tp->z + 50.0f;
+	NiPoint3 targetPos = GetRefPos(target);
+	hitData.impactPos.x = targetPos.x;
+	hitData.impactPos.y = targetPos.y;
+	hitData.impactPos.z = targetPos.z + 50.0f;
 	hitData.impactAngle.z = 1.0f;
 	hitData.flags = flags;
 	hitData.dmgMult = 1.0f;
@@ -424,24 +336,24 @@ static void ApplyHit(Actor* target, Actor* attacker, ActorHitData* hitData,
 	float damage, float fatigueDmg, float limbDmg, SInt32 hitLocation,
 	TESObjectWEAP* weapon, bool skipOnHit)
 {
-	target->baseProcess->CopyHitData(hitData);
-	target->DamageHealthAndFatigue(damage, fatigueDmg, attacker);
+	CopyHitData(target->baseProcess, hitData);
+	DamageHealthAndFatigue(target, damage, fatigueDmg, attacker);
 	//limb damage hits the body part's condition AV. resolve it from the actor's
 	//body part data - the AV varies per part and per race. DamageActorValue takes
 	//a positive damage amount (it gates out negatives for condition AVs 0x19-0x1F)
 	if (limbDmg > 0.0f && hitLocation >= 0 && hitLocation <= 14) {
 		if (BGSBodyPartData* bpd = GetActorBodyPartData(target))
 			if (BGSBodyPart* part = bpd->bodyParts[hitLocation])
-				target->DamageActorValue(part->actorValue, limbDmg, attacker);
+				DamageActorValue(target, part->actorValue, limbDmg, attacker);
 	}
 
 	if (!skipOnHit) {
 		//script events: OnHit (0x80) and OnHitWith (0x100)
-		void* targetExtra = GetExtraDataList(target);
+		BaseExtraList* targetExtra = GetExtraDataList(target);
 		if (attacker)
-			MarkScriptEvent((TESForm*)attacker, targetExtra, 0x80);
+			MarkScriptEvent(attacker, targetExtra, 0x80);
 		if (weapon)
-			MarkScriptEvent((TESForm*)weapon, targetExtra, 0x100);
+			MarkScriptEvent(weapon, targetExtra, 0x100);
 
 		//hostility: if player is the attacker, trigger crime/combat AI
 		if (attacker && attacker == *(Actor**)g_thePlayerPtr)
@@ -455,15 +367,14 @@ static void ApplyHit(Actor* target, Actor* attacker, ActorHitData* hitData,
 		PlayImpactSound(target, weapon, bloodLoc);
 	}
 
-	target->baseProcess->ResetHitData();
+	ResetHitData(target->baseProcess);
 }
 
 static bool Cmd_FakeHit_Execute(COMMAND_ARGS) {
 	*result = 0;
 	if (!thisObj || !extractArgs) return true;
 
-	UInt8 typeID = *((UInt8*)thisObj + 4);
-	if (!IsActorTypeID(typeID)) return true;
+	if (!IsActorTypeID(thisObj->typeID)) return true;
 
 	Actor* attacker = nullptr;
 	float damage = -1.0f;
@@ -474,14 +385,14 @@ static bool Cmd_FakeHit_Execute(COMMAND_ARGS) {
 
 	if (!extractArgs(EXTRACT_ARGS_EX, &attacker, &damage, &weaponForm, &hitLocation, &flags, &bSkipOnHit)) return true;
 
-	if (attacker && !IsActorTypeID(*((UInt8*)attacker + 4))) attacker = nullptr; //non-actor attacker would be misused as Actor* in damage/crime paths
+	if (attacker && !IsActorTypeID(attacker->typeID)) attacker = nullptr; //non-actor attacker would be misused as Actor* in damage/crime paths
 
-	Actor* target = (Actor*)thisObj;
+	Actor* target = static_cast<Actor*>(thisObj);
 	if (!target->baseProcess) return true;
 
-	if (weaponForm && *((UInt8*)weaponForm + 4) != 0x28) weaponForm = nullptr; //weapon only, reads weapon+0x108/+0x24C, garbage on any other form
-	TESObjectWEAP* weapon = (TESObjectWEAP*)weaponForm;
-	if (damage < 0.0f) damage = weapon ? (float)weapon->attackDmg : 1.0f;
+	if (!IsWeaponForm(weaponForm)) weaponForm = nullptr;
+	TESObjectWEAP* weapon = static_cast<TESObjectWEAP*>(weaponForm);
+	if (damage < 0.0f) damage = weapon ? (float)weapon->attackDmg.damage : 1.0f;
 
 	auto hitData = BuildHitData(target, attacker, weapon, damage, 0.0f, 0.0f, hitLocation, flags);
 	ApplyHit(target, attacker, &hitData, damage, 0.0f, 0.0f, hitLocation, weapon, bSkipOnHit != 0);
@@ -494,8 +405,7 @@ static bool Cmd_FakeHitEx_Execute(COMMAND_ARGS) {
 	*result = 0;
 	if (!thisObj || !extractArgs) return true;
 
-	UInt8 typeID = *((UInt8*)thisObj + 4);
-	if (!IsActorTypeID(typeID)) return true;
+	if (!IsActorTypeID(thisObj->typeID)) return true;
 
 	Actor* attacker = nullptr;
 	float damage = 0.0f, fatigueDmg = 0.0f, limbDmg = 0.0f;
@@ -506,13 +416,13 @@ static bool Cmd_FakeHitEx_Execute(COMMAND_ARGS) {
 
 	if (!extractArgs(EXTRACT_ARGS_EX, &attacker, &damage, &fatigueDmg, &limbDmg, &weaponForm, &hitLocation, &flags, &bSkipOnHit)) return true;
 
-	if (attacker && !IsActorTypeID(*((UInt8*)attacker + 4))) attacker = nullptr; //non-actor attacker would be misused as Actor* in damage/crime paths
+	if (attacker && !IsActorTypeID(attacker->typeID)) attacker = nullptr; //non-actor attacker would be misused as Actor* in damage/crime paths
 
-	Actor* target = (Actor*)thisObj;
+	Actor* target = static_cast<Actor*>(thisObj);
 	if (!target->baseProcess) return true;
 
-	if (weaponForm && *((UInt8*)weaponForm + 4) != 0x28) weaponForm = nullptr; //weapon only, reads weapon+0x108/+0x24C, garbage on any other form
-	TESObjectWEAP* weapon = (TESObjectWEAP*)weaponForm;
+	if (!IsWeaponForm(weaponForm)) weaponForm = nullptr;
+	TESObjectWEAP* weapon = static_cast<TESObjectWEAP*>(weaponForm);
 
 	auto hitData = BuildHitData(target, attacker, weapon, damage, fatigueDmg, limbDmg, hitLocation, flags);
 	ApplyHit(target, attacker, &hitData, damage, fatigueDmg, limbDmg, hitLocation, weapon, bSkipOnHit != 0);
@@ -524,18 +434,17 @@ static bool Cmd_FakeHitEx_Execute(COMMAND_ARGS) {
 static void SpawnObjectImpactEffect(TESObjectREFR* obj, BGSImpactData* impactData) {
 	if (!obj || !impactData) return;
 
-	NiPoint3 pos = { obj->posX, obj->posY, obj->posZ };
+	NiPoint3 pos = GetRefPos(obj);
 
 	if (obj->parentCell) {
-		BSString* nifPath = (BSString*)((UInt8*)impactData + 0x1C);
-		const char* modelPath = nifPath->m_data;
+		const char* modelPath = GetImpactModelPath(impactData);
 		if (modelPath && modelPath[0]) {
 			NiPoint3 rot = { 0, 0, 1 };
-			LoadTempEffectParticle(obj->parentCell, impactData->effectDuration, modelPath, rot, pos, 1.0f, 7, nullptr);
+			LoadTempEffectParticle(obj->parentCell, impactData->data.effectDuration, modelPath, rot, pos, 1.0f, 7, nullptr);
 		}
 	}
 
-	TESSound* sounds[2] = { (TESSound*)impactData->sound1, (TESSound*)impactData->sound2 };
+	TESSound* sounds[2] = { impactData->sound1, impactData->sound2 };
 	for (TESSound* sound : sounds) {
 		if (!sound || !sound->refID) continue;
 		Sound snd;
@@ -555,16 +464,15 @@ static bool Cmd_FakeImpact_Execute(COMMAND_ARGS) {
 	SInt32 materialType = -1;
 	if (!extractArgs(EXTRACT_ARGS_EX, &weaponForm, &materialType)) return true;
 
-	//weapon only: GetWeaponImpactData reads weapon+0x24C, garbage on any other form
-	if (!weaponForm || *((UInt8*)weaponForm + 4) != 0x28) return true;
+	if (!IsWeaponForm(weaponForm)) return true;
 
 	//materialType is a raw MATERIAL_TYPE (0-31), remapped to a slot by GetWeaponImpactData.
 	//<0 = omitted; true auto-detect needs a collision (raycast), so fall back to 0 for now
 	UInt32 material = (materialType < 0) ? 0 : (UInt32)materialType;
-	BGSImpactData* impactData = GetWeaponImpactData((TESObjectWEAP*)weaponForm, material);
+	BGSImpactData* impactData = GetWeaponImpactData(static_cast<TESObjectWEAP*>(weaponForm), material);
 	if (!impactData) return true;
 
-	SpawnObjectImpactEffect((TESObjectREFR*)thisObj, impactData);
+	SpawnObjectImpactEffect(thisObj, impactData);
 	*result = 1;
 	return true;
 }

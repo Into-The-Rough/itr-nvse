@@ -1,9 +1,12 @@
 //fires when an actor becomes frenzied (brain condition goes to 0)
 
 #include "OnFrenzyHandler.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
+#include "internal/GameLayout.h"
 
 constexpr UInt32 kAddr_LimbCondition_HandleChange = 0x8B9240;
 static Detours::JumpDetour s_detour;
@@ -22,7 +25,7 @@ static void __cdecl Hook_LimbCondition_HandleChange(
     float delta,
     void* attackerAVO
 ) {
-    Actor* actor = actorValueOwner ? (Actor*)((UInt8*)actorValueOwner - 0xA4) : nullptr;
+    Actor* actor = ActorValueOwnerToActor(static_cast<ActorValueOwner*>(actorValueOwner));
 
     bool willFrenzy = false;
     if (avIndex == 31 && oldValue > 0.0f && delta < 0.0f) {

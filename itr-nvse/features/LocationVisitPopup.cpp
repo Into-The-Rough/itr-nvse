@@ -4,7 +4,9 @@
 #include "internal/CooldownTracker.h"
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
+#include "internal/MenuLayout.h"
 #include <Windows.h>
+#include <cstddef>
 #include <vector>
 #include <cstring>
 
@@ -23,6 +25,14 @@ namespace LocationVisitPopup
 	{
 		char name[260];
 	};
+
+	struct MarkerDataView
+	{
+		void* unk00;
+		const char* name;
+	};
+
+	static_assert(offsetof(MarkerDataView, name) == 0x04);
 
 	static CooldownTracker<256> s_tracker;
 	static CRITICAL_SECTION s_stateLock;
@@ -49,7 +59,7 @@ namespace LocationVisitPopup
 	static void* GetHUDMainMenuTile() {
 		void* hud = *(void**)0x11D96C0; //HUDMainMenu
 		if (!hud) return nullptr;
-		return *(void**)((UInt8*)hud + 0x04); //Menu::tile
+		return HUDMainMenuGetRootTile(hud);
 	}
 
 	static bool CheckMUXInstalled() {
@@ -107,7 +117,7 @@ namespace LocationVisitPopup
 		if (!markerDataPtr)
 			return;
 
-		const char* name = *(const char**)((UInt8*)markerDataPtr + 4);
+		const char* name = static_cast<MarkerDataView*>(markerDataPtr)->name;
 		if (!name || !name[0])
 			return;
 

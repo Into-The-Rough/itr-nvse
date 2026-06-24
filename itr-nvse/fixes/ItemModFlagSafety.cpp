@@ -4,17 +4,22 @@
 //not hot-reloadable
 
 #include "ItemModFlagSafety.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 #include "internal/globals.h"
 
 namespace ItemModFlagSafety
 {
+	constexpr UInt8 kXData_WeaponModFlags = 0x8D;
+
 	//sub_4BD570 reads the weapon itemMod slot form
-	typedef int(__thiscall* GetModSlotForm_t)(void* baseForm, int bit);
+	typedef int(__thiscall* GetModSlotForm_t)(TESForm* baseForm, int bit);
 	//entry to base form helper used by PopulateItemStatsDisplay
-	typedef void* (__thiscall* EntryGetForm_t)(void* entry);
+	typedef TESForm* (__thiscall* EntryGetForm_t)(void* entry);
 	//sub_4BD820 returns nonzero when the entry has ExtraWeaponModFlags
 	typedef char(__thiscall* EntryHasModFlag_t)(void* entry);
 
@@ -25,13 +30,13 @@ namespace ItemModFlagSafety
 	static GetModSlotForm_t s_originalGetSlot = nullptr;
 	static Detours::CallDetour s_statCardGate;
 
-	static bool IsWeaponForm(void* form)
+	static bool IsWeaponForm(TESForm* form)
 	{
-		return form && *(UInt8*)((char*)form + 0x04) == 0x28; //kFormType_TESObjectWEAP
+		return form && form->typeID == kFormType_Weapon;
 	}
 
 	//__thiscall baseForm in ecx and bit on stack
-	int __fastcall Hook_GetModSlotForm(void* baseForm, void* edx, int bit)
+	int __fastcall Hook_GetModSlotForm(TESForm* baseForm, void* edx, int bit)
 	{
 		if (!IsWeaponForm(baseForm) || !s_originalGetSlot) return 0;
 		return s_originalGetSlot(baseForm, bit);
@@ -47,13 +52,13 @@ namespace ItemModFlagSafety
 	//sub_775A00 builds the world activation prompt
 	//jip only appends plus in the weapon branch
 	//0x776F87 is after the prompt name write and before display branching
-	static void __fastcall RolloverAppendPlus(void* refr)
+	static void __fastcall RolloverAppendPlus(TESObjectREFR* refr)
 	{
 		if (!refr) return;
-		void* base = *(void**)((char*)refr + 0x20); //base form
-		if (!base || *(UInt8*)((char*)base + 0x04) == 0x28) return; //weapon handled by jip
-		void* x = Engine::BaseExtraList_GetByType((void*)((char*)refr + 0x44), 0x8D); //ref BaseExtraList is embedded at +0x44
-		if (!x || *(UInt8*)((char*)x + 0x0C) == 0) return;
+		if (!refr->baseForm || refr->baseForm->typeID == kFormType_Weapon) return; //weapon handled by jip
+		auto* x = static_cast<ExtraWeaponModFlagsView*>(
+			Engine::BaseExtraList_GetByType(&refr->extraDataList, kXData_WeaponModFlags));
+		if (!x || x->flags == 0) return;
 		char* name = (char*)0x11D9C48;
 		UInt32 len = 0;
 		while (name[len]) ++len;

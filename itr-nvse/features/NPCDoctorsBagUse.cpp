@@ -9,16 +9,12 @@ namespace NPCDoctorsBagUse
 	static float g_cooldown = 15.0f;
 	static bool g_enabled = false;
 
-	static float GetActorValue(void* actor, uint32_t avCode)
+	static float GetActorValue(Actor* actor, uint32_t avCode)
 	{
-		//ActorValueOwner at Actor+0xA4
-		void* avOwner = (char*)actor + 0xA4;
-		void** vtbl = *(void***)avOwner;
-		typedef float(__thiscall* GetAV_t)(void*, uint32_t);
-		return ((GetAV_t)vtbl[3])(avOwner, avCode);
+		return ActorValueOwnerGetValue(ActorGetActorValueOwner(actor), avCode);
 	}
 
-	static bool HasCrippledLimb(void* actor)
+	static bool HasCrippledLimb(Actor* actor)
 	{
 		if (GetActorValue(actor, 0x48) > 0.0f) //IgnoreCrippledLimbs
 			return false;

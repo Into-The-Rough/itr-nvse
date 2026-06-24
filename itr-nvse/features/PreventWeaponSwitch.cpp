@@ -5,9 +5,11 @@
 #include <cstdint>
 #include <cstring>
 #include "internal/Detours.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
-#include "internal/CallTemplates.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 
 #include "internal/globals.h"
 #include "internal/ScopedLock.h"
@@ -78,13 +80,13 @@ void __fastcall Hook_SwitchWeaponUpdate(void* procedure, void* edx)
 		ScopedLock lock(&g_lock);
 		if (g_count > 0)
 		{
-			void* controller = *(void**)((char*)procedure + 0x4);
+			void* controller = CombatProcedureGetCombatController(procedure);
 			if (controller)
 			{
 				Actor* actor = (Actor*)Engine::CombatController_GetPackageOwner(controller);
 				if (actor)
 				{
-					UInt32 refID = *(UInt32*)((char*)actor + 0x0C);
+					UInt32 refID = actor->refID;
 					if (IsBlocked_Unlocked(refID))
 						shouldBlock = true;
 				}
@@ -94,8 +96,7 @@ void __fastcall Hook_SwitchWeaponUpdate(void* procedure, void* edx)
 
 	if (shouldBlock)
 	{
-		//eStatus = 2 (finished) at offset 0x8
-		*(UInt32*)((char*)procedure + 0x8) = 2;
+		CombatProcedureSetStatus(procedure, 2);
 		return;
 	}
 	s_detour.GetTrampoline<SwitchWeaponUpdate_t>()(procedure);
@@ -115,7 +116,7 @@ void Set(Actor* actor, bool block)
 	if (!actor)
 		return;
 
-	UInt32 refID = *(UInt32*)((char*)actor + 0x0C);
+	UInt32 refID = actor->refID;
 	SetBlocked(refID, block);
 }
 
@@ -124,16 +125,8 @@ bool Get(Actor* actor)
 	if (!actor)
 		return false;
 
-	UInt32 refID = *(UInt32*)((char*)actor + 0x0C);
+	UInt32 refID = actor->refID;
 	return IsBlocked(refID);
-}
-
-//vtable index 0x100
-inline bool IsActorRef(TESObjectREFR* ref) {
-	if (!ref) return false;
-	UInt32 vtable = *(UInt32*)ref;
-	UInt32 isActorFn = *(UInt32*)(vtable + 0x100);
-	return ThisCall<bool>(isActorFn, ref);
 }
 
 static bool Cmd_SetPreventWeaponSwitch_Execute(COMMAND_ARGS)
@@ -143,7 +136,7 @@ static bool Cmd_SetPreventWeaponSwitch_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &block))
 		return true;
 
-	if (IsActorRef(thisObj))
+	if (Engine::TESObjectREFR_IsActor(thisObj))
 	{
 		Set((Actor*)thisObj, block != 0);
 		*result = 1;
@@ -154,7 +147,7 @@ static bool Cmd_SetPreventWeaponSwitch_Execute(COMMAND_ARGS)
 static bool Cmd_GetPreventWeaponSwitch_Execute(COMMAND_ARGS)
 {
 	*result = 0;
-	if (IsActorRef(thisObj))
+	if (Engine::TESObjectREFR_IsActor(thisObj))
 	{
 		*result = Get((Actor*)thisObj) ? 1 : 0;
 	}

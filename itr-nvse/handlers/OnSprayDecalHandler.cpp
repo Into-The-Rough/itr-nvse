@@ -3,9 +3,12 @@
 //decal. main-loop only, so the static emitter ptr is safe.
 
 #include "OnSprayDecalHandler.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
+#include "internal/GameLayout.h"
 
 constexpr UInt32 kAddr_BGSDecalEmitter_Update = 0x4A2D50;
 constexpr UInt32 kAddr_AddDecalCallSite = 0x4A36FD;
@@ -40,9 +43,8 @@ static void __fastcall HookSprayAddDecal(void* cell, void* edx, void* decalData,
 	if (!g_currentEmitter || !g_currentEmitter->pImpactData) return;
 	if (!decalData) return;
 
-	//DECAL_CREATION_DATA: kOrigin (NiPoint3) at +0x00, kDirection (NiPoint3) at +0x0C
-	float* origin = (float*)decalData;
-	float* direction = (float*)((UInt8*)decalData + 0x0C);
+	const float* origin = DecalCreationDataGetOrigin(decalData);
+	const float* direction = DecalCreationDataGetDirection(decalData);
 
 	g_eventManagerInterface->DispatchEventThreadSafe(
 		"ITR:OnSprayDecal", nullptr, nullptr,

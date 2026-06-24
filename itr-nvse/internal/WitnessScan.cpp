@@ -1,5 +1,6 @@
 #include "WitnessScan.h"
 #include "EngineFunctions.h"
+#include "GameLayout.h"
 #include "settings.h"
 #include "nvse/GameObjects.h"
 
@@ -41,7 +42,7 @@ void FindWitnesses(Actor* perpetrator, const float* crimeLocXYZ,
 		if (!actor->baseProcess) continue;
 
 		//skip teammates - they never witness crimes committed by the player
-		if (*reinterpret_cast<UInt8*>(reinterpret_cast<char*>(actor) + 0x18D))
+		if (ActorIsTeammate(actor))
 			continue;
 
 		float dx = actor->posX - cx;

@@ -1,9 +1,12 @@
 //hooks Actor::SetAnimAction call at 0x894081 in FiresWeapon when weapon jams
 
 #include "OnWeaponJamHandler.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"
+#include "internal/GameLayout.h"
 
 namespace OnWeaponJamHandler {
     bool g_hookInstalled = false;
@@ -16,17 +19,11 @@ static TESObjectWEAP* GetActorCurrentWeapon(Actor* actor)
 {
     if (!actor) return nullptr;
 
-    UInt32 pProcess = *(UInt32*)((UInt8*)actor + 0x68);
-    if (!pProcess) return nullptr;
+    BaseProcess* process = actor->baseProcess;
+    if (!process) return nullptr;
 
-    UInt32 vtable = *(UInt32*)pProcess;
-    if (!vtable) return nullptr;
-
-    typedef UInt32 (__thiscall *GetCurrentWeapon_t)(UInt32 pProcess);
-    UInt32 itemChange = ((GetCurrentWeapon_t)(*(UInt32*)(vtable + 82 * 4)))(pProcess);
-    if (!itemChange) return nullptr;
-
-    return (TESObjectWEAP*)(*(UInt32*)(itemChange + 0x08));
+    auto* weaponInfo = process->GetWeaponInfo();
+    return weaponInfo ? weaponInfo->weapon : nullptr;
 }
 
 static void DispatchWeaponJamEvent(Actor* actor)

@@ -2,9 +2,13 @@
 //NOT hot-reloadable - requires game restart
 
 #include "VATSLimbFix.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
+#include "internal/NiLayout.h"
 #include <cstring>
 
 #include "internal/globals.h"
@@ -68,13 +72,8 @@ namespace VATSLimbFix
 		return xDismember ? xDismember->dismemberedMask : 0;
 	}
 
-	//NiSkinInstance+0x10 = actorRoot (NiNode*)
-	//TESObjectREFR+0x64 = RenderState*, RenderState+0x14 = rootNode (NiNode*)
 	void* GetRefRootNode(LimbFixREFR* ref) {
-		if (!ref) return nullptr;
-		void* renderState = *(void**)((uint8_t*)ref + 0x64);
-		if (!renderState) return nullptr;
-		return *(void**)((uint8_t*)renderState + 0x14);
+		return TESObjectREFRGetNiNodeRaw(reinterpret_cast<TESObjectREFR*>(ref));
 	}
 
 	LimbFixREFR* FindOwnerRef(void* skinActorRoot) {
@@ -98,7 +97,7 @@ namespace VATSLimbFix
 
 	void __fastcall SetPartitionVisible_Hook(void* skinInstance, void* edx, uint16_t limbID, char visible) {
 		if (visible) {
-			void* actorRoot = *(void**)((uint8_t*)skinInstance + 0x10);
+			void* actorRoot = NiSkinInstanceGetActorRoot(skinInstance);
 			LimbFixREFR* owner = FindOwnerRef(actorRoot);
 			if (owner && (GetDismemberMask(owner) & (1 << limbID)))
 				return;

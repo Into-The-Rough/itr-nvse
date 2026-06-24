@@ -1,9 +1,9 @@
 #include "CompanionNoBlock.h"
 
 #include "internal/Detours.h"
+#include "internal/GameLayout.h"
 #include "internal/GameGlobals.h"
-#include "nvse/GameForms.h"
-#include "nvse/GameObjects.h"
+#include "internal/HavokLayout.h"
 
 #include <cstring>
 #include <unordered_map>
@@ -16,14 +16,6 @@ namespace
 	typedef void* (__thiscall* _getRoot)(void*);
 	const _getRoot getRoot = reinterpret_cast<_getRoot>(0x624020); //hkpCollidable::getRoot
 
-	//hkpCharacterProxy::updateManifold reads both collectors as
-	//hkpAllCdPointCollector::m_hits hkArray at +0x10: data +0x00, size +0x04.
-	constexpr UInt32 kCollector_HitsData = 0x10;
-	constexpr UInt32 kCollector_HitsSize = 0x14;
-	//the same function copies hkpRootCdPoint in 112-byte chunks and compares
-	//m_rootCollidableB at +0x48 while matching old manifold points.
-	constexpr UInt32 kRootCdPointStride = 112;
-	constexpr UInt32 kRootCdPoint_CollidableB = 0x48;
 	constexpr UInt32 kStalePairSteps = 600;
 	constexpr UInt32 kRebuildInterval = 60; //proxy map only changes on cell/teammate change - no need to rebuild every frame
 
@@ -53,38 +45,33 @@ namespace
 		if (!collidable)
 			return nullptr;
 		void* root = getRoot(collidable);
-		if (!root)
-			return nullptr;
-		return static_cast<UInt8*>(root) - 0x10;
+		return HkpWorldObjectFromCollidableRoot(root);
 	}
 
-	void* GetActorController(void* actor)
+	BhkCharacterControllerView* GetActorController(Actor* actor)
 	{
 		if (!actor)
 			return nullptr;
-		void* process = *reinterpret_cast<void**>(static_cast<UInt8*>(actor) + 0x68);
+		BaseProcess* process = actor->baseProcess;
 		if (!process)
 			return nullptr;
-		if (*reinterpret_cast<UInt32*>(static_cast<UInt8*>(process) + 0x28) > 1)
+		if (process->processLevel > 1)
 			return nullptr;
-		return *reinterpret_cast<void**>(static_cast<UInt8*>(process) + 0x138);
+		return reinterpret_cast<BhkCharacterControllerView*>(
+			reinterpret_cast<ProcessControllerView*>(process)->characterController);
 	}
 
-	void* GetActorProxy(void* ctrl)
+	void* GetActorProxy(BhkCharacterControllerView* ctrl)
 	{
-		return ctrl ? *reinterpret_cast<void**>(static_cast<UInt8*>(ctrl) + 0x08) : nullptr;
+		return ctrl ? ctrl->proxy.serializable.hkObject : nullptr;
 	}
 
-	//the actor's character-controller havok phantom, i.e. the thing other proxies collide
-	//against. chain matches OnContactHandler::MapActorPhantom: *( *(ctrl+0x594) + 0x08 )
-	void* GetActorPhantom(void* ctrl)
+	void* GetActorPhantom(BhkCharacterControllerView* ctrl)
 	{
 		if (!ctrl)
 			return nullptr;
-		void* chrPhantom = *reinterpret_cast<void**>(static_cast<UInt8*>(ctrl) + 0x594);
-		if (!chrPhantom)
-			return nullptr;
-		return *reinterpret_cast<void**>(static_cast<UInt8*>(chrPhantom) + 0x08);
+		BhkCharacterPhantomView* chrPhantom = ctrl->characterPhantom;
+		return chrPhantom ? chrPhantom->havokPhantom : nullptr;
 	}
 
 	//advances at most once per step per key so both collectors and both proxy sides of a
@@ -110,18 +97,16 @@ namespace
 	{
 		if (!collector)
 			return;
-		UInt8* base = static_cast<UInt8*>(collector);
-		UInt8** data = reinterpret_cast<UInt8**>(base + kCollector_HitsData);
-		int* size = reinterpret_cast<int*>(base + kCollector_HitsSize);
-		UInt8* hits = *data;
-		if (!hits || *size <= 0)
+		auto* collectorView = reinterpret_cast<HkpAllCdPointCollectorView*>(collector);
+		HkpRootCdPointView* hits = collectorView->hits.data;
+		if (!hits || collectorView->hits.size <= 0)
 			return;
 
-		int n = *size;
+		int n = collectorView->hits.size;
 		for (int i = 0; i < n; )
 		{
-			UInt8* pt = hits + static_cast<UInt32>(i) * kRootCdPointStride;
-			void* otherColl = *reinterpret_cast<void**>(pt + kRootCdPoint_CollidableB);
+			HkpRootCdPointView* pt = hits + i;
+			void* otherColl = pt->rootCollidableB;
 			void* otherWO = ResolveCollidableToWorldObj(otherColl);
 
 			void* pairKey = nullptr;
@@ -139,14 +124,14 @@ namespace
 			{
 				--n;
 				if (i != n)
-					memcpy(pt, hits + static_cast<UInt32>(n) * kRootCdPointStride, kRootCdPointStride);
+					memcpy(pt, hits + n, sizeof(HkpRootCdPointView));
 			}
 			else
 			{
 				++i;
 			}
 		}
-		*size = n;
+		collectorView->hits.size = n;
 	}
 
 	Detours::JumpDetour g_updateManifoldDetour;
@@ -207,7 +192,7 @@ namespace
 		if (player && player->parentCell && player->refID)
 		{
 			gateOpen = !g_interiorOnly || player->parentCell->IsInterior();
-			void* playerCtrl = GetActorController(player);
+			BhkCharacterControllerView* playerCtrl = GetActorController(player);
 			playerProxy = GetActorProxy(playerCtrl);
 			playerPhantom = GetActorPhantom(playerCtrl);
 			if (playerProxy && playerPhantom)
@@ -220,7 +205,7 @@ namespace
 					continue;
 				if (actor->parentCell != player->parentCell)
 					continue;
-				void* ctrl = GetActorController(actor);
+				BhkCharacterControllerView* ctrl = GetActorController(actor);
 				void* proxy = GetActorProxy(ctrl);
 				void* phantom = GetActorPhantom(ctrl);
 				if (proxy)

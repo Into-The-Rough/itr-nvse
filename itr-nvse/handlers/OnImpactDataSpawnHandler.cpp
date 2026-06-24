@@ -3,9 +3,12 @@
 //ImpactData via the weapon's ImpactDataSet.
 
 #include "OnImpactDataSpawnHandler.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
+#include "internal/GameLayout.h"
 
 constexpr UInt32 kAddr_SpawnCollisionEffects = 0x9C20E0;
 constexpr UInt32 kAddr_GetImpactDataForMaterial = 0x522BA0;
@@ -18,7 +21,7 @@ typedef void* (__thiscall* GetImpactDataForMaterial_t)(void*, UInt32);
 static Detours::JumpDetour s_detour;
 
 static bool IsActorTypeID(UInt8 typeID) {
-	return typeID == 0x3B || typeID == 0x3C;
+	return typeID == kFormType_ACHR || typeID == kFormType_ACRE;
 }
 
 static void __fastcall HookSpawnCollisionEffects(
@@ -36,12 +39,11 @@ static void __fastcall HookSpawnCollisionEffects(
 
 	//actor targets skip the impact-effects path entirely
 	if (a2) {
-		UInt8 typeID = *((UInt8*)a2 + 0x04);
+		UInt8 typeID = a2->typeID;
 		if (IsActorTypeID(typeID)) return;
 	}
 
-	//Projectile + 0xF8 = pSourceWeapon
-	void* weapon = *(void**)((UInt8*)this_ + 0xF8);
+	auto* weapon = ProjectileGetSourceWeapon(this_);
 	if (!weapon) return;
 
 	void* impactData = ((GetImpactDataForMaterial_t)kAddr_GetImpactDataForMaterial)(weapon, material);

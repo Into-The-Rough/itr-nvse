@@ -10,6 +10,7 @@
 #include "internal/globals.h"
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 #include "internal/GameGlobals.h"
 namespace Settings { extern int bAshPileNames; }
 
@@ -34,7 +35,7 @@ namespace AshPileNames
 		BSExtraData* extraData = GetExtraDataByType(&ashPileRef->extraDataList, 0x89); //kExtraData_AshPileRef
 		if (!extraData) return nullptr;
 
-		TESObjectREFR* sourceRef = *(TESObjectREFR**)((UInt8*)extraData + 0x0C);
+		TESObjectREFR* sourceRef = ExtraAshPileRefGetSourceRef(extraData);
 		if (!sourceRef || !sourceRef->baseForm) return nullptr;
 
 		TESForm* baseForm = sourceRef->baseForm;

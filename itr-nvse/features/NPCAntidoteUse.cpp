@@ -10,44 +10,26 @@ namespace NPCAntidoteUse
 	static float g_healthThreshold = 25.0f;
 	static bool g_enabled = false;
 
-	static float GetHealthPercent(void* actor)
+	static float GetHealthPercent(Actor* actor)
 	{
-		//ActorValueOwner at Actor+0xA4
-		void* avOwner = (char*)actor + 0xA4;
-		void** vtbl = *(void***)avOwner;
-
-		typedef float(__thiscall* GetAV_t)(void*, uint32_t);
-		float current = ((GetAV_t)vtbl[3])(avOwner, 0x10);
-		float base = ((GetAV_t)vtbl[1])(avOwner, 0x10);
+		auto* avOwner = ActorGetActorValueOwner(actor);
+		float current = ActorValueOwnerGetValue(avOwner, 0x10);
+		float base = ActorValueOwnerGetBaseValue(avOwner, 0x10);
 
 		if (base <= 0.0f) return 100.0f;
 		return (current / base) * 100.0f;
 	}
 
-	static bool IsPoisoned(void* actor)
+	static bool IsPoisoned(Actor* actor)
 	{
-		//MagicTarget at 0x94, vtable[2] = GetEffectList
-		void* magicTarget = (char*)actor + 0x94;
-		void** vtbl = *(void***)magicTarget;
-
-		typedef void* (__thiscall* GetEffectList_t)(void*);
-		void* effectList = ((GetEffectList_t)vtbl[2])(magicTarget);
+		auto* effectList = MagicTargetGetEffectList(ActorGetMagicTarget(actor));
 		if (!effectList) return false;
 
-		void* node = *(void**)effectList;
-		void* next = *(void**)((char*)effectList + 4);
-
-		while (true)
+		for (auto* node = effectList->Head(); node; node = node->Next())
 		{
-			if (node)
-			{
-				uint32_t spellType = *(uint32_t*)((char*)node + 0x2C);
-				if (spellType == 5) //poison
-					return true;
-			}
-			if (!next) break;
-			node = *(void**)next;
-			next = *(void**)((char*)next + 4);
+			auto* effect = node->Item();
+			if (effect && effect->spellType == 5) //poison
+				return true;
 		}
 		return false;
 	}

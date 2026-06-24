@@ -2,6 +2,7 @@
 
 #include "internal/CallTemplates.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 #include "internal/GameGlobals.h"
 #include "internal/StringAlloc.h"
 #include "internal/globals.h"
@@ -844,7 +845,7 @@ namespace
 
 	void* ActorValueOwner(PlayerCharacter* player)
 	{
-		return player ? reinterpret_cast<UInt8*>(player) + 0xA4 : nullptr;
+		return ActorGetActorValueOwner(player);
 	}
 
 	double ReadActorValue(PlayerCharacter* player, UInt32 avCode)

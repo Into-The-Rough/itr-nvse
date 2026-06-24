@@ -8,10 +8,8 @@
 
 #include "OwnerNameInfoHandler.h"
 #include "internal/EngineFunctions.h"
-
-
-constexpr UInt8 kFormType_Faction = 0x08;
-constexpr UInt32 kOffset_TESForm_TypeID = 0x04;
+#include "internal/GameLayout.h"
+#include "internal/MenuLayout.h"
 
 //TESObjectREFR::IsCrime at 0x579690 (checks if activating/taking would be a crime)
 typedef bool (__thiscall* _IsCrime)(void* refr);
@@ -22,55 +20,46 @@ static bool g_bCompatMode = true;
 static bool g_bShowFactionName = true;
 static bool g_bShowNameOnlyCrime = true;
 
-static void* GetRefOwner(void* ref, bool* outIsFaction)
+static TESForm* GetRefOwner(TESObjectREFR* ref, bool* outIsFaction)
 {
 	if (!ref) return nullptr;
 	*outIsFaction = false;
 
 	//keep prompt ownership aligned with the engine's crime/ownership logic
-	void* owner = Engine::TESObjectREFR_GetOwnerRawForm(ref);
+	auto* owner = reinterpret_cast<TESForm*>(Engine::TESObjectREFR_GetOwnerRawForm(ref));
 
 	if (owner)
 	{
-		UInt8 ownerType = *(UInt8*)((UInt8*)owner + kOffset_TESForm_TypeID);
+		UInt8 ownerType = owner->typeID;
 		*outIsFaction = (ownerType == kFormType_Faction);
 	}
 
 	return owner;
 }
 
-static const char* GetFormEditorID(void* form)
-{
-	if (!form) return nullptr;
-	void** vtable = *(void***)form;
-	if (!vtable) return nullptr;
-	typedef const char* (__thiscall* GetEditorIDFn)(void*);
-	auto fn = (GetEditorIDFn)vtable[0x4C];
-	return fn ? fn(form) : nullptr;
-}
-
-static const char* GetFactionName(void* faction)
+static const char* GetFactionName(TESFaction* faction)
 {
 	if (!faction) return nullptr;
-	const char* name = *(const char**)((UInt8*)faction + 0x1C);
+	const char* name = faction->fullName.name.m_data;
 	if (name && *name)
 		return name;
-	return GetFormEditorID(faction);
+	return Engine::TESForm_GetEditorID(faction);
 }
 
-static const char* GetOwnerName(void* owner)
+static const char* GetOwnerName(TESForm* owner)
 {
 	if (!owner) return nullptr;
-	UInt8 typeID = *(UInt8*)((UInt8*)owner + kOffset_TESForm_TypeID);
+	UInt8 typeID = owner->typeID;
 
 	if (typeID == kFormType_Faction)
-		return GetFactionName(owner);
-	else if (typeID == 0x2A) //NPC
+		return GetFactionName(static_cast<TESFaction*>(owner));
+	else if (typeID == kFormType_NPC)
 	{
-		const char* name = *(const char**)((UInt8*)owner + 0xD4); //TESActorBase::TESFullName at 0xD0, String.data at +0x04
+		auto* actorBase = static_cast<TESActorBase*>(owner);
+		const char* name = actorBase->fullName.name.m_data;
 		if (name && *name)
 			return name;
-		return GetFormEditorID(owner);
+		return Engine::TESForm_GetEditorID(owner);
 	}
 
 	return nullptr;
@@ -175,17 +164,17 @@ void Update()
 	if (!hud)
 		return;
 
-	void* ref = *(void**)((UInt8*)hud + 0x1B8); //crosshairRef
+	auto* ref = HUDMainMenuGetCrosshairRef(hud);
 	if (!ref)
 		return;
 
-	UInt8 refType = *(UInt8*)((UInt8*)ref + kOffset_TESForm_TypeID);
+	UInt8 refType = ref->typeID;
 
-	if (refType == 0x3B) //Actor
+	if (refType == kFormType_ACHR)
 		return;
 
 	bool isFaction = false;
-	void* owner = GetRefOwner(ref, &isFaction);
+	TESForm* owner = GetRefOwner(ref, &isFaction);
 	if (!owner)
 		return;
 
@@ -193,7 +182,7 @@ void Update()
 	if (!ownerName || !*ownerName)
 		return;
 
-	UInt32 ownerRefID = *(UInt32*)((UInt8*)owner + 0x0C); //TESForm::refID
+	UInt32 ownerRefID = owner->refID;
 	if (ownerRefID == 0x7)
 		return;
 
@@ -205,9 +194,7 @@ void Update()
 	if (!itemName || !*itemName)
 		return;
 
-	//get tile for modification
-	void** tiles = (void**)((UInt8*)hud + 0x2C);
-	void* tile = tiles[31];
+	void* tile = HUDMainMenuGetInfoNameTile(hud);
 	if (!tile)
 		return;
 
