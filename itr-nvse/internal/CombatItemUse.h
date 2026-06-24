@@ -2,6 +2,7 @@
 #include <Windows.h>
 #include <cstdint>
 #include "EngineFunctions.h"
+#include "GameLayout.h"
 #include "ScopedLock.h"
 
 namespace CombatItemUse
@@ -69,84 +70,67 @@ namespace CombatItemUse
 		}
 	};
 
-	inline uint32_t GetRefID(void* actor) { return *(uint32_t*)((char*)actor + 0x0C); }
+	inline uint32_t GetRefID(Actor* actor) { return actor ? actor->refID : 0; }
 
-	inline bool IsCharacter(void* actor)
+	inline bool IsCharacter(TESObjectREFR* actor)
 	{
-		uint8_t typeID = *(uint8_t*)((char*)actor + 0x04);
-		return typeID == 0x3B;
+		return actor && actor->typeID == kFormType_ACHR;
 	}
 
 	//extracts the combat actor from a combatState, returns null if invalid
-	inline void* GetCombatActor(void* combatState)
+	inline Actor* GetCombatActor(void* combatState)
 	{
 		if (!combatState) return nullptr;
 
-		void* controller = *(void**)((char*)combatState + 0x1C4);
+		void* controller = CombatStateGetCombatController(combatState);
 		if (!controller) return nullptr;
 
-		void* actor = Engine::CombatController_GetPackageOwner(controller);
+		auto* actor = static_cast<Actor*>(Engine::CombatController_GetPackageOwner(controller));
 		if (!actor) return nullptr;
 
 		if (!IsCharacter(actor)) return nullptr;
 
 		//skip actors not fully loaded (cell transition spawning)
-		if (!*(void**)((char*)actor + 0x68)) return nullptr;
+		if (!actor->baseProcess) return nullptr;
 
 		return actor;
 	}
 
-	inline bool AlchemyItemHasEffect(void* alchItem, uint32_t effectFormID)
+	inline bool AlchemyItemHasEffect(AlchemyItem* alchItem, uint32_t effectFormID)
 	{
-		void* listHead = (char*)alchItem + 0x40;
-		void* data = *(void**)listHead;
-		void* next = *(void**)((char*)listHead + 4);
+		auto* effectList = AlchemyItemGetEffectListView(alchItem);
+		if (!effectList) return false;
 
-		while (true)
+		for (auto* node = &effectList->effects; node; node = node->next)
 		{
-			if (data)
-			{
-				void* setting = *(void**)((char*)data + 0x14);
-				if (setting && *(uint32_t*)((char*)setting + 0x0C) == effectFormID)
-					return true;
-			}
-			if (!next) break;
-			data = *(void**)next;
-			next = *(void**)((char*)next + 4);
+			EffectItem* effect = node->item;
+			EffectSetting* setting = effect ? effect->setting : nullptr;
+			if (setting && setting->refID == effectFormID)
+				return true;
 		}
 		return false;
 	}
 
-	inline void* FindAlchemyItemWithEffect(void* actor, uint32_t effectFormID)
+	inline TESForm* FindAlchemyItemWithEffect(Actor* actor, uint32_t effectFormID)
 	{
-		void* extraDataList = (char*)actor + 0x44;
+		if (!actor) return nullptr;
 
-		void* extraCC = Engine::BaseExtraList_GetByType(extraDataList, 0x15);
+		auto* extraCC = static_cast<ExtraContainerChanges*>(
+			Engine::BaseExtraList_GetByType(&actor->extraDataList, kExtraData_ContainerChanges));
 		if (!extraCC) return nullptr;
 
-		void* data = *(void**)((char*)extraCC + 0x0C);
-		if (!data) return nullptr;
-
-		void* objList = *(void**)data;
+		auto* objList = extraCC->data ? extraCC->data->objList : nullptr;
 		if (!objList) return nullptr;
 
-		void* nodeData = *(void**)objList;
-		void* nodeNext = *(void**)((char*)objList + 4);
-
 		int count = 0;
-		while (true)
+		for (auto* node = objList->Head(); node; node = node->Next())
 		{
-			if (nodeData)
-			{
-				void* form = *(void**)((char*)nodeData + 0x08);
-				uint32_t typeID = form ? *(uint32_t*)((char*)form + 0x04) : 0;
-				if (typeID == 0x2F && AlchemyItemHasEffect(form, effectFormID))
-					return form;
-			}
-			if (!nodeNext) break;
-			nodeData = *(void**)nodeNext;
-			nodeNext = *(void**)((char*)nodeNext + 4);
 			if (++count > 500) break;
+			auto* entry = node->Item();
+			TESForm* form = entry ? entry->type : nullptr;
+			if (form && form->typeID == kFormType_AlchemyItem &&
+				AlchemyItemHasEffect(static_cast<AlchemyItem*>(form), effectFormID))
+				return form;
 		}
 		return nullptr;
 	}
