@@ -5,6 +5,10 @@ class Actor;
 class TESObjectREFR;
 class TESBoundObject;
 class TESForm;
+class BSExtraData;
+struct BaseExtraList;
+struct ExtraDataList;
+class ExtraContainerChanges;
 
 namespace Engine {
 
@@ -85,6 +89,24 @@ inline auto CombatController_GetPackageOwner = (void*(__thiscall*)(void*))0x97AE
 inline auto Actor_GetProcess = (void*(__thiscall*)(void*))0x8D8520;
 inline auto Actor_TryDropWeapon = (void(__thiscall*)(void*))0x89F580;
 inline auto Actor_GetEquippedWeapon = (void*(__thiscall*)(void*))0x8A1710;
+inline auto Actor_GetCombatController = (void*(__thiscall*)(Actor*))0x8A02D0;
+inline auto Actor_IsDead = (bool(__thiscall*)(Actor*, bool))0x8844F0;
+
+inline bool TESObjectREFR_IsActor(TESObjectREFR* ref)
+{
+	if (!ref) return false;
+	using IsActor_t = bool (__thiscall *)(TESObjectREFR*);
+	auto* vtbl = *reinterpret_cast<UInt32**>(ref);
+	return reinterpret_cast<IsActor_t>(vtbl[0x100 / 4])(ref);
+}
+
+inline const char* TESForm_GetEditorID(TESForm* form)
+{
+	if (!form) return nullptr;
+	using GetEditorID_t = const char* (__thiscall *)(TESForm*);
+	auto* vtbl = *reinterpret_cast<UInt32**>(form);
+	return reinterpret_cast<GetEditorID_t>(vtbl[0x4C / 4])(form);
+}
 
 //ownership
 inline auto TESObjectREFR_IsAnOwner = (bool(__thiscall*)(void*, void*, bool))0x5785E0;
@@ -92,6 +114,20 @@ inline auto TESObjectREFR_GetOwnerRawForm = (void*(__thiscall*)(void*))0x567790;
 
 //extra data
 inline auto BaseExtraList_GetByType = (void*(__thiscall*)(void*, UInt32))0x410220;
+inline auto BaseExtraList_AddExtra = (void*(__thiscall*)(void*, void*))0x40FF60;
+inline auto BaseExtraList_RemoveExtra = (void(__thiscall*)(void*, void*, bool))0x410020;
+inline auto BaseExtraList_RemoveByType = (void(__thiscall*)(void*, UInt32))0x410140;
+inline auto ExtraDataList_Ctor = (void*(__thiscall*)(void*))0x410360;
+inline auto ExtraDataList_Copy = (void(__thiscall*)(void*, void*))0x411EC0;
+inline auto ExtraWeaponModFlags_Ctor = (void*(__thiscall*)(void*, UInt8))0x42E450;
+inline auto ExtraDataList_AppendExtraContainerChangeData = (void(__thiscall*)(void*, void*))0x419650;
+
+//form heap
+inline auto FormHeap_Allocate = (void*(__cdecl*)(UInt32))0x401000;
+inline auto FormHeap_Free = (void(__cdecl*)(void*))0x401030;
+
+//actor
+inline auto Actor_ClearProcessItems = (void(__thiscall*)(void*))0x8ADC50;
 
 //collision flags - ref-targeted Script::ToggleCollision uses these
 inline auto TESForm_GetNoCollision = (bool(__thiscall*)(TESForm*))0x50D4A0;
