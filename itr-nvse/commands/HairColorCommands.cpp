@@ -1,21 +1,18 @@
 #include "HairColorCommands.h"
+#include "internal/GameLayout.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
 
 extern const _ExtractArgs ExtractArgs;
 
-//TESNPC.uiHairColor at +0x1D8, packed 0x00BBGGRR (R low, B high), 24 bits used
-constexpr UInt32 kOffset_HairColor = 0x1D8;
-
-static TESForm* GetBaseNPC(TESObjectREFR* thisObj, TESForm* explicitTarget)
+static TESNPC* GetBaseNPC(TESObjectREFR* thisObj, TESForm* explicitTarget)
 {
 	TESForm* target = explicitTarget;
 	if (!target && thisObj)
-		target = *(TESForm**)((UInt8*)thisObj + 0x20);
+		target = thisObj->baseForm;
 	if (!target) return nullptr;
-	UInt8 typeID = *((UInt8*)target + 0x04);
-	return (typeID == kFormType_NPC) ? target : nullptr;
+	return (target->typeID == kFormType_NPC) ? static_cast<TESNPC*>(target) : nullptr;
 }
 
 static ParamInfo kParams_SetHairColorAlt[4] = {
@@ -41,11 +38,10 @@ bool Cmd_SetHairColorAlt_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &r, &g, &b, &explicitTarget))
 		return true;
 
-	TESForm* npc = GetBaseNPC(thisObj, explicitTarget);
+	TESNPC* npc = GetBaseNPC(thisObj, explicitTarget);
 	if (!npc) return true;
 
-	*(UInt32*)((UInt8*)npc + kOffset_HairColor) =
-		((b & 0xFF) << 16) | ((g & 0xFF) << 8) | (r & 0xFF);
+	npc->hairColor = ((b & 0xFF) << 16) | ((g & 0xFF) << 8) | (r & 0xFF);
 	*result = 1;
 	return true;
 }
@@ -58,10 +54,10 @@ bool Cmd_GetHairColorAlt_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &channel, &explicitTarget))
 		return true;
 
-	TESForm* npc = GetBaseNPC(thisObj, explicitTarget);
+	TESNPC* npc = GetBaseNPC(thisObj, explicitTarget);
 	if (!npc) return true;
 
-	UInt32 packed = *(UInt32*)((UInt8*)npc + kOffset_HairColor) & 0x00FFFFFF;
+	UInt32 packed = npc->hairColor & 0x00FFFFFF;
 	switch (channel) {
 		case 1: *result = (double)(packed & 0xFF); break;
 		case 2: *result = (double)((packed >> 8) & 0xFF); break;

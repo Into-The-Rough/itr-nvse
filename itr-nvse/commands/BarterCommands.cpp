@@ -1,6 +1,7 @@
 #include "BarterCommands.h"
 #include "internal/Detours.h"
 #include "internal/CallTemplates.h"
+#include "internal/GameLayout.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/GameForms.h"
@@ -110,8 +111,7 @@ namespace
 		if (!baseForm || baseForm->typeID != kFormType_TalkingActivator)
 			return nullptr;
 
-		//BGSTalkingActivator::talkingActor at +0x90 (JIP GameForms.h)
-		return *reinterpret_cast<TESObjectREFR**>(reinterpret_cast<UInt8*>(baseForm) + 0x90);
+		return BGSTalkingActivatorGetTalkingActor(baseForm);
 	}
 
 	TESObjectREFR* ResolveBarterMerchant(TESObjectREFR* ref)

@@ -10,9 +10,11 @@
 #include "nvse/GameForms.h"
 #include "nvse/GameObjects.h"
 #include "nvse/GameExtraData.h"
+#include "internal/GameLayout.h"
 #include "internal/GameGlobals.h"
 #include "internal/EngineFunctions.h"
 #include "internal/globals.h"
+#include <cstddef>
 #include <cstring>
 #include <cctype>
 
@@ -129,6 +131,14 @@ struct SoundMap
 	}
 };
 
+struct BSAudioManagerView
+{
+	UInt8 pad00[0x54];
+	SoundMap playingSounds;
+};
+
+static_assert(offsetof(BSAudioManagerView, playingSounds) == 0x54);
+
 struct ExtraRadioDataLite //kExtraData_RadioData (0x68)
 {
 	UInt8 pad00[0x10];
@@ -152,7 +162,7 @@ static SetNPCRadio_t s_setNPCRadio = reinterpret_cast<SetNPCRadio_t>(0x835810);
 
 static SoundMap* GetPlayingSoundsMap()
 {
-	return (SoundMap*)((UInt8*)g_audioManager + 0x54);
+	return &reinterpret_cast<BSAudioManagerView*>(g_audioManager)->playingSounds;
 }
 
 static const char* GetSoundFilePath(UInt32 soundKey)
@@ -238,10 +248,10 @@ static TESSound* FindSoundByPath(const char* runtimePath)
 	NormalizePath(runtimePath, normalized, sizeof(normalized));
 	if (!normalized[0]) return nullptr;
 
-	UInt8* dataHandler = (UInt8*)*g_dataHandlerPtr;
+	auto* dataHandler = static_cast<DataHandler*>(*g_dataHandlerPtr);
 	if (!dataHandler) return nullptr;
 
-	auto* soundList = (tList<TESSound>*)(dataHandler + 0xD0);
+	auto* soundList = DataHandlerGetSoundList(dataHandler);
 	for (auto iter = soundList->Begin(); !iter.End(); ++iter)
 	{
 		TESSound* sound = iter.Get();

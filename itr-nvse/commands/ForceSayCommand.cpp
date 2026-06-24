@@ -10,6 +10,7 @@
 #include "nvse/ParamInfos.h"
 #include "internal/CallTemplates.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 #include <cstring>
 #include <cstdio>
 #include <windows.h>
@@ -29,6 +30,12 @@ struct BSSoundHandle
 };
 
 struct BSHash { UInt8 pad[8]; };
+
+static TESTopic::Info* GetFirstTopicInfo(TESTopic* topic)
+{
+	auto* head = reinterpret_cast<TESTopicInfoListNodeView*>(&topic->infos);
+	return head->item;
+}
 
 //check if a voice file exists in loaded BSA archives
 //uses ArchiveManager hash lookup - no audio side effects
@@ -154,7 +161,7 @@ bool ForceSay(Actor* speaker, TESTopic* topic, Actor* target)
 		return false;
 
 	//walk topic->infos to get first topicinfo + quest directly (bypass all conditions)
-	TESTopic::Info* firstInfo = *(TESTopic::Info**)((UInt8*)topic + 0x2C);
+	TESTopic::Info* firstInfo = GetFirstTopicInfo(topic);
 	if (!firstInfo)
 		return false;
 
@@ -172,16 +179,16 @@ bool ForceSay(Actor* speaker, TESTopic* topic, Actor* target)
 	*lipDist = 0x7FFFFFFF;
 
 	//create DialogueItem manually - this loads response list with voice paths
-	void* mem = GameHeapAlloc(0x1C);
+	void* mem = GameHeapAlloc(sizeof(DialogueItem));
 	if (!mem)
 	{
 		*lipDist = oldLipDist;
 		return false;
 	}
 
-	void* item = ThisCall<void*>(0x83C520, mem, quest, topic, topicInfo, speaker); //DialogueItem_0
+	auto* item = ThisCall<DialogueItem*>(0x83C520, mem, quest, topic, topicInfo, speaker); //DialogueItem_0
 	ThisCall<bool>(0x83C7B0, item); //FirstResponse
-	void* response = ThisCall<void*>(0x83C820, item); //GetCurrentItem
+	DialogueResponse* response = ThisCall<DialogueResponse*>(0x83C820, item); //GetCurrentItem
 
 	if (!response)
 	{
@@ -191,13 +198,12 @@ bool ForceSay(Actor* speaker, TESTopic* topic, Actor* target)
 		return false;
 	}
 
-	//layout: [BSStringT text +0x00][emotion +0x08/+0x0C][BSStringT voice +0x10][anims +0x18/+0x1C]
-	char* voicePath       = *(char**)((UInt8*)response + 0x10);
-	UInt32 emotionType    = *(UInt32*)((UInt8*)response + 0x08);
-	UInt32 emotionValue   = *(UInt32*)((UInt8*)response + 0x0C);
-	UInt16 textLen        = *(UInt16*)((UInt8*)response + 0x04);
-	void* speakerAnim     = *(void**)((UInt8*)response + 0x18);
-	void* listenerAnim    = *(void**)((UInt8*)response + 0x1C);
+	char* voicePath       = response->voiceFileName.m_data;
+	UInt32 emotionType    = response->emotionType;
+	UInt32 emotionValue   = static_cast<UInt32>(response->emotionValue);
+	UInt16 textLen        = response->responseText.m_dataLen;
+	TESIdleForm* speakerAnim = response->speakerIdle;
+	TESIdleForm* listenerAnim = response->listenerIdle;
 
 	if (!voicePath || !voicePath[0])
 	{

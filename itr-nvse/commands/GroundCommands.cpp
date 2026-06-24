@@ -3,6 +3,7 @@
 
 #include "GroundCommands.h"
 #include "internal/CallTemplates.h"
+#include "internal/GameLayout.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/GameObjects.h"
@@ -61,7 +62,7 @@ namespace
 
 	bool GetTerrainZ(TESObjectREFR* ref, float* outZ)
 	{
-		auto* cell = *(TESObjectCELL**)(((UInt8*)ref) + 0x40);
+		auto* cell = ref->parentCell;
 		if (!cell) return false;
 		float xy[2] = { ref->posX, ref->posY };
 		return ThisCall<bool>(0x5547C0, cell, xy, outZ);

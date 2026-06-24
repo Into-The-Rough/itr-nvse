@@ -3,6 +3,7 @@
 #include "ResurrectCommands.h"
 #include "internal/CallTemplates.h"
 #include "internal/BSSpinLock.h"
+#include "internal/EngineFunctions.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/GameObjects.h"
@@ -26,20 +27,12 @@ static bool IsActorRef(TESObjectREFR* ref)
 typedef void (__thiscall *_ActorResurrect)(Actor*, bool, bool, bool);
 static const _ActorResurrect ActorResurrect = (_ActorResurrect)0x89F780;
 static BSSpinLock* g_processListsActorLock = (BSSpinLock*)0x11F11A0;
-typedef void* (__cdecl *_FormHeap_Allocate)(UInt32);
-typedef void (__cdecl *_FormHeap_Free)(void*);
-typedef void (__thiscall *_BaseExtraList_Copy)(void*, void*);
-static const _FormHeap_Allocate s_formHeapAllocate = (_FormHeap_Allocate)0x401000;
-static const _FormHeap_Free s_formHeapFree = (_FormHeap_Free)0x401030;
-static const _BaseExtraList_Copy BaseExtraList_Copy = (_BaseExtraList_Copy)0x411EC0;
 
 static void** g_modelLoader = (void**)0x11C3B3C;
 typedef void (__thiscall *_ModelLoader_QueueReference)(void*, TESObjectREFR*, UInt32, bool);
 static const _ModelLoader_QueueReference ModelLoader_QueueReference = (_ModelLoader_QueueReference)0x444850;
 typedef NiNode* (__thiscall *_TESObjectREFR_Get3D)(TESObjectREFR*);
 static const _TESObjectREFR_Get3D TESObjectREFR_Get3D = (_TESObjectREFR_Get3D)0x43FCD0;
-static constexpr UInt32 kExtraDataListVtbl = 0x010143E8;
-static constexpr UInt32 kExtraContainerChangesVtbl = 0x01015BB8;
 
 enum ResurrectActorExFlags : UInt32
 {
@@ -77,50 +70,10 @@ static void TESObjectREFR_Set3D(TESObjectREFR* ref, void* niNode, bool unloadArt
 	fn(ref, niNode, unloadArt);
 }
 
-static bool BaseExtraList_HasType(const BaseExtraList* list, UInt32 type)
-{
-	if (!list) return false;
-	UInt32 index = (type >> 3);
-	UInt8 bitMask = 1 << (type % 8);
-	return (list->m_presenceBitfield[index] & bitMask) != 0;
-}
-
-static void BaseExtraList_MarkType(BaseExtraList* list, UInt32 type, bool cleared)
-{
-	if (!list) return;
-	UInt32 index = (type >> 3);
-	UInt8 bitMask = 1 << (type % 8);
-	UInt8& flag = list->m_presenceBitfield[index];
-	if (cleared)
-		flag &= ~bitMask;
-	else
-		flag |= bitMask;
-}
-
-static BSExtraData* BaseExtraList_GetByTypeLocal(BaseExtraList* list, UInt32 type)
-{
-	if (!list || !BaseExtraList_HasType(list, type)) return nullptr;
-	for (BSExtraData* traverse = list->m_data; traverse; traverse = traverse->next)
-		if (traverse->type == type)
-			return traverse;
-	return nullptr;
-}
-
-static bool BaseExtraList_AddLocal(BaseExtraList* list, BSExtraData* toAdd)
-{
-	if (!list || !toAdd || BaseExtraList_HasType(list, toAdd->type))
-		return false;
-
-	toAdd->next = list->m_data;
-	list->m_data = toAdd;
-	BaseExtraList_MarkType(list, toAdd->type, false);
-	return true;
-}
-
 template <class TList, class TItem>
-static void AppendListItem(TList* list, TItem* item)
+static bool AppendListItem(TList* list, TItem* item)
 {
-	if (!list || !item) return;
+	if (!list || !item) return false;
 
 	using Node = typename TList::_Node;
 	Node* head = list->Head();
@@ -128,57 +81,61 @@ static void AppendListItem(TList* list, TItem* item)
 	{
 		head->item = item;
 		head->next = nullptr;
-		return;
+		return true;
 	}
 
 	Node* node = head;
 	while (node->next)
 		node = node->next;
 
-	Node* newNode = static_cast<Node*>(s_formHeapAllocate(sizeof(Node)));
+	Node* newNode = static_cast<Node*>(Engine::FormHeap_Allocate(sizeof(Node)));
+	if (!newNode) return false;
 	memset(newNode, 0, sizeof(Node));
 	newNode->item = item;
 	node->next = newNode;
+	return true;
 }
 
 static ExtraDataList* CreateEmptyExtraDataList()
 {
-	auto* list = static_cast<ExtraDataList*>(s_formHeapAllocate(sizeof(ExtraDataList)));
-	memset(list, 0, sizeof(ExtraDataList));
-	*(UInt32*)list = kExtraDataListVtbl;
+	auto* list = static_cast<ExtraDataList*>(Engine::FormHeap_Allocate(sizeof(ExtraDataList)));
+	if (!list) return nullptr;
+	Engine::ExtraDataList_Ctor(list);
 	return list;
 }
 
-static ExtraContainerChanges* CreateEmptyExtraContainerChanges(TESObjectREFR* owner)
+static ExtraContainerChanges::Data* CreateEmptyContainerChangesData(TESObjectREFR* owner)
 {
-	auto* xChanges = static_cast<ExtraContainerChanges*>(s_formHeapAllocate(sizeof(ExtraContainerChanges)));
-	memset(xChanges, 0, sizeof(ExtraContainerChanges));
-	*(UInt32*)xChanges = kExtraContainerChangesVtbl;
-	xChanges->type = kExtraData_ContainerChanges;
-
-	xChanges->data = static_cast<ExtraContainerChanges::Data*>(s_formHeapAllocate(sizeof(ExtraContainerChanges::Data)));
-	memset(xChanges->data, 0, sizeof(ExtraContainerChanges::Data));
-	xChanges->data->owner = owner;
-	return xChanges;
+	auto* data = static_cast<ExtraContainerChanges::Data*>(Engine::FormHeap_Allocate(sizeof(ExtraContainerChanges::Data)));
+	if (!data) return nullptr;
+	memset(data, 0, sizeof(ExtraContainerChanges::Data));
+	data->owner = owner;
+	return data;
 }
 
 static ExtraContainerChanges::EntryDataList* CreateEmptyEntryDataList()
 {
-	auto* list = static_cast<ExtraContainerChanges::EntryDataList*>(s_formHeapAllocate(sizeof(ExtraContainerChanges::EntryDataList)));
+	auto* list = static_cast<ExtraContainerChanges::EntryDataList*>(
+		Engine::FormHeap_Allocate(sizeof(ExtraContainerChanges::EntryDataList)));
+	if (!list) return nullptr;
 	memset(list, 0, sizeof(ExtraContainerChanges::EntryDataList));
 	return list;
 }
 
 static ExtraContainerChanges::ExtendDataList* CreateEmptyExtendDataList()
 {
-	auto* list = static_cast<ExtraContainerChanges::ExtendDataList*>(s_formHeapAllocate(sizeof(ExtraContainerChanges::ExtendDataList)));
+	auto* list = static_cast<ExtraContainerChanges::ExtendDataList*>(
+		Engine::FormHeap_Allocate(sizeof(ExtraContainerChanges::ExtendDataList)));
+	if (!list) return nullptr;
 	memset(list, 0, sizeof(ExtraContainerChanges::ExtendDataList));
 	return list;
 }
 
 static ExtraContainerChanges::EntryData* CreateEntryData(TESForm* form, SInt32 countDelta)
 {
-	auto* entry = static_cast<ExtraContainerChanges::EntryData*>(s_formHeapAllocate(sizeof(ExtraContainerChanges::EntryData)));
+	auto* entry = static_cast<ExtraContainerChanges::EntryData*>(
+		Engine::FormHeap_Allocate(sizeof(ExtraContainerChanges::EntryData)));
+	if (!entry) return nullptr;
 	memset(entry, 0, sizeof(ExtraContainerChanges::EntryData));
 	entry->type = form;
 	entry->countDelta = countDelta;
@@ -189,7 +146,8 @@ static ExtraDataList* CloneExtraDataList(ExtraDataList* source)
 {
 	if (!source) return nullptr;
 	auto* copy = CreateEmptyExtraDataList();
-	BaseExtraList_Copy(copy, source);
+	if (!copy) return nullptr;
+	Engine::ExtraDataList_Copy(copy, source);
 	return copy;
 }
 
@@ -215,10 +173,10 @@ static void FreeListOwned(TList* list, FreeItemFn&& freeItem)
 		if (node->item)
 			freeItem(node->item);
 		if (node != list->Head())
-			s_formHeapFree(node);
+			Engine::FormHeap_Free(node);
 		node = next;
 	}
-	s_formHeapFree(list);
+	Engine::FormHeap_Free(list);
 }
 
 static void FreeEntryDataOwned(ExtraContainerChanges::EntryData* entry)
@@ -230,7 +188,7 @@ static void FreeEntryDataOwned(ExtraContainerChanges::EntryData* entry)
 			entry->extendData,
 			[](ExtraDataList* xData) { DeleteExtraDataList(xData); });
 	}
-	s_formHeapFree(entry);
+	Engine::FormHeap_Free(entry);
 }
 
 static void FreeInventorySnapshot(ResurrectActorExInventorySnapshot& snapshot)
@@ -249,7 +207,8 @@ static ResurrectActorExInventorySnapshot CaptureInventorySnapshot(Actor* actor)
 	ResurrectActorExInventorySnapshot snapshot;
 	if (!actor) return snapshot;
 
-	auto* xChanges = static_cast<ExtraContainerChanges*>(BaseExtraList_GetByTypeLocal(&actor->extraDataList, kExtraData_ContainerChanges));
+	auto* xChanges = static_cast<ExtraContainerChanges*>(
+		Engine::BaseExtraList_GetByType(&actor->extraDataList, kExtraData_ContainerChanges));
 	if (!xChanges || !xChanges->data || !xChanges->data->objList)
 		return snapshot;
 
@@ -286,23 +245,32 @@ static void RestoreInventorySnapshot(Actor* actor, ResurrectActorExInventorySnap
 {
 	if (!actor) return;
 
-	auto* xChanges = static_cast<ExtraContainerChanges*>(BaseExtraList_GetByTypeLocal(&actor->extraDataList, kExtraData_ContainerChanges));
-	if (!xChanges)
+	auto* xChanges = static_cast<ExtraContainerChanges*>(
+		Engine::BaseExtraList_GetByType(&actor->extraDataList, kExtraData_ContainerChanges));
+	if (!xChanges || !xChanges->data)
 	{
-		xChanges = CreateEmptyExtraContainerChanges(actor);
-		BaseExtraList_AddLocal(&actor->extraDataList, xChanges);
-	}
-	else if (!xChanges->data)
-	{
-		xChanges->data = static_cast<ExtraContainerChanges::Data*>(s_formHeapAllocate(sizeof(ExtraContainerChanges::Data)));
-		memset(xChanges->data, 0, sizeof(ExtraContainerChanges::Data));
+		auto* data = CreateEmptyContainerChangesData(actor);
+		if (!data)
+		{
+			FreeInventorySnapshot(snapshot);
+			return;
+		}
+		Engine::ExtraDataList_AppendExtraContainerChangeData(&actor->extraDataList, data);
+		xChanges = static_cast<ExtraContainerChanges*>(
+			Engine::BaseExtraList_GetByType(&actor->extraDataList, kExtraData_ContainerChanges));
+		if (!xChanges || !xChanges->data)
+		{
+			Engine::FormHeap_Free(data);
+			FreeInventorySnapshot(snapshot);
+			return;
+		}
 	}
 
 	//ActorResurrect(0x89F780) can cache pointers into this list, MoveToHigh(0x881D30)
 	//stores a GetWornItem(0x4C8C10) copy whose extend list aliases a live entry's
 	//ExtraDataList, clear the process weapon/ammo caches before freeing like
 	//ResetInventory(0x574920) does
-	ThisCall<void>(0x8ADC50, actor); //Actor::ClearProcessItems
+	Engine::Actor_ClearProcessItems(actor);
 
 	if (xChanges->data->objList)
 		FreeListOwned<ExtraContainerChanges::EntryDataList, ExtraContainerChanges::EntryData>(
@@ -314,18 +282,42 @@ static void RestoreInventorySnapshot(Actor* actor, ResurrectActorExInventorySnap
 	xChanges->data->unk3 = snapshot.unk3;
 	xChanges->data->byte10 = snapshot.byte10;
 	xChanges->data->objList = snapshot.entries.empty() ? nullptr : CreateEmptyEntryDataList();
+	if (!snapshot.entries.empty() && !xChanges->data->objList)
+	{
+		FreeInventorySnapshot(snapshot);
+		return;
+	}
 
 	for (auto& snapshotEntry : snapshot.entries)
 	{
 		auto* entry = CreateEntryData(snapshotEntry.type, snapshotEntry.countDelta);
+		if (!entry)
+		{
+			for (auto* xData : snapshotEntry.extraLists)
+				DeleteExtraDataList(xData);
+			snapshotEntry.extraLists.clear();
+			continue;
+		}
 		if (!snapshotEntry.extraLists.empty())
 		{
 			entry->extendData = CreateEmptyExtendDataList();
-			for (auto* xData : snapshotEntry.extraLists)
-				AppendListItem(entry->extendData, xData);
+			if (entry->extendData)
+			{
+				for (auto* xData : snapshotEntry.extraLists)
+				{
+					if (!AppendListItem(entry->extendData, xData))
+						DeleteExtraDataList(xData);
+				}
+			}
+			else
+			{
+				for (auto* xData : snapshotEntry.extraLists)
+					DeleteExtraDataList(xData);
+			}
 			snapshotEntry.extraLists.clear();
 		}
-		AppendListItem(xChanges->data->objList, entry);
+		if (!AppendListItem(xChanges->data->objList, entry))
+			FreeEntryDataOwned(entry);
 	}
 
 	snapshot.entries.clear();

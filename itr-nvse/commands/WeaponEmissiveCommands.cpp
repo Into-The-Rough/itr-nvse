@@ -1,11 +1,13 @@
 #include "WeaponEmissiveCommands.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/CommandTable.h"
+#include "nvse/GameObjects.h"
 #include "nvse/ParamInfos.h"
 
 extern const _ExtractArgs ExtractArgs;
 #include "internal/globals.h"
 #include "internal/GameGlobals.h"
+#include "internal/NiLayout.h"
 
 namespace
 {
@@ -24,9 +26,9 @@ namespace
 
 	static void* GetPlayer1stPersonNode()
 	{
-		void* player = *(void**)g_thePlayerPtr;
+		PlayerCharacter* player = *g_thePlayerPtr;
 		if (!player) return nullptr;
-		return *(void**)((UInt8*)player + 0x694);
+		return player->playerNode;
 	}
 
 	static bool IsGeometry(void* obj)
@@ -46,20 +48,6 @@ namespace
 		return fn(obj) != nullptr;
 	}
 
-	static void* GetMaterialProp(UInt8* geom)
-	{
-		return *(void**)(geom + 0xA4);
-	}
-
-	static void SetEmissive(UInt8* matProp, float r, float g, float b, float mult)
-	{
-		*(float*)(matProp + 0x28) = r;
-		*(float*)(matProp + 0x2C) = g;
-		*(float*)(matProp + 0x30) = b;
-		*(float*)(matProp + 0x40) = mult;
-		(*(UInt32*)(matProp + 0x44))++;
-	}
-
 	//traverse and save original values, returns count of geometry nodes found
 	static UInt32 TraverseCacheOriginals(void* node)
 	{
@@ -67,25 +55,24 @@ namespace
 
 		if (IsGeometry(node))
 		{
-			UInt8* matProp = (UInt8*)GetMaterialProp((UInt8*)node);
+			auto* matProp = NiGeometryGetMaterialProperty(node);
 			if (!matProp) return 0;
 			if (s_count < 64)
 			{
 				auto& orig = s_originals[s_count++];
 				orig.node = node;
-				orig.r = *(float*)(matProp + 0x28);
-				orig.g = *(float*)(matProp + 0x2C);
-				orig.b = *(float*)(matProp + 0x30);
-				orig.mult = *(float*)(matProp + 0x40);
+				orig.r = matProp->emissiveR;
+				orig.g = matProp->emissiveG;
+				orig.b = matProp->emissiveB;
+				orig.mult = matProp->emitMult;
 			}
 			return 1;
 		}
 
 		if (!IsNiNode(node)) return 0;
 
-		UInt8* n = (UInt8*)node;
-		void** childData = *(void***)(n + 0xA0);
-		UInt16 childCount = *(UInt16*)(n + 0xA6);
+		void** childData = NiNodeGetChildData(node);
+		UInt16 childCount = NiNodeGetChildLimit(node);
 		if (!childData) return 0;
 		UInt32 found = 0;
 		for (UInt16 i = 0; i < childCount; i++)
@@ -103,17 +90,16 @@ namespace
 
 		if (IsGeometry(node))
 		{
-			UInt8* matProp = (UInt8*)GetMaterialProp((UInt8*)node);
+			auto* matProp = NiGeometryGetMaterialProperty(node);
 			if (matProp)
-				SetEmissive(matProp, r, g, b, emitMult);
+				NiMaterialPropertySetEmissive(matProp, r, g, b, emitMult);
 			return;
 		}
 
 		if (!IsNiNode(node)) return;
 
-		UInt8* n = (UInt8*)node;
-		void** childData = *(void***)(n + 0xA0);
-		UInt16 childCount = *(UInt16*)(n + 0xA6);
+		void** childData = NiNodeGetChildData(node);
+		UInt16 childCount = NiNodeGetChildLimit(node);
 		if (!childData) return;
 		for (UInt16 i = 0; i < childCount; i++)
 		{
@@ -136,9 +122,8 @@ namespace
 
 		if (!IsNiNode(node)) return true;
 
-		UInt8* n = (UInt8*)node;
-		void** childData = *(void***)(n + 0xA0);
-		UInt16 childCount = *(UInt16*)(n + 0xA6);
+		void** childData = NiNodeGetChildData(node);
+		UInt16 childCount = NiNodeGetChildLimit(node);
 		if (!childData) return true;
 		for (UInt16 i = 0; i < childCount; i++)
 		{
@@ -155,11 +140,11 @@ namespace
 
 		if (IsGeometry(node))
 		{
-			UInt8* matProp = (UInt8*)GetMaterialProp((UInt8*)node);
+			auto* matProp = NiGeometryGetMaterialProperty(node);
 			if (matProp && idx < s_count)
 			{
 				auto& orig = s_originals[idx];
-				SetEmissive(matProp, orig.r, orig.g, orig.b, orig.mult);
+				NiMaterialPropertySetEmissive(matProp, orig.r, orig.g, orig.b, orig.mult);
 			}
 			idx++;
 			return;
@@ -167,9 +152,8 @@ namespace
 
 		if (!IsNiNode(node)) return;
 
-		UInt8* n = (UInt8*)node;
-		void** childData = *(void***)(n + 0xA0);
-		UInt16 childCount = *(UInt16*)(n + 0xA6);
+		void** childData = NiNodeGetChildData(node);
+		UInt16 childCount = NiNodeGetChildLimit(node);
 		if (!childData) return;
 		for (UInt16 i = 0; i < childCount; i++)
 		{

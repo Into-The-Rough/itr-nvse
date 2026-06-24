@@ -15,25 +15,10 @@ extern const _ExtractArgs ExtractArgs;
 extern NVSEArrayVarInterface* g_arrInterface;
 
 #include "internal/CallTemplates.h"
-
-//DialogMenu singleton at 0x11D9510
-//DialogMenu::bIsOpen at 0x11D9514
-//MenuTopicManager* at DialogMenu+0x70
-//MenuTopicManager::FirstTopic = 0x83E370
-//MenuTopicManager::NextTopic = 0x83E3E0
-//MenuTopicManager::GetCurrentTopic = 0x83E4C0
-//MenuTopic::pTopicInfo at offset 0x18
+#include "internal/GameLayout.h"
+#include "internal/MenuLayout.h"
 
 constexpr UInt8 kFormType_TopicInfo = 0x46;
-
-//TESTopicInfo layout (relevant offsets):
-//0x18: ConditionList conditions
-//0x20: UInt16 unk20
-//0x22: UInt8 saidOnce
-//0x23: UInt8 type
-//0x24: UInt8 nextSpeaker
-//0x25: UInt8 flags1
-//0x26: UInt8 flags2
 
 //combined flags (flags1 | flags2 << 8):
 //0x0001 = Goodbye
@@ -64,9 +49,9 @@ bool Cmd_GetDialogueInfoFlags_Execute(COMMAND_ARGS)
 	if (!form || form->typeID != kFormType_TopicInfo)
 		return true;
 
-	UInt8* info = (UInt8*)form;
-	UInt8 flags1 = info[0x25];
-	UInt8 flags2 = info[0x26];
+	auto* info = reinterpret_cast<TESTopicInfo*>(form);
+	UInt8 flags1 = info->flags1;
+	UInt8 flags2 = info->flags2;
 
 	*result = flags1 | (flags2 << 8);
 	return true;
@@ -84,9 +69,9 @@ bool Cmd_SetDialogueInfoFlags_Execute(COMMAND_ARGS)
 	if (!form || form->typeID != kFormType_TopicInfo)
 		return true;
 
-	UInt8* info = (UInt8*)form;
-	info[0x25] = flags & 0xFF;
-	info[0x26] = (flags >> 8) & 0xFF;
+	auto* info = reinterpret_cast<TESTopicInfo*>(form);
+	info->flags1 = flags & 0xFF;
+	info->flags2 = (flags >> 8) & 0xFF;
 
 	*result = 1;
 	return true;
@@ -108,8 +93,7 @@ bool Cmd_GetDisplayedDialogueInfos_Execute(COMMAND_ARGS)
 	if (!dialogMenu)
 		return true;
 
-	//get MenuTopicManager from DialogMenu+0x70
-	void* menuTopicMgr = *(void**)((UInt8*)dialogMenu + 0x70);
+	void* menuTopicMgr = DialogMenuGetTopicManager(dialogMenu);
 	if (!menuTopicMgr)
 		return true;
 
@@ -125,7 +109,7 @@ bool Cmd_GetDisplayedDialogueInfos_Execute(COMMAND_ARGS)
 		void* menuTopic = ThisCall<void*>(0x83E4C0, menuTopicMgr);
 		if (menuTopic)
 		{
-			TESForm* topicInfo = *(TESForm**)((UInt8*)menuTopic + 0x18);
+			TESTopicInfo* topicInfo = MenuTopicGetTopicInfo(menuTopic);
 			if (topicInfo)
 			{
 				NVSEArrayVarInterface::Element elem(topicInfo);

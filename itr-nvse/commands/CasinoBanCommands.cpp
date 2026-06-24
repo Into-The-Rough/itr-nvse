@@ -3,6 +3,7 @@
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
 #include "internal/GameGlobals.h"
+#include "internal/GameLayout.h"
 
 extern const _ExtractArgs ExtractArgs;
 
@@ -11,12 +12,6 @@ extern const _ExtractArgs ExtractArgs;
 //GetCasinoWinningsLevel, which is what YUP's dialogue edits hang off.
 
 constexpr UInt32 kFormType_TESCasino = 0x6D;
-
-//TESCasino
-constexpr UInt32 kOffset_Casino_MaxWinnings = 0x210;
-
-//PlayerCharacter
-constexpr UInt32 kOffset_Player_CasinoDataList = 0x610;
 
 typedef void* (__cdecl*  _OperatorNew)(UInt32 size);
 typedef void (__thiscall* _CasinoStatsCtor)(void* self);
@@ -36,9 +31,9 @@ struct SimpleListNode { void* item; SimpleListNode* next; };
 
 static SimpleListNode* GetCasinoDataList()
 {
-	void* player = *(void**)g_thePlayerPtr;
+	PlayerCharacter* player = *g_thePlayerPtr;
 	if (!player) return nullptr;
-	return *(SimpleListNode**)((UInt8*)player + kOffset_Player_CasinoDataList);
+	return reinterpret_cast<SimpleListNode*>(PlayerCharacterGetCasinoDataList(player));
 }
 
 static CasinoStats* FindEntry(SimpleListNode* list, UInt32 refID)
@@ -66,9 +61,8 @@ static CasinoStats* CreateEntry(SimpleListNode* list, UInt32 refID)
 	return entry;
 }
 
-//TESForm.uiFormID at +0x0C (matches vanilla "this_C" accessor)
 static UInt32 GetCasinoRefID(TESForm* casino) {
-	return *(UInt32*)((UInt8*)casino + 0x0C);
+	return casino ? casino->refID : 0;
 }
 
 static ParamInfo kParams_SetCasinoBan[2] = {
@@ -90,13 +84,13 @@ bool Cmd_SetCasinoBan_Execute(COMMAND_ARGS)
 	UInt32 banned = 0;
 	if (!ExtractArgs(EXTRACT_ARGS, &casino, &banned)) return true;
 	if (!casino) return true;
-	if (*((UInt8*)casino + 0x04) != kFormType_TESCasino) return true;
+	if (casino->typeID != kFormType_TESCasino) return true;
 
 	SimpleListNode* list = GetCasinoDataList();
 	if (!list) return true;
 
 	UInt32 refID = GetCasinoRefID(casino);
-	UInt32 maxWinnings = *(UInt32*)((UInt8*)casino + kOffset_Casino_MaxWinnings);
+	UInt32 maxWinnings = TESCasinoGetMaxWinnings(casino);
 
 	CasinoStats* entry = FindEntry(list, refID);
 	if (banned) {
@@ -118,7 +112,7 @@ bool Cmd_GetCasinoBan_Execute(COMMAND_ARGS)
 	TESForm* casino = nullptr;
 	if (!ExtractArgs(EXTRACT_ARGS, &casino)) return true;
 	if (!casino) return true;
-	if (*((UInt8*)casino + 0x04) != kFormType_TESCasino) return true;
+	if (casino->typeID != kFormType_TESCasino) return true;
 
 	SimpleListNode* list = GetCasinoDataList();
 	if (!list) return true;
@@ -126,7 +120,7 @@ bool Cmd_GetCasinoBan_Execute(COMMAND_ARGS)
 	CasinoStats* entry = FindEntry(list, GetCasinoRefID(casino));
 	if (!entry) return true;
 
-	UInt32 maxWinnings = *(UInt32*)((UInt8*)casino + kOffset_Casino_MaxWinnings);
+	UInt32 maxWinnings = TESCasinoGetMaxWinnings(casino);
 	*result = (entry->earnings >= maxWinnings) ? 1.0 : 0.0;
 	return true;
 }

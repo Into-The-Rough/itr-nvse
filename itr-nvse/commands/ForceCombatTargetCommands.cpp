@@ -2,6 +2,7 @@
 
 #include "ForceCombatTargetCommands.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 #include "internal/Detours.h"
 #include "internal/ScopedLock.h"
 #include "nvse/PluginAPI.h"
@@ -21,10 +22,8 @@ static bool IsActorRef(TESObjectREFR* ref)
 	return ref->baseForm->typeID == kFormType_Creature || ref->baseForm->typeID == kFormType_NPC;
 }
 
-typedef void* (__thiscall *_GetCombatController)(Actor*);
 typedef void* (__thiscall *_GetCombatTargetForActor)(void* combatGroup, Actor* target);
 typedef bool (__thiscall *_CombatGroupCanAddTarget)(void* combatGroup, Actor* target);
-typedef bool (__thiscall *_ActorIsDead)(Actor*, bool);
 typedef UInt8 (__thiscall *_CharacterIsGuardForForceCombatTarget)(Character*);
 typedef void (__thiscall *_CombatControllerSetTarget)(void* combatController, Actor* target);
 typedef void (__thiscall *_CombatControllerAddCombatTarget)(void* combatController, Actor* target, SInt32 a3, SInt32 a4, float a5, float a6);
@@ -34,10 +33,8 @@ typedef void (__thiscall *_ActorPutCreatedPackage)(Actor* actor, void* package, 
 typedef void (__thiscall *_ProcessComputeLastTimeProcessed)(void* process);
 typedef void (__thiscall *_ProcessSavePackageToExtraData)(void* process, Actor* actor);
 typedef void (__thiscall *_CombatControllerSetByte0C4)(void* combatController);
-static const _GetCombatController GetCombatController = (_GetCombatController)0x8A02D0;
 static const _GetCombatTargetForActor GetCombatTargetForActor = (_GetCombatTargetForActor)0x9865D0;
 static const _CombatGroupCanAddTarget CombatGroupCanAddTarget = (_CombatGroupCanAddTarget)0x9866D0;
-static const _ActorIsDead ActorIsDead = (_ActorIsDead)0x8844F0;
 static const _CharacterIsGuardForForceCombatTarget CharacterIsGuardForForceCombatTarget = (_CharacterIsGuardForForceCombatTarget)0x8D1ED0;
 static const _CombatControllerSetTarget CombatControllerSetTarget = (_CombatControllerSetTarget)0x980830;
 static const _CombatControllerAddCombatTarget CombatControllerAddCombatTarget = (_CombatControllerAddCombatTarget)0x97F930;
@@ -86,7 +83,7 @@ namespace
 		//map lookup first so dead-checks only run for pairs we actually forced
 		if (GetForcedCombatTargetRefID(actor->refID) != target->refID)
 			return false;
-		return !ActorIsDead(actor, false) && !ActorIsDead(target, false);
+		return !Engine::Actor_IsDead(actor, false) && !Engine::Actor_IsDead(target, false);
 	}
 
 	static void* TryAddCombatantBootstrap(Actor* actor, Actor* target, bool ignoreActorLimit)
@@ -165,7 +162,7 @@ namespace
 
 		TESForm* forcedForm = (TESForm*)Engine::LookupFormByID(forcedTargetRefID);
 		Actor* forcedTarget = forcedForm && IsActorRef((TESObjectREFR*)forcedForm) ? (Actor*)forcedForm : nullptr;
-		if (!forcedTarget || forcedTarget == actor || ActorIsDead(forcedTarget, false))
+		if (!forcedTarget || forcedTarget == actor || Engine::Actor_IsDead(forcedTarget, false))
 		{
 			ClearForcedCombatTargetRefID(actor->refID);
 			return s_evaluateCombatTargetsOriginal(combatGroup, actor);
@@ -240,21 +237,21 @@ namespace
 			return ForceCombatTargetResult::kInvalidArgs;
 		if (!Engine::Actor_GetProcess(actor) || !Engine::Actor_GetProcess(target))
 			return ForceCombatTargetResult::kNoProcess;
-		if (ActorIsDead(actor, false) || ActorIsDead(target, false))
+		if (Engine::Actor_IsDead(actor, false) || Engine::Actor_IsDead(target, false))
 			return ForceCombatTargetResult::kActorDead;
 		//hooks are installed eagerly at plugin load, just check the result
 		if (!g_forceCombatTargetHookInstalled)
 			return ForceCombatTargetResult::kHookFailed;
 		SetForcedCombatTargetRefID(actor->refID, target->refID);
 
-		void* combatController = GetCombatController(actor);
+		void* combatController = Engine::Actor_GetCombatController(actor);
 		if (!combatController)
 		{
 			const bool ignoreActorLimit = true;
 			bool isGuard = actor->baseForm && actor->baseForm->typeID == kFormType_NPC
 				&& CharacterIsGuardForForceCombatTarget((Character*)actor) != 0;
 			ActorStartCombat(actor, target, nullptr, ignoreActorLimit, !isGuard, false, 0, true, nullptr);
-			combatController = GetCombatController(actor);
+			combatController = Engine::Actor_GetCombatController(actor);
 			if (!combatController)
 				combatController = TryAddCombatantBootstrap(actor, target, ignoreActorLimit);
 		}
@@ -265,7 +262,7 @@ namespace
 			return ForceCombatTargetResult::kNoCombatController;
 		}
 
-		void* combatGroup = *(void**)((UInt8*)combatController + 0x80);
+		void* combatGroup = CombatControllerGetCombatGroup(combatController);
 		if (!combatGroup)
 		{
 			ClearForcedCombatTargetRefID(actor->refID);
@@ -299,11 +296,11 @@ namespace
 
 		ClearForcedCombatTargetRefID(actor->refID);
 
-		void* combatController = GetCombatController(actor);
+		void* combatController = Engine::Actor_GetCombatController(actor);
 		if (!combatController)
 			return;
 
-		void* combatGroup = *(void**)((UInt8*)combatController + 0x80);
+		void* combatGroup = CombatControllerGetCombatGroup(combatController);
 		if (!combatGroup || !s_evaluateCombatTargetsOriginal)
 			return;
 
