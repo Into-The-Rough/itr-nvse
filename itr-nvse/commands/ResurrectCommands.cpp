@@ -4,6 +4,7 @@
 #include "internal/CallTemplates.h"
 #include "internal/BSSpinLock.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/GameObjects.h"
@@ -26,11 +27,7 @@ static bool IsActorRef(TESObjectREFR* ref)
 
 typedef void (__thiscall *_ActorResurrect)(Actor*, bool, bool, bool);
 static const _ActorResurrect ActorResurrect = (_ActorResurrect)0x89F780;
-static BSSpinLock* g_processListsActorLock = (BSSpinLock*)0x11F11A0;
 
-static void** g_modelLoader = (void**)0x11C3B3C;
-typedef void (__thiscall *_ModelLoader_QueueReference)(void*, TESObjectREFR*, UInt32, bool);
-static const _ModelLoader_QueueReference ModelLoader_QueueReference = (_ModelLoader_QueueReference)0x444850;
 typedef NiNode* (__thiscall *_TESObjectREFR_Get3D)(TESObjectREFR*);
 static const _TESObjectREFR_Get3D TESObjectREFR_Get3D = (_TESObjectREFR_Get3D)0x43FCD0;
 
@@ -60,15 +57,6 @@ static ParamInfo kParams_ResurrectActorEx[1] = {
 
 DEFINE_COMMAND_PLUGIN(ResurrectActorEx, "Resurrect actor with flags: 1=reset inventory", 1, 1, kParams_ResurrectActorEx);
 DEFINE_COMMAND_PLUGIN(ResurrectAll, "Resurrects all dead actors in high process", 0, 0, nullptr);
-
-static void TESObjectREFR_Set3D(TESObjectREFR* ref, void* niNode, bool unloadArt)
-{
-	if (!ref) return;
-	auto* vtbl = *(UInt32**)ref;
-	if (!vtbl) return;
-	auto fn = reinterpret_cast<void(__thiscall*)(TESObjectREFR*, void*, bool)>(vtbl[0x1CC / 4]);
-	fn(ref, niNode, unloadArt);
-}
 
 template <class TList, class TItem>
 static bool AppendListItem(TList* list, TItem* item)
@@ -346,13 +334,12 @@ bool Cmd_ResurrectAll_Execute(COMMAND_ARGS)
 			if (actor->lifeState != 2) continue;
 
 			//clear 3D first so resurrection doesn't reuse dismembered model
-			TESObjectREFR_Set3D(refr, nullptr, true);
+			Engine::TESObjectREFR_Set3D(refr, nullptr, true);
 
 			ActorResurrect(actor, true, true, false);
 
 			//queue model reload
-			if (*g_modelLoader)
-				ModelLoader_QueueReference(*g_modelLoader, refr, 1, false);
+			Engine::ModelLoaderQueueReference(refr, 1, false);
 
 			count++;
 		}
@@ -410,11 +397,11 @@ bool Cmd_ResurrectActorEx_Execute(COMMAND_ARGS)
 
 	if (has3D)
 	{
-		TESObjectREFR_Set3D(thisObj, nullptr, true);
+		Engine::TESObjectREFR_Set3D(thisObj, nullptr, true);
 	}
 
 	{
-		BSSpinLockScope actorLock(g_processListsActorLock);
+		BSSpinLockScope actorLock(GetProcessListsActorLock());
 		ActorResurrect(actor, true, has3D, false);
 	}
 
@@ -427,8 +414,7 @@ bool Cmd_ResurrectActorEx_Execute(COMMAND_ARGS)
 		FreeInventorySnapshot(inventorySnapshot);
 	}
 
-	if (*g_modelLoader)
-		ModelLoader_QueueReference(*g_modelLoader, thisObj, 1, false);
+	Engine::ModelLoaderQueueReference(thisObj, 1, false);
 
 	*result = 1;
 	return true;

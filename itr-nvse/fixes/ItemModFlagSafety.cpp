@@ -9,6 +9,7 @@
 #undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "internal/GameLayout.h"
 #include "internal/globals.h"
 
@@ -59,7 +60,7 @@ namespace ItemModFlagSafety
 		auto* x = static_cast<ExtraWeaponModFlagsView*>(
 			Engine::BaseExtraList_GetByType(&refr->extraDataList, kXData_WeaponModFlags));
 		if (!x || x->flags == 0) return;
-		char* name = (char*)0x11D9C48;
+		char* name = GetMutableCrosshairRefName();
 		UInt32 len = 0;
 		while (name[len]) ++len;
 		if (len && len < 0x103) { name[len] = '+'; name[len + 1] = 0; }
