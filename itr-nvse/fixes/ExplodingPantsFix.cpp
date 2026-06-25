@@ -2,9 +2,12 @@
 //NOT hot-reloadable - requires game restart
 
 #include "ExplodingPantsFix.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"
+#include "internal/GameLayout.h"
 
 #include "internal/globals.h"
 
@@ -16,8 +19,7 @@ namespace ExplodingPantsFix
 	bool __fastcall Hook_IsAltTrigger(void* projBase, void* projectileRef) {
 		if (((_IsAltTrigger)s_isAltTriggerDetour.GetOverwrittenAddr())(projBase))
 			return true;
-		//flag 0x400 at offset 0xC8
-		if (projectileRef && (*(uint32_t*)((uint8_t*)projectileRef + 0xC8) & 0x400))
+		if (ProjectileRefHasFlag(projectileRef, kProjectileRefFlag_AltTrigger))
 			return true;
 		return false;
 	}

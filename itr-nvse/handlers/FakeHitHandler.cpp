@@ -125,7 +125,6 @@ static GetObjectByName_t GetObjectByName = (GetObjectByName_t)0x4AAE30;
 static InitSoundForm_t InitSoundForm = (InitSoundForm_t)0xAE5870;
 static Sound_SetPos_t Sound_SetPos = (Sound_SetPos_t)0xAD8B60;
 static Sound_SetNiNode_t Sound_SetNiNode = (Sound_SetNiNode_t)0xAD8F20;
-static void** g_decalManager = (void**)0x11C57F8;
 
 //0x522BA0 - TESObjectWEAP::GetImpactData(material). reads weapon+0x24C, remaps raw
 //material 0-31 to an impactDatas slot via 0x58E8F0. null if the weapon has no set
@@ -226,7 +225,7 @@ static void PlaceSkinnedBloodDecal(Actor* target, Actor* attacker, TESObjectWEAP
 	if (!impactData || !impactData->textureSet) return;
 
 	NiNode* actorNode = target->GetNiNode();
-	void* decalMgr = *g_decalManager;
+	void* decalMgr = GetDecalManager();
 	if (!actorNode || !decalMgr) return;
 
 	NiPoint3 effectPos = GetBodyImpactPosition(target, hitLocation);

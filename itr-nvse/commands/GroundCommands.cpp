@@ -3,6 +3,7 @@
 
 #include "GroundCommands.h"
 #include "internal/CallTemplates.h"
+#include "internal/EngineFunctions.h"
 #include "internal/GameLayout.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
@@ -56,10 +57,6 @@ namespace
 	constexpr float kGroundRayStartOffset = 8.0f;
 	constexpr UInt8 kGroundRayLayer = 6;
 
-	typedef void (__thiscall *TES_PickObject_t)(void* tes, RayCastData* rcData, bool unk);
-	static TES_PickObject_t TES_PickObject = (TES_PickObject_t)0x458440;
-	static void** g_TES = (void**)0x11DEA10;
-
 	bool GetTerrainZ(TESObjectREFR* ref, float* outZ)
 	{
 		auto* cell = ref->parentCell;
@@ -70,8 +67,6 @@ namespace
 
 	bool GetRaycastGroundZ(TESObjectREFR* ref, float* outZ)
 	{
-		if (!*g_TES) return false;
-
 		float startZ = ref->posZ + kGroundRayStartOffset;
 		float endZ = startZ - kGroundRayMaxRange;
 
@@ -87,7 +82,8 @@ namespace
 		rcData.unk44[6] = 0xFFFFFFFF;
 		rcData.layerType = kGroundRayLayer;
 
-		TES_PickObject(*g_TES, &rcData, true);
+		if (!Engine::TESPickObject(&rcData, true))
+			return false;
 		if (rcData.hitFraction >= 1.0f)
 			return false;
 

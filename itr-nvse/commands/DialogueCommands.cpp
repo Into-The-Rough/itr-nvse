@@ -15,6 +15,7 @@ extern const _ExtractArgs ExtractArgs;
 extern NVSEArrayVarInterface* g_arrInterface;
 
 #include "internal/CallTemplates.h"
+#include "internal/GameGlobals.h"
 #include "internal/GameLayout.h"
 #include "internal/MenuLayout.h"
 
@@ -84,12 +85,10 @@ bool Cmd_GetDisplayedDialogueInfos_Execute(COMMAND_ARGS)
 	if (!g_arrInterface)
 		return true;
 
-	//check if dialogue menu is open (bool at 0x11D9514)
-	if (!*(bool*)0x11D9514)
+	if (!IsDialogMenuOpen())
 		return true;
 
-	//get DialogMenu singleton
-	void* dialogMenu = *(void**)0x11D9510;
+	void* dialogMenu = GetDialogMenu();
 	if (!dialogMenu)
 		return true;
 

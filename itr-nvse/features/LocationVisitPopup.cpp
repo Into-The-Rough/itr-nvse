@@ -4,6 +4,7 @@
 #include "internal/CooldownTracker.h"
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "internal/MenuLayout.h"
 #include <Windows.h>
 #include <cstddef>
@@ -57,7 +58,7 @@ namespace LocationVisitPopup
 	static SetCustomQuestText_t SetCustomQuestText = (SetCustomQuestText_t)0x76B960;
 
 	static void* GetHUDMainMenuTile() {
-		void* hud = *(void**)0x11D96C0; //HUDMainMenu
+		void* hud = GetHUDMainMenu();
 		if (!hud) return nullptr;
 		return HUDMainMenuGetRootTile(hud);
 	}

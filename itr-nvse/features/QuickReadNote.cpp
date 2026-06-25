@@ -40,12 +40,6 @@ namespace QuickReadNote
 	constexpr UInt32 kVtbl_MessageMenu = 0x107566C;
 	constexpr UInt32 kOffset_HandleClick = 0x0C;
 
-	#define GameHeapAlloc(size) ((void*(__thiscall*)(void*, UInt32))(0xAA3E40))((void*)0x11F6238, size)
-	#define GameHeapFree(ptr) ((void(__thiscall*)(void*, void*))(0xAA4060))((void*)0x11F6238, ptr)
-	#define InterfaceManager_Singleton (*(void**)0x11D8A80)
-	#define g_mapMenuPtr (*(void**)0x11DA368)
-	#define GAME_SCREEN_HEIGHT (*(UInt32*)0x11F9434)
-
 	struct BSSoundHandle {
 		UInt32 uiSoundID; //0x00
 		bool bAssumeSuccess; //0x04
@@ -88,7 +82,7 @@ namespace QuickReadNote
 	};
 
 	struct BSWin32Audio {
-		static BSWin32Audio* GetSingleton() { return *(BSWin32Audio**)0x11F6D98; }
+		static BSWin32Audio* GetSingleton() { return static_cast<BSWin32Audio*>(GetBSWin32Audio()); }
 		enum AudioFlags : UInt32 {
 			kAudioFlags_2D = 0x1,
 			kAudioFlags_100 = 0x100,
@@ -133,8 +127,6 @@ namespace QuickReadNote
 		return ThisCall<DialogueResponseView*>(0x83C820, item);
 	}
 
-	constexpr UInt32 kAddr_InDialogueOrHolotapePlaying = 0x11DCFA4; //engine flag, true while dialogue/holotape audio plays
-
 	struct ListBoxItem {
 		Tile* tile;
 		void* object;
@@ -148,9 +140,8 @@ namespace QuickReadNote
 	};
 
 	static void ClearHUDSubtitles() {
-		void** g_hudMainMenu = (void**)0x11D96C0;
-		if (*g_hudMainMenu)
-			ThisCall<void>(0x775670, *g_hudMainMenu);
+		if (void* hud = GetHUDMainMenu())
+			ThisCall<void>(0x775670, hud);
 	}
 
 	static void StopHolotape(void* map) {
@@ -174,12 +165,12 @@ namespace QuickReadNote
 		}
 		g_noHolotapeStopSound = false;
 		BSWin32Audio::GetSingleton()->FadeOutDialogueSound();
-		*(UInt8*)kAddr_InDialogueOrHolotapePlaying = false;
+		SetInDialogueOrHolotapePlaying(false);
 		ClearHUDSubtitles();
 	}
 
 	static void PlayHolotape(BGSNote* note, bool playStartStopSound) {
-		void* map = g_mapMenuPtr;
+		void* map = GetMapMenu();
 		if (!map) return;
 		auto* mapView = MapMenuAsView(map);
 
@@ -200,16 +191,16 @@ namespace QuickReadNote
 				*isPlaying = true;
 			}
 		} else if (noteType == kBGSNoteType_Voice) {
-			CharacterView* character = (CharacterView*)GameHeapAlloc(sizeof(CharacterView));
+			CharacterView* character = static_cast<CharacterView*>(Engine::GameHeapAlloc(sizeof(CharacterView)));
 			ThisCall<void>(0x8D1F40, character, false);
 			character->flags |= 0x00004000;
 			ThisCall<void>(0x575690, character, BGSNoteGetSpeaker(note));
 
 			void* voice = BGSNoteGetVoice(note);
-			ConversationView* pConversation = (ConversationView*)GameHeapAlloc(sizeof(ConversationView));
+			ConversationView* pConversation = static_cast<ConversationView*>(Engine::GameHeapAlloc(sizeof(ConversationView)));
 			ThisCall<void>(0x83B850, pConversation, character, *(void**)g_thePlayerPtr, voice);
 
-			UInt32 audioFlags = *(UInt32*)0x7974CA;
+			UInt32 audioFlags = GetMapMenuVoicePlaybackAudioFlags();
 			ConversationFirstItem(pConversation);
 			if (DialogueItemView* currentItem = ConversationGetCurrentItem(pConversation)) {
 				if (DialogueItemFirstResponse(currentItem)) {
@@ -233,9 +224,9 @@ namespace QuickReadNote
 				}
 			}
 			ThisCall<void>(0x83B8D0, pConversation); //~Conversation
-			GameHeapFree(pConversation);
+			Engine::GameHeapFree(pConversation);
 			ThisCall<void>(0x8D2060, character); //~Character
-			GameHeapFree(character);
+			Engine::GameHeapFree(character);
 		}
 
 		if (*isPlaying) {
@@ -247,7 +238,7 @@ namespace QuickReadNote
 			} else {
 				g_noHolotapeStopSound = true;
 			}
-			*(UInt8*)kAddr_InDialogueOrHolotapePlaying = true;
+			SetInDialogueOrHolotapePlaying(true);
 			BSWin32Audio::GetSingleton()->FadeInDialogueSound();
 		}
 	}
@@ -258,7 +249,7 @@ namespace QuickReadNote
 			if (g_maxLines > 48) return 48;
 			return g_maxLines;
 		}
-		UInt32 screenHeight = GAME_SCREEN_HEIGHT;
+		UInt32 screenHeight = GetGameScreenHeight();
 		if (screenHeight < 480 || screenHeight > 4320)
 			screenHeight = GetSystemMetrics(SM_CYSCREEN);
 		if (screenHeight < 480 || screenHeight > 4320)
@@ -367,12 +358,12 @@ namespace QuickReadNote
 	}
 
 	static void SwitchToMiscTab() {
-		void* mapMenu = g_mapMenuPtr;
+		void* mapMenu = GetMapMenu();
 		if (!mapMenu) return;
 		auto* mapView = MapMenuAsView(mapMenu);
 		void* tiles17 = mapView->tabLineTile;
 		if (!tiles17) return;
-		UInt32 traitID = *(UInt32*)0x11DA360;
+		UInt32 traitID = GetMapMenuCurrentTabTrait();
 		if (traitID == 0 || traitID == 0xFFFFFFFF)
 			traitID = Engine::Tile_TextToTrait("_CurrentTab");
 		ThisCall<void>(0x700320, tiles17, traitID, 3);
@@ -386,7 +377,7 @@ namespace QuickReadNote
 	}
 
 	static void OpenPipBoyToNotes() {
-		void* im = InterfaceManager_Singleton;
+		void* im = GetInterfaceManager();
 		if (im) {
 			ThisCall<void>(0x70F4E0, im, nullptr, 0x3FF);
 			g_switchToMiscPending = true;
@@ -413,7 +404,7 @@ namespace QuickReadNote
 				}
 			}
 		} else if (noteType == kBGSNoteType_Sound || noteType == kBGSNoteType_Voice) {
-			void* map = g_mapMenuPtr;
+			void* map = GetMapMenu();
 			if (map) {
 				PlayHolotape(note, true);
 				MapMenuAsView(map)->currentNote = note;
@@ -435,7 +426,7 @@ namespace QuickReadNote
 			g_truncatedNote = nullptr;
 		}
 		if (wasOurMessage) {
-			void* im = InterfaceManager_Singleton;
+			void* im = GetInterfaceManager();
 			if (im) {
 				UInt8 buttonIndex = InterfaceManagerAsView(im)->msgBoxButton;
 				if (buttonIndex == 1) {
@@ -539,7 +530,7 @@ namespace QuickReadNote
 			g_openPipBoyPending = false;
 			OpenPipBoyToNotes();
 		}
-		if (g_switchToMiscPending && g_mapMenuPtr) {
+		if (g_switchToMiscPending && GetMapMenu()) {
 			g_switchToMiscPending = false;
 			SwitchToMiscTab();
 		}

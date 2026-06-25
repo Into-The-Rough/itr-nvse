@@ -4,60 +4,17 @@
 #include <vector>
 
 #include "OnEntryPointHandler.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/GameGlobals.h"
+#include "internal/GameLayout.h"
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"
 
 extern void Log(const char* fmt, ...);
 
-class BGSPerk;
-class BGSPerkEntry;
-class BGSEntryPointPerkEntry;
-
-enum { kFormType_BGSPerk = 0x81 };
-
 constexpr UInt32 kVtbl_BGSEntryPointPerkEntry = 0x1046D0C;
-
-template <typename T>
-struct tListNode {
-    T* data;
-    tListNode<T>* next;
-};
-
-template <typename T>
-struct tList {
-    tListNode<T> first;
-    tListNode<T>* Head() { return &first; }
-};
-
-class BGSPerkEntry {
-public:
-    void** vtable;
-    UInt8 rank;
-    UInt8 priority;
-    UInt16 type;
-};
-
-class BGSEntryPointPerkEntry : public BGSPerkEntry {
-public:
-    UInt8 entryPoint;
-    UInt8 function;
-    UInt8 conditionTabs;
-    UInt8 pad0B;
-    void* data;
-    void* conditions;
-};
-
-class BGSPerk {
-public:
-    UInt8 pad00[0x48];
-    tList<BGSPerkEntry> entries;
-};
-
-struct DataHandler {
-    UInt8 pad[0x3A0];
-};
 
 namespace OnEntryPointHandler {
     //double-buffered: build into new map, swap pointer atomically
@@ -89,26 +46,21 @@ void BuildEntryMap()
     EntryMap* buildMap = g_useMapB ? &g_mapB : &g_mapA;
     buildMap->clear();
 
-    DataHandler** pDataHandler = (DataHandler**)g_dataHandlerPtr;
-    if (!pDataHandler || !*pDataHandler) return;
+    auto* dataHandler = static_cast<DataHandler*>(*g_dataHandlerPtr);
+    if (!dataHandler) return;
 
-    tList<BGSPerk>* perkList = (tList<BGSPerk>*)((UInt8*)*pDataHandler + 0x178);
+    auto* perkList = DataHandlerGetPerkList(dataHandler);
+    if (!perkList) return;
 
-    tListNode<BGSPerk>* perkNode = (tListNode<BGSPerk>*)perkList;
-    while (perkNode && perkNode->data) {
-        BGSPerk* perk = perkNode->data;
+    for (auto* perkNode = perkList->Head(); perkNode && perkNode->Item(); perkNode = perkNode->Next()) {
+        BGSPerk* perk = perkNode->Item();
 
-        tListNode<BGSPerkEntry>* node = perk->entries.Head();
-        while (node && node->data) {
-            BGSPerkEntry* entry = node->data;
+        for (auto* entryNode = perk->entries.Head(); entryNode && entryNode->Item(); entryNode = entryNode->Next()) {
+            BGSPerkEntry* entry = entryNode->Item();
 
-            if (*(UInt32*)entry == kVtbl_BGSEntryPointPerkEntry)
+            if (entry->vtbl == kVtbl_BGSEntryPointPerkEntry)
                 (*buildMap)[(UInt32)entry] = perk;
-
-            node = node->next;
         }
-
-        perkNode = perkNode->next;
     }
 
     //readers instantly see the new complete map

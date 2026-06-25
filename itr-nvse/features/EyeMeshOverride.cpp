@@ -6,6 +6,7 @@
 #include "nvse/GameForms.h"
 
 #include "internal/Detours.h"
+#include "internal/GameLayout.h"
 #include "internal/ScopedLock.h"
 
 #include <string>
@@ -15,12 +16,6 @@ extern const _ExtractArgs ExtractArgs;
 
 namespace
 {
-	//FaceGenNpcData fields read in BSFaceGenManager::AttachEyesToHead (0x6558B0)
-	//eye form supplies only the texture; left/right meshes come from the race
-	constexpr UInt32 kOffset_EyeForm = 0x8C;
-	constexpr UInt32 kOffset_LeftEyeModel = 0xD8;
-	constexpr UInt32 kOffset_RightEyeModel = 0xDC;
-
 	//single call site, inside BSFaceGenManager::CreateFaceGenHead
 	constexpr UInt32 kAddr_AttachEyesCall = 0x655032;
 
@@ -68,7 +63,7 @@ namespace
 
 	void __cdecl Hook_AttachEyesToHead(void* a1, void* a2, void* npcData, char a4)
 	{
-		TESForm* eyeForm = *reinterpret_cast<TESForm**>(static_cast<UInt8*>(npcData) + kOffset_EyeForm);
+		TESForm* eyeForm = FaceGenNpcDataGetEyeForm(npcData);
 
 		std::string left, right;
 		bool have = false;
@@ -100,8 +95,14 @@ namespace
 			~ModelSwap() { *slot = saved; }
 		};
 
-		void** pLeft = reinterpret_cast<void**>(static_cast<UInt8*>(npcData) + kOffset_LeftEyeModel);
-		void** pRight = reinterpret_cast<void**>(static_cast<UInt8*>(npcData) + kOffset_RightEyeModel);
+		void** pLeft = FaceGenNpcDataGetLeftEyeModelSlot(npcData);
+		void** pRight = FaceGenNpcDataGetRightEyeModelSlot(npcData);
+		if (!pLeft || !pRight)
+		{
+			g_origAttachEyes(a1, a2, npcData, a4);
+			return;
+		}
+
 		FakeEyeModel fakeLeft{ s_fakeVtbl, left.c_str() };
 		FakeEyeModel fakeRight{ s_fakeVtbl, right.c_str() };
 

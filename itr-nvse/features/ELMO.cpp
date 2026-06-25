@@ -7,6 +7,8 @@
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
 #include "internal/FormatLogic.h"
+#include "internal/GameGlobals.h"
+#include "internal/GameLayout.h"
 #include "internal/SafeWrite.h"
 #include <cstdio>
 
@@ -57,14 +59,15 @@ namespace ELMO
 
 		auto repDesc = ThisCall<const char*>(0x616890, reputation);
 		auto repTitle = ThisCall<const char*>(0x616710, reputation);
-		auto factionName = ThisCall<const char*>(0x408DA0, reinterpret_cast<UInt8*>(reputation) + 0x18);
+		auto* fullName = TESReputationGetFullName(reputation);
+		auto factionName = fullName ? ThisCall<const char*>(0x408DA0, fullName) : nullptr;
 		auto message = FormatReputationMessage(
 			factionName ? factionName : "",
 			repTitle ? repTitle : "",
 			repDesc ? repDesc : "");
 		auto iconPath = ThisCall<const char*>(0x6167D0, reputation);
-		auto wasPositive = *reinterpret_cast<UInt32*>(reinterpret_cast<UInt8*>(reputation) + 0x4C) == 1;
-		auto soundPath = GetINIString(wasPositive ? 0x11CBCB0 : 0x11CBA30);
+		auto wasPositive = TESReputationLastChangeWasPositive(reputation);
+		auto soundPath = GetINIString(wasPositive ? kSetting_ReputationPositiveSound : kSetting_ReputationNegativeSound);
 
 		CornerMessageHandler::TrackMessageMeta(message, kReputationDisplayTime, kCornerMeta_ReputationChange);
 		Engine::QueueUIMessage(message, kEmotion_Neutral, iconPath, soundPath, kReputationDisplayTime, false);

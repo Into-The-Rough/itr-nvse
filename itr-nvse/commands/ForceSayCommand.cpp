@@ -18,9 +18,6 @@
 extern const _ExtractArgs ExtractArgs;
 extern void Log(const char* fmt, ...);
 
-#define GameHeapAlloc(size) ((void*(__thiscall*)(void*, UInt32))(0xAA3E40))((void*)0x11F6238, size)
-#define GameHeapFree(ptr) ((void(__thiscall*)(void*, void*))(0xAA4060))((void*)0x11F6238, ptr)
-
 struct BSSoundHandle
 {
 	UInt32 uiSoundID;
@@ -174,12 +171,12 @@ bool ForceSay(Actor* speaker, TESTopic* topic, Actor* target)
 		return false;
 
 	//max lip distance so lip sync works at any range
-	UInt32* lipDist = (UInt32*)(0x11CD7D4 + 4);
+	UInt32* lipDist = GetVoiceLipDistanceLimit();
 	UInt32 oldLipDist = *lipDist;
 	*lipDist = 0x7FFFFFFF;
 
 	//create DialogueItem manually - this loads response list with voice paths
-	void* mem = GameHeapAlloc(sizeof(DialogueItem));
+	void* mem = Engine::GameHeapAlloc(sizeof(DialogueItem));
 	if (!mem)
 	{
 		*lipDist = oldLipDist;
@@ -193,7 +190,7 @@ bool ForceSay(Actor* speaker, TESTopic* topic, Actor* target)
 	if (!response)
 	{
 		ThisCall(0x83C670, item);
-		GameHeapFree(item);
+		Engine::GameHeapFree(item);
 		*lipDist = oldLipDist;
 		return false;
 	}
@@ -208,7 +205,7 @@ bool ForceSay(Actor* speaker, TESTopic* topic, Actor* target)
 	if (!voicePath || !voicePath[0])
 	{
 		ThisCall(0x83C670, item);
-		GameHeapFree(item);
+		Engine::GameHeapFree(item);
 		*lipDist = oldLipDist;
 		return false;
 	}
@@ -241,7 +238,7 @@ bool ForceSay(Actor* speaker, TESTopic* topic, Actor* target)
 	*lipDist = oldLipDist;
 
 	ThisCall(0x83C670, item);
-	GameHeapFree(item);
+	Engine::GameHeapFree(item);
 
 	return true;
 }

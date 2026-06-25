@@ -71,13 +71,17 @@ struct ContainerMenuView {
 };
 
 struct BarterMenuView {
-	UInt8 pad00[0x9C];
+	UInt8 pad00[0x80];
+	TESObjectREFR* merchantRef;
+	UInt8 pad84[0x9C - 0x84];
 	UInt32 leftFilter;
 	UInt32 rightFilter;
 	UInt8 padA4[0xA8 - 0xA4];
 	void* leftItems;
 	UInt8 padAC[0x108 - 0xAC];
 	void* currentItems;
+	void* leftBarterItem;
+	void* leftBarterNext;
 };
 
 struct HUDMainMenuView {
@@ -146,7 +150,9 @@ struct VATSHighlightDataView {
 };
 
 struct DialogMenuView {
-	UInt8 pad00[0x70];
+	UInt8 pad00[0x48];
+	void* currentInfo;
+	UInt8 pad4C[0x70 - 0x4C];
 	void* topicManager;
 };
 
@@ -181,10 +187,12 @@ static_assert(offsetof(ContainerMenuView, leftFilter) == 0x8C);
 static_assert(offsetof(ContainerMenuView, rightFilter) == 0x90);
 static_assert(offsetof(ContainerMenuView, leftItems) == 0x98);
 static_assert(offsetof(ContainerMenuView, currentItems) == 0xF8);
+static_assert(offsetof(BarterMenuView, merchantRef) == 0x80);
 static_assert(offsetof(BarterMenuView, leftFilter) == 0x9C);
 static_assert(offsetof(BarterMenuView, rightFilter) == 0xA0);
 static_assert(offsetof(BarterMenuView, leftItems) == 0xA8);
 static_assert(offsetof(BarterMenuView, currentItems) == 0x108);
+static_assert(offsetof(BarterMenuView, leftBarterItem) == 0x10C);
 static_assert(offsetof(HUDMainMenuView, infoNameTile) == 0xA8);
 static_assert(offsetof(HUDMainMenuView, crosshairRef) == 0x1B8);
 static_assert(sizeof(BGSNoteView) == 0x80);
@@ -211,6 +219,7 @@ static_assert(offsetof(InterfaceManagerView, crosshairRef) == 0xFC);
 static_assert(offsetof(InterfaceManagerView, vatsHighlightData) == 0x1DC);
 static_assert(offsetof(VATSHighlightDataView, refs) == 0x00);
 static_assert(offsetof(VATSHighlightDataView, refCount) == 0x0C);
+static_assert(offsetof(DialogMenuView, currentInfo) == 0x48);
 static_assert(offsetof(DialogMenuView, topicManager) == 0x70);
 static_assert(offsetof(MenuTopicView, topicInfo) == 0x18);
 
@@ -335,6 +344,11 @@ inline UInt32 BarterMenuGetLeftFilter(void* menu)
 	return menu ? reinterpret_cast<BarterMenuView*>(menu)->leftFilter : 0;
 }
 
+inline TESObjectREFR* BarterMenuGetMerchantRef(void* menu)
+{
+	return menu ? reinterpret_cast<BarterMenuView*>(menu)->merchantRef : nullptr;
+}
+
 inline UInt32 BarterMenuGetRightFilter(void* menu)
 {
 	return menu ? reinterpret_cast<BarterMenuView*>(menu)->rightFilter : 0;
@@ -353,6 +367,11 @@ inline void* BarterMenuGetCurrentItems(void* menu)
 inline UInt32 BarterMenuGetCurrentSide(void* menu)
 {
 	return BarterMenuGetCurrentItems(menu) == BarterMenuGetLeftItems(menu) ? 0 : 1;
+}
+
+inline void* BarterMenuGetLeftBarter(void* menu)
+{
+	return menu ? &reinterpret_cast<BarterMenuView*>(menu)->leftBarterItem : nullptr;
 }
 
 inline HUDMainMenuView* HUDMainMenuAsView(void* hud)
@@ -380,6 +399,11 @@ inline VATSHighlightDataView* InterfaceManagerGetVATSHighlightData(void* interfa
 	return interfaceManager ? reinterpret_cast<VATSHighlightDataView*>(InterfaceManagerAsView(interfaceManager)->vatsHighlightData) : nullptr;
 }
 
+inline TESObjectREFR* InterfaceManagerGetCrosshairRef(void* interfaceManager)
+{
+	return interfaceManager ? InterfaceManagerAsView(interfaceManager)->crosshairRef : nullptr;
+}
+
 inline UInt32 VATSHighlightDataGetRefCount(void* vatsData)
 {
 	return vatsData ? reinterpret_cast<VATSHighlightDataView*>(vatsData)->refCount : 0;
@@ -394,6 +418,11 @@ inline bool VATSHighlightDataHasRefs(void* vatsData)
 inline void* DialogMenuGetTopicManager(void* dialogMenu)
 {
 	return dialogMenu ? reinterpret_cast<DialogMenuView*>(dialogMenu)->topicManager : nullptr;
+}
+
+inline void* DialogMenuGetCurrentInfo(void* dialogMenu)
+{
+	return dialogMenu ? reinterpret_cast<DialogMenuView*>(dialogMenu)->currentInfo : nullptr;
 }
 
 inline TESTopicInfo* MenuTopicGetTopicInfo(void* menuTopic)
