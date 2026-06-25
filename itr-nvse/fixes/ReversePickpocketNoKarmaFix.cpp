@@ -4,6 +4,7 @@
 #include "internal/NVSEMinimal.h"
 #include "internal/CallTemplates.h"
 #include "internal/GameGlobals.h"
+#include "internal/MenuLayout.h"
 #include "internal/Detours.h"
 
 #include "internal/globals.h"
@@ -19,11 +20,10 @@ namespace ReversePickpocketNoKarmaFix
 
 	bool __fastcall ShouldSkipKarma(void* menu, void* actor)
 	{
-		void* entry = *(void**)0x11D93FC;
+		void* entry = GetContainerMenuSelection();
 		void* player = *(void**)g_thePlayerPtr;
 
-		uint32_t currentItems = *(uint32_t*)((uint32_t)menu + 0xF8);
-		bool isReverse = (currentItems == (uint32_t)menu + 0x98);
+		bool isReverse = ContainerMenuGetCurrentItems(menu) == ContainerMenuGetLeftItems(menu);
 
 		if (isReverse && entry)
 		{
@@ -70,4 +70,3 @@ namespace ReversePickpocketNoKarmaFix
 		g_enabled = enabled;
 	}
 }
-

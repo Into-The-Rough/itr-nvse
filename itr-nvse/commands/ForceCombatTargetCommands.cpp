@@ -2,6 +2,7 @@
 
 #include "ForceCombatTargetCommands.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "internal/GameLayout.h"
 #include "internal/Detours.h"
 #include "internal/ScopedLock.h"
@@ -44,7 +45,6 @@ static const _ActorPutCreatedPackage ActorPutCreatedPackage = (_ActorPutCreatedP
 static const _ProcessComputeLastTimeProcessed ProcessComputeLastTimeProcessed = (_ProcessComputeLastTimeProcessed)0x907650;
 static const _ProcessSavePackageToExtraData ProcessSavePackageToExtraData = (_ProcessSavePackageToExtraData)0x9130F0;
 static const _CombatControllerSetByte0C4 CombatControllerSetByte0C4 = (_CombatControllerSetByte0C4)0x8A0250;
-static void** g_combatManager = reinterpret_cast<void**>(0x11F1958);
 
 namespace
 {
@@ -88,7 +88,8 @@ namespace
 
 	static void* TryAddCombatantBootstrap(Actor* actor, Actor* target, bool ignoreActorLimit)
 	{
-		if (!actor || !target || !g_combatManager || !*g_combatManager)
+		void* combatManager = GetCombatManager();
+		if (!actor || !target || !combatManager)
 			return nullptr;
 
 		//call through the trampoline, 0x8B0670 is detoured to Hook_CanAttackActor
@@ -96,7 +97,7 @@ namespace
 		if (!s_canAttackActorOriginal(actor, target))
 			return nullptr;
 
-		void* combatController = CombatManagerAddCombatant(*g_combatManager, actor, target, 0, 0);
+		void* combatController = CombatManagerAddCombatant(combatManager, actor, target, 0, 0);
 		if (!combatController)
 			return nullptr;
 

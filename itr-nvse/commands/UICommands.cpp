@@ -6,6 +6,7 @@
 extern const _ExtractArgs ExtractArgs;
 #include "internal/globals.h"
 #include "internal/CallTemplates.h"
+#include "internal/GameGlobals.h"
 #include "internal/MenuLayout.h"
 
 #include <cmath>
@@ -13,8 +14,6 @@ extern const _ExtractArgs ExtractArgs;
 
 namespace
 {
-	static TileMenuArrayView* g_TileMenuArray = reinterpret_cast<TileMenuArrayView*>(0x11F3508);
-
 	constexpr UInt32 kTileType_Image = 0x386;
 	constexpr UInt32 kTileType_Radial = 0x38C;
 
@@ -94,9 +93,10 @@ namespace
 			return nullptr;
 
 		void* tile = nullptr;
-		for (UInt16 i = 0; i < g_TileMenuArray->firstFreeEntry; i++)
+		auto* tileMenuArray = GetTileMenuArray();
+		for (UInt16 i = 0; i < tileMenuArray->firstFreeEntry; i++)
 		{
-			auto tm = g_TileMenuArray->data[i];
+			auto tm = tileMenuArray->data[i];
 			const char* tileName = GetTileName(tm);
 			if (tileName && !_stricmp(tileName, menuName))
 			{
@@ -137,7 +137,7 @@ namespace
 
 		void* fixedString = nullptr;
 		ThisCall<void*>(kAddr_BSFixedString_Ctor, &fixedString, fullPath);
-		void* texture = CdeclCall<void*>(kAddr_NiSourceTexture_Create, &fixedString, reinterpret_cast<void*>(0x11A9598), true, false);
+		void* texture = CdeclCall<void*>(kAddr_NiSourceTexture_Create, &fixedString, GetTextureManager(), true, false);
 		CdeclCall(kAddr_BSFixedString_Dtor, &fixedString);
 		return texture;
 	}

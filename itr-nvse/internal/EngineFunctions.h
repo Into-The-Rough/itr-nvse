@@ -1,6 +1,8 @@
 //typed engine function pointers - centralized to catch address errors once
 #pragma once
 
+#include "internal/GameGlobals.h"
+
 class Actor;
 class TESObjectREFR;
 class TESBoundObject;
@@ -82,6 +84,30 @@ inline auto BSSoundHandle_SetVolume = (void(__thiscall*)(void*, float))0xAD89E0;
 //input
 inline auto OSInputGlobals_GetControlState = (bool(__thiscall*)(void*, UInt32, UInt8))0xA24660;
 
+//settings
+inline auto Setting_GetDataPtr = (void*(__thiscall*)(void*))0x403E20;
+
+inline void* GetSettingDataPtr(void* setting)
+{
+	return setting ? Setting_GetDataPtr(setting) : nullptr;
+}
+
+inline float* GetSettingFloatPtr(void* setting)
+{
+	return static_cast<float*>(GetSettingDataPtr(setting));
+}
+
+inline UInt8* GetSettingUInt8Ptr(void* setting)
+{
+	return static_cast<UInt8*>(GetSettingDataPtr(setting));
+}
+
+inline float GetSettingFloatValue(void* setting, float fallback = 0.0f)
+{
+	float* value = GetSettingFloatPtr(setting);
+	return value ? *value : fallback;
+}
+
 //combat
 inline auto CombatController_GetPackageOwner = (void*(__thiscall*)(void*))0x97AE90;
 
@@ -105,7 +131,7 @@ inline const char* TESForm_GetEditorID(TESForm* form)
 	if (!form) return nullptr;
 	using GetEditorID_t = const char* (__thiscall *)(TESForm*);
 	auto* vtbl = *reinterpret_cast<UInt32**>(form);
-	return reinterpret_cast<GetEditorID_t>(vtbl[0x4C / 4])(form);
+	return vtbl ? reinterpret_cast<GetEditorID_t>(vtbl[0x130 / 4])(form) : nullptr;
 }
 
 //ownership
@@ -126,8 +152,52 @@ inline auto ExtraDataList_AppendExtraContainerChangeData = (void(__thiscall*)(vo
 inline auto FormHeap_Allocate = (void*(__cdecl*)(UInt32))0x401000;
 inline auto FormHeap_Free = (void(__cdecl*)(void*))0x401030;
 
+//game heap
+inline auto GameHeap_Allocate = (void*(__thiscall*)(void*, UInt32))0xAA3E40;
+inline auto GameHeap_Free = (void(__thiscall*)(void*, void*))0xAA4060;
+
+inline void* GameHeapAlloc(UInt32 size)
+{
+	return GameHeap_Allocate(g_gameHeap, size);
+}
+
+inline void GameHeapFree(void* ptr)
+{
+	if (ptr) GameHeap_Free(g_gameHeap, ptr);
+}
+
 //actor
 inline auto Actor_ClearProcessItems = (void(__thiscall*)(void*))0x8ADC50;
+
+//model loading
+inline auto ModelLoader_QueueReference = (void(__thiscall*)(void*, TESObjectREFR*, UInt32, bool))0x444850;
+
+inline void ModelLoaderQueueReference(TESObjectREFR* ref, UInt32 queueFlags, bool unk)
+{
+	void* modelLoader = GetModelLoader();
+	if (modelLoader)
+		ModelLoader_QueueReference(modelLoader, ref, queueFlags, unk);
+}
+
+inline void TESObjectREFR_Set3D(TESObjectREFR* ref, void* niNode, bool unloadArt)
+{
+	if (!ref) return;
+	auto* vtbl = *reinterpret_cast<UInt32**>(ref);
+	if (!vtbl) return;
+	auto fn = reinterpret_cast<void(__thiscall*)(TESObjectREFR*, void*, bool)>(vtbl[0x1CC / 4]);
+	fn(ref, niNode, unloadArt);
+}
+
+//world raycasts
+inline auto TES_PickObject = (void(__thiscall*)(void*, void*, bool))0x458440;
+
+inline bool TESPickObject(void* rayCastData, bool unk)
+{
+	void* tes = GetTES();
+	if (!tes) return false;
+	TES_PickObject(tes, rayCastData, unk);
+	return true;
+}
 
 //collision flags - ref-targeted Script::ToggleCollision uses these
 inline auto TESForm_GetNoCollision = (bool(__thiscall*)(TESForm*))0x50D4A0;

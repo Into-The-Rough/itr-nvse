@@ -5,15 +5,15 @@
 #include "internal/NVSEMinimal.h"
 #include "internal/EventDispatch.h"
 #include "internal/CallTemplates.h"
+#include "internal/GameGlobals.h"
 
 static bool g_lastVisible = false;
-static UInt8* g_consoleOpen = (UInt8*)0x11DEA2E;
 
 namespace OnConsoleHandler {
 void Update()
 {
 	bool visible = false;
-	if (*g_consoleOpen)
+	if (IsConsoleStateOpen())
 	{
 		//MenuConsole::Instance(0) at 0x71B160
 		void* console = CdeclCall<void*>(0x71B160, 0);

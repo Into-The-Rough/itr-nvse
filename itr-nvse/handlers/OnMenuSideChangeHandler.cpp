@@ -4,6 +4,7 @@
 #include "OnMenuSideChangeHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/EventDispatch.h"
+#include "internal/GameGlobals.h"
 #include "internal/MenuLayout.h"
 
 constexpr UInt32 kMenuType_Container = 1008;
@@ -30,7 +31,7 @@ namespace OnMenuSideChangeHandler {
 void Update() {
     if (!g_eventManagerInterface) return;
 
-    void* contMenu = *(void**)0x11D93F8;
+    void* contMenu = GetContainerMenu();
     if (contMenu) {
         if (contMenu != g_lastContainerMenu) {
             g_lastContainerSide = GetCurrentSide(contMenu, kMenuType_Container);
@@ -46,7 +47,7 @@ void Update() {
         g_lastContainerSide = 0xFFFFFFFF;
     }
 
-    void* bartMenu = *(void**)0x11D8FA4;
+    void* bartMenu = GetBarterMenu();
     if (bartMenu) {
         if (bartMenu != g_lastBarterMenu) {
             g_lastBarterSide = GetCurrentSide(bartMenu, kMenuType_Barter);

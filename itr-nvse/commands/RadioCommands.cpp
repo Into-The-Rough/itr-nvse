@@ -151,14 +151,14 @@ using GetRadioEntryFromActivator_t = RadioEntry* (__cdecl*)(void*);
 using DisableNPCRadio_t = void(__cdecl*)(Actor*);
 using SetNPCRadio_t = void(__cdecl*)(Actor*, TESObjectREFR*);
 
-//game globals
-static RadioEntry** g_currentRadio = (RadioEntry**)0x11DD42C;
-static char* g_currentSong = (char*)0x11DD448;
-static tList<DynamicRadio>* g_dynamicRadios = (tList<DynamicRadio>*)0x11DD58C;
-static UInt8* g_radioEnabled = reinterpret_cast<UInt8*>(0x11DD434);
 static GetRadioEntryFromActivator_t s_getRadioEntryFromActivator = reinterpret_cast<GetRadioEntryFromActivator_t>(0x832830);
 static DisableNPCRadio_t s_disableNPCRadio = reinterpret_cast<DisableNPCRadio_t>(0x835980);
 static SetNPCRadio_t s_setNPCRadio = reinterpret_cast<SetNPCRadio_t>(0x835810);
+
+static tList<DynamicRadio>* GetDynamicRadioList()
+{
+	return static_cast<tList<DynamicRadio>*>(GetDynamicRadios());
+}
 
 static SoundMap* GetPlayingSoundsMap()
 {
@@ -174,7 +174,7 @@ static const char* GetSoundFilePath(UInt32 soundKey)
 
 static VoiceEntry* GetCurrentVoiceEntry()
 {
-	RadioEntry* radio = *g_currentRadio;
+	auto* radio = static_cast<RadioEntry*>(GetCurrentRadio());
 	if (!radio || !radio->data.voiceList) return nullptr;
 	auto* node = radio->data.voiceList->entries.Head();
 	return (node && node->item) ? node->item : nullptr;
@@ -183,12 +183,15 @@ static VoiceEntry* GetCurrentVoiceEntry()
 //get playing track path - pipboy radio or world radio
 static const char* GetPlayingTrackPath()
 {
+	char* currentSong = GetCurrentRadioSong();
+
 	//pipboy radio song
-	if (g_currentSong[0])
-		return g_currentSong;
+	if (currentSong[0])
+		return currentSong;
 
 	//world/dynamic radios
-	for (auto iter = g_dynamicRadios->Begin(); !iter.End(); ++iter)
+	auto* dynamicRadios = GetDynamicRadioList();
+	for (auto iter = dynamicRadios->Begin(); !iter.End(); ++iter)
 	{
 		DynamicRadio* dr = iter.Get();
 		if (dr && dr->isActive)
@@ -417,12 +420,13 @@ static void StopRadioSound(SoundKey* key)
 
 static bool AdvanceDynamicRadios(double* result)
 {
-	if (!g_dynamicRadios)
+	auto* dynamicRadios = GetDynamicRadioList();
+	if (!dynamicRadios)
 		return false;
 
 	UInt32 stoppedCount = 0, advancedCount = 0, reseatCount = 0;
 
-	for (auto iter = g_dynamicRadios->Begin(); !iter.End(); ++iter)
+	for (auto iter = dynamicRadios->Begin(); !iter.End(); ++iter)
 	{
 		DynamicRadio* dr = iter.Get();
 		if (!dr || !dr->isActive)
@@ -510,11 +514,7 @@ static bool AdvanceCurrentRadioTrack(double* result)
 {
 	*result = 0;
 
-	if (!g_currentRadio)
-		return true;
-
-	UInt8 radioEnabled = g_radioEnabled ? *g_radioEnabled : 0;
-	RadioEntry* radio = radioEnabled ? *g_currentRadio : nullptr;
+	auto* radio = IsRadioEnabled() ? static_cast<RadioEntry*>(GetCurrentRadio()) : nullptr;
 
 	//pip-boy radio disabled or no entry - try ambient/dynamic radios
 	if (!radio)
@@ -538,25 +538,27 @@ bool Cmd_IsRadioPlaying_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 
-	if (g_currentSong[0])
+	if (GetCurrentRadioSong()[0])
 	{
 		*result = 1;
 		return true;
 	}
 
-	if (g_radioEnabled && *g_radioEnabled && g_currentRadio && *g_currentRadio)
+	if (IsRadioEnabled())
 	{
-		if ((*g_currentRadio)->data.soundTimeRemaining)
+		auto* radio = static_cast<RadioEntry*>(GetCurrentRadio());
+		if (radio && radio->data.soundTimeRemaining)
 		{
 			*result = 1;
 			return true;
 		}
 	}
 
-	if (!g_dynamicRadios)
+	auto* dynamicRadios = GetDynamicRadioList();
+	if (!dynamicRadios)
 		return true;
 
-	for (auto iter = g_dynamicRadios->Begin(); !iter.End(); ++iter)
+	for (auto iter = dynamicRadios->Begin(); !iter.End(); ++iter)
 	{
 		DynamicRadio* dr = iter.Get();
 		if (!dr)

@@ -4,6 +4,7 @@
 #include "OnMenuFilterChangeHandler.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/EventDispatch.h"
+#include "internal/GameGlobals.h"
 #include "internal/MenuLayout.h"
 
 constexpr UInt32 kMenuType_Container = 1008;
@@ -33,7 +34,7 @@ namespace OnMenuFilterChangeHandler {
 void Update() {
     if (!g_eventManagerInterface) return;
 
-    void* invMenu = *(void**)0x11D9EA4;
+    void* invMenu = GetInventoryMenu();
     if (invMenu) {
         if (invMenu != g_lastInventoryMenu) {
             g_lastInventoryFilter = InventoryMenuGetFilter(invMenu);
@@ -49,7 +50,7 @@ void Update() {
         g_lastInventoryFilter = 0xFFFFFFFF;
     }
 
-    void* contMenu = *(void**)0x11D93F8;
+    void* contMenu = GetContainerMenu();
     if (contMenu) {
         if (contMenu != g_lastContainerMenu) {
             g_lastContainerLeftFilter = ContainerMenuGetLeftFilter(contMenu);
@@ -71,7 +72,7 @@ void Update() {
         g_lastContainerRightFilter = 0xFFFFFFFF;
     }
 
-    void* bartMenu = *(void**)0x11D8FA4;
+    void* bartMenu = GetBarterMenu();
     if (bartMenu) {
         if (bartMenu != g_lastBarterMenu) {
             g_lastBarterLeftFilter = BarterMenuGetLeftFilter(bartMenu);
@@ -93,9 +94,9 @@ void Update() {
         g_lastBarterRightFilter = 0xFFFFFFFF;
     }
 
-    void* recipeMenu = *(void**)0x11D8E90;
+    void* recipeMenu = GetRecipeMenu();
     if (recipeMenu) {
-        int currentCategory = *(int*)0x119FBF4;
+        int currentCategory = GetRecipeMenuCategory();
         if (recipeMenu != g_lastRecipeMenu) {
             g_lastRecipeCategory = currentCategory;
             g_lastRecipeMenu = recipeMenu;
