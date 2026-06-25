@@ -1,6 +1,8 @@
 #include "AimZoomFirstPersonOnly.h"
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"
+#include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 #include "internal/globals.h"
 #include "internal/settings.h"
 #include "nvse/CommandTable.h"
@@ -25,7 +27,7 @@ namespace AimZoomFirstPersonOnly
 
 	static bool IsThirdPerson(void* player)
 	{
-		return player && *reinterpret_cast<UInt8*>(reinterpret_cast<char*>(player) + 0x64B) != 0;
+		return PlayerCharacterIsAimZoomThirdPerson(static_cast<PlayerCharacter*>(player));
 	}
 
 	static bool IsAiming(void* player)
@@ -43,13 +45,12 @@ namespace AimZoomFirstPersonOnly
 		if (!player)
 			return;
 
-		auto* defaultWorldFOV = ThisCall<float*>(0x403E20, reinterpret_cast<void*>(0x120315C));
-		auto* defaultFirstPersonFOV = ThisCall<float*>(0x403E20, reinterpret_cast<void*>(0x1203168));
+		auto* defaultWorldFOV = Engine::GetSettingFloatPtr(g_fDefaultWorldFOVSetting);
+		auto* defaultFirstPersonFOV = Engine::GetSettingFloatPtr(g_fDefaultFirstPersonFOVSetting);
 		if (!defaultWorldFOV || !defaultFirstPersonFOV)
 			return;
 
-		*reinterpret_cast<float*>(reinterpret_cast<char*>(player) + 0x670) = *defaultWorldFOV;
-		*reinterpret_cast<float*>(reinterpret_cast<char*>(player) + 0x674) = *defaultFirstPersonFOV;
+		PlayerCharacterSetFOVs(static_cast<PlayerCharacter*>(player), *defaultWorldFOV, *defaultFirstPersonFOV);
 	}
 
 	static void CallOriginal(UpdateAimZoom_t original, void* player, float delta)
@@ -64,7 +65,7 @@ namespace AimZoomFirstPersonOnly
 			return;
 		}
 
-		auto* ironSightsZoomDefault = ThisCall<float*>(0x403E20, reinterpret_cast<void*>(0x11E0970));
+		auto* ironSightsZoomDefault = Engine::GetSettingFloatPtr(g_fIronSightsZoomDefaultSetting);
 		if (!ironSightsZoomDefault)
 		{
 			original(player, delta);

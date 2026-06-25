@@ -72,8 +72,6 @@ namespace
 	constexpr UInt32 kAddr_Load3D_DoorTravelCullCall = 0x56BAC8;
 	Detours::CallDetour s_load3DPrimitiveCullCall;
 	Detours::CallDetour s_load3DDoorTravelCullCall;
-	constexpr UInt32 kAddr_gs_bPrimitivesOn = 0x11CA2DC;
-	constexpr UInt32 kAddr_g_TES = 0x11DEA10;
 	constexpr UInt32 kAddr_NiAlphaProperty_Create = 0xA5CEB0;
 	constexpr UInt32 kAddr_NiObject_Alloc = 0xAA13E0;
 	constexpr UInt32 kAddr_BSShaderNoLightingProperty_Create = 0xB6FC90;
@@ -196,9 +194,9 @@ namespace
 	static UInt32 s_lastRefreshMs = 0;
 	static void* s_alphaProperty = nullptr;
 
-	TESView* GetTES()
+	TESView* GetTESView()
 	{
-		return *reinterpret_cast<TESView**>(kAddr_g_TES);
+		return static_cast<TESView*>(::GetTES());
 	}
 
 	TESObjectREFR* GetPlayer()
@@ -208,7 +206,7 @@ namespace
 
 	UInt8* GetPrimitivesSetting()
 	{
-		return ThisCall<UInt8*>(kAddr_INISettingCollection_GetValueAddr, reinterpret_cast<void*>(kAddr_gs_bPrimitivesOn));
+		return Engine::GetSettingUInt8Ptr(GetPrimitivesEnabledSetting());
 	}
 
 	bool ArePrimitivesVisible()
@@ -786,7 +784,7 @@ bool Cmd_ToggleAllPrimitives_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 
-	TESView* tes = GetTES();
+	TESView* tes = GetTESView();
 	if (!tes)
 		return true;
 
@@ -833,7 +831,7 @@ namespace ToggleAllPrimitives
 
 		s_lastRefreshMs = now;
 
-		if (TESView* tes = GetTES())
+		if (TESView* tes = GetTESView())
 		{
 			for (auto it = s_debugNodeStates.begin(); it != s_debugNodeStates.end();)
 			{

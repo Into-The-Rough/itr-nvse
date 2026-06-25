@@ -27,7 +27,6 @@ namespace
 	using CombatGroupHasSearch_t = bool(__thiscall*)(void*);
 	using CombatGroupGetNumTargets_t = UInt32(__thiscall*)(void*);
 	using CombatGroupStartSearch_t = void(__thiscall*)(void*);
-	using GetSettingFloat_t = float*(__thiscall*)(void*);
 	using GetTopic_t = TESTopic*(__cdecl*)(UInt32, SInt32);
 	using AddPlayerAction_t = void(__thiscall*)(Actor*, UInt32, float, TESForm*);
 	using StartGreetingPlayer_t = void(__thiscall*)(Actor*, TESTopic*);
@@ -40,7 +39,6 @@ namespace
 	const auto CombatGroupHasSearch = reinterpret_cast<CombatGroupHasSearch_t>(0x97EF30);
 	const auto CombatGroupGetNumTargets = reinterpret_cast<CombatGroupGetNumTargets_t>(0x5A4320);
 	const auto CombatGroupStartSearch = reinterpret_cast<CombatGroupStartSearch_t>(0x98ADD0);
-	const auto GetSettingFloat = reinterpret_cast<GetSettingFloat_t>(0x403E20);
 	const auto GetTopic = reinterpret_cast<GetTopic_t>(0x61A2D0);
 	const auto AddPlayerAction = reinterpret_cast<AddPlayerAction_t>(0x963EB0);
 	const auto StartGreetingPlayer = reinterpret_cast<StartGreetingPlayer_t>(0x8BC3D0);
@@ -54,7 +52,6 @@ namespace
 	constexpr UInt32 kPlayerAction_FireWeapon = 3;
 	constexpr UInt32 kTopic_PLAYERFIREWEAPON = 0x000000CB;
 	constexpr UInt32 kDefaultAlertTimerMs = 4000;
-	void* kGMST_fActorAlertSoundTimer = reinterpret_cast<void*>(0x11CD8D8);
 
 	struct ForcedAlert
 	{
@@ -166,7 +163,7 @@ namespace
 
 	UInt32 GetAlertTimerMs()
 	{
-		float* seconds = GetSettingFloat(kGMST_fActorAlertSoundTimer);
+		float* seconds = Engine::GetSettingFloatPtr(g_fActorAlertSoundTimerSetting);
 		if (!seconds || *seconds <= 0.0f)
 			return kDefaultAlertTimerMs;
 

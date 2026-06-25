@@ -8,7 +8,6 @@
 namespace AltTabMute
 {
 	constexpr UInt32 kNumVolumeChannels = 12;
-	#define INI_MUSIC_VOLUME_ADDR 0x11F6E44
 
 	struct BSAudioManager
 	{
@@ -33,9 +32,8 @@ namespace AltTabMute
 			g_savedVolumes[i] = audioMgr->volumes[i];
 			audioMgr->volumes[i] = 0.0f;
 		}
-		float* iniMusicVolume = (float*)INI_MUSIC_VOLUME_ADDR;
-		g_savedIniMusicVolume = *iniMusicVolume;
-		*iniMusicVolume = 0.0f;
+		g_savedIniMusicVolume = GetIniMusicVolume();
+		SetIniMusicVolume(0.0f);
 		g_volumesSaved = true;
 	}
 
@@ -47,8 +45,7 @@ namespace AltTabMute
 		{
 			audioMgr->volumes[i] = g_savedVolumes[i];
 		}
-		float* iniMusicVolume = (float*)INI_MUSIC_VOLUME_ADDR;
-		*iniMusicVolume = g_savedIniMusicVolume;
+		SetIniMusicVolume(g_savedIniMusicVolume);
 	}
 
 	void Update()

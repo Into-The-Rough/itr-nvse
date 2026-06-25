@@ -12,7 +12,6 @@ namespace AutoQuickLoad
 {
 	static bool g_done = false;
 	static DWORD g_startTime = 0;
-	static UInt8* g_MenuVisibilityArray = (UInt8*)0x011F308F;
 
 	#ifndef kMenuType_Start
 	#define kMenuType_Start 0x3F5
@@ -23,7 +22,7 @@ namespace AutoQuickLoad
 
 	static bool IsStartMenuVisible()
 	{
-		return g_MenuVisibilityArray && g_MenuVisibilityArray[kMenuType_Start] != 0;
+		return IsMenuVisible(kMenuType_Start);
 	}
 
 	//hooked at 0x86E88C - injects F9 keypress AFTER PollControls reads hardware
@@ -55,9 +54,7 @@ namespace AutoQuickLoad
 		if ((GetTickCount() - g_startTime) < (DWORD)Settings::iAutoQuickLoadDelayMs)
 			return;
 
-		//DIK_F9=0x43, currKeyStates at +0x18F8
-		auto input = (UInt8*)*g_inputGlobalsPtr;
-		if (input) input[0x18F8 + 0x43] = 0x80;
+		OSInputGlobalsSetKeyState(*g_inputGlobalsPtr, 0x43, 0x80); //DIK_F9
 		g_done = true;
 	}
 

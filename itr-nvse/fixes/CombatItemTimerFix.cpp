@@ -5,6 +5,7 @@
 #include "CombatItemTimerFix.h"
 #include "internal/NVSEMinimal.h"
 #include "internal/Detours.h"
+#include "internal/GameGlobals.h"
 
 #include "internal/globals.h"
 
@@ -14,11 +15,6 @@ namespace CombatItemTimerFix
 
 	//combat item types
 	enum { COMBAT_ITEM_RESTORE = 0, COMBAT_ITEM_BUFF = 1, COMBAT_ITEM_COUNT = 2 };
-
-	//game setting pointers
-	struct Setting { void* vtbl; float f; const char* name; };
-	static Setting** gs_fCombatItemRestoreTimer = (Setting**)0x11CFDD8;
-	static Setting** gs_fCombatItemBuffTimer = (Setting**)0x11CF480;
 
 	//AITimer at offset 0x1AC in CombatState
 	struct AITimer
@@ -47,9 +43,9 @@ namespace CombatItemTimerFix
 			{
 				float fTimer;
 				if (i == COMBAT_ITEM_RESTORE)
-					fTimer = (*gs_fCombatItemRestoreTimer)->f;
+					fTimer = GetCombatItemRestoreTimer();
 				else
-					fTimer = (*gs_fCombatItemBuffTimer)->f;
+					fTimer = GetCombatItemBuffTimer();
 
 				combatState->kCombatItemTimers[i].Reset(fTimer);
 				return;
@@ -62,4 +58,3 @@ namespace CombatItemTimerFix
 		s_resetCombatItemTimerCall.WriteRelCall(0x9DAB61, Hook_ResetCombatItemTimer);
 	}
 }
-

@@ -7,6 +7,7 @@
 #include "nvse/GameObjects.h"
 #include "nvse/GameForms.h"
 #include "nvse/GameData.h"
+#include "nvse/GameScript.h"
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
 #include "nvse/SafeWrite.h"
@@ -135,7 +136,7 @@ const _FormHeap_Free FormHeap_Free = (_FormHeap_Free)0x00401030;
 //MenuConsole::Idle.
 static thread_local bool s_inConsoleDispatch = false;
 
-using ConsoleScriptRun_t = int(__thiscall*)(void*, void*, int, void*);
+using ConsoleScriptRun_t = int(__thiscall*)(Script*, void*, int, TESObjectREFR*);
 
 static Detours::CallDetour s_consoleDispatchBatDetour;
 static Detours::CallDetour s_consoleDispatchInputDetour;
@@ -145,9 +146,9 @@ struct EventManagerDispatchInterface {
 	bool (*DispatchEvent)(const char* eventName, TESObjectREFR* thisObj, ...);
 };
 
-static const char* GetScriptText(void* script)
+static const char* GetScriptText(Script* script)
 {
-	return script ? *reinterpret_cast<const char**>(reinterpret_cast<UInt8*>(script) + 0x2C) : nullptr;
+	return script ? script->text : nullptr;
 }
 
 static void DispatchConsoleCommandEvent(const char* fullCommand, TESObjectREFR* calleeRef)
@@ -163,7 +164,7 @@ static void DispatchConsoleCommandEvent(const char* fullCommand, TESObjectREFR* 
 		commandName, fullCommand, calleeRef);
 }
 
-static int ConsoleScriptRunCommon(void* script, void* scriptContext, int a3,
+static int ConsoleScriptRunCommon(Script* script, void* scriptContext, int a3,
 	TESObjectREFR* calleeRef, ConsoleScriptRun_t orig)
 {
 	const bool prev = s_inConsoleDispatch;
@@ -174,13 +175,13 @@ static int ConsoleScriptRunCommon(void* script, void* scriptContext, int a3,
 	return result;
 }
 
-static int __fastcall Hook_ConsoleScriptRun_Bat(void* script, void* /*edx*/, void* scriptContext, int a3, TESObjectREFR* calleeRef)
+static int __fastcall Hook_ConsoleScriptRun_Bat(Script* script, void* /*edx*/, void* scriptContext, int a3, TESObjectREFR* calleeRef)
 {
 	return ConsoleScriptRunCommon(script, scriptContext, a3, calleeRef,
 		(ConsoleScriptRun_t)s_consoleDispatchBatDetour.GetOverwrittenAddr());
 }
 
-static int __fastcall Hook_ConsoleScriptRun_Input(void* script, void* /*edx*/, void* scriptContext, int a3, TESObjectREFR* calleeRef)
+static int __fastcall Hook_ConsoleScriptRun_Input(Script* script, void* /*edx*/, void* scriptContext, int a3, TESObjectREFR* calleeRef)
 {
 	return ConsoleScriptRunCommon(script, scriptContext, a3, calleeRef,
 		(ConsoleScriptRun_t)s_consoleDispatchInputDetour.GetOverwrittenAddr());
@@ -474,7 +475,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OnEffectHandler::ClearState();
 			if (Settings::bAutoGodMode && !g_godModeExecuted)
 			{
-				*(UInt8*)0x11E07BA = 1;
+				SetGodModeEnabled(true);
 				g_godModeExecuted = true;
 			}
 			break;
@@ -522,12 +523,12 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					{
 						if (Settings::bAutoGodMode && !oldGodMode)
 						{
-							*(UInt8*)0x11E07BA = 1;
+							SetGodModeEnabled(true);
 							Console_Print("itr-nvse: God mode enabled");
 						}
 						else if (!Settings::bAutoGodMode && oldGodMode)
 						{
-							*(UInt8*)0x11E07BA = 0;
+							SetGodModeEnabled(false);
 							Console_Print("itr-nvse: God mode disabled");
 						}
 					}

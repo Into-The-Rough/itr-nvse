@@ -5,6 +5,7 @@
 #include "internal/NVSEMinimal.h"
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"
+#include "internal/GameGlobals.h"
 #include "internal/globals.h"
 #include "internal/settings.h"
 #include <cstdio>
@@ -17,7 +18,6 @@ namespace InlineGlyphFix
 	constexpr UInt32 kAddr_Font_ComputeButtonMetrics = 0xA14170;
 	constexpr UInt32 kAddr_TileTextVtable_MakeNode = 0x1094880;
 	constexpr UInt32 kAddr_Tile_GetFloat = 0xA011B0;
-	constexpr UInt32 kAddr_FontManager_pSingleton = 0x11F33F8;
 
 	constexpr UInt32 kTileValue_Zoom = 4024;
 	constexpr UInt32 kTileValue_Font = 4025;
@@ -58,11 +58,6 @@ namespace InlineGlyphFix
 		return result;
 	}
 
-	static void** GetFontManager()
-	{
-		return *(void***)kAddr_FontManager_pSingleton;
-	}
-
 	static float GetFontSize(void* font)
 	{
 		if (!font) return 0.0f;
@@ -75,7 +70,7 @@ namespace InlineGlyphFix
 
 	static void* GetTileFont(void* tile, void* fallbackFont)
 	{
-		void** fontManager = GetFontManager();
+		void** fontManager = ::GetFontManager();
 		if (!tile || !fontManager) return fallbackFont;
 
 		float fontValue = ThisCall<float>(kAddr_Tile_GetFloat, tile, kTileValue_Font);
@@ -91,7 +86,7 @@ namespace InlineGlyphFix
 		if (!tile)
 			return 1.0f;
 
-		void** fontManager = GetFontManager();
+		void** fontManager = ::GetFontManager();
 		if (!fontManager) return 1.0f;
 		void* font1 = fontManager[0];
 		if (!font1) return 1.0f;

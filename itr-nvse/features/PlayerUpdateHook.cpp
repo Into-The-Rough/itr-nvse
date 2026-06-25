@@ -3,6 +3,7 @@
 #include "PlayerUpdateHook.h"
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 #include "internal/GameGlobals.h"
 #include "internal/CallTemplates.h"
 
@@ -40,7 +41,8 @@ namespace PlayerUpdateHook
 	}
 
 	void RotatePlayer180(void* player) {
-		float* rotZ = (float*)((uint8_t*)player + 0x2C); //rotZ
+		float* rotZ = TESObjectREFRGetRotZ(static_cast<TESObjectREFR*>(player));
+		if (!rotZ) return;
 		*rotZ += PI;
 		while (*rotZ > PI) *rotZ -= 2.0f * PI;
 		while (*rotZ < -PI) *rotZ += 2.0f * PI;
@@ -51,7 +53,7 @@ namespace PlayerUpdateHook
 		if (original)
 			original(player, timeDelta);
 
-		void* osGlobals = *(void**)0x11DEA0C;
+		void* osGlobals = *g_osGlobalsPtr;
 		void* inputGlobals = *g_inputGlobalsPtr;
 
 		if (!osGlobals) {
@@ -60,8 +62,8 @@ namespace PlayerUpdateHook
 			return;
 		}
 
-		HWND gameWindow = *(HWND*)((uint8_t*)osGlobals + 0x08); //hWnd
-		if (GetForegroundWindow() != gameWindow) {
+		void* gameWindow = OSGlobalsGetWindow(osGlobals);
+		if (reinterpret_cast<void*>(GetForegroundWindow()) != gameWindow) {
 			g_quickDropLastPressed = false;
 			g_quick180LastPressed = false;
 			return;

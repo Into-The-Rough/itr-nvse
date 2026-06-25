@@ -19,7 +19,7 @@ void Update()
 
 	void* input = *g_inputGlobalsPtr;
 	if (!input) return;
-	UInt8* keys = (UInt8*)((UInt8*)input + 0x18F8);
+	UInt8* keys = OSInputGlobalsGetCurrentKeyStates(input);
 	DWORD now = GetTickCount();
 
 	for (int i = 1; i < 256; i++) {
