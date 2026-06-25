@@ -5,7 +5,8 @@
 #include "internal/NVSEPluginAPI.h"
 #include "internal/Detours.h"
 #include "internal/GameGlobals.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+#include "internal/layout/VATS.h"
 
 #include "internal/globals.h"
 #include "internal/CallTemplates.h"

@@ -10,7 +10,8 @@
 #include "internal/globals.h"
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+#include "internal/layout/ExtraData.h"
 #include "internal/GameGlobals.h"
 namespace Settings { extern int bAshPileNames; }
 

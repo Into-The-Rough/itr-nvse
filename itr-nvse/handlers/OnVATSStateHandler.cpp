@@ -9,7 +9,9 @@
 #include "internal/EventDispatch.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+#include "internal/layout/Player.h"
+#include "internal/layout/VATS.h"
 
 constexpr UInt32 kAddr_VATS_SetMode             = 0x9C6C30;
 constexpr UInt32 kAddr_StartKillcamForActor     = 0x93E530;

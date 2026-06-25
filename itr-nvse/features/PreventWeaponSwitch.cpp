@@ -7,7 +7,8 @@
 #include "internal/Detours.h"
 #include "internal/NVSEPluginAPI.h"
 #include "internal/EngineFunctions.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+#include "internal/layout/Combat.h"
 
 #include "internal/globals.h"
 #include "internal/ScopedLock.h"

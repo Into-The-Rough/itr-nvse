@@ -1,7 +1,8 @@
 #include "CompanionNoBlock.h"
 
 #include "internal/Detours.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+
 #include "internal/GameGlobals.h"
 #include "internal/HavokLayout.h"
 

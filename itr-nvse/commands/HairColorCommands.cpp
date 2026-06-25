@@ -1,5 +1,6 @@
 #include "HairColorCommands.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+
 #include "nvse/PluginAPI.h"
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"

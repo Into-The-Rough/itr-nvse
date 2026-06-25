@@ -10,7 +10,9 @@
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+#include "internal/layout/Process.h"
+
 #include "internal/HavokLayout.h"
 
 enum HkCharState : UInt32 {

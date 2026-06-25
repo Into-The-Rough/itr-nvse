@@ -6,7 +6,8 @@
 #include <cstdint>
 
 #include "internal/Detours.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+#include "internal/layout/Process.h"
 #include "internal/globals.h"
 
 namespace NoDoorFade

@@ -2,7 +2,8 @@
 #include "internal/NVSEPluginAPI.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+
 #include "internal/NiLayout.h"
 #include <Windows.h>
 #include <cstdio>

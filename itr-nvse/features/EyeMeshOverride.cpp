@@ -6,7 +6,8 @@
 #include "nvse/GameForms.h"
 
 #include "internal/Detours.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+#include "internal/layout/FaceGen.h"
 #include "internal/ScopedLock.h"
 
 #include <string>

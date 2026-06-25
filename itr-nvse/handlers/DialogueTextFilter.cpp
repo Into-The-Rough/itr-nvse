@@ -16,6 +16,7 @@
 #include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
 #include "internal/globals.h"
+#include "internal/EngineHelpers.h"
 #include "internal/GameLayout.h"
 
 struct QueuedDialogueEvent

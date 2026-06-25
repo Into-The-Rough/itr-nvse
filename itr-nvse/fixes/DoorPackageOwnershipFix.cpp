@@ -6,7 +6,8 @@
 #include "DoorPackageOwnershipFix.h"
 #include "internal/EngineFunctions.h"
 #include "internal/Detours.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+
 #include <cstdint>
 
 namespace DoorPackageOwnershipFix

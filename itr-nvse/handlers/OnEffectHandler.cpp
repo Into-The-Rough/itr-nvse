@@ -10,6 +10,7 @@
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/EngineFunctions.h"
+#include "internal/EngineHelpers.h"
 #include "internal/GameLayout.h"
 #include "internal/ScopedLock.h"
 #include "internal/globals.h"

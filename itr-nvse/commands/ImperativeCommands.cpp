@@ -6,6 +6,7 @@
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
 #include "internal/CallTemplates.h"
+#include "internal/EngineHelpers.h"
 #include "internal/GameLayout.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"

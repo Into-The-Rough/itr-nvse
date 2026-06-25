@@ -2,6 +2,7 @@
 #include <Windows.h>
 #include <cstdint>
 #include "EngineFunctions.h"
+#include "EngineHelpers.h"
 #include "GameLayout.h"
 #include "ScopedLock.h"
 

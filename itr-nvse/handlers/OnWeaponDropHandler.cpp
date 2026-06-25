@@ -5,7 +5,8 @@
 #include "internal/EngineFunctions.h"
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+
 
 namespace OnWeaponDropHandler {
     bool g_hookInstalled = false;
