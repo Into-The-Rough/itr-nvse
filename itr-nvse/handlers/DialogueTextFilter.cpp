@@ -143,8 +143,8 @@ static TESTopic* GetTopicInfoParentTopic(TESTopicInfo* topicInfo)
 }
 
 static bool BuildVoicePath(char* outPath, size_t outSize,
-                          TESTopicInfo* topicInfo, Actor* speaker,
-                          UInt8 responseNum)
+	                          TESTopicInfo* topicInfo, TESTopic* topic, Actor* speaker,
+	                          UInt8 responseNum)
 {
 	if (!outPath || !topicInfo || !speaker) return false;
 	outPath[0] = '\0';
@@ -160,11 +160,13 @@ static bool BuildVoicePath(char* outPath, size_t outSize,
 	const char* voiceTypeID = voiceType ? GetVoiceTypeEditorID(voiceType) : nullptr;
 	if (!voiceTypeID || !*voiceTypeID) return false;
 
-	auto* quest = reinterpret_cast<TESQuest*>(topicInfo->unk48);
+	if (!topic)
+		topic = GetTopicInfoParentTopic(topicInfo);
+
+	TESQuest* quest = TESTopicGetQuestForInfo(topic, topicInfo);
 	const char* questID = Engine::TESForm_GetEditorID(quest);
 	if (!questID) questID = "";
 
-	TESTopic* topic = GetTopicInfoParentTopic(topicInfo);
 	const char* topicID = Engine::TESForm_GetEditorID(topic);
 	if (!topicID) topicID = "";
 
@@ -298,8 +300,7 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 		return;
 	}
 
-	//strlen * fNoticeTextTimePerCharacter (setting at 0x11D2178, float at +0x04)
-	float timePerChar = *(float*)(0x11D2178 + 0x04);
+	float timePerChar = Engine::GetSettingFloatValue(g_fDialogueTextMinSecondsPerCharSetting, 0.08f);
 	if (timePerChar <= 0.0f) timePerChar = 0.08f;
 	UInt32 topicRefID = ReadRefID(GetTopicInfoParentTopic(topicInfo));
 	DWORD queueStartTick = GetTickCount();
@@ -509,7 +510,7 @@ void Update()
 
 		char voicePath[512] = {0};
 		bool hasVoice = IsActorRef(speaker) &&
-			BuildVoicePath(voicePath, sizeof(voicePath), topicInfo, speaker, evt.responseNum);
+			BuildVoicePath(voicePath, sizeof(voicePath), topicInfo, topic, speaker, evt.responseNum);
 
 		if (!hasVoice) {
 			g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",

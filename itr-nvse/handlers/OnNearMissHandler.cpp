@@ -1,8 +1,10 @@
 
 #include "OnNearMissHandler.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/GameGlobals.h"
-#include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/settings.h"
@@ -18,18 +20,15 @@ constexpr UInt32 kOff_NearestCount  = 0x150;
 constexpr UInt32 kMaxNearestActors  = 50;
 
 constexpr UInt32 kProj_ImpactList = 0x88; //tList<ImpactData>, one entry per contact, struck ref at +0
-constexpr UInt32 kProj_SourceWeap = 0xF8;
-constexpr UInt32 kProj_SourceRef  = 0xFC;
 constexpr UInt32 kRefr_Position   = 0x30;
-constexpr UInt32 kForm_ID         = 0x0C;
 
 constexpr float kActorBodyHeight = 128.0f;
 
 struct Vec3 { float x, y, z; };
 
 //projectile update runs on the main thread but inside the mobile-object iteration, so we
-//queue refIDs here and dispatch from the main loop to keep scripts off the live list
-struct QueuedNearMiss { UInt32 victimID; UInt32 shooterID; UInt32 weaponID; float dist; };
+//queue here and dispatch from the main loop to keep scripts off the live list
+struct QueuedNearMiss { TESForm* victim; TESForm* shooter; TESForm* weapon; float dist; };
 
 typedef int (__thiscall* ProjectileUpdate_t)(void*, int);
 
@@ -103,7 +102,7 @@ static bool PassesCooldown(void* shooter, void* victim, UInt32 now) {
 	return true;
 }
 
-static void ScanFlight(void* proj, void* shooter, TESForm* weapon, const Vec3& a, const Vec3& b) {
+static void ScanFlight(void* proj, TESObjectREFR* shooter, TESObjectWEAP* weapon, const Vec3& a, const Vec3& b) {
 	const float radius = Settings::fNearMissRadius;
 	if (radius <= 0.0f) return;
 	const float r2 = radius * radius;
@@ -133,18 +132,28 @@ static void ScanFlight(void* proj, void* shooter, TESForm* weapon, const Vec3& a
 		if (d2 > r2 || ProjectileHitActor(proj, actor) || !PassesCooldown(shooter, actor, now)) continue;
 
 		s_pending.push_back({
-			*(UInt32*)((UInt8*)actor + kForm_ID),
-			shooter ? *(UInt32*)((UInt8*)shooter + kForm_ID) : 0,
-			weapon ? *(UInt32*)((UInt8*)weapon + kForm_ID) : 0,
+			(TESForm*)actor,
+			(TESForm*)shooter,
+			weapon,
 			sqrtf(d2)
 		});
 	}
 }
 
 static int __fastcall HookProjectileUpdate(void* proj, void*, int a2) {
+	TESObjectREFR* shooter = nullptr;
+	TESObjectWEAP* weapon = nullptr;
+	if (Settings::bOnNearMiss && g_eventManagerInterface) {
+		shooter = ProjectileGetSourceRef(proj);
+		weapon = ProjectileGetSourceWeapon(proj);
+	}
+
 	int ret = s_detour.GetTrampoline<ProjectileUpdate_t>()(proj, a2);
 
 	if (!Settings::bOnNearMiss || !g_eventManagerInterface)
+		return ret;
+
+	if (!TESFormIsActorRef(shooter) || !TESFormIsWeapon(weapon))
 		return ret;
 
 	//the ref position settles once per frame, so build the swept segment from last frame's
@@ -164,8 +173,6 @@ static int __fastcall HookProjectileUpdate(void* proj, void*, int a2) {
 	const float seg2 = dx*dx + dy*dy + dz*dz;
 	if (seg2 < 1.0f || seg2 > 1.0e8f) return ret; //stationary, or a reused projectile slot
 
-	void* shooter = *(void**)((UInt8*)proj + kProj_SourceRef);
-	TESForm* weapon = *(TESForm**)((UInt8*)proj + kProj_SourceWeap);
 	ScanFlight(proj, shooter, weapon, prev, cur);
 	return ret;
 }
@@ -187,11 +194,9 @@ void Update() {
 	std::vector<QueuedNearMiss> batch;
 	batch.swap(s_pending);
 	for (const auto& e : batch) {
-		TESForm* victim = (TESForm*)Engine::LookupFormByID(e.victimID);
-		if (!victim) continue;
-		TESForm* shooter = e.shooterID ? (TESForm*)Engine::LookupFormByID(e.shooterID) : nullptr;
-		TESForm* weapon = e.weaponID ? (TESForm*)Engine::LookupFormByID(e.weaponID) : nullptr;
-		g_eventManagerInterface->DispatchEvent("ITR:OnNearMiss", nullptr, victim, shooter, weapon, PackEventFloatArg(e.dist));
+		if (!e.victim) continue;
+		g_eventManagerInterface->DispatchEvent("ITR:OnNearMiss", nullptr,
+			e.victim, e.shooter, e.weapon, PackEventFloatArg(e.dist));
 	}
 }
 }
