@@ -42,19 +42,6 @@ namespace
 		DispatchReturn (*DispatchEventAlt)(const char* eventName, DispatchCallback resultCallback, void* anyData, TESObjectREFR* thisObj, ...);
 	};
 
-	struct Setting
-	{
-		void* vtbl;
-		union
-		{
-			UInt32 uint;
-			SInt32 i;
-			float f;
-			char* str;
-		} data;
-		const char* name;
-	};
-
 	using InventoryRefCreateEntry_t = TESObjectREFR* (__stdcall *)(TESObjectREFR* container, TESForm* itemForm, SInt32 countDelta, ExtraDataList* xData);
 	constexpr UInt32 kNVSEData_InventoryReferenceCreateEntry = 7;
 	constexpr UInt32 kAVCode_PerceptionCondition = 0x19;
@@ -63,8 +50,6 @@ namespace
 
 	static EventManagerInterfaceEx* g_eventInterface = nullptr;
 	static InventoryRefCreateEntry_t g_inventoryRefCreateEntry = nullptr;
-	static Setting* g_sFullHealth = reinterpret_cast<Setting*>(0x11D2AF0);
-	static BGSDefaultObjectManager** g_defaultObjectManager = reinterpret_cast<BGSDefaultObjectManager**>(0x11CA80C);
 
 	static bool IsActorRef(TESObjectREFR* ref)
 	{
@@ -106,14 +91,14 @@ namespace
 		if (!actor || !item)
 			return false;
 
-		BGSDefaultObjectManager* defObjMgr = g_defaultObjectManager ? *g_defaultObjectManager : nullptr;
+		BGSDefaultObjectManager* defObjMgr = GetDefaultObjectManager();
 		if (!defObjMgr)
 			return true;
 
 		auto showBlockedMessage = []()
 		{
-			if (g_sFullHealth && g_sFullHealth->data.str)
-				Engine::QueueUIMessage(g_sFullHealth->data.str, 0, nullptr, nullptr, 2.0f, false);
+			if (const char* message = GetFullHealthMessage())
+				Engine::QueueUIMessage(message, 0, nullptr, nullptr, 2.0f, false);
 		};
 
 		if (item == defObjMgr->defaultObjects.asStruct.Stimpak || item == defObjMgr->defaultObjects.asStruct.SuperStimpak)
@@ -794,19 +779,6 @@ bool Cmd_SetCreatureCombatSkill_Execute(COMMAND_ARGS)
 	return true;
 }
 
-static void** g_modelLoader = (void**)0x11C3B3C;
-typedef void (__thiscall *_ModelLoader_QueueReference)(void*, TESObjectREFR*, UInt32, bool);
-static const _ModelLoader_QueueReference ModelLoader_QueueReference = (_ModelLoader_QueueReference)0x444850;
-
-static void TESObjectREFR_Set3D(TESObjectREFR* ref, void* niNode, bool unloadArt)
-{
-	if (!ref) return;
-	auto* vtbl = *(UInt32**)ref;
-	if (!vtbl) return;
-	auto fn = reinterpret_cast<void(__thiscall*)(TESObjectREFR*, void*, bool)>(vtbl[0x1CC / 4]);
-	fn(ref, niNode, unloadArt);
-}
-
 //ForceReload - forces actor to play reload animation and refill ammo
 typedef char (__thiscall *_ActorReload)(Actor*, TESObjectWEAP*, UInt32, bool);
 static const _ActorReload ActorReload = (_ActorReload)0x8A8420;
@@ -953,9 +925,8 @@ bool Cmd_SetRaceAlt_Execute(COMMAND_ARGS)
 	targetNPC->race.race = newRace;
 
 	//refresh 3D
-	TESObjectREFR_Set3D(thisObj, nullptr, true);
-	if (*g_modelLoader)
-		ModelLoader_QueueReference(*g_modelLoader, thisObj, 1, false);
+	Engine::TESObjectREFR_Set3D(thisObj, nullptr, true);
+	Engine::ModelLoaderQueueReference(thisObj, 1, false);
 
 	*result = 1;
 

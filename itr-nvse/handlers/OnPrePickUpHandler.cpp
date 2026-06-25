@@ -37,19 +37,10 @@ static ActorPickUp_t s_actorPickUp = nullptr;
 static AddObjecttoContainer_t s_addObjectToContainer = nullptr;
 static ContainerTransferItem_t s_containerTransferItem = nullptr;
 
-static void**    g_containerMenuPtrAddr = (void**)0x011D93F8;
-static UInt32*   g_containerMenuSelAddr = (UInt32*)0x011D93FC;
-
 typedef TESObjectREFR* (__stdcall *InvRefCreateEntry_t)(TESObjectREFR* container, TESForm* itemForm, SInt32 countDelta, ExtraDataList* xData);
 static InvRefCreateEntry_t g_invRefCreateEntry = nullptr;
 
 constexpr UInt32 kNVSEData_InventoryReferenceCreateEntry = 7;
-
-struct ContChangesEntry {
-	void*    extendData;
-	SInt32   countDelta;
-	TESForm* type;
-};
 
 static bool DispatchResultCb(NVSEArrayVarInterface::Element& result, void* shouldPickAddr)
 {
@@ -119,16 +110,15 @@ static int __fastcall AddObjecttoContainer_Hook(TESObjectREFR* container, void*,
 
 static int __cdecl CheckContainerTransferItem(SInt32 count)
 {
-	void* menu = *g_containerMenuPtrAddr;
+	void* menu = GetContainerMenu();
 	if (!menu) return 1;
 
 	void* currentItems = ContainerMenuGetCurrentItems(menu);
 	void* playerList = ContainerMenuGetLeftItems(menu);
 	if (currentItems == playerList) return 1;     //PUT direction
 
-	UInt32 selRaw = *g_containerMenuSelAddr;
-	if (!selRaw) return 1;
-	auto* entry = reinterpret_cast<ContChangesEntry*>(selRaw);
+	auto* entry = static_cast<ExtraContainerChanges::EntryData*>(GetContainerMenuSelection());
+	if (!entry) return 1;
 	TESForm* item = entry->type;
 	if (!item) return 1;
 

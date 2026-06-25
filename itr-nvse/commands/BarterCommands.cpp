@@ -1,6 +1,7 @@
 #include "BarterCommands.h"
 #include "internal/Detours.h"
 #include "internal/CallTemplates.h"
+#include "internal/GameGlobals.h"
 #include "internal/GameLayout.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
@@ -34,11 +35,6 @@ namespace
 	constexpr UInt32 kVtable_IsMobileObject = 0xFC;
 	constexpr UInt32 kVtable_IsActor = 0x100;
 
-	constexpr UInt32 kOffset_MerchantRef = 0x80;
-	constexpr UInt32 kOffset_LeftItems = 0xA8;
-	constexpr UInt32 kOffset_CurrentItems = 0x108;
-	constexpr UInt32 kOffset_LeftBarter = 0x10C;
-
 	using ShowBarterMenu_t = void* (__cdecl*)(TESObjectREFR*, SInt32);
 	using BarterMenuClose_t = void(__cdecl*)();
 	using ShouldHideItem_t = bool(__cdecl*)(ExtraContainerChanges::EntryData*);
@@ -60,10 +56,6 @@ namespace
 	const auto GetActivatorRef = reinterpret_cast<GetActivatorRef_t>(kAddr_MobileObject_GetActivatorRef);
 	const auto TileIsFloatValueNotNull =
 		reinterpret_cast<TileIsFloatValueNotNull_t>(kAddr_Tile_IsFloatValueNotNull);
-	void** g_barterMenu = reinterpret_cast<void**>(0x11D8FA4);
-	ExtraContainerChanges::EntryData** g_barterMenuSelection =
-		reinterpret_cast<ExtraContainerChanges::EntryData**>(0x11D8FA8);
-	UInt32* g_barterMenuTraitIsBarterSelected = reinterpret_cast<UInt32*>(0x11D8FB4);
 
 	static_assert(offsetof(ExtraContainerChanges::EntryData, extendData) == 0x00,
 		"EntryData extras offset changed");
@@ -146,24 +138,19 @@ namespace
 		return merchant;
 	}
 
-	void* GetBarterMenu()
-	{
-		return g_barterMenu ? *g_barterMenu : nullptr;
-	}
-
 	TESObjectREFR* GetMerchantRef(void* menu)
 	{
-		return menu ? *reinterpret_cast<TESObjectREFR**>(reinterpret_cast<UInt8*>(menu) + kOffset_MerchantRef) : nullptr;
+		return BarterMenuGetMerchantRef(menu);
 	}
 
 	void* LeftItems(void* menu)
 	{
-		return menu ? reinterpret_cast<UInt8*>(menu) + kOffset_LeftItems : nullptr;
+		return BarterMenuGetLeftItems(menu);
 	}
 
 	void* CurrentItems(void* menu)
 	{
-		return menu ? *reinterpret_cast<void**>(reinterpret_cast<UInt8*>(menu) + kOffset_CurrentItems) : nullptr;
+		return BarterMenuGetCurrentItems(menu);
 	}
 
 	bool IsPlayerSideSelected(void* menu)
@@ -182,16 +169,17 @@ namespace
 
 	bool IsBarterSelectedTile(void* tile)
 	{
-		return tile && g_barterMenuTraitIsBarterSelected &&
-			TileIsFloatValueNotNull(tile, *g_barterMenuTraitIsBarterSelected);
+		UInt32 trait = GetBarterMenuSelectedTrait();
+		return tile && trait && TileIsFloatValueNotNull(tile, trait);
 	}
 
 	void* SelectedTile(void* menu)
 	{
-		if (!menu || !g_barterMenuSelection)
+		if (!menu)
 			return nullptr;
 
-		return EntryTile(CurrentItems(menu), *g_barterMenuSelection);
+		auto* entry = static_cast<ExtraContainerChanges::EntryData*>(GetBarterMenuSelection());
+		return EntryTile(CurrentItems(menu), entry);
 	}
 
 	bool IsSelectedItemAlreadyBartered(void* menu)
@@ -251,12 +239,12 @@ namespace
 	bool ShouldBlockSelectedTransfer()
 	{
 		void* menu = GetBarterMenu();
-		if (!IsActive() || !IsPlayerSideSelected(menu) || !g_barterMenuSelection)
+		if (!IsActive() || !IsPlayerSideSelected(menu))
 			return false;
 		if (IsSelectedItemAlreadyBartered(menu))
 			return false;
 
-		auto* entry = *g_barterMenuSelection;
+		auto* entry = static_cast<ExtraContainerChanges::EntryData*>(GetBarterMenuSelection());
 		return entry && ShouldBlockPlayerItem(entry->type);
 	}
 
@@ -265,7 +253,7 @@ namespace
 		if (!IsActive() || !menu)
 			return false;
 
-		auto* node = reinterpret_cast<BarterItemNode*>(reinterpret_cast<UInt8*>(menu) + kOffset_LeftBarter);
+		auto* node = reinterpret_cast<BarterItemNode*>(BarterMenuGetLeftBarter(menu));
 		for (; node && node->item; node = node->next)
 		{
 			if (ShouldBlockPlayerItem(node->item->type))

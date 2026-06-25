@@ -56,6 +56,17 @@ struct TESTopicInfoListNodeView {
 	TESTopicInfoListNodeView* next;
 };
 
+struct SettingView {
+	void* vtbl;
+	union {
+		UInt32 uint;
+		SInt32 i;
+		float f;
+		char* str;
+	} data;
+	char* name;
+};
+
 struct BGSTalkingActivatorView {
 	TESObjectACTI base;
 	Actor* talkingActor;
@@ -122,10 +133,27 @@ struct PlayerCasinoDataView {
 	void* casinoDataList;
 };
 
+struct PlayerAimFOVView {
+	UInt8 pad00[0x64B];
+	UInt8 is3rdPerson;
+	bool bThirdPerson;
+	UInt8 pad64D[0x670 - 0x64D];
+	float worldFOV;
+	float firstPersonFOV;
+};
+
 struct ProjectileView {
 	UInt8 pad00[0xF8];
 	TESObjectWEAP* sourceWeap;
+	TESObjectREFR* sourceRef;
 };
+
+struct ProjectileRefFlagsView {
+	UInt8 pad00[0xC8];
+	UInt32 flags;
+};
+
+inline constexpr UInt32 kProjectileRefFlag_AltTrigger = 0x400;
 
 struct HighProcessFadeView {
 	UInt8 pad00[0x3EC];
@@ -142,6 +170,43 @@ struct VATSCameraDataView {
 	UInt32 mode;
 	UInt8 pad0C[0x3C - 0x0C];
 	UInt32 numKills;
+};
+
+enum VATSTargetType : UInt32 {
+	kVATSTargetType_Projectile = 2,
+};
+
+struct VATSBodyPartView {
+	float screenPosX;
+	float screenPosY;
+	float relativePosX;
+	float relativePosY;
+	float relativePosZ;
+	float posX;
+	float posY;
+	float posZ;
+	UInt32 bodyPartID;
+	float percentVisible;
+	float hitChance;
+	bool isOnScreen;
+	bool chanceCalculated;
+	bool firstTimeShown;
+	bool needsRecalc;
+	void* bodyPartPercent;
+	float unk34;
+	UInt8 unk38;
+	UInt8 pad39[3];
+};
+
+struct VATSTargetView {
+	TESObjectREFR* targetRef;
+	UInt32 type;
+	BSSimpleListNodeView<VATSBodyPartView*> bodyParts;
+	UInt8 unk10;
+	UInt8 pad11[3];
+	UInt32 unk14[3];
+	UInt8 unk20;
+	UInt8 pad21[3];
 };
 
 struct PlayerKillCamView {
@@ -175,6 +240,35 @@ struct TESActorBaseVoiceFallbackView {
 	BGSVoiceType* voiceType;
 };
 
+struct FaceGenNpcDataView {
+	UInt8 pad00[0x8C];
+	TESForm* eyeForm;
+	UInt8 pad90[0xD8 - 0x90];
+	void* leftEyeModel;
+	void* rightEyeModel;
+};
+
+struct ExtraDismemberedLimbsView : BSExtraData {
+	UInt16 dismemberedMask;
+	UInt8 pad0E[2];
+	SInt32 unk10;
+	TESObjectWEAP* weapon;
+	SInt32 unk18;
+	bool wasEaten;
+	UInt8 pad1D[3];
+};
+
+struct TESReputationView {
+	TESForm form;
+	TESFullName fullName;
+	TESIcon icon;
+	BGSMessageIcon msgIcon;
+	float maxReputation;
+	float positiveReputation;
+	float negativeReputation;
+	UInt32 reputationChangedWasPositive;
+};
+
 struct TESChallengeDataView {
 	UInt32 type;
 	UInt32 threshold;
@@ -203,7 +297,9 @@ static_assert(offsetof(TESForm, typeID) == 0x04);
 static_assert(offsetof(TESForm, refID) == 0x0C);
 static_assert(sizeof(TESObjectACTI) == 0x90);
 static_assert(offsetof(BGSTalkingActivatorView, talkingActor) == 0x90);
+static_assert(offsetof(SettingView, data) == 0x04);
 static_assert(offsetof(TESObjectREFR, baseForm) == 0x20);
+static_assert(offsetof(TESObjectREFR, rotZ) == 0x2C);
 static_assert(offsetof(TESObjectREFR, posX) == 0x30);
 static_assert(offsetof(TESObjectREFR, posY) == 0x34);
 static_assert(offsetof(TESObjectREFR, posZ) == 0x38);
@@ -222,6 +318,10 @@ static_assert(offsetof(PlayerCharacter, actorMover) == 0x190);
 static_assert(offsetof(PlayerCharacter, bThirdPerson) == 0x64C);
 static_assert(offsetof(PlayerCharacter, playerNode) == 0x694);
 static_assert(offsetof(PlayerCasinoDataView, casinoDataList) == 0x610);
+static_assert(offsetof(PlayerAimFOVView, is3rdPerson) == 0x64B);
+static_assert(offsetof(PlayerAimFOVView, bThirdPerson) == 0x64C);
+static_assert(offsetof(PlayerAimFOVView, worldFOV) == 0x670);
+static_assert(offsetof(PlayerAimFOVView, firstPersonFOV) == 0x674);
 static_assert(sizeof(Character) == 0x1C8);
 static_assert(sizeof(CharacterView) == sizeof(Character));
 static_assert(offsetof(CharacterView, flags) == offsetof(TESForm, flags));
@@ -331,6 +431,7 @@ static_assert(offsetof(DialogueItemView, currentQuest) == offsetof(DialogueItem,
 static_assert(offsetof(DialogueItemView, currentSpeaker) == offsetof(DialogueItem, currentSpeaker));
 static_assert(offsetof(DataHandler, modList) == 0x210);
 static_assert(offsetof(DataHandler, soundList) == 0x0D0);
+static_assert(offsetof(DataHandler, perkList) == 0x178);
 static_assert(offsetof(ModList, loadedMods) == 0x0C);
 static_assert(offsetof(ModInfo, name) == 0x20);
 static_assert(offsetof(BGSVoiceTypeEditorIDView, editorID) == 0x1C);
@@ -353,9 +454,20 @@ static_assert(offsetof(CombatTargetView, inFullLOSCount) == 0x4D);
 static_assert(offsetof(CombatTargetView, timestamps) == 0x50);
 static_assert(sizeof(CombatTargetView) == 0x68);
 static_assert(offsetof(ProjectileView, sourceWeap) == 0xF8);
+static_assert(offsetof(ProjectileView, sourceRef) == 0xFC);
+static_assert(offsetof(ProjectileRefFlagsView, flags) == 0xC8);
 static_assert(offsetof(HighProcessFadeView, delayTime) == 0x3EC);
 static_assert(offsetof(VATSCameraDataView, mode) == 0x08);
 static_assert(offsetof(VATSCameraDataView, numKills) == 0x3C);
+static_assert(offsetof(VATSTargetView, targetRef) == 0x00);
+static_assert(offsetof(VATSTargetView, type) == 0x04);
+static_assert(offsetof(VATSTargetView, bodyParts) == 0x08);
+static_assert(sizeof(VATSBodyPartView) == 0x3C);
+static_assert(offsetof(VATSBodyPartView, percentVisible) == 0x24);
+static_assert(offsetof(VATSBodyPartView, hitChance) == 0x28);
+static_assert(offsetof(VATSBodyPartView, isOnScreen) == 0x2C);
+static_assert(offsetof(VATSBodyPartView, chanceCalculated) == 0x2D);
+static_assert(sizeof(VATSTargetView) == 0x24);
 static_assert(offsetof(PlayerKillCamView, killCamTimer) == 0xE18);
 static_assert(offsetof(TESCasinoView, maxWinnings) == 0x210);
 static_assert(offsetof(AlchemyItem, effects) == 0x3C);
@@ -368,6 +480,21 @@ static_assert(sizeof(ExtraContainerChanges::EntryData) == 0x0C);
 static_assert(offsetof(EffectItemListView, effects) == 0x04);
 static_assert(offsetof(HighProcessQueuedGreetView, queuedGreetTopic) == 0x3E4);
 static_assert(offsetof(TESActorBaseVoiceFallbackView, voiceType) == 0x94);
+static_assert(offsetof(FaceGenNpcDataView, eyeForm) == 0x8C);
+static_assert(offsetof(FaceGenNpcDataView, leftEyeModel) == 0xD8);
+static_assert(offsetof(FaceGenNpcDataView, rightEyeModel) == 0xDC);
+static_assert(sizeof(ExtraDismemberedLimbsView) == 0x20);
+static_assert(offsetof(ExtraDismemberedLimbsView, dismemberedMask) == 0x0C);
+static_assert(offsetof(ExtraDismemberedLimbsView, weapon) == 0x14);
+static_assert(offsetof(ExtraDismemberedLimbsView, wasEaten) == 0x1C);
+static_assert(sizeof(TESReputationView) == 0x50);
+static_assert(offsetof(TESReputationView, fullName) == 0x18);
+static_assert(offsetof(TESReputationView, icon) == 0x24);
+static_assert(offsetof(TESReputationView, msgIcon) == 0x30);
+static_assert(offsetof(TESReputationView, maxReputation) == 0x40);
+static_assert(offsetof(TESReputationView, positiveReputation) == 0x44);
+static_assert(offsetof(TESReputationView, negativeReputation) == 0x48);
+static_assert(offsetof(TESReputationView, reputationChangedWasPositive) == 0x4C);
 static_assert(sizeof(TESChallengeDataView) == 0x18);
 static_assert(sizeof(TESChallengeView) == 0x7C);
 static_assert(offsetof(TESChallengeView, fullName) == 0x18);
@@ -409,9 +536,30 @@ inline UInt8 TESFormGetTypeID(TESForm* form)
 	return form ? form->typeID : 0;
 }
 
+inline bool TESFormIsActorRef(TESForm* form)
+{
+	UInt8 typeID = TESFormGetTypeID(form);
+	return typeID == kFormType_ACHR || typeID == kFormType_ACRE;
+}
+
+inline bool TESFormIsWeapon(TESForm* form)
+{
+	return TESFormGetTypeID(form) == kFormType_Weapon;
+}
+
 inline TESForm* TESObjectREFRGetBaseForm(TESObjectREFR* ref)
 {
 	return ref ? ref->baseForm : nullptr;
+}
+
+inline float* TESObjectREFRGetRotZ(TESObjectREFR* ref)
+{
+	return ref ? &ref->rotZ : nullptr;
+}
+
+inline float SettingGetFloat(SettingView* setting, float fallback = 0.0f)
+{
+	return setting ? setting->data.f : fallback;
 }
 
 inline Actor* BGSTalkingActivatorGetTalkingActor(TESForm* form)
@@ -509,6 +657,19 @@ inline void* PlayerCharacterGetCasinoDataList(PlayerCharacter* player)
 	return player ? reinterpret_cast<PlayerCasinoDataView*>(player)->casinoDataList : nullptr;
 }
 
+inline bool PlayerCharacterIsAimZoomThirdPerson(PlayerCharacter* player)
+{
+	return player && reinterpret_cast<PlayerAimFOVView*>(player)->is3rdPerson != 0;
+}
+
+inline void PlayerCharacterSetFOVs(PlayerCharacter* player, float worldFOV, float firstPersonFOV)
+{
+	if (!player) return;
+	auto* view = reinterpret_cast<PlayerAimFOVView*>(player);
+	view->worldFOV = worldFOV;
+	view->firstPersonFOV = firstPersonFOV;
+}
+
 inline float ActorValueOwnerGetBaseValue(ActorValueOwner* owner, UInt32 avCode)
 {
 	if (!owner) return 0.0f;
@@ -549,6 +710,16 @@ inline TESObjectWEAP* ProjectileGetSourceWeapon(void* projectile)
 	return projectile ? reinterpret_cast<ProjectileView*>(projectile)->sourceWeap : nullptr;
 }
 
+inline TESObjectREFR* ProjectileGetSourceRef(void* projectile)
+{
+	return projectile ? reinterpret_cast<ProjectileView*>(projectile)->sourceRef : nullptr;
+}
+
+inline bool ProjectileRefHasFlag(void* projectileRef, UInt32 flag)
+{
+	return projectileRef && (reinterpret_cast<ProjectileRefFlagsView*>(projectileRef)->flags & flag) != 0;
+}
+
 inline void HighProcessSetDelayTime(void* process, float delayTime)
 {
 	if (process) reinterpret_cast<HighProcessFadeView*>(process)->delayTime = delayTime;
@@ -579,6 +750,11 @@ inline tList<TESSound>* DataHandlerGetSoundList(DataHandler* dataHandler)
 	return dataHandler ? &dataHandler->soundList : nullptr;
 }
 
+inline tList<BGSPerk>* DataHandlerGetPerkList(DataHandler* dataHandler)
+{
+	return dataHandler ? &dataHandler->perkList : nullptr;
+}
+
 inline UInt32 VATSCameraDataGetMode(void* vatsCameraData)
 {
 	return vatsCameraData ? reinterpret_cast<VATSCameraDataView*>(vatsCameraData)->mode : 0;
@@ -587,6 +763,33 @@ inline UInt32 VATSCameraDataGetMode(void* vatsCameraData)
 inline UInt32 VATSCameraDataGetNumKills(void* vatsCameraData)
 {
 	return vatsCameraData ? reinterpret_cast<VATSCameraDataView*>(vatsCameraData)->numKills : 0;
+}
+
+inline BSSimpleListNodeView<VATSTargetView*>* VATSTargetListGetHead(void* targetList)
+{
+	return reinterpret_cast<BSSimpleListNodeView<VATSTargetView*>*>(targetList);
+}
+
+inline bool VATSTargetNodeIsEmpty(BSSimpleListNodeView<VATSTargetView*>* node)
+{
+	return !node || !node->item;
+}
+
+inline bool VATSBodyPartNodeIsEmpty(BSSimpleListNodeView<VATSBodyPartView*>* node)
+{
+	return !node || !node->item;
+}
+
+inline bool VATSTargetIsProjectile(VATSTargetView* target)
+{
+	return target && target->type == kVATSTargetType_Projectile;
+}
+
+inline void VATSBodyPartForceVisible(VATSBodyPartView* part)
+{
+	if (!part) return;
+	part->percentVisible = 1.0f;
+	part->chanceCalculated = true;
 }
 
 inline float PlayerCharacterGetKillCamTimer(PlayerCharacter* player)
@@ -609,6 +812,26 @@ inline TESTopic* TESTopicInfoGetParentTopic(TESTopicInfo* topicInfo)
 	return topicInfo ? reinterpret_cast<TESTopicInfoVoiceParentView*>(topicInfo)->parentTopic : nullptr;
 }
 
+inline TESQuest* TESTopicGetQuestForInfo(TESTopic* topic, TESTopicInfo* topicInfo)
+{
+	if (!topic || !topicInfo) return nullptr;
+
+	for (auto* node = reinterpret_cast<TESTopicInfoListNodeView*>(&topic->infos);
+		 node && node->item;
+		 node = node->next) {
+		TESTopic::Info* info = node->item;
+		auto& infoArray = info->infoArray;
+		if (!infoArray.data) continue;
+
+		for (UInt32 i = 0; i < infoArray.firstFreeEntry; ++i) {
+			if (infoArray.data[i] == topicInfo)
+				return info->quest;
+		}
+	}
+
+	return nullptr;
+}
+
 inline void* HighProcessGetQueuedGreetTopic(BaseProcess* process)
 {
 	return process ? reinterpret_cast<HighProcessQueuedGreetView*>(process)->queuedGreetTopic : nullptr;
@@ -617,6 +840,36 @@ inline void* HighProcessGetQueuedGreetTopic(BaseProcess* process)
 inline BGSVoiceType* TESActorBaseGetLegacyVoiceTypeFallback(TESForm* baseForm)
 {
 	return baseForm ? reinterpret_cast<TESActorBaseVoiceFallbackView*>(baseForm)->voiceType : nullptr;
+}
+
+inline TESForm* FaceGenNpcDataGetEyeForm(void* npcData)
+{
+	return npcData ? reinterpret_cast<FaceGenNpcDataView*>(npcData)->eyeForm : nullptr;
+}
+
+inline void** FaceGenNpcDataGetLeftEyeModelSlot(void* npcData)
+{
+	return npcData ? &reinterpret_cast<FaceGenNpcDataView*>(npcData)->leftEyeModel : nullptr;
+}
+
+inline void** FaceGenNpcDataGetRightEyeModelSlot(void* npcData)
+{
+	return npcData ? &reinterpret_cast<FaceGenNpcDataView*>(npcData)->rightEyeModel : nullptr;
+}
+
+inline UInt16 ExtraDismemberedLimbsGetMask(BSExtraData* extraData)
+{
+	return extraData ? reinterpret_cast<ExtraDismemberedLimbsView*>(extraData)->dismemberedMask : 0;
+}
+
+inline TESFullName* TESReputationGetFullName(void* reputation)
+{
+	return reputation ? &reinterpret_cast<TESReputationView*>(reputation)->fullName : nullptr;
+}
+
+inline bool TESReputationLastChangeWasPositive(void* reputation)
+{
+	return reputation && reinterpret_cast<TESReputationView*>(reputation)->reputationChangedWasPositive == 1;
 }
 
 inline TESChallengeView* TESChallengeAsView(TESForm* form)
