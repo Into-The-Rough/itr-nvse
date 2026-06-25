@@ -1,9 +1,7 @@
 //fires when an actor becomes frenzied (brain condition goes to 0)
 
 #include "OnFrenzyHandler.h"
-#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
-#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/GameLayout.h"

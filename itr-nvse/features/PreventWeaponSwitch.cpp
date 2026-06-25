@@ -5,9 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include "internal/Detours.h"
-#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
-#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/EngineFunctions.h"
 #include "internal/GameLayout.h"
 

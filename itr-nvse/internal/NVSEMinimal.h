@@ -246,11 +246,6 @@ enum ParamType {
     kParamType_AnyForm      = 0x3D,
 };
 
-#ifndef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
-enum FormType {
-    kFormType_Script = 0x11,
-};
-#endif
 
 #define DEFINE_COMMAND_PLUGIN(name, desc, needsParent, numParams, params) \
     extern bool Cmd_##name##_Execute(COMMAND_ARGS); \
