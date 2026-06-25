@@ -5,7 +5,7 @@
 //GetPackType dereferences null and crashes at 0x41CA9A.
 
 #include "DetectionFollowerCrashFix.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 
 #include "internal/globals.h"
 

@@ -3,7 +3,7 @@
 //decal. main-loop only, so the static emitter ptr is safe.
 
 #include "OnSprayDecalHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/GameLayout.h"

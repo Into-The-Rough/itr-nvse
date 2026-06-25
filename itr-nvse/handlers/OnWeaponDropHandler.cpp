@@ -1,7 +1,7 @@
 //hooks Actor::TryDropWeapon (0x89F580) to dispatch events when actors drop weapons
 
 #include "OnWeaponDropHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/EngineFunctions.h"
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"

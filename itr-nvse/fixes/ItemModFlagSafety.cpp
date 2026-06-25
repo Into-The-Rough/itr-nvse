@@ -4,7 +4,7 @@
 //not hot-reloadable
 
 #include "ItemModFlagSafety.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"

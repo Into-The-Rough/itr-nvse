@@ -2,7 +2,7 @@
 //vanilla renders button icons in an UNZOOMED geometry (1.0 transform) while surrounding text is zoom-transformed by the tile
 //so at tile zoom != 100% the button appears oversized and offset far to the right of where the text ends
 #include "InlineGlyphFix.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"
 #include "internal/GameGlobals.h"

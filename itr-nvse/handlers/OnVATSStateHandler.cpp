@@ -4,7 +4,7 @@
 //  ITR:OnKillCamEnd   - PlayerCharacter::ForceEndKillCam
 
 #include "OnVATSStateHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/EngineFunctions.h"

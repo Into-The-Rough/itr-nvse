@@ -1,7 +1,7 @@
 //hooks Actor::StealAlarm (0x8BFA40) to dispatch events when items are stolen
 
 #include "OnStealHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"
 

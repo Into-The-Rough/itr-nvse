@@ -2,7 +2,7 @@
 //MenuConsole::IsConsoleVisible checks ucConsoleState > 0
 
 #include "OnConsoleHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/EventDispatch.h"
 #include "internal/CallTemplates.h"
 #include "internal/GameGlobals.h"

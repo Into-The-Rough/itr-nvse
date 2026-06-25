@@ -3,7 +3,7 @@
 //NOT hot-reloadable - requires game restart
 
 #include "CombatItemTimerFix.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/Detours.h"
 #include "internal/GameGlobals.h"
 

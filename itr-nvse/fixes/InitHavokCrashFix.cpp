@@ -6,7 +6,7 @@
 //re-initializes the physics correctly.
 
 #include "InitHavokCrashFix.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 
 #include "internal/globals.h"
 

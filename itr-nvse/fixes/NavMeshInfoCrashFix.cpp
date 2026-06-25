@@ -6,7 +6,7 @@
 //seen with TLD_Travelers caravans during Stewie's UpdateLowActors_TravelOrSleep.
 
 #include "NavMeshInfoCrashFix.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 
 #include "internal/globals.h"
 

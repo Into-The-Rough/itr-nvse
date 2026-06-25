@@ -1,6 +1,6 @@
 
 #include "OnNearMissHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/GameGlobals.h"
 #include "internal/GameLayout.h"
 #include "internal/Detours.h"

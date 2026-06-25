@@ -8,7 +8,7 @@
 #include <Windows.h>
 
 #include "DialogueTextFilter.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"
 #include "internal/ScopedLock.h"

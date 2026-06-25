@@ -4,7 +4,7 @@
 #include <Windows.h>
 
 #include "OnCombatProcedureHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/Detours.h"
 #include "internal/ScopedLock.h"
 #include "internal/EngineFunctions.h"

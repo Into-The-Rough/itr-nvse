@@ -4,7 +4,7 @@
 //banned" after the baseline snapshot counts as a transition.
 
 #include "OnCasinoBanHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameLayout.h"
 #include "internal/GameGlobals.h"

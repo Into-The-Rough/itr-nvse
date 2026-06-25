@@ -3,7 +3,7 @@
 //g_activeContacts coalesces multiple contact points for the same watched pair.
 
 #include "OnContactHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"

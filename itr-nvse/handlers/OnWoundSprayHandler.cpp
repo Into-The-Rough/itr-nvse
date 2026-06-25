@@ -3,7 +3,7 @@
 //one event per splatter.
 
 #include "OnWoundSprayHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/GameLayout.h"

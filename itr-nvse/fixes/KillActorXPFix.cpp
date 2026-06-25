@@ -1,7 +1,7 @@
 //prevents XP reward when using "kill" command on already-dead actors
 
 #include "KillActorXPFix.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 
 #include "internal/globals.h"
 
