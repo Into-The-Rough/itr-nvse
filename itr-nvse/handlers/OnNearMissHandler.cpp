@@ -22,6 +22,10 @@ constexpr UInt32 kRefr_Position   = 0x30;
 
 constexpr float kActorBodyHeight = 128.0f;
 
+//Actor.uiLifeState - only these two stand and react, the rest are dead/dying/downed
+constexpr UInt32 kLifeState_Alive      = 0;
+constexpr UInt32 kLifeState_Restrained = 5; //engine Actor::IsRestrained compares lifeState == 5
+
 struct Vec3 { float x, y, z; };
 
 //projectile update runs on the main thread but inside the mobile-object iteration, so we
@@ -32,7 +36,6 @@ typedef int (__thiscall* ProjectileUpdate_t)(void*, int);
 
 static Detours::JumpDetour s_detour;
 static std::unordered_map<UInt64, UInt32> s_lastFire;
-static std::unordered_map<void*, Vec3> s_lastPos;
 static std::vector<QueuedNearMiss> s_pending;
 
 static void GetRefPos(void* ref, Vec3* out) {
@@ -117,6 +120,8 @@ static void ScanFlight(void* proj, TESObjectREFR* shooter, TESObjectWEAP* weapon
 	for (UInt32 i = 0; i < count; ++i) {
 		void* actor = nearest[i];
 		if (!actor || actor == shooter) continue;
+		const UInt32 ls = *(UInt32*)((UInt8*)actor + 0x108); //lifeState
+		if (ls != kLifeState_Alive && ls != kLifeState_Restrained) continue; //corpses and downed actors do not near-miss
 
 		const float* p = (const float*)((UInt8*)actor + kRefr_Position);
 		//where along this frame's sweep the actor's column lies - outside [0,1] is another frame
@@ -141,37 +146,38 @@ static void ScanFlight(void* proj, TESObjectREFR* shooter, TESObjectWEAP* weapon
 static int __fastcall HookProjectileUpdate(void* proj, void*, int a2) {
 	TESObjectREFR* shooter = nullptr;
 	TESObjectWEAP* weapon = nullptr;
-	if (Settings::bOnNearMiss && g_eventManagerInterface) {
+	const bool active = Settings::bOnNearMiss && g_eventManagerInterface;
+	if (active) {
 		shooter = ProjectileGetSourceRef(proj);
 		weapon = ProjectileGetSourceWeapon(proj);
 	}
 
 	int ret = s_detour.GetTrampoline<ProjectileUpdate_t>()(proj, a2);
 
-	if (!Settings::bOnNearMiss || !g_eventManagerInterface)
-		return ret;
+	if (!active) return ret;
+	if (!TESFormIsActorRef(shooter) || !TESFormIsWeapon(weapon)) return ret;
 
-	if (!TESFormIsActorRef(shooter) || !TESFormIsWeapon(weapon))
-		return ret;
+	//player rounds are near hitscan - one update, no reported motion - so sweep the projectile's
+	//forward travel vector instead of a frame delta. kVector is the last move delta (Projectile::Move
+	//-> SetVector), and the launch aim on the first frame
+	const float* v = (const float*)((UInt8*)proj + 0x104); //kVector
+	const float vlen = sqrtf(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+	if (vlen < 0.001f) return ret;
 
-	//the ref position settles once per frame, so build the swept segment from last frame's
-	Vec3 cur;
-	GetRefPos(proj, &cur);
+	Vec3 pos;
+	GetRefPos(proj, &pos);
+	float range = *(float*)((UInt8*)proj + 0xD4); //fRange
+	if (range < 256.0f) range = 256.0f;
+	if (range > 8192.0f) range = 8192.0f;
 
-	auto it = s_lastPos.find(proj);
-	if (it == s_lastPos.end()) {
-		if (s_lastPos.size() > 1024) s_lastPos.clear();
-		s_lastPos[proj] = cur;
-		return ret;
-	}
-	Vec3 prev = it->second;
-	it->second = cur;
+	const float inv = 1.0f / vlen;
+	const float dnx = v[0]*inv, dny = v[1]*inv, dnz = v[2]*inv;
+	//sweep from the muzzle forward - the shooter is excluded by ref, so no muzzle offset, which
+	//would otherwise clip close friendlies like a follower standing next to the player
+	Vec3 a = pos;
+	Vec3 b = { pos.x + dnx*range, pos.y + dny*range, pos.z + dnz*range };
 
-	const float dx = cur.x-prev.x, dy = cur.y-prev.y, dz = cur.z-prev.z;
-	const float seg2 = dx*dx + dy*dy + dz*dz;
-	if (seg2 < 1.0f || seg2 > 1.0e8f) return ret; //stationary, or a reused projectile slot
-
-	ScanFlight(proj, shooter, weapon, prev, cur);
+	ScanFlight(proj, shooter, weapon, a, b);
 	return ret;
 }
 
