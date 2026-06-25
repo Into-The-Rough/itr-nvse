@@ -8,9 +8,7 @@
 #include <Windows.h>
 
 #include "DialogueTextFilter.h"
-#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
-#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"
 #include "internal/ScopedLock.h"

@@ -2,9 +2,7 @@
 //once any handler vetoes, later handlers can't un-veto.
 
 #include "OnPrePickUpHandler.h"
-#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
-#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"
 #include "internal/GameLayout.h"

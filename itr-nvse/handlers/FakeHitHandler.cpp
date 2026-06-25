@@ -1,7 +1,5 @@
 #include "FakeHitHandler.h"
-#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
-#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
 #include "internal/GameLayout.h"

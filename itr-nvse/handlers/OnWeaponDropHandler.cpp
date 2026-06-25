@@ -1,9 +1,7 @@
 //hooks Actor::TryDropWeapon (0x89F580) to dispatch events when actors drop weapons
 
 #include "OnWeaponDropHandler.h"
-#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
-#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/EngineFunctions.h"
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"

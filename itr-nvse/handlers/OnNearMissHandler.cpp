@@ -1,8 +1,6 @@
 
 #include "OnNearMissHandler.h"
-#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
-#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/GameGlobals.h"
 #include "internal/GameLayout.h"
 #include "internal/Detours.h"

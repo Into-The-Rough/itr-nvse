@@ -3,9 +3,7 @@
 //one event per splatter.
 
 #include "OnWoundSprayHandler.h"
-#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
-#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/GameLayout.h"
