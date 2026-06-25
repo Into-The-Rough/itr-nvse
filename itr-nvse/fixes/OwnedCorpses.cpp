@@ -2,7 +2,8 @@
 
 #include "OwnedCorpses.h"
 #include "internal/EngineFunctions.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+
 #include "internal/globals.h"
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"

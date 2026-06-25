@@ -6,7 +6,8 @@
 #include "OnCasinoBanHandler.h"
 #include "internal/NVSEPluginAPI.h"
 #include "internal/EngineFunctions.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+#include "internal/layout/Player.h"
 #include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
 

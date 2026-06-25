@@ -9,7 +9,8 @@
 #include "internal/ScopedLock.h"
 #include "internal/EngineFunctions.h"
 #include "internal/EventDispatch.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+
 
 struct QueuedCombatEvent {
     UInt32 actorRefID;

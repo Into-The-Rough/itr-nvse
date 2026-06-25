@@ -1,5 +1,5 @@
 //xNVSE event registration for ITR events
-#include "NVSEMinimal.h"
+#include "NVSEPluginAPI.h"
 #include "EventDispatch.h"
 #include "globals.h"
 

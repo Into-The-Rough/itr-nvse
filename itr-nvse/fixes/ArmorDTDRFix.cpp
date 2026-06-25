@@ -5,7 +5,8 @@
 #include "ArmorDTDRFix.h"
 #include "internal/NVSEPluginAPI.h"
 #include "internal/Detours.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+
 
 #include "internal/globals.h"
 #include "internal/CallTemplates.h"

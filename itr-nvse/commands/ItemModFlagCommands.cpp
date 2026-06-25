@@ -9,7 +9,8 @@
 #define FORMUTILS_USE_NVSE_TYPES
 #include "internal/FormUtils.h"
 #include "internal/EngineFunctions.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+#include "internal/layout/ExtraData.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/CommandTable.h"

@@ -8,7 +8,8 @@
 #include "internal/EngineFunctions.h"
 #include "internal/FormatLogic.h"
 #include "internal/GameGlobals.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+#include "internal/layout/Reputation.h"
 #include "internal/SafeWrite.h"
 #include <cstdio>
 

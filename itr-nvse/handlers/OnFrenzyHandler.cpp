@@ -4,6 +4,7 @@
 #include "internal/NVSEPluginAPI.h"
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
+#include "internal/EngineHelpers.h"
 #include "internal/GameLayout.h"
 
 constexpr UInt32 kAddr_LimbCondition_HandleChange = 0x8B9240;

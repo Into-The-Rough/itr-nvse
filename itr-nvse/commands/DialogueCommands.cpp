@@ -16,7 +16,8 @@ extern NVSEArrayVarInterface* g_arrInterface;
 
 #include "internal/CallTemplates.h"
 #include "internal/GameGlobals.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+
 #include "internal/MenuLayout.h"
 
 constexpr UInt8 kFormType_TopicInfo = 0x46;

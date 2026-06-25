@@ -12,7 +12,8 @@
 #include <cstdio>
 #include "internal/CallTemplates.h"
 #include "internal/EngineFunctions.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+#include "internal/layout/Challenge.h"
 
 extern const _ExtractArgs ExtractArgs;
 

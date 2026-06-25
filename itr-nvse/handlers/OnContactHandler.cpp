@@ -9,7 +9,9 @@
 #include "internal/EventDispatch.h"
 #include "internal/ScopedLock.h"
 #include "internal/Detours.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+#include "internal/layout/Process.h"
+
 #include "internal/HavokLayout.h"
 #include <vector>
 #include <algorithm>

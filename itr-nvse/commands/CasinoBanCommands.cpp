@@ -3,7 +3,8 @@
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
 #include "internal/GameGlobals.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+#include "internal/layout/Player.h"
 
 extern const _ExtractArgs ExtractArgs;
 

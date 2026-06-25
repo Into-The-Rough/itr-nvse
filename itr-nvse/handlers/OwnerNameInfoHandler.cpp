@@ -9,7 +9,8 @@
 #include "OwnerNameInfoHandler.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+
 #include "internal/MenuLayout.h"
 
 //TESObjectREFR::IsCrime at 0x579690 (checks if activating/taking would be a crime)

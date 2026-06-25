@@ -6,7 +6,8 @@
 #include "internal/NVSEPluginAPI.h"
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
-#include "internal/GameLayout.h"
+#include "internal/GameSDK.h"
+#include "internal/layout/Projectile.h"
 
 constexpr UInt32 kAddr_SpawnCollisionEffects = 0x9C20E0;
 constexpr UInt32 kAddr_GetImpactDataForMaterial = 0x522BA0;
