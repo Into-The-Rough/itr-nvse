@@ -7,7 +7,7 @@
 #include <cmath>
 
 #include "CornerMessageHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/ScopedLock.h"
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"

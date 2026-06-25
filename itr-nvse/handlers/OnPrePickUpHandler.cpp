@@ -2,7 +2,7 @@
 //once any handler vetoes, later handlers can't un-veto.
 
 #include "OnPrePickUpHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"
 #include "internal/GameLayout.h"

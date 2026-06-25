@@ -1,7 +1,7 @@
 //allows sleeping in owned beds with consequences
 
 #include "OwnedBeds.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameLayout.h"
 #include "internal/GameGlobals.h"

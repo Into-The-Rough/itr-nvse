@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include "internal/Detours.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameLayout.h"
 

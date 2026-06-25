@@ -13,7 +13,7 @@
 //prologue at 0x59C9D5).
 
 #include "GetLineOfSightCrashFix.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 
 #include "internal/globals.h"
 

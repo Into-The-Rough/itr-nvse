@@ -2,7 +2,7 @@
 //uses polling to avoid hook conflicts with JIP NVSE
 
 #include "OnMenuFilterChangeHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/EventDispatch.h"
 #include "internal/GameGlobals.h"
 #include "internal/MenuLayout.h"

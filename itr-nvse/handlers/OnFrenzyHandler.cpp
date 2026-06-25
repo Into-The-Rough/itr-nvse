@@ -1,7 +1,7 @@
 //fires when an actor becomes frenzied (brain condition goes to 0)
 
 #include "OnFrenzyHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/GameLayout.h"

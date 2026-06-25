@@ -2,7 +2,7 @@
 //trespass bypasses Crime, so also hook Actor::TrespassAlarm (0x8C0EC0).
 
 #include "OnWitnessedHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/EngineFunctions.h"

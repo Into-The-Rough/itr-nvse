@@ -1,7 +1,7 @@
 //prevents player from earning infamy when a companion kills a faction member
 
 #include "CompanionNoInfamy.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"
 #include "internal/GameGlobals.h"

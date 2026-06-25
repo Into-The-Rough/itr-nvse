@@ -2,7 +2,7 @@
 //NOT hot-reloadable - requires game restart
 
 #include "VATSProjectileFix.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/Detours.h"
 #include "internal/GameGlobals.h"
 #include "internal/GameLayout.h"

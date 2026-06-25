@@ -2,7 +2,7 @@
 //during load.
 
 #include "PathingNullActorFix.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 
 #include "internal/globals.h"
 

@@ -1,7 +1,7 @@
 //prevents lockpicking karma loss when the player already owns the locked ref
 
 #include "LockpickOwnerKarmaFix.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
 #include "internal/Detours.h"

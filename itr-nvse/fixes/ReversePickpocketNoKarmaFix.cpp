@@ -1,7 +1,7 @@
 //prevents karma loss when reverse pickpocketing non-grenades
 
 #include "ReversePickpocketNoKarmaFix.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/CallTemplates.h"
 #include "internal/GameGlobals.h"
 #include "internal/MenuLayout.h"

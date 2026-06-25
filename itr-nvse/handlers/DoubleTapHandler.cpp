@@ -4,7 +4,7 @@
 #include <Windows.h>
 
 #include "DoubleTapHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
 

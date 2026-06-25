@@ -1,7 +1,7 @@
 //hooks Actor::SetAnimAction call at 0x894081 in FiresWeapon when weapon jams
 
 #include "OnWeaponJamHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"
 #include "internal/GameLayout.h"

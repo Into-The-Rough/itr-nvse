@@ -1,7 +1,7 @@
 //provides DisableKeyEx/EnableKeyEx wrapper commands that fire events
 
 #include "OnKeyStateHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/EventDispatch.h"
 
 namespace

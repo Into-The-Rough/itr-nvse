@@ -2,7 +2,7 @@
 //NOT hot-reloadable - requires game restart
 
 #include "ExplodingPantsFix.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"
 #include "internal/GameLayout.h"

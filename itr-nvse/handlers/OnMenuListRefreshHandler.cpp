@@ -2,7 +2,7 @@
 //detours each menu's refresh function and dispatches ITR:OnMenuListRefresh on completion
 
 #include "OnMenuListRefreshHandler.h"
-#include "internal/NVSEMinimal.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"
 #include "internal/globals.h"
