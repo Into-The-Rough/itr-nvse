@@ -2,47 +2,18 @@
 //NOT hot-reloadable - requires game restart
 
 #include "VATSProjectileFix.h"
+#define ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/NVSEMinimal.h"
+#undef ITR_NVSE_MINIMAL_SKIP_FORMTYPE
 #include "internal/Detours.h"
+#include "internal/GameGlobals.h"
+#include "internal/GameLayout.h"
 
 #include "internal/globals.h"
 #include "internal/CallTemplates.h"
 
 namespace VATSProjectileFix
 {
-
-	struct SimpleListNode {
-		void* item;
-		SimpleListNode* next;
-		bool IsEmpty() { return !item; }
-		SimpleListNode* GetNext() { return next; }
-	};
-
-	struct VATSTarget {
-		void* pReference;
-		UInt32 eType;
-		SimpleListNode bodyParts;
-	};
-	static_assert(offsetof(VATSTarget, bodyParts) == 0x08);
-
-	struct VATSBodyPart {
-		float screenPosX;
-		float screenPosY;
-		float relativePosX;
-		float relativePosY;
-		float relativePosZ;
-		float posX;
-		float posY;
-		float posZ;
-		UInt32 eBodyPart;
-		float fPercentVisible;
-		float fHitChance;
-		bool bIsOnScreen;
-		bool bChanceCalculated;
-		bool bFirstTimeShown;
-		bool bNeedsRecalc;
-	};
-
 	constexpr UInt32 kAddr_HookSite = 0x7ED349;
 
 	static Detours::CallDetour s_vatsMenuUpdateCall;
@@ -54,28 +25,23 @@ namespace VATSProjectileFix
 		bool result = original(pThis);
 		if (!result) return result;
 
-		void** ppTargetRef = (void**)0x11F21CC;
-		void* pTargetRef = *ppTargetRef;
+		TESObjectREFR* pTargetRef = VATSGetCurrentTarget();
 		if (!pTargetRef) return result;
 
-		SimpleListNode* pTargetEntry = ThisCall<SimpleListNode*>(0x7F3C90, pThis, pTargetRef);
-		if (!pTargetEntry || pTargetEntry->IsEmpty()) return result;
+		auto* pTargetEntry = ThisCall<BSSimpleListNodeView<VATSTargetView*>*>(0x7F3C90, pThis, pTargetRef);
+		if (VATSTargetNodeIsEmpty(pTargetEntry)) return result;
 
-		VATSTarget* pTarget = (VATSTarget*)pTargetEntry->item;
-		if (!pTarget) return result;
+		VATSTargetView* pTarget = pTargetEntry->item;
+		if (!VATSTargetIsProjectile(pTarget)) return result;
 
-		//type 2 = projectile
-		if (pTarget->eType != 2) return result;
-
-		SimpleListNode* pIter = &pTarget->bodyParts;
-		while (pIter && !pIter->IsEmpty()) {
-			VATSBodyPart* pPart = (VATSBodyPart*)pIter->item;
+		auto* pIter = &pTarget->bodyParts;
+		while (!VATSBodyPartNodeIsEmpty(pIter)) {
+			VATSBodyPartView* pPart = pIter->item;
 			if (pPart) {
-				pPart->fPercentVisible = 1.0f;
-				pPart->bChanceCalculated = true;
+				VATSBodyPartForceVisible(pPart);
 				ThisCall<double>(0x7F1290, pThis, pIter);
 			}
-			pIter = pIter->GetNext();
+			pIter = pIter->next;
 		}
 
 		return result;
@@ -86,4 +52,3 @@ namespace VATSProjectileFix
 		s_vatsMenuUpdateCall.WriteRelCall(kAddr_HookSite, VATSMenuUpdate_Hook);
 	}
 }
-

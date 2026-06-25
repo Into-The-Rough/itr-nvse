@@ -8,6 +8,7 @@
 
 #include "internal/globals.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "internal/CallTemplates.h"
 #include "internal/MenuLayout.h"
 
@@ -22,11 +23,9 @@ namespace VATSExtender
 	bool g_lastWasInterior = false;
 	static Detours::CallDetour s_renderSceneCall;
 
-	void** g_interfaceManager = (void**)0x11D8A80;
-
 	void* GetVATSHighlightData()
 	{
-		void* im = *g_interfaceManager;
+		void* im = GetInterfaceManager();
 		if (!im) return nullptr;
 		return InterfaceManagerGetVATSHighlightData(im);
 	}
