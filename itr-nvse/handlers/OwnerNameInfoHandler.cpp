@@ -8,6 +8,7 @@
 
 #include "OwnerNameInfoHandler.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameGlobals.h"
 #include "internal/GameLayout.h"
 #include "internal/MenuLayout.h"
 
@@ -160,7 +161,7 @@ void Update()
 	if (!g_bOwnerNameInfo)
 		return;
 
-	void* hud = *(void**)0x11D96C0; //HUDMainMenu
+	void* hud = GetHUDMainMenu();
 	if (!hud)
 		return;
 
@@ -190,7 +191,7 @@ void Update()
 		return;
 
 	//get original item name from global buffer
-	const char* itemName = (const char*)0x11D9C48; //crosshairRefName
+	const char* itemName = GetCrosshairRefName();
 	if (!itemName || !*itemName)
 		return;
 

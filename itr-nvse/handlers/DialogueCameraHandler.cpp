@@ -168,14 +168,8 @@ struct alignas(16) RayCastData {
 };
 static_assert(sizeof(RayCastData) == 0xB0, "RayCastData size mismatch");
 
-typedef void (__thiscall *TES_PickObject_t)(void* tes, RayCastData* rcData, bool unk); //0x458440
-static TES_PickObject_t TES_PickObject = (TES_PickObject_t)0x458440;
-static void** g_TES = (void**)0x11DEA10;
-
 static float CastRay(float startX, float startY, float startZ,
 					 float endX, float endY, float endZ, UInt8 layer) {
-	if (!*g_TES) return 1.0f;
-
 	RayCastData rcData = {};
 	rcData.pos0[0] = startX * kHavokScale;
 	rcData.pos0[1] = startY * kHavokScale;
@@ -192,7 +186,8 @@ static float CastRay(float startX, float startY, float startZ,
 	rcData.group = 0;
 	rcData.cdBody = nullptr;
 
-	TES_PickObject(*g_TES, &rcData, true);
+	if (!Engine::TESPickObject(&rcData, true))
+		return 1.0f;
 
 	return rcData.hitFraction;
 }
@@ -279,25 +274,6 @@ enum CameraAngleMode {
 	kAngleMode_Manual
 };
 
-struct InterfaceManager {
-	UInt8 pad[0xFC];
-	TESObjectREFR* crosshairRef;  //0xFC
-
-	static InterfaceManager* GetSingleton() {
-		return *(InterfaceManager**)0x11D8A80;
-	}
-};
-
-struct DialogueMenu {
-	UInt8 pad[0x48];
-	void* currentInfo;  //0x48
-
-	static DialogueMenu* GetSingleton() {
-		return *(DialogueMenu**)0x11D9510;
-	}
-};
-
-static UInt8* g_MenuVisibilityArray = (UInt8*)0x011F308F;
 static constexpr UInt32 kMenuType_Dialogue = 1009;
 
 static bool g_inDialogue = false;
@@ -356,7 +332,6 @@ static float FrameDelta()
 }
 
 static int* g_pDialogueCamera = &Settings::bDialogueCamera;
-static const UInt32 kAddr_bShouldRestore1stPerson = 0x11F21D0;
 static Detours::CallDetour s_show1stPersonFocusCall;
 static Detours::CallDetour s_show1stPersonDialogCall;
 static Detours::CallDetour s_pickAnimationsCall;
@@ -423,7 +398,7 @@ __declspec(naked) void Hook_ForceThirdPerson_Branch2() {
 		mov eax, g_pDialogueCamera
 		cmp dword ptr [eax], 0
 		jnz skip
-		mov eax, kAddr_bShouldRestore1stPerson
+		mov eax, g_shouldRestoreFirstPersonPtr
 		mov byte ptr [eax], 1
 		jmp kSite4_Return
 	skip:
@@ -481,7 +456,7 @@ static void __fastcall Hook_SkipPickAnimations(void* actor, void*, float a1, flo
 		return;
 	}
 
-	if (!g_playerMovementSettled && (g_inDialogue || g_MenuVisibilityArray[kMenuType_Dialogue]))
+	if (!g_playerMovementSettled && (g_inDialogue || IsMenuVisible(kMenuType_Dialogue)))
 	{
 		ClearPlayerDialogueMovement(static_cast<PlayerCharacter*>(actor));
 		original(actor, a1, a2);
@@ -898,10 +873,10 @@ static void ApplyCameraNoise(float dt) {
 
 static void OnDialogueStart() {
 
-	InterfaceManager* intfc = InterfaceManager::GetSingleton();
+	void* intfc = GetInterfaceManager();
 	if (!intfc) return;
 
-	g_dialogueTarget = intfc->crosshairRef;
+	g_dialogueTarget = InterfaceManagerGetCrosshairRef(intfc);
 	if (!g_dialogueTarget) return;
 
 	//0x3B=Character, 0x3C=Creature
@@ -955,7 +930,7 @@ void Update() {
 	if (!g_patchesInstalled || !CameraHooks::AreHooksInstalled())
 		return;
 
-	bool dialogueMenuVisible = g_MenuVisibilityArray[kMenuType_Dialogue] != 0;
+	bool dialogueMenuVisible = IsMenuVisible(kMenuType_Dialogue);
 
 	if (dialogueMenuVisible && !g_inDialogue) {
 		g_inDialogue = true;
@@ -968,9 +943,9 @@ void Update() {
 
 	if (!g_cameraActive || !g_dialogueTarget) return;
 
-	DialogueMenu* dlgMenu = DialogueMenu::GetSingleton();
+	void* dlgMenu = GetDialogMenu();
 	if (dlgMenu) {
-		UInt32 currentInfoAddr = (UInt32)dlgMenu->currentInfo;
+		UInt32 currentInfoAddr = (UInt32)DialogMenuGetCurrentInfo(dlgMenu);
 		if (currentInfoAddr != 0 && currentInfoAddr != g_lastTopicInfoID) {
 			g_lastTopicInfoID = currentInfoAddr;
 			g_dialogueLineCount++;
