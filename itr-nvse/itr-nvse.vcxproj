@@ -255,6 +255,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="internal\BSSpinLock.h" />
     <ClInclude Include="internal\EventDispatch.h" />
     <ClInclude Include="internal\EngineFunctions.h" />
+    <ClInclude Include="internal\EngineHelpers.h" />
     <ClInclude Include="internal\GameGlobals.h" />
     <ClInclude Include="handlers\DialogueTextFilter.h" />
     <ClInclude Include="handlers\OnStealHandler.h" />
