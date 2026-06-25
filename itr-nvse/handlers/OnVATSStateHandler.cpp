@@ -16,8 +16,6 @@
 constexpr UInt32 kAddr_VATS_SetMode             = 0x9C6C30;
 constexpr UInt32 kAddr_StartKillcamForActor     = 0x93E530;
 constexpr UInt32 kAddr_ForceEndKillCam          = 0x93E770;
-constexpr UInt32 kAddr_VATSSingleton            = 0x011F2250;
-constexpr UInt32 kAddr_VATSMenuCurrentTarget    = 0x011F21CC;
 
 constexpr UInt32 kVATSMode_None     = 0;
 constexpr UInt32 kVATSMode_Playback = 4;
@@ -47,7 +45,7 @@ static void __fastcall Hook_VATSSetMode(void* this_, void* edx, UInt32 aeMode, b
 
 	if (newMode == kVATSMode_Playback)
 	{
-		TESForm* target = *(TESForm**)kAddr_VATSMenuCurrentTarget;
+		TESForm* target = VATSGetCurrentTarget();
 		g_eventManagerInterface->DispatchEvent("ITR:OnVATSEnter", nullptr, target);
 	}
 	else if (newMode == kVATSMode_None)

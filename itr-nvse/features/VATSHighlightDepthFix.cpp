@@ -2,6 +2,7 @@
 #include "internal/SafeWrite.h"
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"
+#include "internal/GameGlobals.h"
 #include "internal/globals.h"
 #include "internal/MenuLayout.h"
 #include "internal/NiLayout.h"
@@ -54,17 +55,17 @@ namespace VATSHighlightDepthFix
 
 	UInt32 GetVATSMode()
 	{
-		return *reinterpret_cast<UInt32*>(0x11F2258);
+		return VATSGetMode();
 	}
 
 	void* GetVATSMenu()
 	{
-		return *reinterpret_cast<void**>(0x11DB0D4);
+		return VATSGetMenu();
 	}
 
 	void* GetCurrentVATSTarget()
 	{
-		return *reinterpret_cast<void**>(0x11F21CC);
+		return VATSGetCurrentTarget();
 	}
 
 	bool IsVanillaVATSOwnerActive()
@@ -79,7 +80,7 @@ namespace VATSHighlightDepthFix
 
 	void* GetCurrentVATSTexture()
 	{
-		return *reinterpret_cast<void**>(0x11DEB38);
+		return VATSGetRenderedTexture();
 	}
 
 	bool HasAdditionalRefs(void* vatsData)

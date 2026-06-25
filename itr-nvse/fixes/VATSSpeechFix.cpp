@@ -4,6 +4,7 @@
 #include "nvse/PluginAPI.h"
 #include "internal/Detours.h"
 #include <Windows.h>
+#include <cstddef>
 
 #include "internal/globals.h"
 
@@ -47,6 +48,12 @@ namespace VATSSpeechFix
 	class BSWin32GameSound : public BSGameSound
 	{
 	public:
+	};
+	static_assert(offsetof(BSGameSound, soundFlags) == 0x08);
+
+	enum : UInt32 {
+		kBSGameSoundSoundFlagsOffset = offsetof(BSGameSound, soundFlags),
+		kVatsSpeechIgnoreTimescaleFlag = AudioFlags::kAudioFlags_IgnoreTimescale,
 	};
 
 	static bool IsVoiceSound(const char* filePath)
@@ -112,7 +119,7 @@ namespace VATSSpeechFix
 			cmp g_enabled, 0
 			je skip_to_original
 
-			test dword ptr [esi+0x08], 0x200000    //esi = sound object; bit 0x200000 = VATS speech tag
+			test dword ptr [esi+kBSGameSoundSoundFlagsOffset], kVatsSpeechIgnoreTimescaleFlag
 			jnz skip_timescale
 
 		skip_to_original:
