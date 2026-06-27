@@ -436,6 +436,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			DoorPinchFix::ClearState();
 			OnJumpLandHandler::ClearState();
 			DialogueTextFilter::ClearState();
+			OnNearMissHandler::ClearState();
 			OnEffectHandler::ClearState();
 			break;
 
@@ -472,6 +473,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OnJumpLandHandler::InstallListenerProbes();
 			OnSoundPlayedHandler::InstallListenerProbes();
 			DialogueTextFilter::ClearState();
+			OnNearMissHandler::ClearState();
 			OnEffectHandler::ClearState();
 			if (Settings::bAutoGodMode && !g_godModeExecuted)
 			{

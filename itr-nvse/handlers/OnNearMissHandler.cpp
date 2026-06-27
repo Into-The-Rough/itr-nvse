@@ -3,6 +3,7 @@
 #include "internal/NVSEPluginAPI.h"
 #include "internal/GameGlobals.h"
 #include "internal/GameLayout.h"
+#include "internal/EngineFunctions.h"
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/settings.h"
@@ -29,8 +30,8 @@ constexpr UInt32 kLifeState_Restrained = 5; //engine Actor::IsRestrained compare
 struct Vec3 { float x, y, z; };
 
 //projectile update runs on the main thread but inside the mobile-object iteration, so we
-//queue here and dispatch from the main loop to keep scripts off the live list
-struct QueuedNearMiss { TESForm* victim; TESForm* shooter; TESForm* weapon; float dist; };
+//queue refIDs here and dispatch from the main loop to keep scripts off the live list
+struct QueuedNearMiss { UInt32 victimID; UInt32 shooterID; UInt32 weaponID; float dist; };
 
 typedef int (__thiscall* ProjectileUpdate_t)(void*, int);
 
@@ -89,8 +90,9 @@ static float SegSegDistSq(const Vec3& p1, const Vec3& q1, const Vec3& p2, const 
 	return cx*cx + cy*cy + cz*cz;
 }
 
-static bool PassesCooldown(void* shooter, void* victim, UInt32 now) {
-	UInt64 key = ((UInt64)(UInt32)shooter << 32) | (UInt32)victim;
+static bool PassesCooldown(TESObjectREFR* shooter, TESObjectREFR* victim, UInt32 now) {
+	if (!shooter || !victim) return false;
+	UInt64 key = ((UInt64)shooter->refID << 32) | victim->refID;
 	auto it = s_lastFire.find(key);
 	if (it != s_lastFire.end() && (now - it->second) < (UInt32)Settings::iNearMissCooldownMs)
 		return false;
@@ -118,9 +120,9 @@ static void ScanFlight(void* proj, TESObjectREFR* shooter, TESObjectWEAP* weapon
 	if (count > kMaxNearestActors) count = kMaxNearestActors;
 
 	for (UInt32 i = 0; i < count; ++i) {
-		void* actor = nearest[i];
+		Actor* actor = static_cast<Actor*>(nearest[i]);
 		if (!actor || actor == shooter) continue;
-		const UInt32 ls = *(UInt32*)((UInt8*)actor + 0x108); //lifeState
+		const UInt32 ls = actor->lifeState;
 		if (ls != kLifeState_Alive && ls != kLifeState_Restrained) continue; //corpses and downed actors do not near-miss
 
 		const float* p = (const float*)((UInt8*)actor + kRefr_Position);
@@ -135,9 +137,9 @@ static void ScanFlight(void* proj, TESObjectREFR* shooter, TESObjectWEAP* weapon
 		if (d2 > r2 || ProjectileHitActor(proj, actor) || !PassesCooldown(shooter, actor, now)) continue;
 
 		s_pending.push_back({
-			(TESForm*)actor,
-			(TESForm*)shooter,
-			weapon,
+			actor->refID,
+			shooter ? shooter->refID : 0,
+			weapon ? weapon->refID : 0,
 			sqrtf(d2)
 		});
 	}
@@ -190,6 +192,11 @@ bool Init(void* nvseInterface) {
 	return s_detour.WriteRelJump(kAddr_ProjectileUpdate, HookProjectileUpdate, 10);
 }
 
+void ClearState() {
+	s_pending.clear();
+	s_lastFire.clear();
+}
+
 void Update() {
 	if (s_pending.empty() || !g_eventManagerInterface) {
 		s_pending.clear();
@@ -198,9 +205,12 @@ void Update() {
 	std::vector<QueuedNearMiss> batch;
 	batch.swap(s_pending);
 	for (const auto& e : batch) {
-		if (!e.victim) continue;
+		TESForm* victim = (TESForm*)Engine::LookupFormByID(e.victimID);
+		if (!victim) continue;
+		TESForm* shooter = e.shooterID ? (TESForm*)Engine::LookupFormByID(e.shooterID) : nullptr;
+		TESForm* weapon = e.weaponID ? (TESForm*)Engine::LookupFormByID(e.weaponID) : nullptr;
 		g_eventManagerInterface->DispatchEvent("ITR:OnNearMiss", nullptr,
-			e.victim, e.shooter, e.weapon, PackEventFloatArg(e.dist));
+			victim, shooter, weapon, PackEventFloatArg(e.dist));
 	}
 }
 }

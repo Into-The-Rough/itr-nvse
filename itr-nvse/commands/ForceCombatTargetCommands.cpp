@@ -51,6 +51,8 @@ namespace
 {
 	using EvaluateCombatTargets_t = Actor* (__thiscall*)(void* combatGroup, Actor* actor);
 	using CanAttackActor_t = bool (__thiscall*)(Actor* actor, Actor* target);
+	static constexpr UInt32 kAddr_ActorCanAttackActor = 0x8B0670;
+	static const CanAttackActor_t ActorCanAttackActor = reinterpret_cast<CanAttackActor_t>(kAddr_ActorCanAttackActor);
 
 	enum class ForceCombatTargetResult
 	{
@@ -93,9 +95,8 @@ namespace
 		if (!actor || !target || !combatManager)
 			return nullptr;
 
-		//call through the trampoline, 0x8B0670 is detoured to Hook_CanAttackActor
-		//only reached behind the g_forceCombatTargetHookInstalled gate so the original is set
-		if (!s_canAttackActorOriginal(actor, target))
+		//call the patched entry so forced pairs pass the bootstrap precheck
+		if (!ActorCanAttackActor(actor, target))
 			return nullptr;
 
 		void* combatController = CombatManagerAddCombatant(combatManager, actor, target, 0, 0);
@@ -194,7 +195,7 @@ namespace
 				(UInt8**)&s_evaluateCombatTargetsOriginal))
 			return false;
 
-		if (!s_forceCombatCanAttackDetour.WriteRelJump(0x8B0670, Hook_CanAttackActor, 6,
+		if (!s_forceCombatCanAttackDetour.WriteRelJump(kAddr_ActorCanAttackActor, Hook_CanAttackActor, 6,
 				(UInt8**)&s_canAttackActorOriginal))
 		{
 			if (s_forceCombatTargetDetour.Remove())
