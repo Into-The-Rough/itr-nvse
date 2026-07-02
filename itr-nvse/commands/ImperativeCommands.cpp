@@ -173,6 +173,7 @@ static bool MatchesFormType(TESObjectREFR* refr, UInt32 formType, bool includeTa
 bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 {
 	*result = 0;
+	if (!g_arrInterface) return true;
 
 	float maxDistance = 0;
 	UInt32 formType = kFormTypeFilter_AnyType;
@@ -320,6 +321,7 @@ bool Cmd_Duplicate_Execute(COMMAND_ARGS)
 	ExtractArgs(EXTRACT_ARGS, &count);
 
 	if (count < 1) count = 1;
+	if (count > 1000) count = 1000;
 
 	if (!thisObj || !thisObj->baseForm)
 	{

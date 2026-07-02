@@ -527,6 +527,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					LockpickOwnerKarmaFix::SetEnabled(Settings::bLockpickOwnerKarmaFix != 0);
 					InlineGlyphFix::SetEnabled(Settings::bInlineGlyphFix != 0);
 					AimZoomFirstPersonOnly::SetEnabled(Settings::bAimZoomFirstPersonOnly != 0);
+					if (Settings::bAutoQuickLoad)
+						AutoQuickLoad::InstallHook(); //idempotent, covers enabling at runtime
 
 					if (*g_thePlayerPtr)
 					{

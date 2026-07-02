@@ -79,15 +79,19 @@ bool Cmd_DisableKeyEx_Execute(COMMAND_ARGS)
 	UInt32 keycode = 0;
 	UInt32 mask = 0;
 
+	if (!g_diHookControl || !g_ExtractArgsEx)
+		return true;
+
 	if (!g_ExtractArgsEx(
 			reinterpret_cast<ParamInfo*>(paramInfo),
 			scriptData, opcodeOffsetPtr, scriptObj, eventList,
 			&keycode, &mask))
 		return true;
 
-	g_diHookControl->SetKeyDisableState(keycode, true, mask ? mask : DIHookControl::kDisable_All);
+	UInt32 effectiveMask = mask ? mask : DIHookControl::kDisable_All;
+	g_diHookControl->SetKeyDisableState(keycode, true, effectiveMask);
 
-	DispatchKeyDisabledEvent(keycode, mask);
+	DispatchKeyDisabledEvent(keycode, effectiveMask);
 	*result = 1;
 	return true;
 }
@@ -102,15 +106,19 @@ bool Cmd_EnableKeyEx_Execute(COMMAND_ARGS)
 	UInt32 keycode = 0;
 	UInt32 mask = 0;
 
+	if (!g_diHookControl || !g_ExtractArgsEx)
+		return true;
+
 	if (!g_ExtractArgsEx(
 			reinterpret_cast<ParamInfo*>(paramInfo),
 			scriptData, opcodeOffsetPtr, scriptObj, eventList,
 			&keycode, &mask))
 		return true;
 
-	g_diHookControl->SetKeyDisableState(keycode, false, mask ? mask : DIHookControl::kDisable_All);
+	UInt32 effectiveMask = mask ? mask : DIHookControl::kDisable_All;
+	g_diHookControl->SetKeyDisableState(keycode, false, effectiveMask);
 
-	DispatchKeyEnabledEvent(keycode, mask);
+	DispatchKeyEnabledEvent(keycode, effectiveMask);
 	*result = 1;
 	return true;
 }

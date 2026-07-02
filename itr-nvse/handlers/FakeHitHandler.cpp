@@ -359,7 +359,7 @@ static void ApplyHit(Actor* target, Actor* attacker, ActorHitData* hitData,
 	}
 
 	if (weapon) {
-		SInt32 bloodLoc = (hitLocation >= 0) ? hitLocation : 0;
+		SInt32 bloodLoc = (hitLocation >= 0 && hitLocation <= 14) ? hitLocation : 0;
 		PlaceBloodEffect(target, attacker, weapon, bloodLoc);
 		PlaceSkinnedBloodDecal(target, attacker, weapon, bloodLoc);
 		PlayImpactSound(target, weapon, bloodLoc);

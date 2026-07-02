@@ -347,6 +347,7 @@ bool Cmd_GetPlayingRadioTrack_Execute(COMMAND_ARGS)
 
 bool Cmd_GetPlayingRadioTrackFileName_Execute(COMMAND_ARGS)
 {
+	*result = 0;
 	if (!g_strInterface) return true;
 	const char* path = GetPlayingTrackPath();
 	g_strInterface->Assign(PASS_COMMAND_ARGS, path ? path : "");
@@ -355,6 +356,7 @@ bool Cmd_GetPlayingRadioTrackFileName_Execute(COMMAND_ARGS)
 
 bool Cmd_GetPlayingRadioText_Execute(COMMAND_ARGS)
 {
+	*result = 0;
 	if (!g_strInterface) return true;
 	const char* empty = "";
 

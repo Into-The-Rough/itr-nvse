@@ -131,13 +131,12 @@ namespace GestureCommand
 
 	void Init() {}
 
+	//load/new-game only, the cached pose belongs to the previous session's skeleton so drop
+	//it without restoring onto the freshly loaded bones
 	void Reset()
 	{
 		for (auto& g : g_gestures)
-		{
-			if (g.type)
-				StopGesture(g);
-		}
+			ClearGesture(g);
 	}
 
 	void Update()

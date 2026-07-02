@@ -15,10 +15,8 @@ extern const _ExtractArgs ExtractArgs;
 namespace CameraOverride
 {
 	static Mat3 g_rotation;
-	static bool g_overrideRot = false;
 
 	void SetRotation(bool enable, int axis, float degrees) {
-		g_overrideRot = enable;
 		if (!enable) {
 			g_rotation.Identity();
 			DialogueCameraHandler::ClearExternalRotation();
@@ -40,6 +38,7 @@ namespace CameraOverride
 
 	void ResetRotation() {
 		g_rotation.Identity();
+		DialogueCameraHandler::ClearExternalRotation();
 	}
 }
 

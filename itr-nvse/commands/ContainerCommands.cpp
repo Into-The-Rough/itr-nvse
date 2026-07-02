@@ -55,7 +55,7 @@ namespace
 		if (!entryList || !item)
 			return nullptr;
 
-		for (auto* node = entryList->Head(); node && node->Item(); node = node->Next())
+		for (auto* node = entryList->Head(); node; node = node->Next())
 		{
 			auto* entry = node->Item();
 			if (entry && entry->type == item)
@@ -70,10 +70,10 @@ namespace
 		if (!entry || !entry->extendData)
 			return false;
 
-		for (auto* node = entry->extendData->Head(); node && node->Item(); node = node->Next())
+		for (auto* node = entry->extendData->Head(); node; node = node->Next())
 		{
 			auto* extraList = node->Item();
-			if (BaseExtraListGetByType(extraList, extraType))
+			if (extraList && BaseExtraListGetByType(extraList, extraType))
 				return true;
 		}
 
@@ -85,7 +85,7 @@ namespace
 		if (!container || !item)
 			return false;
 
-		for (auto* node = container->formCountList.Head(); node && node->Item(); node = node->Next())
+		for (auto* node = container->formCountList.Head(); node; node = node->Next())
 		{
 			auto* formCount = node->Item();
 			if (formCount && formCount->form == item && item->typeID != kFormType_LeveledItem)
@@ -100,7 +100,7 @@ namespace
 		int count = 0;
 		const bool includeUnresolvedLeveled = !entryList;
 
-		for (auto* node = container->formCountList.Head(); node && node->Item(); node = node->Next())
+		for (auto* node = container->formCountList.Head(); node; node = node->Next())
 		{
 			auto* formCount = node->Item();
 			if (!formCount || !IsVisibleInventoryForm(formCount->form, includeUnresolvedLeveled))
@@ -122,7 +122,7 @@ namespace
 		if (!entryList)
 			return count;
 
-		for (auto* node = entryList->Head(); node && node->Item(); node = node->Next())
+		for (auto* node = entryList->Head(); node; node = node->Next())
 		{
 			auto* entry = node->Item();
 			if (!entry || entry->countDelta <= 0 || !IsVisibleInventoryForm(entry->type, false))

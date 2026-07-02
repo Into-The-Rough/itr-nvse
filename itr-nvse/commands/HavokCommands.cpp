@@ -36,7 +36,6 @@ namespace
 		UInt32 flags;
 		DWORD endTime;
 		UInt8 limb;
-		UInt8 delayFrames;
 		UInt8 retryFrames;
 		UInt8 repeat;
 		UInt8 active;
@@ -315,7 +314,6 @@ namespace
 		motion.flags = flags;
 		motion.endTime = durationMs ? GetTickCount() + durationMs : 0;
 		motion.limb = limb;
-		motion.delayFrames = 1;
 		motion.retryFrames = kMaxRagdollRetryFrames;
 		motion.repeat = durationMs ? 1 : 0;
 		motion.active = 1;
@@ -522,7 +520,7 @@ void Update()
 
 		ApplyRagdollMotion(ref, motion.limb, motion.linear, motion.spin, motion.flags);
 
-		if (!motion.repeat || now >= motion.endTime)
+		if (!motion.repeat || (SInt32)(now - motion.endTime) >= 0)
 			memset(&motion, 0, sizeof(motion));
 	}
 }
