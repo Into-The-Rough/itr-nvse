@@ -146,6 +146,7 @@ static SetFirstPerson_t SetFirstPerson = (SetFirstPerson_t)0x950110;
 
 constexpr float PI = 3.14159265358979323846f;
 constexpr float kHavokScale = 0.1428571f; //1/7, game units to havok
+constexpr float kMinShotDist = 45.0f; //camera never ends closer than this to its look target
 
 constexpr UInt8 LAYER_STATIC = 1;
 struct alignas(16) RayCastData {
@@ -773,6 +774,23 @@ static void ApplyCameraAngle(CameraAngle angle) {
 	if (angle != kAngle_Vanilla)
 		EnforceActorStandoff(camX, camY, camZ, px, py, pz, 35.0f);
 	EnforceActorStandoff(camX, camY, camZ, nx, ny, nz, 40.0f);
+
+	//a shot that collapsed into its subject is unusable, reframe over the player
+	float shotDistX = camX - lookX, shotDistY = camY - lookY, shotDistZ = camZ - lookZ;
+	if (angle != kAngle_Vanilla
+		&& sqrtf(shotDistX*shotDistX + shotDistY*shotDistY + shotDistZ*shotDistZ) < kMinShotDist) {
+		camX = px + dirX * 5.0f;
+		camY = py + dirY * 5.0f;
+		camZ = pz + 50.0f;
+		lookX = nx; lookY = ny; lookZ = nz;
+		float frac = CheckCameraClip(camX, camY, camZ, lookX, lookY, lookZ);
+		if (frac < 0.95f) {
+			camX = lookX + (camX - lookX) * frac;
+			camY = lookY + (camY - lookY) * frac;
+			camZ = lookZ + (camZ - lookZ) * frac;
+		}
+		EnforceActorStandoff(camX, camY, camZ, nx, ny, nz, 40.0f);
+	}
 
 	bool isFirstAngle = !g_hasPrevShot;
 	g_hasPrevShot = true;
