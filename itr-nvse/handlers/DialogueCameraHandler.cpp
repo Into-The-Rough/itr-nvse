@@ -270,6 +270,7 @@ static UInt32 g_dialogueTargetID = 0;
 static CameraAngle g_currentAngle = kAngle_Vanilla;
 static CameraAngleMode g_angleMode = kAngleMode_Cycle;
 static CameraAngle g_fixedAngle = kAngle_Vanilla;
+static bool g_angleDisabled[kAngle_Count]; //blocks cycle/random selection only, fixed/manual picks ignore it
 static bool g_cameraActive = false;
 static bool g_wasFirstPerson = false;
 static int g_dialogueLineCount = 0;
@@ -596,6 +597,14 @@ static const char* GetCameraModeName(CameraAngleMode mode)
 	}
 }
 
+static int EnabledAngles(CameraAngle* out)
+{
+	int count = 0;
+	for (int i = 0; i < kAngle_Count; i++)
+		if (!g_angleDisabled[i]) out[count++] = (CameraAngle)i;
+	return count;
+}
+
 static CameraAngle GetRandomCameraAngle(CameraAngle exclude = kAngle_Count)
 {
 	if (!g_rngSeeded) {
@@ -603,22 +612,32 @@ static CameraAngle GetRandomCameraAngle(CameraAngle exclude = kAngle_Count)
 		g_rngSeeded = true;
 	}
 
-	int choice = rand() % kAngle_Count;
-	if (exclude < kAngle_Count && kAngle_Count > 1) {
-		for (int i = 0; i < 4 && choice == exclude; i++)
-			choice = rand() % kAngle_Count;
-		if (choice == exclude)
-			choice = (choice + 1) % kAngle_Count;
+	CameraAngle pool[kAngle_Count];
+	int count = EnabledAngles(pool);
+	if (!count) return kAngle_Vanilla;
+
+	int choice = rand() % count;
+	if (count > 1 && pool[choice] == exclude) {
+		for (int i = 0; i < 4 && pool[choice] == exclude; i++)
+			choice = rand() % count;
+		if (pool[choice] == exclude)
+			choice = (choice + 1) % count;
 	}
 
-	return (CameraAngle)choice;
+	return pool[choice];
 }
 
 static CameraAngle SelectDialogueAngle(bool dialogueStart)
 {
+	CameraAngle pool[kAngle_Count];
 	switch (g_angleMode) {
-		case kAngleMode_Cycle:
-			return dialogueStart ? kAngle_Vanilla : (CameraAngle)(g_dialogueLineCount % kAngle_Count);
+		case kAngleMode_Cycle: {
+			int count = EnabledAngles(pool);
+			if (!count) return kAngle_Vanilla;
+			if (dialogueStart)
+				return g_angleDisabled[kAngle_Vanilla] ? pool[0] : kAngle_Vanilla;
+			return pool[g_dialogueLineCount % count];
+		}
 		case kAngleMode_Fixed:
 			return g_fixedAngle;
 		case kAngleMode_Random:
@@ -1057,6 +1076,14 @@ bool SetFixedAngle(int angle) {
 	return true;
 }
 
+bool SetAngleEnabled(int angle, bool enabled) {
+	if (!IsValidCameraAngle(angle))
+		return false;
+
+	g_angleDisabled[angle] = !enabled;
+	return true;
+}
+
 int SetCurrentAngle(int angle) {
 	CameraAngle chosenAngle;
 	if (angle < 0)
@@ -1265,6 +1292,31 @@ bool Cmd_SetDialogueCameraShake_Execute(COMMAND_ARGS)
 	return true;
 }
 
+static ParamInfo kParams_SetDialogueCameraAngleEnabled[2] = {
+	{"angle", kParamType_Integer, 0},
+	{"enable", kParamType_Integer, 0},
+};
+
+DEFINE_COMMAND_PLUGIN(SetDialogueCameraAngleEnabled, "Allow or block an angle (0-11) for cycle/random selection", 0, 2, kParams_SetDialogueCameraAngleEnabled);
+
+bool Cmd_SetDialogueCameraAngleEnabled_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	int angle = 0;
+	UInt32 enable = 1;
+	if (!ExtractArgs(EXTRACT_ARGS, &angle, &enable))
+		return true;
+	if (!DialogueCameraHandler::SetAngleEnabled(angle, enable != 0))
+		return true;
+
+	*result = 1;
+
+	if (IsConsoleMode())
+		Console_Print("DialogueCameraAngleEnabled >> %s %s",
+			DialogueCameraHandler::GetCameraAngleName((DialogueCameraHandler::CameraAngle)angle), enable ? "on" : "off");
+	return true;
+}
+
 namespace DialogueCameraHandler {
 void RegisterCommands(void* nvsePtr)
 {
@@ -1280,5 +1332,11 @@ void RegisterCommands2(void* nvsePtr)
 	nvse->RegisterCommand(&kCommandInfo_SetDialogueCameraMode);
 	nvse->RegisterCommand(&kCommandInfo_SetDialogueCameraFixedAngle);
 	nvse->RegisterCommand(&kCommandInfo_SetDialogueCameraAngle);
+}
+
+void RegisterCommands3(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_SetDialogueCameraAngleEnabled);
 }
 }

@@ -21,6 +21,7 @@ namespace DialogueCameraHandler {
 	bool IsEnabled();
 	bool SetAngleMode(int mode);
 	bool SetFixedAngle(int angle);
+	bool SetAngleEnabled(int angle, bool enabled);
 	int SetCurrentAngle(int angle);
 	void SetDolly(float speed, float maxDist, int runOnce);
 	void SetShakeAmplitude(float amplitude);
@@ -30,4 +31,5 @@ namespace DialogueCameraHandler {
 	void ClearExternalRotation();
 	void RegisterCommands(void* nvse);
 	void RegisterCommands2(void* nvse);
+	void RegisterCommands3(void* nvse);
 }
