@@ -46,6 +46,11 @@ void Update()
 
 	auto* list = reinterpret_cast<SimpleListNode*>(PlayerCharacterGetCasinoDataList(player));
 
+	//an OnCasinoBan handler can run script that mutates the casino list, so record
+	//transitions during the walk and dispatch once the list pointers are no longer live
+	TESForm* newlyBanned[16];
+	UInt32 newlyBannedCount = 0;
+
 	for (SimpleListNode* n = list; n; n = n->next) {
 		auto* entry = (CasinoStats*)n->item;
 		if (!entry) continue;
@@ -56,23 +61,22 @@ void Update()
 		UInt32 max = TESCasinoGetMaxWinnings(casino);
 		bool nowBanned = entry->earnings >= max;
 		auto* tracked = GetTracked(entry->casinoRefID);
-		if (!tracked) {
-			if (!g_needsBaseline && nowBanned) {
-				g_eventManagerInterface->DispatchEvent(
-					"ITR:OnCasinoBan", nullptr, (TESForm*)casino);
-			}
-			SetLastState(entry->casinoRefID, nowBanned);
-			continue;
-		}
+		bool crossedIntoBan = tracked ? (nowBanned && !tracked->banned)
+		                              : (!g_needsBaseline && nowBanned);
 
-		if (nowBanned && !tracked->banned) {
-			g_eventManagerInterface->DispatchEvent(
-				"ITR:OnCasinoBan", nullptr, (TESForm*)casino);
-		}
-		tracked->banned = nowBanned;
+		if (crossedIntoBan && newlyBannedCount < 16)
+			newlyBanned[newlyBannedCount++] = casino;
+
+		if (tracked)
+			tracked->banned = nowBanned;
+		else
+			SetLastState(entry->casinoRefID, nowBanned);
 	}
 
 	g_needsBaseline = false;
+
+	for (UInt32 i = 0; i < newlyBannedCount; ++i)
+		g_eventManagerInterface->DispatchEvent("ITR:OnCasinoBan", nullptr, newlyBanned[i]);
 }
 
 void ClearState()
