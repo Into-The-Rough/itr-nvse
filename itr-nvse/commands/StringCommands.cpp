@@ -29,6 +29,8 @@ DEFINE_COMMAND_PLUGIN(Sv_Reverse, "reverses a string", 0, 1, kParams_OneString)
 bool Cmd_Sv_Reverse_Execute(COMMAND_ARGS)
 {
 	*result = 0;
+	if (!g_strInterface || !ExtractArgsEx) return true;
+
 	char srcString[0x200];
 	srcString[0] = 0;
 
@@ -44,8 +46,10 @@ bool Cmd_Sv_Reverse_Execute(COMMAND_ARGS)
 bool Cmd_Sv_Join_Execute(COMMAND_ARGS)
 {
 	*result = 0;
+	if (!g_strInterface || !g_arrInterface || !ExtractArgsEx) return true;
+
 	UInt32 arrID = 0;
-	char delimiter[0x100] = "";
+	char delimiter[0x200] = "";
 
 	if (!ExtractArgsEx(EXTRACT_ARGS_EX, &arrID, &delimiter))
 		return true;
@@ -86,6 +90,8 @@ bool Cmd_Sv_Join_Execute(COMMAND_ARGS)
 bool Cmd_Sv_TrimStr_Execute(COMMAND_ARGS)
 {
 	*result = 0;
+	if (!g_strInterface || !ExtractArgsEx) return true;
+
 	char srcString[0x200];
 	srcString[0] = 0;
 
