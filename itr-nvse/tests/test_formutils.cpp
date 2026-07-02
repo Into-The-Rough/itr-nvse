@@ -11,105 +11,31 @@ struct MockRef {
 	float posX, posY, posZ;
 };
 
-TEST(FormUtils_IsInventoryItem_Weapon)
-{
-	ASSERT(IsInventoryItemType(0x28));
-	return true;
-}
+//ContainerCanHoldType (0x481F30) output for form types 0x00-0xFF, dumped from the
+//runtime on 2026-07-02 - the 1.4.0.525 binary is frozen so this table is permanent
+static const unsigned char kEngineInventoryTable[256] = {
+	/*0x00*/ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	/*0x10*/ 0,0,0,0,0,0,0,0,1,1,1,0,0,1,1,1,
+	/*0x20*/ 0,0,0,0,0,0,0,0,1,1,0,0,0,0,1,1,
+	/*0x30*/ 0,1,1,0,1,0,0,0,0,0,0,0,0,0,0,0,
+	/*0x40*/ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	/*0x50*/ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	/*0x60*/ 0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,
+	/*0x70*/ 0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,
+	/*0x80*/ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	/*0x90*/ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	/*0xA0*/ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	/*0xB0*/ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	/*0xC0*/ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	/*0xD0*/ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	/*0xE0*/ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+	/*0xF0*/ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+};
 
-TEST(FormUtils_IsInventoryItem_Armor)
+TEST(FormUtils_InventoryTable_MatchesEngineDump)
 {
-	ASSERT(IsInventoryItemType(0x18));
-	return true;
-}
-
-TEST(FormUtils_IsInventoryItem_Ammo)
-{
-	ASSERT(IsInventoryItemType(0x29));
-	return true;
-}
-
-TEST(FormUtils_IsInventoryItem_Key)
-{
-	ASSERT(IsInventoryItemType(0x2E));
-	return true;
-}
-
-TEST(FormUtils_IsInventoryItem_Book)
-{
-	ASSERT(IsInventoryItemType(0x19));
-	return true;
-}
-
-TEST(FormUtils_IsInventoryItem_AlchemyItem)
-{
-	ASSERT(IsInventoryItemType(0x2F));
-	return true;
-}
-
-TEST(FormUtils_IsInventoryItem_Note)
-{
-	ASSERT(IsInventoryItemType(0x31));
-	return true;
-}
-
-TEST(FormUtils_IsInventoryItem_Light)
-{
-	ASSERT(IsInventoryItemType(0x1E));
-	return true;
-}
-
-TEST(FormUtils_IsInventoryItem_ConstructibleObject)
-{
-	ASSERT(IsInventoryItemType(0x32));
-	return true;
-}
-
-TEST(FormUtils_IsInventoryItem_LeveledItem)
-{
-	ASSERT(IsInventoryItemType(0x34));
-	return true;
-}
-
-TEST(FormUtils_IsInventoryItem_WeaponMods)
-{
-	ASSERT(IsInventoryItemType(0x67));
-	return true;
-}
-
-TEST(FormUtils_IsInventoryItem_CasinoChip)
-{
-	ASSERT(IsInventoryItemType(0x6C));
-	return true;
-}
-
-TEST(FormUtils_IsInventoryItem_CaravanCard)
-{
-	ASSERT(IsInventoryItemType(0x73));
-	return true;
-}
-
-TEST(FormUtils_IsInventoryItem_FactionCurrency)
-{
-	ASSERT(IsInventoryItemType(0x74));
-	return true;
-}
-
-TEST(FormUtils_NotInventoryItem_Creature)
-{
-	ASSERT(!IsInventoryItemType(0x30));
-	return true;
-}
-
-TEST(FormUtils_NotInventoryItem_NPC)
-{
-	ASSERT(!IsInventoryItemType(0x36));
-	return true;
-}
-
-TEST(FormUtils_NotInventoryItem_Zero)
-{
-	ASSERT(!IsInventoryItemType(0));
+	for (int type = 0; type < 256; ++type)
+		ASSERT(IsInventoryItemType((uint8_t)type) == (kEngineInventoryTable[type] != 0));
 	return true;
 }
 

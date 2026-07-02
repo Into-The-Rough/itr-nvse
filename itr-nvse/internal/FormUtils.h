@@ -11,9 +11,10 @@ enum FormTypeFilter : uint32_t {
 	kFilter_InventoryItem = 201,
 };
 
-inline bool IsInventoryItemType(uint8_t formType)
+//hand-copied engine table for the tests - byte-for-byte match of ContainerCanHoldType
+//(0x481F30) output, parity-verified against the runtime
+inline bool IsInventoryItemTypeMirror(uint8_t formType)
 {
-#ifdef FORMUTILS_TEST_MIRROR_ENGINE
 	switch (formType)
 	{
 		case 0x18: //Armor
@@ -37,6 +38,12 @@ inline bool IsInventoryItemType(uint8_t formType)
 		default:
 			return false;
 	}
+}
+
+inline bool IsInventoryItemType(uint8_t formType)
+{
+#ifdef FORMUTILS_TEST_MIRROR_ENGINE
+	return IsInventoryItemTypeMirror(formType);
 #else
 	using ContainerCanHoldType_t = bool(__cdecl*)(uint32_t);
 	return reinterpret_cast<ContainerCanHoldType_t>(0x481F30)(formType);
