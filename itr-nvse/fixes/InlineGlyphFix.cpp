@@ -45,14 +45,15 @@ namespace InlineGlyphFix
 	static TileText_MakeNode_t s_origMakeNode = nullptr;
 	static bool s_installed = false;
 
-	static void* s_currentTile = nullptr; //UI pipeline is single-threaded
-	static void* s_lastTile = nullptr;
+	//UI pipeline is single-threaded. every Font::AddButton call chain originates inside
+	//TileText::MakeNode (sub_A21AF0, sole xref is vtable slot 0x1094880), so this is
+	//always live when the font hooks run
+	static void* s_currentTile = nullptr;
 
 	void* __fastcall Hook_MakeNode(void* tile, void*)
 	{
 		void* prev = s_currentTile;
 		s_currentTile = tile;
-		s_lastTile = tile;
 		void* result = s_origMakeNode(tile);
 		s_currentTile = prev;
 		return result;
@@ -102,11 +103,6 @@ namespace InlineGlyphFix
 		return (tileFontSize / font1Size) * (zoom / 100.0f);
 	}
 
-	static void* GetActiveTile()
-	{
-		return s_currentTile ? s_currentTile : s_lastTile;
-	}
-
 	static float GetGlyphVisualScale()
 	{
 		int percent = Settings::iInlineGlyphVisualScalePercent;
@@ -120,7 +116,6 @@ namespace InlineGlyphFix
 		//hook may outlive a refused remove
 		void* tile = s_currentTile;
 		if (!s_installed || !tile || !font || !icon) return;
-		s_lastTile = tile;
 
 		float scale = GetTileScale(tile, font);
 		if (scale > 0.999f && scale < 1.001f) return;
@@ -131,7 +126,6 @@ namespace InlineGlyphFix
 		float scaledSize = oldSize * scale;
 		float newSize = scaledSize * visualScale;
 		float newAdvance = oldAdvance * scale;
-		float shrinkPerSide = (scaledSize - newSize) * 0.5f;
 
 		icon->metric[0] = newSize;
 		icon->metric[1] *= scale;
@@ -141,6 +135,7 @@ namespace InlineGlyphFix
 		FILE* fp = nullptr;
 		fopen_s(&fp, "InlineGlyphFix.log", "a");
 		if (fp) {
+			float shrinkPerSide = (scaledSize - newSize) * 0.5f;
 			void* tileFont = GetTileFont(tile, font);
 			float zoom = ThisCall<float>(kAddr_Tile_GetFloat, tile, kTileValue_Zoom);
 			int fontID = tileFont ? *(int*)((char*)tileFont + kFont_uiFontID) : 0;
@@ -153,7 +148,7 @@ namespace InlineGlyphFix
 
 	void __fastcall Hook_AddButton(void* font, void*, int iconIdx, void* triShape, NiPoint3* cursor)
 	{
-		void* tile = GetActiveTile();
+		void* tile = s_currentTile;
 		if (!s_installed || !tile || !cursor)
 		{
 			s_origAddButton(font, iconIdx, triShape, cursor);
@@ -253,7 +248,6 @@ namespace InlineGlyphFix
 		if (s_metricsDetour.Remove())
 			s_origComputeButtonMetrics = nullptr;
 		s_currentTile = nullptr;
-		s_lastTile = nullptr;
 	}
 
 	void SetEnabled(bool enabled)
