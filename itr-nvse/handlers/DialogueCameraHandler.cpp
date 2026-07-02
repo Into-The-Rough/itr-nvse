@@ -306,7 +306,6 @@ static float g_dollyProgress = 0.0f;
 static bool g_dollyFirstDone = false;
 float g_shakeAmplitude = -1.0f; //-1 = use default
 static bool g_rngSeeded = false;
-static bool g_playerMovementSettled = false;
 
 static const siv::PerlinNoise g_perlinPitch{ 4 };
 static const siv::PerlinNoise g_perlinYaw{ 5 };
@@ -338,6 +337,7 @@ static Detours::CallDetour s_pickAnimationsCall;
 static Detours::CallDetour s_setFirstPersonCall;
 typedef void(__thiscall* Show1stPerson_t)(void*, bool);
 typedef void(__thiscall* PickAnimations_t)(void*, float, float);
+static PickAnimations_t const Actor_PickAnimations = (PickAnimations_t)0x895110;
 
 struct DialogueVec3 { float x, y, z; };
 
@@ -351,6 +351,13 @@ static void ClearPlayerDialogueMovement(PlayerCharacter* player)
 	DialogueVec3 zero = {};
 	ThisCall<void>(0x9EA570, mover, &zero); //PlayerMover::SetSpeedVector
 	ThisCall<void>(0x9EA3B0, mover, 0x3F); //PlayerMover::ClearMovementFlag_
+}
+
+static UInt8 CurrentMovementGroup(PlayerCharacter* player)
+{
+	void* animData = ThisCall<void*>(0x950A60, player, 0); //PlayerCharacter::GetAnimData, 0 = 3rd person
+	if (!animData) return 0xFF;
+	return ThisCall<UInt16>(0x4301B0, animData, 1) & 0xFF; //current group on the movement sequence
 }
 
 //sites 1&2: call wrappers for Show1stPerson (0x951A10)
@@ -442,25 +449,14 @@ __declspec(naked) void Hook_SkipFallbackFOV() {
 	}
 }
 
-//site 7: suppress per-frame PickAnimations in FocusOnActor's heading block.
-//Allow one clean reselect after dialogue starts so movement entered from a run
-//doesn't keep a stale locomotion group on the visible 3rd person body.
+//site 7: suppress per-frame PickAnimations in FocusOnActor's heading block,
+//the settle monitor in Update owns movement reselection while the camera is on
 static void __fastcall Hook_SkipPickAnimations(void* actor, void*, float a1, float a2) {
-	auto original = reinterpret_cast<PickAnimations_t>(s_pickAnimationsCall.GetOverwrittenAddr());
-	if (!original)
-		return;
-
 	if (!Settings::bDialogueCamera)
 	{
-		original(actor, a1, a2);
-		return;
-	}
-
-	if (!g_playerMovementSettled && (g_inDialogue || IsMenuVisible(kMenuType_Dialogue)))
-	{
-		ClearPlayerDialogueMovement(static_cast<PlayerCharacter*>(actor));
-		original(actor, a1, a2);
-		g_playerMovementSettled = true;
+		auto original = reinterpret_cast<PickAnimations_t>(s_pickAnimationsCall.GetOverwrittenAddr());
+		if (original)
+			original(actor, a1, a2);
 	}
 }
 
@@ -939,7 +935,6 @@ static void OnDialogueEnd() {
 	}
 	g_dialogueTarget = nullptr;
 	g_dialogueTargetID = 0;
-	g_playerMovementSettled = false;
 }
 
 void Update() {
@@ -955,6 +950,19 @@ void Update() {
 	else if (!dialogueMenuVisible && g_inDialogue) {
 		g_inDialogue = false;
 		OnDialogueEnd();
+	}
+
+	//keep the visible body out of locomotion groups for the whole conversation,
+	//covers headless speakers whose engine heading block is skipped and anims restarted mid-dialogue
+	if (g_inDialogue) {
+		PlayerCharacter* settlePlayer = *g_thePlayerPtr;
+		if (settlePlayer && settlePlayer->bThirdPerson) {
+			UInt8 group = CurrentMovementGroup(settlePlayer);
+			if (group >= 3 && group <= 16) { //forward..turnright, the band PickAnimations selects from
+				ClearPlayerDialogueMovement(settlePlayer);
+				Actor_PickAnimations(settlePlayer, 1.0f, 1.0f);
+			}
+		}
 	}
 
 	if (!g_cameraActive || !g_dialogueTarget) return;
