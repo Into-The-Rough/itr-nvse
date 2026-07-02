@@ -24,9 +24,9 @@ static void __fastcall DispatchStealEvent(Actor* thief, TESObjectREFR* target, T
 
 static void __fastcall StealAlarmHook(Actor* thief, void*, TESObjectREFR* target, TESForm* item, SInt32 quantity, UInt32 arg4, TESObjectREFR* owner)
 {
-    DispatchStealEvent(thief, target, item, quantity, owner);
     if (s_stealAlarm)
         s_stealAlarm(thief, target, item, quantity, arg4, owner);
+    DispatchStealEvent(thief, target, item, quantity, owner);
 }
 
 namespace OnStealHandler {
