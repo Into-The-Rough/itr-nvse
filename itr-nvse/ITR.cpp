@@ -393,19 +393,19 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bDetectionFollowerCrashFix)
 					DetectionFollowerCrashFix::Init();
 				if (Settings::bGetLineOfSightCrashFix)
-				ToggleAllPrimitives::InstallHooks();
 					GetLineOfSightCrashFix::Init();
 				LockpickOwnerKarmaFix::Init(Settings::bLockpickOwnerKarmaFix != 0);
 				if (Settings::bInlineGlyphFix)
 					InlineGlyphFix::Init();
-				OnEntryPointHandler::InstallListenerProbe();
-				OnCombatProcedureHandler::InstallListenerProbe();
 				AimZoomFirstPersonOnly::Init(Settings::bAimZoomFirstPersonOnly != 0);
 				ItemModFlagSafety::Init();
+				ToggleAllPrimitives::InstallHooks();
 				EventDispatch::RegisterEvents();
 				WeatherChangeEvent::Init();
 				OnJumpLandHandler::InstallListenerProbes();
 				OnSoundPlayedHandler::InstallListenerProbes();
+				OnEntryPointHandler::InstallListenerProbe();
+				OnCombatProcedureHandler::InstallListenerProbe();
 				PerkRuntimeFramework::BuildIndex();
 				g_hooksInstalled = true;
 			}
@@ -431,14 +431,14 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			BarterCommands::ClearState();
 			CompanionNoBlock::ClearState();
 			DoorPinchFix::ClearState();
-			NoWeaponSearch::ClearState();
-			PreventWeaponSwitch::ClearState();
-			OwnedBeds::ClearState();
-			OnWitnessedHandler::ClearState();
 			OnJumpLandHandler::ClearState();
 			DialogueTextFilter::ClearState();
 			OnNearMissHandler::ClearState();
 			OnEffectHandler::ClearState();
+			NoWeaponSearch::ClearState();
+			PreventWeaponSwitch::ClearState();
+			OwnedBeds::ClearState();
+			OnWitnessedHandler::ClearState();
 			break;
 
 		case NVSEMessagingInterface::kMessage_NewGame:
@@ -457,28 +457,28 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			HavokCommands::ClearState();
 			GestureCommand::Reset();
 			CrouchCommands::ClearState();
-			NoWeaponSearch::ClearState();
-			PreventWeaponSwitch::ClearState();
-			OwnedBeds::ClearState();
-			OnWitnessedHandler::ClearState();
 			ForceCombatTargetCommands::ClearState();
 			OnCasinoBanHandler::ClearState();
 			OnContactHandler::ClearState();
 			OnVATSStateHandler::ClearState();
+			NoWeaponSearch::ClearState();
+			PreventWeaponSwitch::ClearState();
+			OwnedBeds::ClearState();
+			OnWitnessedHandler::ClearState();
 			ToggleAllPrimitives::Reset();
 			ExteriorDoorCommands::ClearCache();
 			DetectionSoundCommands::ClearState();
 			BarterCommands::ClearState();
 			CompanionNoBlock::ClearState();
 			DoorPinchFix::ClearState();
-			OnEntryPointHandler::InstallListenerProbe();
-			OnCombatProcedureHandler::InstallListenerProbe();
 
 			OnEntryPointHandler::BuildEntryMap();
 			PerkRuntimeFramework::BuildIndex();
 			OnJumpLandHandler::ClearState();
 			OnJumpLandHandler::InstallListenerProbes();
 			OnSoundPlayedHandler::InstallListenerProbes();
+			OnEntryPointHandler::InstallListenerProbe();
+			OnCombatProcedureHandler::InstallListenerProbe();
 			DialogueTextFilter::ClearState();
 			OnNearMissHandler::ClearState();
 			OnEffectHandler::ClearState();
@@ -564,11 +564,11 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OwnerNameInfoHandler::Update();
 			KeyHeldHandler::Update();
 			DoubleTapHandler::Update();
-			OnEntryPointHandler::Update();
 			OnSoundPlayedHandler::Update();
 			OnJumpLandHandler::Update();
 			OnCasinoBanHandler::Update();
 			OnCombatProcedureHandler::Update();
+			OnEntryPointHandler::Update();
 			OnNearMissHandler::Update();
 			OnEffectHandler::Update();
 			CompanionNoBlock::Update();
@@ -592,13 +592,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 	}
 }
-
-static void InitLog()
-{
-	CreateDirectoryA("logs", nullptr);
-	g_logFile = fopen("logs\\itr-nvse.log", "w");
-}
-
 
 static void RegisterHandlers(NVSEInterface* nvse)
 {
@@ -653,8 +646,6 @@ namespace ITR
 		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 
 		g_pluginHandle = nvse->GetPluginHandle();
-
-		InitLog();
 
 		g_msgInterface = (NVSEMessagingInterface*)nvse->QueryInterface(kInterface_Messaging);
 		g_consoleInterface = (NVSEConsoleInterface*)nvse->QueryInterface(kInterface_Console);
