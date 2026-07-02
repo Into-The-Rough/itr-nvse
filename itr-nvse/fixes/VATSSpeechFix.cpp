@@ -190,38 +190,37 @@ namespace VATSSpeechFix
 			return false;
 		}
 
-		//hook vtable Func09 (sound initialization)
-		OriginalFunc09 = *(BSWin32GameSound_Func09_t*)GameAddr::BSWin32GameSound_Vtbl_Func09;
-		if (!SafeWrite32(GameAddr::BSWin32GameSound_Vtbl_Func09, (UInt32)HookedFunc09))
+		//install the fallible inline detour before touching the vtable, so a failure here
+		//leaves nothing half-patched to recurse into on a later retry
+		if (s_timescalePatchOwner == TimescalePatchOwner::Vanilla)
 		{
-			Log("VATSSpeechFix: failed to hook Func09");
-			return false;
-		}
-
-		//hook vtable Func10 (sound playback)
-		OriginalFunc10 = *(BSWin32GameSound_Func10_t*)GameAddr::BSWin32GameSound_Vtbl_Func10;
-		if (!SafeWrite32(GameAddr::BSWin32GameSound_Vtbl_Func10, (UInt32)HookedFunc10))
-		{
-			Log("VATSSpeechFix: failed to hook Func10");
-			return false;
-		}
-
-		switch (s_timescalePatchOwner)
-		{
-		case TimescalePatchOwner::Vanilla:
-			if (s_timescaleDetour.WriteRelJump(s_timescalePatchAddr, HookedTimescaleNaked, sizeof(kVanillaTimescalePatch), &s_trampolineTimescale))
-			{
-				Log("VATSSpeechFix: installed inline timescale detour");
-			}
-			else
+			if (!s_timescaleDetour.WriteRelJump(s_timescalePatchAddr, HookedTimescaleNaked, sizeof(kVanillaTimescalePatch), &s_trampolineTimescale))
 			{
 				Log("VATSSpeechFix: failed to install inline timescale detour");
 				return false;
 			}
-			break;
-		case TimescalePatchOwner::Stewie:
+			Log("VATSSpeechFix: installed inline timescale detour");
+		}
+		else
+		{
 			Log("VATSSpeechFix: using Stewie audio inline at 0x%X", s_timescalePatchAddr);
-			break;
+		}
+
+		//capture the real originals only if the slots aren't already ours, a guarded retry
+		//must never recapture HookedFunc09/10 as the passthrough target
+		auto slot09 = *(BSWin32GameSound_Func09_t*)GameAddr::BSWin32GameSound_Vtbl_Func09;
+		auto slot10 = *(BSWin32GameSound_Func10_t*)GameAddr::BSWin32GameSound_Vtbl_Func10;
+		if ((void*)slot09 != (void*)HookedFunc09) OriginalFunc09 = slot09;
+		if ((void*)slot10 != (void*)HookedFunc10) OriginalFunc10 = slot10;
+
+		bool ok09 = SafeWrite32(GameAddr::BSWin32GameSound_Vtbl_Func09, (UInt32)HookedFunc09);
+		bool ok10 = ok09 && SafeWrite32(GameAddr::BSWin32GameSound_Vtbl_Func10, (UInt32)HookedFunc10);
+		if (!ok10)
+		{
+			Log("VATSSpeechFix: failed to hook sound vtable");
+			if (ok09) SafeWrite32(GameAddr::BSWin32GameSound_Vtbl_Func09, (UInt32)OriginalFunc09);
+			if (s_timescalePatchOwner == TimescalePatchOwner::Vanilla) s_timescaleDetour.Remove();
+			return false;
 		}
 
 		g_hooksInstalled = true;
