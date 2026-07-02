@@ -36,6 +36,8 @@ public:
 					return 1;
 				if (popupTime[i] && now - popupTime[i] < cooldownMs)
 					return 1;
+				//consumed this visit, require another departure before the next trigger
+				hasLeft[i] = false;
 				return 0;
 			}
 		}
