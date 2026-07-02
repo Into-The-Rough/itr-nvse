@@ -70,6 +70,7 @@ static std::unordered_set<UInt32> g_watchedRefIDs;         //main thread only (m
 static std::unordered_set<UInt32> g_watchedBaseFormIDs;    //main thread only (mutation)
 static std::unordered_set<UInt32> g_watchedSnapshot;       //read by hooks under lock
 static std::unordered_set<UInt32> g_watchedBaseSnapshot;   //read by hooks under lock
+static volatile LONG g_watchActive = 0;                    //lock-free idle gate for the contact hooks
 static std::unordered_map<ContactPair, int, ContactPairHash> g_activeContacts;
 static std::vector<QueuedContactEvent> g_pendingEvents;
 static CRITICAL_SECTION g_contactLock;
@@ -167,14 +168,11 @@ typedef void (__thiscall *_FOCollisionListener_contactPointAdded)(void*, void*);
 static void __fastcall Hook_ContactPointAdded(void* listener, void* edx, void* event) {
 	s_rigidBodyDetour.GetTrampoline<_FOCollisionListener_contactPointAdded>()(listener, event);
 
+	if (!g_watchActive) return;
+
 	auto* contactEvent = reinterpret_cast<HkpContactPointAddedEventView*>(event);
 	void* bodyA = contactEvent->bodyA;
 	void* bodyB = contactEvent->bodyB;
-
-	{
-		ScopedLock lock(&g_contactLock);
-		if (!HasAnyWatchSnapshot()) return;
-	}
 
 	UInt32 baseA = 0, baseB = 0;
 	UInt32 refA = ResolveCollidableToRefID(bodyA, &baseA);
@@ -454,11 +452,12 @@ static void PollContactEnd() {
 }
 
 static Detours::JumpDetour s_charAddedDetour;
-static Detours::JumpDetour s_charRemovedDetour;
 typedef void (__thiscall *_fireContact)(void*, void*);
 
 static void __fastcall Hook_CharProxyContactAdded(void* proxy, void* edx, void* point) {
 	s_charAddedDetour.GetTrampoline<_fireContact>()(proxy, point);
+
+	if (!g_watchActive) return;
 
 	UInt32 actorRefID = 0;
 	{
@@ -479,11 +478,6 @@ static void __fastcall Hook_CharProxyContactAdded(void* proxy, void* edx, void* 
 	QueueEvent(actorRefID, otherRefID, kChannel_CharProxy, true);
 }
 
-static void __fastcall Hook_CharProxyContactRemoved(void* proxy, void* edx, void* point) {
-	s_charRemovedDetour.GetTrampoline<_fireContact>()(proxy, point);
-	//The removed callback does not identify a stable contact pair; PollContactEnd handles ch1 ends.
-}
-
 static Detours::JumpDetour s_simpleAddDetour;
 static Detours::JumpDetour s_simpleRemoveDetour;
 static Detours::JumpDetour s_cachingAddDetour;
@@ -492,6 +486,8 @@ static Detours::JumpDetour s_cachingRemoveDetour;
 typedef void (__thiscall *_phantomOverlap)(void*, void*);
 
 static void PhantomOverlapCommon(void* phantom, void* cdBody, bool isAdd) {
+	if (!g_watchActive) return;
+
 	void* rootCollidable = cdBody ? getRoot(cdBody) : nullptr;
 	void* bodyWorldObj = HkpWorldObjectFromCollidableRoot(rootCollidable);
 	UInt32 mappedPhantomRefID = 0;
@@ -631,11 +627,6 @@ bool Init(void* nvseInterface)
 		Log("OnContactHandler: ch1 added hook failed at 0xCAD480");
 		return false;
 	}
-	if (!s_charRemovedDetour.WriteRelJump(0xCAD4C0, Hook_CharProxyContactRemoved, 10)) {
-		Log("OnContactHandler: ch1 removed hook failed at 0xCAD4C0");
-		return false;
-	}
-
 	//simple add: 53 8B 5C 24 08 83 3B 00 (need >=5 clean bytes)
 	if (!s_simpleAddDetour.WriteRelJump(0xD1F690, Hook_SimpleAdd, 5)) {
 		Log("OnContactHandler: ch2 simple-add hook failed at 0xD1F690");
@@ -674,6 +665,7 @@ void Update()
 			ScopedLock lock(&g_contactLock);
 			g_watchedSnapshot = g_watchedRefIDs;
 			g_watchedBaseSnapshot = g_watchedBaseFormIDs;
+			g_watchActive = HasAnyWatchSnapshot() ? 1 : 0;
 		}
 		RebuildProxyMap();
 		g_snapshotDirty = false;
@@ -773,6 +765,7 @@ void ClearState()
 	g_watchedBaseFormIDs.clear();
 	g_watchedSnapshot.clear();
 	g_watchedBaseSnapshot.clear();
+	g_watchActive = 0;
 	g_proxyToRefID.clear();
 	g_phantomToRefID.clear();
 	g_snapshotDirty = false;
