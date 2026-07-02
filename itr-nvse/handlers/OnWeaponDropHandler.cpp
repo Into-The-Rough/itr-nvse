@@ -3,6 +3,7 @@
 #include "OnWeaponDropHandler.h"
 #include "internal/NVSEPluginAPI.h"
 #include "internal/EngineFunctions.h"
+#include "internal/EngineHelpers.h"
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"
 #include "internal/GameSDK.h"
@@ -16,22 +17,11 @@ static Detours::JumpDetour s_tryDropWeaponDetour;
 using TryDropWeapon_t = int(__thiscall*)(Actor*);
 static TryDropWeapon_t s_originalTryDropWeapon = nullptr;
 
-static TESObjectWEAP* GetActorCurrentWeapon(Actor* actor)
-{
-    if (!actor) return nullptr;
-
-    BaseProcess* process = actor->baseProcess;
-    if (!process) return nullptr;
-
-    auto* weaponInfo = process->GetWeaponInfo();
-    return weaponInfo ? weaponInfo->weapon : nullptr;
-}
-
 static void DispatchWeaponDropEvent(Actor* actor)
 {
     if (!actor) return;
 
-    auto* weapon = GetActorCurrentWeapon(actor);
+    auto* weapon = ActorGetCurrentWeapon(actor);
     if (!weapon) return;
 
     if (g_eventManagerInterface)

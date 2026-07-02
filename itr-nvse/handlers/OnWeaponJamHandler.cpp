@@ -4,6 +4,7 @@
 #include "internal/NVSEPluginAPI.h"
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"
+#include "internal/EngineHelpers.h"
 #include "internal/GameSDK.h"
 
 
@@ -14,22 +15,11 @@ namespace OnWeaponJamHandler {
 static Detours::CallDetour s_setAnimActionCall;
 using SetAnimAction_t = int(__thiscall*)(Actor*, int, void*);
 
-static TESObjectWEAP* GetActorCurrentWeapon(Actor* actor)
-{
-    if (!actor) return nullptr;
-
-    BaseProcess* process = actor->baseProcess;
-    if (!process) return nullptr;
-
-    auto* weaponInfo = process->GetWeaponInfo();
-    return weaponInfo ? weaponInfo->weapon : nullptr;
-}
-
 static void DispatchWeaponJamEvent(Actor* actor)
 {
     if (!actor) return;
 
-    TESObjectWEAP* weapon = GetActorCurrentWeapon(actor);
+    TESObjectWEAP* weapon = ActorGetCurrentWeapon(actor);
     if (!weapon) return;
 
     if (g_eventManagerInterface)

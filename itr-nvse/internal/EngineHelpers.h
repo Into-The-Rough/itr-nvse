@@ -66,6 +66,13 @@ inline EffectNode* MagicTargetGetEffectList(MagicTarget* magicTarget)
 	return magicTarget ? magicTarget->GetEffectList() : nullptr;
 }
 
+inline TESObjectWEAP* ActorGetCurrentWeapon(Actor* actor)
+{
+	if (!actor || !actor->baseProcess) return nullptr;
+	auto* weaponInfo = actor->baseProcess->GetWeaponInfo();
+	return weaponInfo ? weaponInfo->weapon : nullptr;
+}
+
 inline void BaseProcessSetAmmoInfo(BaseProcess* process, BaseProcess::AmmoInfo* ammoInfo)
 {
 	if (!process) return;
