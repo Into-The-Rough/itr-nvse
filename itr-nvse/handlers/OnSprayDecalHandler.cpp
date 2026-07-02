@@ -43,8 +43,9 @@ static void __fastcall HookSprayAddDecal(void* cell, void* edx, void* decalData,
 	const float* origin = DecalCreationDataGetOrigin(decalData);
 	const float* direction = DecalCreationDataGetDirection(decalData);
 
-	g_eventManagerInterface->DispatchEventThreadSafe(
-		"ITR:OnSprayDecal", nullptr, nullptr,
+	//BGSDecalEmitter::Update is reached only from Main::Update (0x86E650), main thread
+	g_eventManagerInterface->DispatchEvent(
+		"ITR:OnSprayDecal", nullptr,
 		(TESForm*)g_currentEmitter->pImpactData,
 		PackEventFloatArg(origin[0]),
 		PackEventFloatArg(origin[1]),
