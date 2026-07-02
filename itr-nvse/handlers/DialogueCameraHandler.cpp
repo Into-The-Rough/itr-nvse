@@ -192,37 +192,10 @@ static float CastRay(float startX, float startY, float startZ,
 	return rcData.hitFraction;
 }
 
-//<1.0 when the camera sits closer to the actor's head than minDist
-static float ActorProximityFrac(float camX, float camY, float camZ,
-								float lookX, float lookY, float lookZ,
-								TESObjectREFR* actor, float minDist) {
-	if (!actor) return 1.0f;
-
-	float dx = camX - actor->posX;
-	float dy = camY - actor->posY;
-	float dz = camZ - (actor->posZ + 60.0f);
-	float dist = sqrtf(dx*dx + dy*dy + dz*dz);
-	if (dist >= minDist) return 1.0f;
-
-	float lookToCamX = camX - lookX;
-	float lookToCamY = camY - lookY;
-	float lookToCamZ = camZ - lookZ;
-	float totalDist = sqrtf(lookToCamX*lookToCamX + lookToCamY*lookToCamY + lookToCamZ*lookToCamZ);
-	if (totalDist <= 1.0f) return 1.0f;
-
-	return (totalDist - (minDist - dist) * 1.5f) / totalDist;
-}
-
-//returns safe fraction from look target (1.0=ok, <1.0=pull closer)
+//returns safe fraction from look target against static geometry, 1.0 = clear
 static float CheckCameraClip(float camX, float camY, float camZ,
-							 float lookX, float lookY, float lookZ,
-							 TESObjectREFR* npc, TESObjectREFR* player) {
+							 float lookX, float lookY, float lookZ) {
 	float safeFrac = 1.0f;
-
-	float frac = ActorProximityFrac(camX, camY, camZ, lookX, lookY, lookZ, npc, 40.0f);
-	if (frac < safeFrac) safeFrac = frac;
-	frac = ActorProximityFrac(camX, camY, camZ, lookX, lookY, lookZ, player, 35.0f);
-	if (frac < safeFrac) safeFrac = frac;
 
 	//raycast from look target to camera, offset start past actor collision
 	float rayDirX = camX - lookX;
@@ -249,6 +222,20 @@ static float CheckCameraClip(float camX, float camY, float camZ,
 	if (safeFrac < 0.15f) safeFrac = 0.15f;
 
 	return safeFrac;
+}
+
+//pushes the camera out along its own offset axis when it sits inside minDist of a head
+static void EnforceActorStandoff(float& camX, float& camY, float& camZ,
+								 float headX, float headY, float headZ, float minDist)
+{
+	float dx = camX - headX, dy = camY - headY, dz = camZ - headZ;
+	float dist = sqrtf(dx*dx + dy*dy + dz*dz);
+	if (dist >= minDist) return;
+	if (dist < 1.0f) { dx = 0.0f; dy = 0.0f; dz = 1.0f; dist = 1.0f; }
+	float scale = minDist / dist;
+	camX = headX + dx*scale;
+	camY = headY + dy*scale;
+	camZ = headZ + dz*scale;
 }
 
 enum CameraAngle {
@@ -757,8 +744,7 @@ static void ApplyCameraAngle(CameraAngle angle) {
 
 	for (int i = 0; i < 2; i++) {
 		float clipFrac = CheckCameraClip(candidates[i].x, candidates[i].y, candidates[i].z,
-										 candidates[i].lookX, candidates[i].lookY, candidates[i].lookZ,
-										 g_dialogueTarget, player);
+										 candidates[i].lookX, candidates[i].lookY, candidates[i].lookZ);
 
 		if (clipFrac > bestClipFrac) {
 			bestClipFrac = clipFrac;
@@ -777,12 +763,16 @@ static void ApplyCameraAngle(CameraAngle angle) {
 	float lookY = candidates[chosen].lookY;
 	float lookZ = candidates[chosen].lookZ;
 
-	float finalClipFrac = CheckCameraClip(camX, camY, camZ, lookX, lookY, lookZ, g_dialogueTarget, player);
+	float finalClipFrac = CheckCameraClip(camX, camY, camZ, lookX, lookY, lookZ);
 	if (finalClipFrac < 0.95f) {
 		camX = lookX + (camX - lookX) * finalClipFrac;
 		camY = lookY + (camY - lookY) * finalClipFrac;
 		camZ = lookZ + (camZ - lookZ) * finalClipFrac;
 	}
+
+	if (angle != kAngle_Vanilla)
+		EnforceActorStandoff(camX, camY, camZ, px, py, pz, 35.0f);
+	EnforceActorStandoff(camX, camY, camZ, nx, ny, nz, 40.0f);
 
 	bool isFirstAngle = !g_hasPrevShot;
 	g_hasPrevShot = true;
