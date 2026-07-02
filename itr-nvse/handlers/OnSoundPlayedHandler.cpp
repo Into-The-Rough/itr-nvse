@@ -244,8 +244,8 @@ void Update()
     for (const auto& evt : eventsToProcess)
     {
         const char* filePath = evt.filePath[0] ? evt.filePath : "";
+        //sounds played by file path carry no TESSound form, dispatch them with a null source
         TESForm* sourceSound = evt.soundFormID ? (TESForm*)Engine::LookupFormByID(evt.soundFormID) : nullptr;
-        if (!sourceSound) continue;
 
         g_eventManagerInterface->DispatchEvent(kSoundPlayedEvent, nullptr,
             filePath, (int)evt.soundFlags, (TESObjectREFR*)sourceSound);
