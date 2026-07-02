@@ -404,6 +404,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				LockpickOwnerKarmaFix::Init(Settings::bLockpickOwnerKarmaFix != 0);
 				if (Settings::bInlineGlyphFix)
 					InlineGlyphFix::Init();
+				OnEntryPointHandler::InstallListenerProbe();
+				OnCombatProcedureHandler::InstallListenerProbe();
 				AimZoomFirstPersonOnly::Init(Settings::bAimZoomFirstPersonOnly != 0);
 				ItemModFlagSafety::Init();
 				EventDispatch::RegisterEvents();
@@ -475,6 +477,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			BarterCommands::ClearState();
 			CompanionNoBlock::ClearState();
 			DoorPinchFix::ClearState();
+			OnEntryPointHandler::InstallListenerProbe();
+			OnCombatProcedureHandler::InstallListenerProbe();
 
 			OnEntryPointHandler::BuildEntryMap();
 			PerkRuntimeFramework::BuildIndex();
@@ -564,6 +568,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OwnerNameInfoHandler::Update();
 			KeyHeldHandler::Update();
 			DoubleTapHandler::Update();
+			OnEntryPointHandler::Update();
 			OnSoundPlayedHandler::Update();
 			OnJumpLandHandler::Update();
 			OnCasinoBanHandler::Update();

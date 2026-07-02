@@ -16,6 +16,49 @@ void InitEventManager(void* nvseInterface)
 		return;
 }
 
+static constexpr int kProbePriority = -9999;
+static constexpr UInt32 kProbeRefreshFrames = 30;
+
+bool ListenerProbe::Install()
+{
+	if (!g_eventManagerInterface ||
+		!g_eventManagerInterface->SetNativeEventHandlerWithPriority ||
+		!g_eventManagerInterface->RemoveNativeEventHandlerWithPriority ||
+		g_pluginHandle == kPluginHandle_Invalid)
+	{
+		installed = false;
+		hasListeners = true;
+		return false;
+	}
+
+	g_eventManagerInterface->RemoveNativeEventHandlerWithPriority(eventName, handler, kProbePriority);
+	installed = g_eventManagerInterface->SetNativeEventHandlerWithPriority(
+		eventName, handler, g_pluginHandle, handlerName, kProbePriority);
+	refreshCounter = kProbeRefreshFrames;
+	hasListeners = true;
+	return installed;
+}
+
+bool ListenerProbe::Refresh(bool force)
+{
+	if (!installed)
+		Install();
+
+	if (!installed || !g_eventManagerInterface || !g_eventManagerInterface->IsEventHandlerFirst) {
+		hasListeners = true;
+		return true;
+	}
+
+	if (!force && refreshCounter++ < kProbeRefreshFrames)
+		return hasListeners;
+
+	refreshCounter = 0;
+	hasListeners = !g_eventManagerInterface->IsEventHandlerFirst(
+		eventName, handler, kProbePriority,
+		nullptr, 0, nullptr, 0, nullptr, 0);
+	return hasListeners;
+}
+
 void RegisterEvents()
 {
 	if (!g_eventManagerInterface) return;

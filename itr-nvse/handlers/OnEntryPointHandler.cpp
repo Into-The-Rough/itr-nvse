@@ -113,6 +113,10 @@ static UInt32 s_ExecuteFunctionReturnAddr = 0x5E5ABE;
 
 static DWORD s_mainThreadId = 0;
 
+static void EntryPointProbe(TESObjectREFR*, void*) {}
+static EventDispatch::ListenerProbe s_probe = { "ITR:OnEntryPoint", "ITR_OnEntryPointProbe", EntryPointProbe };
+static volatile UInt8 s_hasListeners = 1;
+
 static __declspec(naked) void Hook_ExecuteFunctionCall()
 {
     __asm {
@@ -122,6 +126,8 @@ static __declspec(naked) void Hook_ExecuteFunctionCall()
         mov eax, fs:[0x24]                        //TEB->ClientId.UniqueThread (current tid)
         cmp eax, [s_mainThreadId]
         jne ai_thread
+        cmp byte ptr [s_hasListeners], 0
+        je ai_thread
 
         //filterForm1 lives in the first vararg slot ([ebp+0x10]) only when the entry
         //point has more than one filter arg (v17[0]=actor, v17[1]=filterForm1...).
@@ -173,5 +179,16 @@ bool Init(void* nvseInterface)
     }
 
     return true;
+}
+
+void InstallListenerProbe()
+{
+    s_probe.Install();
+    s_hasListeners = 1;
+}
+
+void Update()
+{
+    s_hasListeners = s_probe.Refresh(false) ? 1 : 0;
 }
 }

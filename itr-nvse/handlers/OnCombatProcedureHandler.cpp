@@ -88,7 +88,6 @@ static void InitVtables()
 static UInt32 GetProcedureType(void* procedure)
 {
     if (!procedure) return (UInt32)-1;
-    if (!s_vtablesInitialized) InitVtables();
 
     UInt32 vtable = *(UInt32*)procedure;
     for (int i = 0; i <= 12; i++)
@@ -96,9 +95,12 @@ static UInt32 GetProcedureType(void* procedure)
     return (UInt32)-1;
 }
 
-//candidate for listener-probe gating like onsoundplayed
+static void CombatProcedureProbe(TESObjectREFR*, void*) {}
+static EventDispatch::ListenerProbe s_probe = { "ITR:OnCombatProcedure", "ITR_OnCombatProcedureProbe", CombatProcedureProbe };
+
 static void __cdecl QueueCombatProcedureEvent(void* combatController, void* procedure, UInt32 isActionProcedure)
 {
+    if (!s_probe.hasListeners) return;
     if (!combatController || !procedure) return;
     if (OnCombatProcedureHandler::g_stateLockInit != 2) return;
 
@@ -119,9 +121,16 @@ static void __cdecl QueueCombatProcedureEvent(void* combatController, void* proc
 }
 
 namespace OnCombatProcedureHandler {
+void InstallListenerProbe()
+{
+    s_probe.Install();
+}
+
 void Update()
 {
     if (OnCombatProcedureHandler::g_stateLockInit != 2) return;
+
+    s_probe.Refresh(false);
 
     DWORD currentThreadId = GetCurrentThreadId();
     if (!OnCombatProcedureHandler::g_mainThreadId)
@@ -171,6 +180,9 @@ bool Init(void* nvseInterface)
 
     EnsureStateLockInitialized();
     OnCombatProcedureHandler::g_mainThreadId = GetCurrentThreadId();
+
+    //build the vtable map on the main thread before any AI-thread hook can read it
+    InitVtables();
 
     //both functions: push ebp; mov ebp,esp; sub esp,10h = 6 bytes
     if (!s_actionDetour.WriteRelJump(0x980110, Hook_SetActionProcedure, 6))
