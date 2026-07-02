@@ -173,4 +173,11 @@ void RegisterCommands(void* nvse)
 	nvseIntf->RegisterCommand(&kCommandInfo_SetPreventWeaponSwitch);
 	nvseIntf->RegisterCommand(&kCommandInfo_GetPreventWeaponSwitch);
 }
+
+void ClearState()
+{
+	EnsureLockInit();
+	ScopedLock lock(&g_lock);
+	g_count = 0;
+}
 }

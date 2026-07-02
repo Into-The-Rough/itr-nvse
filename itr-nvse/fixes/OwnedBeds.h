@@ -3,4 +3,5 @@
 namespace OwnedBeds {
 	void Init(bool enabled);
 	void SetEnabled(bool enabled);
+	void ClearState();
 }

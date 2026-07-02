@@ -435,6 +435,10 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			BarterCommands::ClearState();
 			CompanionNoBlock::ClearState();
 			DoorPinchFix::ClearState();
+			NoWeaponSearch::ClearState();
+			PreventWeaponSwitch::ClearState();
+			OwnedBeds::ClearState();
+			OnWitnessedHandler::ClearState();
 			OnJumpLandHandler::ClearState();
 			DialogueTextFilter::ClearState();
 			OnNearMissHandler::ClearState();
@@ -457,6 +461,10 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			HavokCommands::ClearState();
 			GestureCommand::Reset();
 			CrouchCommands::ClearState();
+			NoWeaponSearch::ClearState();
+			PreventWeaponSwitch::ClearState();
+			OwnedBeds::ClearState();
+			OnWitnessedHandler::ClearState();
 			ForceCombatTargetCommands::ClearState();
 			OnCasinoBanHandler::ClearState();
 			OnContactHandler::ClearState();

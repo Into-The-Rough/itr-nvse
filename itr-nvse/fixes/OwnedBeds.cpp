@@ -84,6 +84,10 @@ namespace OwnedBeds
 		g_enabled = enabled;
 	}
 
+	void ClearState() {
+		g_playerWarnedAboutBed = false;
+	}
+
 	void Init(bool enabled)
 	{
 		s_isOwnerCall.WriteRelCall(0x509679, IsAnOwnerHook);

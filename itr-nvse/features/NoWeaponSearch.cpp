@@ -187,4 +187,11 @@ void RegisterCommands(void* nvsePtr)
 	nvse->RegisterCommand(&kCommandInfo_SetNoWeaponSearch);
 	nvse->RegisterCommand(&kCommandInfo_GetNoWeaponSearch);
 }
+
+void ClearState()
+{
+	EnsureLockInit();
+	ScopedLock lock(&g_lock);
+	g_count = 0;
+}
 }

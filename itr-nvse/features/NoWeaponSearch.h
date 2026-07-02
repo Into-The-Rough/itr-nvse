@@ -6,6 +6,7 @@ class Actor;
 
 namespace NoWeaponSearch {
 	void Init();
+	void ClearState();
 	void RegisterCommands(void* nvse);
 	void Set(Actor* actor, bool disable);
 	bool Get(Actor* actor);
