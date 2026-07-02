@@ -7,6 +7,29 @@
 #include "nvse/GameObjects.h"
 #include "nvse/GameProcess.h"
 #include "nvse/GameEffects.h"
+#include "internal/CallTemplates.h"
+
+class ScopedCellRefLock
+{
+public:
+	explicit ScopedCellRefLock(TESObjectCELL* cell) : cell_(cell)
+	{
+		if (cell_)
+			ThisCall<void>(0x541AC0, cell_); //TESObjectCELL::LockRefLists
+	}
+
+	~ScopedCellRefLock()
+	{
+		if (cell_)
+			ThisCall<void>(0x541AE0, cell_); //TESObjectCELL::UnlockRefLists
+	}
+
+	ScopedCellRefLock(const ScopedCellRefLock&) = delete;
+	ScopedCellRefLock& operator=(const ScopedCellRefLock&) = delete;
+
+private:
+	TESObjectCELL* cell_;
+};
 
 inline Actor* ActorValueOwnerToActor(ActorValueOwner* owner)
 {

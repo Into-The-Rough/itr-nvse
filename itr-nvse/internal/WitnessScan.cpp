@@ -1,5 +1,6 @@
 #include "WitnessScan.h"
 #include "EngineFunctions.h"
+#include "EngineHelpers.h"
 #include "GameLayout.h"
 #include "settings.h"
 #include "nvse/GameObjects.h"
@@ -28,6 +29,7 @@ void FindWitnesses(Actor* perpetrator, const float* crimeLocXYZ,
 	float radiusSq = radius * radius;
 
 	TESObjectCELL* cell = perpetrator->parentCell;
+	ScopedCellRefLock refLock(cell);
 
 	for (auto iter = cell->objectList.Begin(); !iter.End(); ++iter)
 	{
@@ -41,7 +43,7 @@ void FindWitnesses(Actor* perpetrator, const float* crimeLocXYZ,
 		if (actor == perpetrator) continue;
 		if (!actor->baseProcess) continue;
 
-		//skip teammates - they never witness crimes committed by the player
+		//teammates never raise alarms against their own side
 		if (ActorIsTeammate(actor))
 			continue;
 

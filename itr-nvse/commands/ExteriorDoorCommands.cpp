@@ -1,5 +1,6 @@
 #include "ExteriorDoorCommands.h"
 #include "internal/CallTemplates.h"
+#include "internal/EngineHelpers.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
 #include "nvse/CommandTable.h"
@@ -276,28 +277,6 @@ namespace
 
 		s_routeCache.fallbacks.push_back({ targetSpace, door });
 	}
-
-	class ScopedCellRefLock
-	{
-	public:
-		explicit ScopedCellRefLock(TESObjectCELL* cell) : cell_(cell)
-		{
-			if (cell_)
-				ThisCall<void>(0x541AC0, cell_);
-		}
-
-		~ScopedCellRefLock()
-		{
-			if (cell_)
-				ThisCall<void>(0x541AE0, cell_);
-		}
-
-		ScopedCellRefLock(const ScopedCellRefLock&) = delete;
-		ScopedCellRefLock& operator=(const ScopedCellRefLock&) = delete;
-
-	private:
-		TESObjectCELL* cell_;
-	};
 
 	static bool ContainsCell(const std::vector<TESObjectCELL*>& cells, TESObjectCELL* cell)
 	{
