@@ -7,11 +7,15 @@
 
 #include "NavMeshInfoCrashFix.h"
 #include "internal/NVSEPluginAPI.h"
+#include "internal/Detours.h"
 
 #include "internal/globals.h"
 
 namespace NavMeshInfoCrashFix
 {
+	static Detours::JumpDetour s_detour;
+
+	//full replacement of GetFlag10, never falls through to the original
 	__declspec(naked) void Hook()
 	{
 		__asm
@@ -32,7 +36,9 @@ namespace NavMeshInfoCrashFix
 
 	void Init()
 	{
-		SafeWrite::WriteRelJump(0x68F320, (UInt32)Hook); //NavMeshInfo::GetFlag10
+		//push ebp; mov ebp,esp; push ecx; mov [ebp-4],ecx = 7 bytes
+		if (!s_detour.WriteRelJump(0x68F320, Hook, 7)) //NavMeshInfo::GetFlag10
+			Log("NavMeshInfoCrashFix: GetFlag10 already patched, skipping");
 	}
 }
 
