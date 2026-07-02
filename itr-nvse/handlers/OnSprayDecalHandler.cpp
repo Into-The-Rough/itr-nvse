@@ -10,7 +10,6 @@
 
 constexpr UInt32 kAddr_BGSDecalEmitter_Update = 0x4A2D50;
 constexpr UInt32 kAddr_AddDecalCallSite = 0x4A36FD;
-constexpr UInt32 kAddr_TESObjectCELL_AddDecal = 0x4A3FE0;
 
 struct BGSDecalEmitter {
 	UInt32 uiDecalsToEmit;   // +0x00
@@ -35,7 +34,7 @@ static void __fastcall HookEmitterUpdate(BGSDecalEmitter* this_, void* edx) {
 
 //replaces the call AddDecal at 0x4A36FD; same signature as TESObjectCELL::AddDecal
 static void __fastcall HookSprayAddDecal(void* cell, void* edx, void* decalData, int type, UInt8 forceAdd) {
-	((TESObjectCELL_AddDecal_t)kAddr_TESObjectCELL_AddDecal)(cell, decalData, type, forceAdd);
+	((TESObjectCELL_AddDecal_t)s_addDecalDetour.GetOverwrittenAddr())(cell, decalData, type, forceAdd);
 
 	if (!g_eventManagerInterface) return;
 	if (!g_currentEmitter || !g_currentEmitter->pImpactData) return;

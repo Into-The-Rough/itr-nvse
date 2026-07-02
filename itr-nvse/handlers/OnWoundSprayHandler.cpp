@@ -9,8 +9,6 @@
 #include "internal/GameLayout.h"
 
 constexpr UInt32 kAddr_Actor_CreateBlood = 0x88E8D0;
-constexpr UInt32 kAddr_BGSImpactData_GetIsParallax = 0x4A4120;
-constexpr UInt32 kAddr_TESObjectCELL_AddDecal = 0x4A3FE0;
 
 struct HitData {
 	void*  pSource;                  //+0x00
@@ -49,11 +47,11 @@ static void __fastcall HookCreateBlood(void* this_, void* edx, float a2, HitData
 //lines above the wall-splatter dispatch).
 static bool __fastcall HookCaptureWoundIPCT(void* this_, void* edx) {
 	g_currentCtx.pImpactData = this_;
-	return ((BGSImpactData_GetIsParallax_t)kAddr_BGSImpactData_GetIsParallax)(this_);
+	return ((BGSImpactData_GetIsParallax_t)s_getIsParallaxDetour.GetOverwrittenAddr())(this_);
 }
 
 static void __fastcall HookWoundAddDecal(void* cell, void* edx, void* decalData, int type, UInt8 forceAdd) {
-	((TESObjectCELL_AddDecal_t)kAddr_TESObjectCELL_AddDecal)(cell, decalData, type, forceAdd);
+	((TESObjectCELL_AddDecal_t)s_addDecalDetour.GetOverwrittenAddr())(cell, decalData, type, forceAdd);
 
 	if (!g_eventManagerInterface) return;
 	if (!g_currentCtx.pActor || !g_currentCtx.pHit || !g_currentCtx.pImpactData) return;
