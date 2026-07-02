@@ -492,28 +492,37 @@ static bool InstallDialoguePatches() {
 
 	//verify every site before writing anything - partial install would suppress
 	//vanilla first-person dialogue with no replacement camera
-	struct SiteCheck { UInt32 addr; UInt8 expect; const char* name; };
+	static const UInt8 kSite1[] = { 0xE8 };
+	static const UInt8 kSite2[] = { 0xE8 };
+	static const UInt8 kSite3[] = { 0x6A, 0x01, 0x8B, 0x8D, 0x64, 0xFF, 0xFF, 0xFF }; //push 1, mov ecx,[ebp-0x9C]
+	static const UInt8 kSite4[] = { 0xC6, 0x05, 0xD0, 0x21, 0x1F, 0x01, 0x01 };       //mov g_shouldRestoreFirstPerson, 1
+	static const UInt8 kSite5[] = { 0x0F, 0x84, 0x9E, 0x01, 0x00, 0x00 };             //jz +0x19E
+	static const UInt8 kSite6[] = { 0x0F, 0xB6, 0x45, 0xEB, 0x85, 0xC0, 0x75, 0x3F }; //movzx eax,[ebp-0x15], test, jnz
+	static const UInt8 kSite7[] = { 0xE8 };
+	static const UInt8 kSite8[] = { 0xE8 };
+	struct SiteCheck { UInt32 addr; const UInt8* expect; UInt32 len; const char* name; };
 	static const SiteCheck kSites[] = {
-		{ 0x953124, 0xE8, "site 1 (FocusOnActor::Show1stPerson)" },
-		{ 0x761DEF, 0xE8, "site 2 (DialogMenu::Create::Show1stPerson)" },
-		{ 0x953ABF, 0x6A, "site 3 (force-third-person branch 1)" },
-		{ 0x762E55, 0xC6, "site 4 (DoIdle save first-person)" },
-		{ 0x9533BE, 0x0F, "site 5 (dialogue zoom conditional)" },
-		{ 0x953BB4, 0x0F, "site 6 (fallback SetFOV)" },
-		{ 0x953B2F, 0xE8, "site 7 (PickAnimations)" },
-		{ 0x953AC7, 0xE8, "site 8 (SetFirstPerson)" },
+		{ 0x953124, kSite1, sizeof(kSite1), "site 1 (FocusOnActor::Show1stPerson)" },
+		{ 0x761DEF, kSite2, sizeof(kSite2), "site 2 (DialogMenu::Create::Show1stPerson)" },
+		{ 0x953ABF, kSite3, sizeof(kSite3), "site 3 (force-third-person branch 1)" },
+		{ 0x762E55, kSite4, sizeof(kSite4), "site 4 (DoIdle save first-person)" },
+		{ 0x9533BE, kSite5, sizeof(kSite5), "site 5 (dialogue zoom conditional)" },
+		{ 0x953BB4, kSite6, sizeof(kSite6), "site 6 (fallback SetFOV)" },
+		{ 0x953B2F, kSite7, sizeof(kSite7), "site 7 (PickAnimations)" },
+		{ 0x953AC7, kSite8, sizeof(kSite8), "site 8 (SetFirstPerson)" },
 	};
 	for (const auto& s : kSites)
 	{
-		if (*(UInt8*)s.addr != s.expect)
+		if (memcmp((const void*)s.addr, s.expect, s.len) != 0)
 		{
-			Log("DialogueCameraHandler: %s expected 0x%02X at 0x%08X, found 0x%02X - dialogue camera disabled", s.name, s.expect, s.addr, *(UInt8*)s.addr);
+			Log("DialogueCameraHandler: %s bytes at 0x%08X do not match vanilla - dialogue camera disabled", s.name, s.addr);
 			return false;
 		}
 	}
 
-	InstallCallSite(s_show1stPersonFocusCall, 0x953124, Hook_Show1stPerson_Focus, "site 1 (FocusOnActor::Show1stPerson)");
-	InstallCallSite(s_show1stPersonDialogCall, 0x761DEF, Hook_Show1stPerson_Dialog, "site 2 (DialogMenu::Create::Show1stPerson)");
+	bool ok = true;
+	ok &= InstallCallSite(s_show1stPersonFocusCall, 0x953124, Hook_Show1stPerson_Focus, "site 1 (FocusOnActor::Show1stPerson)");
+	ok &= InstallCallSite(s_show1stPersonDialogCall, 0x761DEF, Hook_Show1stPerson_Dialog, "site 2 (DialogMenu::Create::Show1stPerson)");
 
 	//site 3: FocusOnActor force-third-person branch (8 bytes: push 1 + mov ecx)
 	SafeWrite::WriteRelJump(0x953ABF, (UInt32)Hook_ForceThirdPerson_Branch1);
@@ -531,8 +540,15 @@ static bool InstallDialoguePatches() {
 	SafeWrite::WriteRelJump(0x953BB4, (UInt32)Hook_SkipFallbackFOV);
 	SafeWrite::WriteNop(0x953BB9, 3); //pad remainder of 8-byte overwrite
 
-	InstallCallSite(s_pickAnimationsCall, 0x953B2F, Hook_SkipPickAnimations, "site 7 (PickAnimations)");
-	InstallCallSite(s_setFirstPersonCall, 0x953AC7, Hook_SkipSetFirstPerson, "site 8 (SetFirstPerson)");
+	ok &= InstallCallSite(s_pickAnimationsCall, 0x953B2F, Hook_SkipPickAnimations, "site 7 (PickAnimations)");
+	ok &= InstallCallSite(s_setFirstPersonCall, 0x953AC7, Hook_SkipSetFirstPerson, "site 8 (SetFirstPerson)");
+
+	if (!ok)
+	{
+		//sites 3-6 pass through when the feature is off, so a partial install stays vanilla
+		Log("DialogueCameraHandler: call-site install failed, dialogue camera disabled");
+		Settings::bDialogueCamera = 0;
+	}
 
 	g_patchesInstalled = true;
 	return true;
