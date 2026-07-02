@@ -851,9 +851,13 @@ namespace ToggleAllPrimitives
 
 	void RegisterCommands(void* nvsePtr)
 	{
-		InstallLoad3DFixes();
-
 		NVSEInterface* nvse = reinterpret_cast<NVSEInterface*>(nvsePtr);
 		nvse->RegisterCommand(&kCommandInfo_ToggleAllPrimitives);
+	}
+
+	//code patches, runtime only - registration runs in the GECK too where these addresses differ
+	void InstallHooks()
+	{
+		InstallLoad3DFixes();
 	}
 }

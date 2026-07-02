@@ -399,6 +399,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bDetectionFollowerCrashFix)
 					DetectionFollowerCrashFix::Init();
 				if (Settings::bGetLineOfSightCrashFix)
+				ToggleAllPrimitives::InstallHooks();
 					GetLineOfSightCrashFix::Init();
 				LockpickOwnerKarmaFix::Init(Settings::bLockpickOwnerKarmaFix != 0);
 				if (Settings::bInlineGlyphFix)
