@@ -573,7 +573,7 @@
 					"title": "Door Pinch Fix",
 					"type": 5,
 					"enable": 1,
-					"mouse": "Temporarily disable nearby opening door collision so doors can't shove or trap you",
+					"mouse": "Temporarily disable nearby opening door collision so doors can't shove or trap you. Requires restart after changing.",
 					"vars": [{ "configINI": "Tweaks:bDoorPinchFix", "default": 1 }]
 				},
 				"22": {

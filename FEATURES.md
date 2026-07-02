@@ -123,15 +123,15 @@
 - ITR:OnMenuFilterChange - fires on menu filter tab change (menuID, oldFilter, newFilter, filterCount)
 - ITR:OnMenuSideChange - fires on menu side change (menuID, oldSide, newSide)
 - ITR:OnMenuListRefresh - fires after a menu's tile list rebuilds for any reason - add/remove/sell/drop/craft/equip (menuID). Inventory (1002), Container (1008), Barter (1053), Recipe (1077).
-- ITR:OnSoundPlayed - fires on sound playback (filePath, flags, sourceForm)
+- ITR:OnSoundPlayed - fires on sound playback (filePath, flags, sourceForm). sourceForm is 0 for sounds played by file path with no backing form
 - ITR:OnSoundCompleted - fires when tracked voice sound completes (filePath, flags, sourceForm)
 - ITR:OnContactBegin - fires when physics contact begins on watched actor (actor, contactType)
 - ITR:OnContactEnd - fires when physics contact ends on watched actor (actor, contactType)
-- ITR:OnWitnessed - fires per witness per crime (witness, perpetrator, crimeType, victim, detectionValue). Filterable on witness/perpetrator/victim refs/formlists/factions and on crimeType equality.
+- ITR:OnWitnessed - fires per witness per crime (witness, perpetrator, crimeType, victim, detectionValue). Filterable on witness/perpetrator/victim refs/formlists/factions and on crimeType equality. Trespass alarms are rate-limited to one event per witness per 3 seconds.
 - ITR:OnImpactDataSpawn - fires when a projectile resolves ImpactData on a non-actor hit (impactData, x, y, z, normalX, normalY, normalZ, projectile, target, weapon, material)
 - ITR:OnSprayDecal - fires per blood spray decal placement during limb sever/explode (impactData, x, y, z, normalX, normalY, normalZ)
 - ITR:OnWoundSpray - fires per wound blood spray on an actor (actor, impactData, x, y, z, dx, dy, dz, hitLocation, source, weapon)
-- ITR:OnNearMiss - fires when a projectile passes near an actor without hitting (actor, shooter, weapon, distance)
+- ITR:OnNearMiss - fires when a projectile passes near an actor without hitting (actor, shooter, weapon, distance). iCooldownMs has a 50ms floor
 - ITR:OnCasinoBan - fires when the player is banned from a casino (casino)
 - ITR:OnEffectApplied - fires when a magic effect is applied (target, magicItem, effectItemIndex, caster). magicItem is the parent spell/ingestible; effectItemIndex selects the effect within it
 - ITR:OnEffectRemoved - fires when a magic effect is removed (target, magicItem, effectItemIndex, caster)
@@ -191,6 +191,7 @@
 - GetLineOfSightCrashFix - fix crash from a null node in the line-of-sight check
 - LockpickOwnerKarmaFix - no karma loss picking a lock you already own
 - InlineGlyphFix - correct inline control-glyph sizing/placement in UI text
+- ItemModFlagSafety - guard weapon mod flag writes against invalid entries. When JIP LN is present this patches a jnz inside JIP's GetEntryDataModFlagsHook, verified by byte signature - a future JIP update that reshapes that hook silently disables this feature (check the log)
 - ConsoleLogCleaner - delete console log on startup
 
 ## Configuration
