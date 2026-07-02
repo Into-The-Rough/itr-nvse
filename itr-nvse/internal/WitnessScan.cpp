@@ -53,7 +53,7 @@ void FindWitnesses(Actor* perpetrator, const float* crimeLocXYZ,
 
 		int detVal = Engine::Actor_GetDetectionValue(actor, perpetrator);
 		if (detVal >= detectionThreshold)
-			out.push_back({ actor, detVal });
+			out.push_back({ actor, detVal, actor->refID });
 	}
 }
 

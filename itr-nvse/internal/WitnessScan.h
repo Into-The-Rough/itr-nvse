@@ -4,12 +4,15 @@
 
 #include <vector>
 
+#include "common/ITypes.h"
+
 class Actor;
 
 namespace WitnessScan {
 	struct Hit {
 		Actor* actor;
 		int    detectionValue;
+		UInt32 refID;
 	};
 
 	//if crimeLoc is null, uses perpetrator position

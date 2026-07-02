@@ -2,4 +2,5 @@
 
 namespace OnWitnessedHandler {
 	bool Init(void* nvseInterface);
+	void ClearState();
 }
