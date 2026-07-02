@@ -78,10 +78,10 @@
     </Link>
     <PostBuildEvent>
       <Message>Copying DLL and PDB to mod folder...</Message>
-      <Command>if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" copy "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
-if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"
-if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" copy "$(TargetPath)" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
-if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"</Command>
+      <Command>if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" copy /Y "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
+if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" if exist "$(TargetDir)$(TargetName).pdb" copy /Y "$(TargetDir)$(TargetName).pdb" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"
+if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" copy /Y "$(TargetPath)" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
+if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(TargetDir)$(TargetName).pdb" copy /Y "$(TargetDir)$(TargetName).pdb" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -110,10 +110,10 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     </Link>
     <PostBuildEvent>
       <Message>Copying DLL and PDB to mod folder...</Message>
-      <Command>if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" copy "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
-if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"
-if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" copy "$(TargetPath)" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
-if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(TargetDir)$(TargetName).pdb" copy "$(TargetDir)$(TargetName).pdb" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"</Command>
+      <Command>if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" copy /Y "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
+if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" if exist "$(TargetDir)$(TargetName).pdb" copy /Y "$(TargetDir)$(TargetName).pdb" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"
+if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" copy /Y "$(TargetPath)" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
+if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(TargetDir)$(TargetName).pdb" copy /Y "$(TargetDir)$(TargetName).pdb" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
