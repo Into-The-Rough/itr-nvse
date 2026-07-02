@@ -875,6 +875,9 @@ static void ApplyCameraNoise(float dt) {
 		{
 			float t = g_dollyProgress * g_dollyProgress * (3.0f - 2.0f * g_dollyProgress);
 			float dolly = t * g_dollyMaxDist;
+			float maxDolly = toDist - kMinShotDist; //dolly stops at the shot floor
+			if (maxDolly < 0.0f) maxDolly = 0.0f;
+			if (dolly > maxDolly) dolly = maxDolly;
 			camX += (toDirX / toDist) * dolly;
 			camY += (toDirY / toDist) * dolly;
 			camZ += (toDirZ / toDist) * dolly;
