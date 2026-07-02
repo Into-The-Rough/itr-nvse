@@ -3,7 +3,7 @@
 //pHkWorldObject->GethkWorld() via vtable[0x94], but the object's vtable
 //points to reused memory (e.g. animation strings). [vtable+0x94] reads 0,
 //call 0 crashes. the null case naturally falls through to AddObjects which
-//re-initializes the physics correctly.
+//re-initialises the physics correctly.
 
 #include "InitHavokCrashFix.h"
 #include "internal/NVSEPluginAPI.h"

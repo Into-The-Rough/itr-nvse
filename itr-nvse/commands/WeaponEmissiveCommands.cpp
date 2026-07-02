@@ -169,8 +169,8 @@ namespace
 		{"fEmitMult", kParamType_Float, 0},
 	};
 
-	DEFINE_COMMAND_PLUGIN(SetWeaponEmissiveColor, "Sets emissive color on 1st person weapon geometry", 0, 4, kParams_SetWeaponEmissiveColor);
-	DEFINE_COMMAND_PLUGIN(ClearWeaponEmissiveColor, "Restores original emissive color on 1st person weapon", 0, 0, nullptr);
+	DEFINE_COMMAND_PLUGIN(SetWeaponEmissiveColor, "Sets emissive colour on 1st person weapon geometry", 0, 4, kParams_SetWeaponEmissiveColor);
+	DEFINE_COMMAND_PLUGIN(ClearWeaponEmissiveColor, "Restores original emissive colour on 1st person weapon", 0, 0, nullptr);
 
 	bool Cmd_SetWeaponEmissiveColor_Execute(COMMAND_ARGS)
 	{

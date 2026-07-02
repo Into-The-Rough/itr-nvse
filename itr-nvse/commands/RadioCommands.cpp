@@ -204,7 +204,7 @@ static const char* GetPlayingTrackPath()
 	return nullptr;
 }
 
-//normalize runtime path for form matching
+//normalise runtime path for form matching
 //strips "data\sound\" prefix and "_mono"/"_stereo" suffix
 static void NormalizePath(const char* src, char* dst, size_t dstSize)
 {
