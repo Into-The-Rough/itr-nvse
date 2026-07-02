@@ -64,30 +64,21 @@ namespace OwnedCorpses
 	//reimplementation of GetOwnerRawForm (0x567790) with dead actor ownership
 	void* __fastcall GetOwnerRawFormHook(void* ref, void* edx)
 	{
+		if (!Engine::TESObjectREFR_IsActor(static_cast<TESObjectREFR*>(ref)))
+			return g_detour.GetTrampoline<void*(__thiscall*)(void*)>()(ref);
+
 		void* owner = ThisCall<void*>(0x567770, ref); //GetMyOwner (ExtraOwnership)
+		if (!g_enabled || owner)
+			return owner;
 
-		bool isActor = Engine::TESObjectREFR_IsActor(static_cast<TESObjectREFR*>(ref));
-		if (isActor)
-		{
-			if (!g_enabled)
-				return owner;
+		if (!Engine::Actor_IsDead(static_cast<Actor*>(ref), false))
+			return owner;
 
-			bool isDead = Engine::Actor_IsDead(static_cast<Actor*>(ref), false);
-			if (!isDead)
-				return owner;
+		//dead actor: zone/cell ownership first, then faction fallback
+		void* zoneOwner = GetZoneOrCellOwner(ref);
+		if (zoneOwner) return zoneOwner;
 
-			if (owner)
-				return owner;
-
-			//dead actor: zone/cell ownership first, then faction fallback
-			void* zoneOwner = GetZoneOrCellOwner(ref);
-			if (zoneOwner) return zoneOwner;
-
-			return GetBestFaction(static_cast<TESObjectREFR*>(ref));
-		}
-
-		//non-actor: full vanilla fallback chain via trampoline
-		return g_detour.GetTrampoline<void*(__thiscall*)(void*)>()(ref);
+		return GetBestFaction(static_cast<TESObjectREFR*>(ref));
 	}
 
 	static bool __fastcall IsDeadForStealAlarm(Actor* actor, void*)
