@@ -159,25 +159,44 @@ static int __fastcall HookProjectileUpdate(void* proj, void*, int a2) {
 	if (!active) return ret;
 	if (!TESFormIsActorRef(shooter) || !TESFormIsWeapon(weapon)) return ret;
 
-	//player rounds are near hitscan - one update, no reported motion - so sweep the projectile's
-	//forward travel vector instead of a frame delta. kVector is the last move delta (Projectile::Move
-	//-> SetVector), and the launch aim on the first frame
+	//kVector is the launch aim on the first update and the applied move delta afterwards
+	//(Projectile::Move -> SetVector)
 	const float* v = (const float*)((UInt8*)proj + 0x104); //kVector
 	const float vlen = sqrtf(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
 	if (vlen < 0.001f) return ret;
 
 	Vec3 pos;
 	GetRefPos(proj, &pos);
-	float range = *(float*)((UInt8*)proj + 0xD4); //fRange
-	if (range < 256.0f) range = 256.0f;
-	if (range > 8192.0f) range = 8192.0f;
 
-	const float inv = 1.0f / vlen;
-	const float dnx = v[0]*inv, dny = v[1]*inv, dnz = v[2]*inv;
-	//sweep from the muzzle forward - the shooter is excluded by ref, so no muzzle offset, which
-	//would otherwise clip close friendlies like a follower standing next to the player
-	Vec3 a = pos;
-	Vec3 b = { pos.x + dnx*range, pos.y + dny*range, pos.z + dnz*range };
+	Vec3 a, b;
+	const float lifeTime = *(const float*)((UInt8*)proj + 0xD8);
+	if (lifeTime <= *g_frameTimePtr * 1.5f) {
+		//launch update - player rounds are near hitscan, one update with no reported motion,
+		//so sweep the aim line out to weapon range. the shooter is excluded by ref, so no
+		//muzzle offset, which would otherwise clip close friendlies
+		float range = *(float*)((UInt8*)proj + 0xD4); //fRange
+		if (range < 256.0f) range = 256.0f;
+		if (range > 8192.0f) range = 8192.0f;
+
+		const float inv = 1.0f / vlen;
+		const float dnx = v[0]*inv, dny = v[1]*inv, dnz = v[2]*inv;
+
+		//a round that already struck something stops there - no near-misses behind cover
+		for (void** node = (void**)((UInt8*)proj + kProj_ImpactList); node; node = (void**)node[1]) {
+			if (!node[0]) continue;
+			const float* ip = (const float*)((UInt8*)node[0] + 0x04); //Projectile::ImpactData.pos
+			const float t = (ip[0]-pos.x)*dnx + (ip[1]-pos.y)*dny + (ip[2]-pos.z)*dnz;
+			if (t >= 0.0f && t < range) range = t;
+		}
+		if (range <= 0.0f) return ret;
+
+		a = pos;
+		b = { pos.x + dnx*range, pos.y + dny*range, pos.z + dnz*range };
+	} else {
+		//in flight - sweep only the path travelled this update
+		a = { pos.x - v[0], pos.y - v[1], pos.z - v[2] };
+		b = pos;
+	}
 
 	ScanFlight(proj, shooter, weapon, a, b);
 	return ret;

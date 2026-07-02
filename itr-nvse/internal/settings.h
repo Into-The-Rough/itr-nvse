@@ -185,7 +185,9 @@ namespace Settings
 
 		bOnNearMiss = GetINIInt("Tweaks", "bOnNearMiss", 0);
 		fNearMissRadius = (float)GetINIInt("OnNearMiss", "iRadius", 256);
+		//a per-actor floor stops the forward corridor re-dispatching every projectile update
 		iNearMissCooldownMs = GetINIInt("OnNearMiss", "iCooldownMs", 250);
+		if (iNearMissCooldownMs < 50) iNearMissCooldownMs = 50;
 
 	}
 }

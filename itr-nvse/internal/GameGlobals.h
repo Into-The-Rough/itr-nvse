@@ -44,6 +44,7 @@ inline BSSpinLock* const g_processListsActorLock = (BSSpinLock*)0x11F11A0;
 inline UInt8* const g_consoleStatePtr = (UInt8*)0x11DEA2E;
 inline UInt8* const g_godModeEnabledPtr = (UInt8*)0x11E07BA;
 inline float* const g_globalTimeMultiplierPtr = (float*)0x11AC3A0;
+inline float* const g_frameTimePtr = (float*)(0x11F6394 + 0x0C); //TimeGlobal::secondsPassed
 inline float* const g_iniMusicVolumePtr = (float*)0x11F6E44;
 inline void** const g_hudMainMenuPtr = (void**)0x11D96C0;
 inline char* const g_crosshairRefName = (char*)0x11D9C48;
