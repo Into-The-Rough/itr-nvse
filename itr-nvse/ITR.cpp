@@ -141,11 +141,6 @@ using ConsoleScriptRun_t = int(__thiscall*)(Script*, void*, int, TESObjectREFR*)
 static Detours::CallDetour s_consoleDispatchBatDetour;
 static Detours::CallDetour s_consoleDispatchInputDetour;
 
-struct EventManagerDispatchInterface {
-	void* registerEvent;
-	bool (*DispatchEvent)(const char* eventName, TESObjectREFR* thisObj, ...);
-};
-
 static const char* GetScriptText(Script* script)
 {
 	return script ? script->text : nullptr;
@@ -160,8 +155,7 @@ static void DispatchConsoleCommandEvent(const char* fullCommand, TESObjectREFR* 
 	if (!ConsoleCommand::ExtractCommandName(fullCommand, commandName, sizeof(commandName)))
 		return;
 
-	reinterpret_cast<EventManagerDispatchInterface*>(g_eventManagerInterface)->DispatchEvent("ITR:OnConsoleCommand", nullptr,
-		commandName, fullCommand, calleeRef);
+	EventDispatch::DispatchConsoleCommand(commandName, fullCommand, calleeRef);
 }
 
 static int ConsoleScriptRunCommon(Script* script, void* scriptContext, int a3,

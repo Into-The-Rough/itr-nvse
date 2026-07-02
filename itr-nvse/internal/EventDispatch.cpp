@@ -59,6 +59,68 @@ bool ListenerProbe::Refresh(bool force)
 	return hasListeners;
 }
 
+bool DispatchConsoleCommand(const char* commandName, const char* fullCommand, TESObjectREFR* calleeRef)
+{
+	if (!g_eventManagerInterface) return false;
+	return g_eventManagerInterface->DispatchEvent("ITR:OnConsoleCommand", nullptr,
+		commandName, fullCommand, calleeRef);
+}
+
+static bool EventResultAsBool(const NVSEArrayVarInterface::Element& result)
+{
+	switch (result.GetType()) {
+	case NVSEArrayVarInterface::Element::kType_Numeric: return result.num != 0.0;
+	case NVSEArrayVarInterface::Element::kType_Form:    return result.form != nullptr;
+	case NVSEArrayVarInterface::Element::kType_Array:   return result.arr != nullptr;
+	case NVSEArrayVarInterface::Element::kType_String:  return result.str && result.str[0] != '\0';
+	default: return false;
+	}
+}
+
+bool DispatchShowOffPreActivate(TESObjectREFR* player, TESForm* baseForm, TESObjectREFR* invRef)
+{
+	if (!g_eventManagerInterface) return true;
+
+	UInt32 shouldActivate = 1;
+
+	auto resultCallback = [](NVSEArrayVarInterface::Element& result, void* shouldActivateAddr) -> bool
+	{
+		UInt32& shouldActivateRef = *static_cast<UInt32*>(shouldActivateAddr);
+		if (shouldActivateRef && result.IsValid())
+			shouldActivateRef = EventResultAsBool(result) ? 1 : 0;
+		return true;
+	};
+
+	auto retn = g_eventManagerInterface->DispatchEventAlt(
+		"ShowOff:OnPreActivateInventoryItem",
+		resultCallback,
+		&shouldActivate,
+		player,
+		baseForm,
+		invRef,
+		&shouldActivate,
+		static_cast<UInt32>(0));
+
+	UInt32 isSpecialActivation = 0;
+	auto retnAlt = g_eventManagerInterface->DispatchEventAlt(
+		"ShowOff:OnPreActivateInventoryItemAlt",
+		resultCallback,
+		&shouldActivate,
+		player,
+		baseForm,
+		invRef,
+		&shouldActivate,
+		static_cast<UInt32>(0),
+		isSpecialActivation);
+
+	//unknown events never invoke the callback, only treat the result as authoritative if either event exists
+	if (retn == NVSEEventManagerInterface::kRetn_UnknownEvent &&
+		retnAlt == NVSEEventManagerInterface::kRetn_UnknownEvent)
+		return true;
+
+	return shouldActivate != 0;
+}
+
 void RegisterEvents()
 {
 	if (!g_eventManagerInterface) return;

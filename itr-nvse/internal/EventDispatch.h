@@ -17,10 +17,17 @@ inline void* PackEventFloatArg(float value)
 }
 
 class TESObjectREFR;
+class TESForm;
 
 namespace EventDispatch {
 	void InitEventManager(void* nvseInterface);
 	void RegisterEvents();
+
+	//typed dispatch wrappers for translation units stuck on the old SDK headers,
+	//which cannot include internal/NVSEPluginAPI.h without struct redefinitions
+	bool DispatchConsoleCommand(const char* commandName, const char* fullCommand, TESObjectREFR* calleeRef);
+	//ShowOff pre-activate gate for inventory refs - true means activation may proceed
+	bool DispatchShowOffPreActivate(TESObjectREFR* player, TESForm* baseForm, TESObjectREFR* invRef);
 
 	typedef void (*ProbeHandlerFn)(TESObjectREFR*, void*);
 
