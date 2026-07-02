@@ -1,5 +1,5 @@
-//Temporary path probes exposed as script commands.
-//Builds a standalone PathingRequest/Solution instead of reading an actor's live mover path.
+//temporary path probes exposed as script commands
+//builds a standalone PathingRequest/Solution instead of reading an actor's live mover path
 
 #include "PathingCommands.h"
 #include "internal/CallTemplates.h"

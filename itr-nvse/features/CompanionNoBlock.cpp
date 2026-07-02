@@ -25,7 +25,7 @@ namespace
 	bool g_interiorOnly = true;
 	bool g_hookInstalled = false;
 	volatile LONG g_releaseFrames = 30; //written on the main thread, read by the physics hook
-	volatile LONG g_stepCounter = 0; //InterlockedIncrement on the main thread; snapshotted by the physics hook
+	volatile LONG g_stepCounter = 0; //InterlockedIncrement on the main thread, snapshotted by the physics hook
 	UInt32 g_rebuildCountdown = 0;
 
 	CRITICAL_SECTION g_lock;

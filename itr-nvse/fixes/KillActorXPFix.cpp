@@ -14,9 +14,9 @@ namespace KillActorXPFix
 	constexpr uint32_t kAddr_ActorGetLevel = 0x87F9F0;
 	constexpr uint32_t kAddr_ReturnAfterHook = 0x5BE381;
 
-	//memory-indirect targets so the naked wrapper doesn't have to stage them in EAX.
-	//Actor::GetLevel returns the level in AX; the engine reads AX at kAddr_ReturnAfterHook
-	//(movzx edx, ax). Any post-call register staging would clobber that return value.
+	//memory-indirect targets so the naked wrapper doesn't have to stage them in eax
+	//Actor::GetLevel returns the level in ax, the engine reads ax at kAddr_ReturnAfterHook
+	//(movzx edx, ax) - any post-call register staging would clobber that return value
 	static UInt32 s_actorGetLevel = kAddr_ActorGetLevel;
 	static UInt32 s_returnAfterHook = kAddr_ReturnAfterHook;
 	static UInt32 s_xpBlockEnd = kAddr_XPBlockEnd;

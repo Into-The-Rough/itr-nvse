@@ -99,7 +99,7 @@ namespace
 		return GetTerrainZ(ref, outZ);
 	}
 
-	//Mirror the engine's position update path so the ref's 3D and collision stay in sync.
+	//mirror the engine's position update path so the ref's 3D and collision stay in sync
 	void SetPosAndUpdate3D(TESObjectREFR* ref, float newZ)
 	{
 		NiPoint3 pos = { ref->posX, ref->posY, newZ };
