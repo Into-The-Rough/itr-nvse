@@ -675,7 +675,7 @@ static void ApplyCameraAngle(CameraAngle angle) {
 	float midY = (py + ny) / 2.0f;
 	float midZ = (pz + nz) / 2.0f;
 
-	//scale offsets by distance - designed for ~100 unit separation
+	//dual-subject shots scale with actor separation, tuned for ~100 units, single-subject shots are fixed
 	float s = dist / 100.0f;
 	if (s < 0.5f) s = 0.5f;
 	if (s > 2.0f) s = 2.0f;
@@ -688,48 +688,48 @@ static void ApplyCameraAngle(CameraAngle angle) {
 
 	switch (angle) {
 		case kAngle_Vanilla:
-			candidates[0] = { px + dirX * 5.0f, py + dirY * 5.0f, pz + 50.0f*s, nx, ny, nz };
+			candidates[0] = { px + dirX * 5.0f, py + dirY * 5.0f, pz + 50.0f, nx, ny, nz };
 			candidates[1] = candidates[0];
 			break;
 		case kAngle_OverShoulder:
-			candidates[0] = { px - dirX*70*s + perpX*50*s, py - dirY*70*s + perpY*50*s, pz + 20.0f, nx, ny, nz };
-			candidates[1] = { px - dirX*70*s - perpX*50*s, py - dirY*70*s - perpY*50*s, pz + 20.0f, nx, ny, nz };
+			candidates[0] = { px - dirX*70 + perpX*50, py - dirY*70 + perpY*50, pz + 20.0f, nx, ny, nz };
+			candidates[1] = { px - dirX*70 - perpX*50, py - dirY*70 - perpY*50, pz + 20.0f, nx, ny, nz };
 			break;
 		case kAngle_NPCCloseup:
-			candidates[0] = { nx + dirX*40*s + perpX*80*s, ny + dirY*40*s + perpY*80*s, nz, px, py, pz };
-			candidates[1] = { nx + dirX*40*s - perpX*80*s, ny + dirY*40*s - perpY*80*s, nz, px, py, pz };
+			candidates[0] = { nx + dirX*40 + perpX*80, ny + dirY*40 + perpY*80, nz, px, py, pz };
+			candidates[1] = { nx + dirX*40 - perpX*80, ny + dirY*40 - perpY*80, nz, px, py, pz };
 			break;
 		case kAngle_TwoShot:
 			candidates[0] = { midX + perpX*120*s, midY + perpY*120*s, midZ + 20.0f, midX, midY, midZ };
 			candidates[1] = { midX - perpX*120*s, midY - perpY*120*s, midZ + 20.0f, midX, midY, midZ };
 			break;
 		case kAngle_NPCFace:
-			candidates[0] = { nx - dirX*60*s + perpX*20*s, ny - dirY*60*s + perpY*20*s, nz + 5.0f, nx, ny, nz };
-			candidates[1] = { nx - dirX*60*s - perpX*20*s, ny - dirY*60*s - perpY*20*s, nz + 5.0f, nx, ny, nz };
+			candidates[0] = { nx - dirX*60 + perpX*20, ny - dirY*60 + perpY*20, nz + 5.0f, nx, ny, nz };
+			candidates[1] = { nx - dirX*60 - perpX*20, ny - dirY*60 - perpY*20, nz + 5.0f, nx, ny, nz };
 			break;
 		case kAngle_LowAngle:
-			candidates[0] = { nx - dirX*80*s + perpX*30*s, ny - dirY*80*s + perpY*30*s, nz - 30.0f, nx, ny, nz };
-			candidates[1] = { nx - dirX*80*s - perpX*30*s, ny - dirY*80*s - perpY*30*s, nz - 30.0f, nx, ny, nz };
+			candidates[0] = { nx - dirX*80 + perpX*30, ny - dirY*80 + perpY*30, nz - 30.0f, nx, ny, nz };
+			candidates[1] = { nx - dirX*80 - perpX*30, ny - dirY*80 - perpY*30, nz - 30.0f, nx, ny, nz };
 			break;
 		case kAngle_HighAngle:
-			candidates[0] = { nx - dirX*60*s + perpX*30*s, ny - dirY*60*s + perpY*30*s, nz + 80.0f*s, nx, ny, nz };
-			candidates[1] = { nx - dirX*60*s - perpX*30*s, ny - dirY*60*s - perpY*30*s, nz + 80.0f*s, nx, ny, nz };
+			candidates[0] = { nx - dirX*60 + perpX*30, ny - dirY*60 + perpY*30, nz + 80.0f, nx, ny, nz };
+			candidates[1] = { nx - dirX*60 - perpX*30, ny - dirY*60 - perpY*30, nz + 80.0f, nx, ny, nz };
 			break;
 		case kAngle_PlayerFace:
-			candidates[0] = { px + perpX*80*s, py + perpY*80*s, pz, nx, ny, nz };
-			candidates[1] = { px - perpX*80*s, py - perpY*80*s, pz, nx, ny, nz };
+			candidates[0] = { px + perpX*80, py + perpY*80, pz, nx, ny, nz };
+			candidates[1] = { px - perpX*80, py - perpY*80, pz, nx, ny, nz };
 			break;
 		case kAngle_WideShot:
 			candidates[0] = { midX + perpX*200*s, midY + perpY*200*s, midZ + 60.0f*s, midX, midY, midZ };
 			candidates[1] = { midX - perpX*200*s, midY - perpY*200*s, midZ + 60.0f*s, midX, midY, midZ };
 			break;
 		case kAngle_NPCProfile:
-			candidates[0] = { nx + perpX*90*s, ny + perpY*90*s, nz, nx, ny, nz };
-			candidates[1] = { nx - perpX*90*s, ny - perpY*90*s, nz, nx, ny, nz };
+			candidates[0] = { nx + perpX*90, ny + perpY*90, nz, nx, ny, nz };
+			candidates[1] = { nx - perpX*90, ny - perpY*90, nz, nx, ny, nz };
 			break;
 		case kAngle_PlayerProfile:
-			candidates[0] = { px + perpX*90*s, py + perpY*90*s, pz, px, py, pz };
-			candidates[1] = { px - perpX*90*s, py - perpY*90*s, pz, px, py, pz };
+			candidates[0] = { px + perpX*90, py + perpY*90, pz, px, py, pz };
+			candidates[1] = { px - perpX*90, py - perpY*90, pz, px, py, pz };
 			break;
 		case kAngle_Overhead:
 			candidates[0] = { midX, midY, midZ + 150.0f*s, midX, midY, midZ };
