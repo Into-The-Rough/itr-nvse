@@ -213,6 +213,6 @@ void RegisterAllCommands(void* nvsePtr)
 	nvse->SetOpcodeBase(0x40C3);
 	DialogueCameraHandler::RegisterCommands3(nvse); //SetDialogueCameraAngleEnabled
 
-	nvse->SetOpcodeBase(0x410F);
+	nvse->SetOpcodeBase(0x40C4);
 	RaceEyeCommands::RegisterCommands(nvse); //AddRaceEye, RemoveRaceEye, ClearRaceEyes
 }
