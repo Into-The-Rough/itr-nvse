@@ -30,7 +30,8 @@ struct NiTObjectArrayView {
 struct NiAVObjectView {
 	UInt8 pad00[0x18];
 	void* parent;
-	UInt8 pad1C[0x34 - 0x1C];
+	void* collisionObject;
+	UInt8 pad20[0x34 - 0x20];
 	NiTransformView local;
 	NiTransformView world;
 };
@@ -91,6 +92,7 @@ static_assert(offsetof(NiTObjectArrayView<void*>, numObjs) == 0x0C);
 
 static_assert(sizeof(NiAVObjectView) == 0x9C);
 static_assert(offsetof(NiAVObjectView, parent) == 0x18);
+static_assert(offsetof(NiAVObjectView, collisionObject) == 0x1C);
 static_assert(offsetof(NiAVObjectView, local) == 0x34);
 static_assert(offsetof(NiAVObjectView, local.rotate) == 0x34);
 static_assert(offsetof(NiAVObjectView, local.translate) == 0x58);
@@ -136,6 +138,19 @@ inline NiNodeView* NiNodeAsView(void* node)
 inline NiMaterialPropertyView* NiGeometryGetMaterialProperty(void* geometry)
 {
 	return static_cast<NiGeometryMaterialView*>(geometry)->materialProperty;
+}
+
+inline void* NiAVObjectGetCollisionObject(void* object)
+{
+	return object ? NiAVObjectAsView(object)->collisionObject : nullptr;
+}
+
+inline void* NiAVObjectGetAsNiNode(void* object)
+{
+	if (!object)
+		return nullptr;
+	void** vtbl = *static_cast<void***>(object);
+	return reinterpret_cast<void*(__thiscall*)(void*)>(vtbl[3])(object); //NiAVObject::GetAsNiNode
 }
 
 inline UInt16 NiNodeGetChildLimit(void* node)

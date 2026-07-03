@@ -6,6 +6,7 @@
 
 constexpr UInt32 kHkpWorldObject_Collidable = 0x10;
 constexpr UInt8 kHkpWorldObject_CollisionTypeRigidBody = 1;
+constexpr UInt8 kHkpFilterFlag_NoCollision = 0x40; //collisionFilterInfo byte at hkObject+0x2D
 
 //havok layouts missing from the sdk, checked against falloutnv.exe
 
@@ -173,6 +174,19 @@ inline HkpRigidBodyView* HkpRigidBodyAsView(void* rigidBody)
 inline void* BhkWorldObjectGetHavokObject(void* worldObject)
 {
 	return worldObject ? static_cast<BhkSerializableView*>(worldObject)->hkObject : nullptr;
+}
+
+inline UInt8* HkpWorldObjectGetCollisionFilterFlags(void* hkObject)
+{
+	return hkObject ? static_cast<UInt8*>(hkObject) + 0x2D : nullptr;
+}
+
+inline void BhkWorldObjectUpdateCollisionFilter(void* worldObject)
+{
+	if (!worldObject)
+		return;
+	void** vtbl = *static_cast<void***>(worldObject);
+	reinterpret_cast<void(__thiscall*)(void*)>(vtbl[0xC4 / 4])(worldObject); //bhkWorldObject::UpdateCollisionFilter -> hkpWorld::updateCollisionFilterOnEntity
 }
 
 inline bool HkpRigidBodyIsMobile(void* rigidBody)

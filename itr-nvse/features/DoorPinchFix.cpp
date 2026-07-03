@@ -3,6 +3,9 @@
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
+#include "internal/GameLayout.h"
+#include "internal/HavokLayout.h"
+#include "internal/NiLayout.h"
 #include "nvse/GameForms.h"
 #include "nvse/GameObjects.h"
 
@@ -66,19 +69,54 @@ namespace
 		return openState == kOpenState_Opening || openState == kOpenState_Closing;
 	}
 
+	void SetNodeCollisionEnabled(void* node, bool enabled)
+	{
+		if (!node)
+			return;
+
+		if (void* colObj = NiAVObjectGetCollisionObject(node))
+		{
+			if (void* worldObject = BhkCollisionObjectAsView(colObj)->worldObject)
+			{
+				if (void* hkObject = BhkWorldObjectGetHavokObject(worldObject))
+				{
+					UInt8* flags = HkpWorldObjectGetCollisionFilterFlags(hkObject);
+					const bool noCollision = !enabled;
+					if (((*flags & kHkpFilterFlag_NoCollision) != 0) != noCollision)
+					{
+						if (noCollision)
+							*flags |= kHkpFilterFlag_NoCollision;
+						else
+							*flags &= ~kHkpFilterFlag_NoCollision;
+						BhkWorldObjectUpdateCollisionFilter(worldObject);
+					}
+				}
+			}
+		}
+
+		if (NiAVObjectGetAsNiNode(node))
+		{
+			void** children = NiNodeGetChildData(node);
+			const UInt16 count = NiNodeGetChildLimit(node);
+			for (UInt16 i = 0; i < count; ++i)
+				if (children[i])
+					SetNodeCollisionEnabled(children[i], enabled);
+		}
+	}
+
 	bool IsCollisionDisabled(TESObjectREFR* ref)
 	{
-		return ref && Engine::TESForm_GetNoCollision(ref);
+		void* node = ref ? TESObjectREFRGetNiNodeRaw(ref) : nullptr;
+		void* colObj = node ? NiAVObjectGetCollisionObject(node) : nullptr;
+		void* worldObject = colObj ? BhkCollisionObjectAsView(colObj)->worldObject : nullptr;
+		void* hkObject = BhkWorldObjectGetHavokObject(worldObject);
+		return hkObject && (*HkpWorldObjectGetCollisionFilterFlags(hkObject) & kHkpFilterFlag_NoCollision) != 0;
 	}
 
 	void SetCollisionEnabled(TESObjectREFR* ref, bool enabled)
 	{
-		if (!ref)
-			return;
-
-		const bool noCollision = !enabled;
-		if (Engine::TESForm_GetNoCollision(ref) != noCollision)
-			Engine::TESForm_SetNoCollision(ref, noCollision);
+		if (ref)
+			SetNodeCollisionEnabled(TESObjectREFRGetNiNodeRaw(ref), enabled);
 	}
 
 	void TrackDoor(TESObjectREFR* ref)
