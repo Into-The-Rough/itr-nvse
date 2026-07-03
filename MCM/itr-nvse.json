@@ -3,10 +3,13 @@
 	"displayName": "Into the Rough - NVSE",
 	"description": "Quality of life tweaks and fixes for Fallout New Vegas",
 	"saveFile": "itr-nvse.ini",
-	"minMCMVersion": 1.00,
-	"minModVersion": 1.00,
+	"minMCMVersion": 1.0,
+	"minModVersion": 1.0,
 	"requirements": [
-		{ "type": "file", "file": "NVSE/Plugins/scripts/ln_itr-nvse-mcm.txt" }
+		{
+			"type": "file",
+			"file": "NVSE/Plugins/scripts/ln_itr-nvse-mcm.txt"
+		}
 	],
 	"submenus": {
 		"1": {
@@ -26,28 +29,48 @@
 					"type": 5,
 					"enable": 1,
 					"mouse": "NPCs can now hurt each other with non-explosive weapons.",
-					"vars": [{ "configINI": "Tweaks:bFriendlyFire", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bFriendlyFire",
+							"default": 0
+						}
+					]
 				},
 				"3": {
 					"title": "VATS Extender",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Extend VATS target highlighting limit",
-					"vars": [{ "configINI": "Tweaks:bVATSExtender", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bVATSExtender",
+							"default": 0
+						}
+					]
 				},
 				"4": {
 					"title": "NPC Antidote Use",
 					"type": 5,
 					"enable": 1,
 					"mouse": "NPCs use antidotes when poisoned during combat",
-					"vars": [{ "configINI": "Tweaks:bNPCAntidoteUse", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bNPCAntidoteUse",
+							"default": 0
+						}
+					]
 				},
 				"5": {
 					"title": "Cure Timer",
 					"type": 2,
 					"enable": 1,
 					"mouse": "Cooldown in seconds between antidote uses",
-					"vars": [{ "configINI": "NPCAntidoteUse:iCureTimer", "default": 10 }],
+					"vars": [
+						{
+							"configINI": "NPCAntidoteUse:iCureTimer",
+							"default": 10
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 1,
@@ -61,7 +84,12 @@
 					"type": 2,
 					"enable": 1,
 					"mouse": "Skip cure if health below this percent - prioritize stimpaks",
-					"vars": [{ "configINI": "NPCAntidoteUse:iHealthThreshold", "default": 25 }],
+					"vars": [
+						{
+							"configINI": "NPCAntidoteUse:iHealthThreshold",
+							"default": 25
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 5,
@@ -75,14 +103,24 @@
 					"type": 5,
 					"enable": 1,
 					"mouse": "NPCs use doctor's bags when crippled in combat",
-					"vars": [{ "configINI": "Tweaks:bNPCDoctorsBagUse", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bNPCDoctorsBagUse",
+							"default": 0
+						}
+					]
 				},
 				"8": {
 					"title": "Use Timer",
 					"type": 2,
 					"enable": 1,
 					"mouse": "Cooldown in seconds between doctor's bag uses",
-					"vars": [{ "configINI": "NPCDoctorsBagUse:iUseTimer", "default": 15 }],
+					"vars": [
+						{
+							"configINI": "NPCDoctorsBagUse:iUseTimer",
+							"default": 15
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 1,
@@ -96,14 +134,24 @@
 					"type": 5,
 					"enable": 1,
 					"mouse": "Companions killing faction members doesn't give player infamy",
-					"vars": [{ "configINI": "Tweaks:bCompanionNoInfamy", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bCompanionNoInfamy",
+							"default": 0
+						}
+					]
 				},
 				"10": {
 					"title": "First Person Aim Zoom",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Only apply aiming camera zoom in first person",
-					"vars": [{ "configINI": "Tweaks:bAimZoomFirstPersonOnly", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bAimZoomFirstPersonOnly",
+							"default": 0
+						}
+					]
 				},
 				"11": {
 					"title": "Quick Read Note",
@@ -115,14 +163,24 @@
 					"type": 5,
 					"enable": 1,
 					"mouse": "Quick view notes and play holotapes on pickup. Enabling after startup requires restart.",
-					"vars": [{ "configINI": "Tweaks:bQuickReadNote", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bQuickReadNote",
+							"default": 0
+						}
+					]
 				},
 				"13": {
 					"title": "Timeout",
 					"type": 2,
 					"enable": 1,
 					"mouse": "Time in milliseconds the prompt remains active after picking up a note",
-					"vars": [{ "configINI": "QuickReadNote:iTimeoutMs", "default": 5000 }],
+					"vars": [
+						{
+							"configINI": "QuickReadNote:iTimeoutMs",
+							"default": 5000
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 500,
@@ -136,7 +194,12 @@
 					"type": 2,
 					"enable": 1,
 					"mouse": "Control ID that triggers quick view (6=Aim/Block)",
-					"vars": [{ "configINI": "QuickReadNote:iControlID", "default": 6 }],
+					"vars": [
+						{
+							"configINI": "QuickReadNote:iControlID",
+							"default": 6
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 1,
@@ -149,7 +212,12 @@
 					"type": 2,
 					"enable": 1,
 					"mouse": "Max lines before truncating (0=auto-calculate from screen height)",
-					"vars": [{ "configINI": "QuickReadNote:iMaxLines", "default": 0 }],
+					"vars": [
+						{
+							"configINI": "QuickReadNote:iMaxLines",
+							"default": 0
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 1,
@@ -167,14 +235,24 @@
 					"type": 5,
 					"enable": 1,
 					"mouse": "180 degree turn with modifier+run key",
-					"vars": [{ "configINI": "Tweaks:bQuick180", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bQuick180",
+							"default": 0
+						}
+					]
 				},
 				"18": {
 					"title": "Modifier Key",
 					"type": 2,
 					"enable": 1,
 					"mouse": "Modifier key VK code (0=None, 16=Shift, 17=Ctrl, 18=Alt)",
-					"vars": [{ "configINI": "Quick180:iModifierKey", "default": 16 }],
+					"vars": [
+						{
+							"configINI": "Quick180:iModifierKey",
+							"default": 16
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 1,
@@ -187,7 +265,12 @@
 					"type": 2,
 					"enable": 1,
 					"mouse": "Control ID to combine with modifier (5=Run)",
-					"vars": [{ "configINI": "Quick180:iControlID", "default": 5 }],
+					"vars": [
+						{
+							"configINI": "Quick180:iControlID",
+							"default": 5
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 1,
@@ -205,14 +288,24 @@
 					"type": 5,
 					"enable": 1,
 					"mouse": "Drop weapon with modifier+ready weapon key",
-					"vars": [{ "configINI": "Tweaks:bQuickDrop", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bQuickDrop",
+							"default": 0
+						}
+					]
 				},
 				"22": {
 					"title": "Modifier Key",
 					"type": 2,
 					"enable": 1,
 					"mouse": "Modifier key VK code (0=None, 16=Shift, 17=Ctrl, 18=Alt)",
-					"vars": [{ "configINI": "QuickDrop:iModifierKey", "default": 16 }],
+					"vars": [
+						{
+							"configINI": "QuickDrop:iModifierKey",
+							"default": 16
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 1,
@@ -225,7 +318,12 @@
 					"type": 2,
 					"enable": 1,
 					"mouse": "Control ID to combine with modifier (7=Ready Weapon)",
-					"vars": [{ "configINI": "QuickDrop:iControlID", "default": 7 }],
+					"vars": [
+						{
+							"configINI": "QuickDrop:iControlID",
+							"default": 7
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 1,
@@ -251,28 +349,48 @@
 					"type": 5,
 					"enable": 1,
 					"mouse": "Quick close message boxes with Enter/Space key. Enabling after startup requires restart.",
-					"vars": [{ "configINI": "Tweaks:bMessageBoxQuickClose", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bMessageBoxQuickClose",
+							"default": 1
+						}
+					]
 				},
 				"3": {
 					"title": "Save File Size",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Show file size in save/load menu",
-					"vars": [{ "configINI": "Tweaks:bSaveFileSize", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bSaveFileSize",
+							"default": 1
+						}
+					]
 				},
 				"4": {
 					"title": "Suppress Objectives",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Convert quest objectives popup to corner message. Requires restart after changing.",
-					"vars": [{ "configINI": "Tweaks:bSuppressObjectives", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bSuppressObjectives",
+							"default": 0
+						}
+					]
 				},
 				"5": {
 					"title": "Suppress Reputation",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Convert reputation change popup to corner message. Requires restart after changing.",
-					"vars": [{ "configINI": "Tweaks:bSuppressReputation", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bSuppressReputation",
+							"default": 0
+						}
+					]
 				},
 				"6": {
 					"title": "Audio & Visual",
@@ -284,14 +402,24 @@
 					"type": 5,
 					"enable": 1,
 					"mouse": "Mute audio when alt-tabbing out of the game",
-					"vars": [{ "configINI": "Tweaks:bAltTabMute", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bAltTabMute",
+							"default": 1
+						}
+					]
 				},
 				"8": {
 					"title": "No Door Fade",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Skip actor fade-out when entering doors",
-					"vars": [{ "configINI": "Tweaks:bNoDoorFade", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bNoDoorFade",
+							"default": 0
+						}
+					]
 				}
 			}
 		},
@@ -311,14 +439,24 @@
 					"type": 5,
 					"enable": 1,
 					"mouse": "Show popup when revisiting discovered locations",
-					"vars": [{ "configINI": "Tweaks:bLocationVisitPopup", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bLocationVisitPopup",
+							"default": 0
+						}
+					]
 				},
 				"3": {
 					"title": "Cooldown",
 					"type": 2,
 					"enable": 1,
 					"mouse": "Cooldown in seconds before showing popup for same location again (0 = show every time)",
-					"vars": [{ "configINI": "LocationVisitPopup:iCooldownSeconds", "default": 300 }],
+					"vars": [
+						{
+							"configINI": "LocationVisitPopup:iCooldownSeconds",
+							"default": 300
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 10,
@@ -332,7 +470,12 @@
 					"type": 5,
 					"enable": 1,
 					"mouse": "Disable the discovery sound jingle",
-					"vars": [{ "configINI": "LocationVisitPopup:bDisableSound", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "LocationVisitPopup:bDisableSound",
+							"default": 0
+						}
+					]
 				},
 				"5": {
 					"title": "Ownership Prompt",
@@ -344,28 +487,48 @@
 					"type": 5,
 					"enable": 1,
 					"mouse": "Show owner name on crosshair prompt",
-					"vars": [{ "configINI": "Tweaks:bOwnerNameInfo", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bOwnerNameInfo",
+							"default": 0
+						}
+					]
 				},
 				"7": {
 					"title": "Compatibility Mode",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Use 'Item (Owner)' format instead of 'Owner's Item'",
-					"vars": [{ "configINI": "OwnerNameInfo:bCompatibilityMode", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "OwnerNameInfo:bCompatibilityMode",
+							"default": 1
+						}
+					]
 				},
 				"8": {
 					"title": "Show Faction Name",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Show faction ownership",
-					"vars": [{ "configINI": "OwnerNameInfo:bShowFactionName", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "OwnerNameInfo:bShowFactionName",
+							"default": 1
+						}
+					]
 				},
 				"9": {
 					"title": "Show Name Only Crime",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Only show owner when taking would be a crime",
-					"vars": [{ "configINI": "OwnerNameInfo:bShowNameOnlyCrime", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "OwnerNameInfo:bShowNameOnlyCrime",
+							"default": 1
+						}
+					]
 				},
 				"10": {
 					"title": "Ownership Rules",
@@ -377,50 +540,89 @@
 					"type": 5,
 					"enable": 1,
 					"mouse": "Allow sleeping in owned beds with consequences",
-					"vars": [{ "configINI": "Tweaks:bOwnedBeds", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bOwnedBeds",
+							"default": 0
+						}
+					]
 				},
 				"12": {
 					"title": "Owned Corpses",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Looting dead NPCs in owned cells/zones counts as stealing",
-					"vars": [{ "configINI": "Tweaks:bOwnedCorpses", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bOwnedCorpses",
+							"default": 0
+						}
+					]
 				},
 				"13": {
 					"title": "Ash Pile Names",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Show original NPC name for ash piles",
-					"vars": [{ "configINI": "Tweaks:bAshPileNames", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bAshPileNames",
+							"default": 0
+						}
+					]
 				},
 				"14": {
 					"title": "Reverse Pickpocket No Karma",
 					"type": 5,
 					"enable": 1,
 					"mouse": "No karma loss when reverse pickpocketing non-explosives",
-					"vars": [{ "configINI": "Tweaks:bReversePickpocketNoKarma", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bReversePickpocketNoKarma",
+							"default": 0
+						}
+					]
 				},
 				"15": {
 					"title": "Door Package Ownership Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix NPCs with lock/unlock packages locking doors in cells they don't own",
-					"vars": [{ "configINI": "Tweaks:bDoorPackageOwnershipFix", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bDoorPackageOwnershipFix",
+							"default": 1
+						}
+					]
 				},
 				"16": {
 					"title": "NPC Door Unlock Block",
 					"type": 1,
 					"enable": 1,
 					"mouse": "0=Vanilla (guards/cell owners bypass), 1=Strict (only door owners), 2=Full (nobody bypasses)",
-					"vars": [{ "configINI": "Tweaks:iNPCDoorUnlockBlock", "default": 0 }],
-					"strings": ["Vanilla", "Strict", "Full Block"]
+					"vars": [
+						{
+							"configINI": "Tweaks:iNPCDoorUnlockBlock",
+							"default": 0
+						}
+					],
+					"strings": [
+						"Vanilla",
+						"Strict",
+						"Full Block"
+					]
 				},
 				"17": {
 					"title": "Lockpick Owner Karma Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "No lockpick karma loss when the player already owns the locked ref through cell or faction ownership",
-					"vars": [{ "configINI": "Tweaks:bLockpickOwnerKarmaFix", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bLockpickOwnerKarmaFix",
+							"default": 1
+						}
+					]
 				}
 			}
 		},
@@ -440,56 +642,96 @@
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix physics explosion in extreme slow motion",
-					"vars": [{ "configINI": "Tweaks:bSlowMotionPhysicsFix", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bSlowMotionPhysicsFix",
+							"default": 1
+						}
+					]
 				},
 				"3": {
 					"title": "Exploding Pants Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix explosive pants/held items detonating on holder",
-					"vars": [{ "configINI": "Tweaks:bExplodingPantsFix", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bExplodingPantsFix",
+							"default": 0
+						}
+					]
 				},
 				"4": {
 					"title": "Kill Actor XP Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Prevent XP from kill command on already-dead actors",
-					"vars": [{ "configINI": "Tweaks:bKillActorXPFix", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bKillActorXPFix",
+							"default": 1
+						}
+					]
 				},
 				"5": {
 					"title": "Armor DT/DR Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix NPC armor DT/DR not updating when they change armor",
-					"vars": [{ "configINI": "Tweaks:bArmorDTDRFix", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bArmorDTDRFix",
+							"default": 1
+						}
+					]
 				},
 				"6": {
 					"title": "Combat Item Timer Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix stimpak timer using wrong game setting",
-					"vars": [{ "configINI": "Tweaks:bCombatItemTimerFix", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bCombatItemTimerFix",
+							"default": 1
+						}
+					]
 				},
 				"7": {
 					"title": "Music Reset On Load",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Reset music state when loading a save - fixes stuck or missing music",
-					"vars": [{ "configINI": "Tweaks:bMusicResetOnLoad", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bMusicResetOnLoad",
+							"default": 1
+						}
+					]
 				},
 				"8": {
 					"title": "Inline Glyph Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Scale inline button glyphs to the tile's font and zoom (fixes oversized glyphs in ELMO, B42 Notify, etc)",
-					"vars": [{ "configINI": "Tweaks:bInlineGlyphFix", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bInlineGlyphFix",
+							"default": 0
+						}
+					]
 				},
 				"9": {
 					"title": "Inline Glyph Scale",
 					"type": 2,
 					"enable": 1,
 					"mouse": "Visual size multiplier for inline button glyphs, as percent",
-					"vars": [{ "configINI": "Tweaks:iInlineGlyphVisualScalePercent", "default": 88 }],
+					"vars": [
+						{
+							"configINI": "Tweaks:iInlineGlyphVisualScalePercent",
+							"default": 88
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 1,
@@ -508,28 +750,48 @@
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix projectile hit chance in VATS",
-					"vars": [{ "configINI": "Tweaks:bVATSProjectileFix", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bVATSProjectileFix",
+							"default": 1
+						}
+					]
 				},
 				"12": {
 					"title": "VATS Limb Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Hide dismembered limbs in VATS",
-					"vars": [{ "configINI": "Tweaks:bVATSLimbFix", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bVATSLimbFix",
+							"default": 0
+						}
+					]
 				},
 				"13": {
 					"title": "VATS Speech Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Prevent voice/dialogue from slowing down during VATS",
-					"vars": [{ "configINI": "Tweaks:bVATSSpeechFix", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bVATSSpeechFix",
+							"default": 0
+						}
+					]
 				},
 				"14": {
 					"title": "VATS Highlight Depth Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Experimental: make non-VATS additional-reference highlights test against world depth (made for Loot Locator)",
-					"vars": [{ "configINI": "Tweaks:bVATSHighlightDepthFix", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bVATSHighlightDepthFix",
+							"default": 0
+						}
+					]
 				},
 				"15": {
 					"title": "Crash Fixes",
@@ -541,47 +803,89 @@
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix crash when GetDetectionState called during cell transitions",
-					"vars": [{ "configINI": "Tweaks:bDetectionFollowerCrashFix", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bDetectionFollowerCrashFix",
+							"default": 1
+						}
+					]
 				},
 				"17": {
 					"title": "Pathing Null Actor Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix crash from null actor in pathing code",
-					"vars": [{ "configINI": "Tweaks:bPathingNullActorFix", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bPathingNullActorFix",
+							"default": 1
+						}
+					]
 				},
 				"18": {
 					"title": "NavMesh Info Crash Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix crash in NavMesh info processing",
-					"vars": [{ "configINI": "Tweaks:bNavMeshInfoCrashFix", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bNavMeshInfoCrashFix",
+							"default": 1
+						}
+					]
 				},
 				"19": {
 					"title": "Init Havok Crash Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Fix crash during Havok physics initialization",
-					"vars": [{ "configINI": "Tweaks:bInitHavokCrashFix", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bInitHavokCrashFix",
+							"default": 1
+						}
+					]
 				},
 				"20": {
+					"title": "Line Of Sight Crash Fix",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Fix crash when GetLineOfSight is called on a disabled actor",
+					"vars": [
+						{
+							"configINI": "Tweaks:bGetLineOfSightCrashFix",
+							"default": 1
+						}
+					]
+				},
+				"21": {
 					"title": "Collision",
 					"enable": 1,
 					"type": 0
 				},
-				"21": {
+				"22": {
 					"title": "Door Pinch Fix",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Temporarily disable nearby opening door collision so doors can't shove or trap you. Requires restart after changing.",
-					"vars": [{ "configINI": "Tweaks:bDoorPinchFix", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bDoorPinchFix",
+							"default": 1
+						}
+					]
 				},
-				"22": {
+				"23": {
 					"title": "Door Pinch Distance",
 					"type": 2,
 					"enable": 1,
 					"mouse": "Player distance in game units for temporarily disabling opening door collision",
-					"vars": [{ "configINI": "DoorPinchFix:iDistance", "default": 140 }],
+					"vars": [
+						{
+							"configINI": "DoorPinchFix:iDistance",
+							"default": 140
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 10,
@@ -590,12 +894,17 @@
 						"suffix": "u"
 					}
 				},
-				"23": {
+				"24": {
 					"title": "Door Pinch Timeout",
 					"type": 2,
 					"enable": 1,
 					"mouse": "Safety restore timeout in milliseconds if an opening sequence never reports finished",
-					"vars": [{ "configINI": "DoorPinchFix:iTimeoutMs", "default": 8000 }],
+					"vars": [
+						{
+							"configINI": "DoorPinchFix:iTimeoutMs",
+							"default": 8000
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 500,
@@ -604,19 +913,29 @@
 						"suffix": "ms"
 					}
 				},
-				"24": {
+				"25": {
 					"title": "Companion No Block",
 					"type": 5,
 					"enable": 1,
 					"mouse": "You and teammates ghost through each other after sustained contact so you can't block each other in tight spaces",
-					"vars": [{ "configINI": "Tweaks:bCompanionNoBlock", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bCompanionNoBlock",
+							"default": 0
+						}
+					]
 				},
-				"25": {
+				"26": {
 					"title": "Companion Release Frames",
 					"type": 2,
 					"enable": 1,
 					"mouse": "Frames of continuous contact before a player/companion pair ghosts through each other. Lower = ghosts sooner",
-					"vars": [{ "configINI": "CompanionNoBlock:iReleaseFrames", "default": 30 }],
+					"vars": [
+						{
+							"configINI": "CompanionNoBlock:iReleaseFrames",
+							"default": 30
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 5,
@@ -624,12 +943,36 @@
 						"valueMax": 120
 					}
 				},
-				"26": {
+				"27": {
+					"title": "Companion Restore Distance",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Separation distance in game units before a ghosted player/companion pair regains collision",
+					"vars": [
+						{
+							"configINI": "CompanionNoBlock:iRestoreDistance",
+							"default": 220
+						}
+					],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 10,
+						"valueMin": 50,
+						"valueMax": 500,
+						"suffix": "u"
+					}
+				},
+				"28": {
 					"title": "Companion Interior Only",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Only apply companion no-block in interior cells",
-					"vars": [{ "configINI": "CompanionNoBlock:bInteriorOnly", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "CompanionNoBlock:bInteriorOnly",
+							"default": 1
+						}
+					]
 				}
 			}
 		},
@@ -649,21 +992,36 @@
 					"type": 5,
 					"enable": 1,
 					"mouse": "Auto-enable god mode on new game/load",
-					"vars": [{ "configINI": "Tweaks:bAutoGodMode", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bAutoGodMode",
+							"default": 0
+						}
+					]
 				},
 				"3": {
 					"title": "Auto Quick Load",
 					"type": 5,
 					"enable": 1,
 					"mouse": "Auto-load quicksave when reaching start menu. Enabling after startup requires restart.",
-					"vars": [{ "configINI": "Tweaks:bAutoQuickLoad", "default": 0 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bAutoQuickLoad",
+							"default": 0
+						}
+					]
 				},
 				"4": {
 					"title": "Delay",
 					"type": 2,
 					"enable": 1,
 					"mouse": "Delay in milliseconds before loading quicksave (mods may need ~1500ms to init)",
-					"vars": [{ "configINI": "AutoQuickLoad:iDelayMs", "default": 1500 }],
+					"vars": [
+						{
+							"configINI": "AutoQuickLoad:iDelayMs",
+							"default": 1500
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 250,
@@ -682,7 +1040,12 @@
 					"type": 5,
 					"enable": 1,
 					"mouse": "Delete console log on startup",
-					"vars": [{ "configINI": "Tweaks:bConsoleLogCleaner", "default": 1 }]
+					"vars": [
+						{
+							"configINI": "Tweaks:bConsoleLogCleaner",
+							"default": 1
+						}
+					]
 				},
 				"7": {
 					"title": "Event Timings",
@@ -694,7 +1057,12 @@
 					"type": 2,
 					"enable": 1,
 					"mouse": "Maximum time between presses for double tap detection. Requires restart after changing.",
-					"vars": [{ "configINI": "Events:iDoubleTapThresholdMs", "default": 300 }],
+					"vars": [
+						{
+							"configINI": "Events:iDoubleTapThresholdMs",
+							"default": 300
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 25,
@@ -708,7 +1076,12 @@
 					"type": 2,
 					"enable": 1,
 					"mouse": "Hold time before key held events start firing. Requires restart after changing.",
-					"vars": [{ "configINI": "Events:iKeyHeldThresholdMs", "default": 500 }],
+					"vars": [
+						{
+							"configINI": "Events:iKeyHeldThresholdMs",
+							"default": 500
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 50,
@@ -722,13 +1095,115 @@
 					"type": 2,
 					"enable": 1,
 					"mouse": "Repeat interval for key held events after the initial trigger. Requires restart after changing.",
-					"vars": [{ "configINI": "Events:iKeyHeldRepeatMs", "default": 250 }],
+					"vars": [
+						{
+							"configINI": "Events:iKeyHeldRepeatMs",
+							"default": 250
+						}
+					],
 					"scale": {
 						"valueDecimal": 0,
 						"valueIncrement": 25,
 						"valueMin": 50,
 						"valueMax": 1000,
 						"suffix": "ms"
+					}
+				},
+				"11": {
+					"title": "Near Miss Event",
+					"type": 0,
+					"enable": 1
+				},
+				"12": {
+					"title": "Enable",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Fire ITR:OnNearMiss when a shot passes near an actor. Only useful for mods that listen for the event.",
+					"vars": [
+						{
+							"configINI": "Tweaks:bOnNearMiss",
+							"default": 0
+						}
+					]
+				},
+				"13": {
+					"title": "Radius",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Distance in game units from the projectile's flight path within which an actor counts as nearly missed",
+					"vars": [
+						{
+							"configINI": "OnNearMiss:iRadius",
+							"default": 256
+						}
+					],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 16,
+						"valueMin": 32,
+						"valueMax": 1024,
+						"suffix": "u"
+					}
+				},
+				"14": {
+					"title": "Cooldown",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Minimum time between near-miss events for the same shooter and victim, collapses shotgun pellets and throttles auto fire",
+					"vars": [
+						{
+							"configINI": "OnNearMiss:iCooldownMs",
+							"default": 250
+						}
+					],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 50,
+						"valueMin": 0,
+						"valueMax": 2000,
+						"suffix": "ms"
+					}
+				},
+				"15": {
+					"title": "Witness Event",
+					"type": 0,
+					"enable": 1
+				},
+				"16": {
+					"title": "Detection Threshold",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Detection value an actor needs toward the perpetrator to count as an ITR:OnWitnessed witness",
+					"vars": [
+						{
+							"configINI": "OnWitnessed:iDetectionThreshold",
+							"default": 25
+						}
+					],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 1,
+						"valueMin": 1,
+						"valueMax": 100
+					}
+				},
+				"17": {
+					"title": "Search Radius",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Radius in game units scanned for witnesses around a crime",
+					"vars": [
+						{
+							"configINI": "OnWitnessed:iSearchRadius",
+							"default": 2048
+						}
+					],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 256,
+						"valueMin": 256,
+						"valueMax": 8192,
+						"suffix": "u"
 					}
 				}
 			}
