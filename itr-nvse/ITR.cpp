@@ -406,6 +406,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				OnSoundPlayedHandler::InstallListenerProbes();
 				OnEntryPointHandler::InstallListenerProbe();
 				OnCombatProcedureHandler::InstallListenerProbe();
+				OnNearMissHandler::InstallListenerProbe();
 				PerkRuntimeFramework::BuildIndex();
 				g_hooksInstalled = true;
 			}
@@ -479,6 +480,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OnSoundPlayedHandler::InstallListenerProbes();
 			OnEntryPointHandler::InstallListenerProbe();
 			OnCombatProcedureHandler::InstallListenerProbe();
+			OnNearMissHandler::InstallListenerProbe();
 			DialogueTextFilter::ClearState();
 			OnNearMissHandler::ClearState();
 			OnEffectHandler::ClearState();

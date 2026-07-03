@@ -39,6 +39,10 @@ static Detours::JumpDetour s_detour;
 static std::unordered_map<UInt64, UInt32> s_lastFire;
 static std::vector<QueuedNearMiss> s_pending;
 
+static void NearMissProbe(TESObjectREFR*, void*) {}
+static EventDispatch::ListenerProbe s_probe = { "ITR:OnNearMiss", "ITR_OnNearMissProbe", NearMissProbe };
+static volatile UInt8 s_hasListeners = 1;
+
 static void GetRefPos(void* ref, Vec3* out) {
 	const float* p = (const float*)((UInt8*)ref + kRefr_Position);
 	out->x = p[0]; out->y = p[1]; out->z = p[2];
@@ -148,7 +152,7 @@ static void ScanFlight(void* proj, TESObjectREFR* shooter, TESObjectWEAP* weapon
 static int __fastcall HookProjectileUpdate(void* proj, void*, int a2) {
 	TESObjectREFR* shooter = nullptr;
 	TESObjectWEAP* weapon = nullptr;
-	const bool active = Settings::bOnNearMiss && g_eventManagerInterface;
+	const bool active = s_hasListeners && g_eventManagerInterface;
 	if (active) {
 		shooter = ProjectileGetSourceRef(proj);
 		weapon = ProjectileGetSourceWeapon(proj);
@@ -216,7 +220,13 @@ void ClearState() {
 	s_lastFire.clear();
 }
 
+void InstallListenerProbe() {
+	s_probe.Install();
+	s_hasListeners = 1;
+}
+
 void Update() {
+	s_hasListeners = s_probe.Refresh(false) ? 1 : 0;
 	if (s_pending.empty() || !g_eventManagerInterface) {
 		s_pending.clear();
 		return;
