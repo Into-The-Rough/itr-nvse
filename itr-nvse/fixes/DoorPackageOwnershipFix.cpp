@@ -15,9 +15,6 @@ namespace DoorPackageOwnershipFix
 	static Detours::CallDetour s_lockDoorsIsOwnerCall;
 	static Detours::CallDetour s_unlockDoorsIsOwnerCall;
 
-	typedef bool (__thiscall* _IsInFaction)(Actor* actor, TESForm* faction);
-	static _IsInFaction IsInFaction = (_IsInFaction)0x89A9A0;
-
 	inline bool IsCellLoaded(TESObjectCELL* cell)
 	{
 		if (!cell) return false;
@@ -32,21 +29,31 @@ namespace DoorPackageOwnershipFix
 		return ownership ? ownership->owner : nullptr;
 	}
 
+	//actor's base is in the faction if its faction list holds a matching entry
+	bool ActorInFaction(TESActorBase* actorBase, TESForm* faction)
+	{
+		auto* node = actorBase->baseData.factionList.Head();
+		while (node && node->item)
+		{
+			if (node->item->faction == faction)
+				return true;
+			node = node->next;
+		}
+		return false;
+	}
+
 	//check if actor owns the cell (or is in the owning faction)
 	bool ActorOwnsCell(Actor* actor, TESForm* cellOwner)
 	{
 		if (!actor || !cellOwner) return true; //safe default
 
-		if (cellOwner->typeID == kFormType_Faction)
-		{
-			return IsInFaction(actor, cellOwner);
-		}
-
-		//cell owner is an NPC - check if actor's base form matches
-		//actor is a reference, owner is a base form
-		TESForm* actorBase = actor->baseForm;
+		auto* actorBase = static_cast<TESActorBase*>(actor->baseForm);
 		if (!actorBase) return true;
 
+		if (cellOwner->typeID == kFormType_Faction)
+			return ActorInFaction(actorBase, cellOwner);
+
+		//cell owner is an NPC, compare against the actor's base form
 		return actorBase->refID == cellOwner->refID;
 	}
 
