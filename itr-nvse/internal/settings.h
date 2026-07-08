@@ -12,6 +12,7 @@ namespace Settings
 	inline int bQuickDrop = 0;
 	inline int bQuick180 = 0;
 	inline int bAimZoomFirstPersonOnly = 0;
+	inline int bDebugLog = 0;
 
 	inline int iQuickDropModifierKey = VK_SHIFT;
 	inline int iQuickDropControlID = 7; //ready weapon
@@ -103,6 +104,7 @@ namespace Settings
 		if (lastSlash) *lastSlash = '\0';
 		strcat_s(iniPath, "\\Data\\config\\itr-nvse.ini");
 
+		bDebugLog = GetINIInt("Debug", "bDebugLog", 0);
 		bAutoGodMode = GetINIInt("Tweaks", "bAutoGodMode", 0);
 		bAutoQuickLoad = GetINIInt("Tweaks", "bAutoQuickLoad", 0);
 		bMessageBoxQuickClose = GetINIInt("Tweaks", "bMessageBoxQuickClose", 1);

@@ -896,14 +896,20 @@ void RegisterCommands(void* nvsePtr)
 void RegisterCommands2(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-#ifdef _DEBUG
-	nvse->RegisterCommand(&kCommandInfo_DumpCombatTarget);
-#endif
 	nvse->RegisterTypedCommand(&kCommandInfo_GetTargetLastSeenLocation, kRetnType_Array);
 	nvse->RegisterTypedCommand(&kCommandInfo_GetTargetDetectedLocation, kRetnType_Array);
 	nvse->RegisterTypedCommand(&kCommandInfo_GetTargetLastFullyVisibleLocation, kRetnType_Array);
 	nvse->RegisterTypedCommand(&kCommandInfo_GetTargetInitialLocation, kRetnType_Array);
 }
+
+#ifdef _DEBUG
+//own opcode base so the release command layout never shifts
+void RegisterDebugCommands(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	nvse->RegisterCommand(&kCommandInfo_DumpCombatTarget);
+}
+#endif
 
 void RegisterCommands3(void* nvsePtr)
 {

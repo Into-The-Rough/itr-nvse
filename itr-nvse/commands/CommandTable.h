@@ -17,11 +17,11 @@
 // 0x4022  Duplicate
 // 0x4023  GetAvailableRecipes
 // 0x4024  ChangeRadioTrack
-// 0x4025  DumpCombatTarget (_DEBUG only)
-// 0x4026  GetTargetLastSeenLocation
-// 0x4027  GetTargetDetectedLocation
-// 0x4028  GetTargetLastFullyVisibleLocation
-// 0x4029  GetTargetInitialLocation
+// 0x4025  GetTargetLastSeenLocation
+// 0x4026  GetTargetDetectedLocation
+// 0x4027  GetTargetLastFullyVisibleLocation
+// 0x4028  GetTargetInitialLocation
+// 0x4029  DumpCombatTarget (Debug only)
 // 0x402A  SetNoWeaponSearch
 // 0x402B  GetNoWeaponSearch
 // 0x402C  SetPreventWeaponSwitch
@@ -95,9 +95,15 @@
 // 0x40BB  RagdollLimb
 // 0x40BC  SetEyeMesh
 // 0x40BD  ClearEyeMesh
+// 0x40BE  StartNewGame
 // 0x40BF  SetAimZoomFirstPersonOnly
 // 0x40C0  GetAimZoomFirstPersonOnly
 // 0x40C1  FakeImpact
+// 0x40C2  CenterOnCellAlt
+// 0x40C3  SetDialogueCameraAngleEnabled
+// 0x40C4  AddRaceEye
+// 0x40C5  RemoveRaceEye
+// 0x40C6  ClearRaceEyes
 // 0x410E  Gesture
 
 

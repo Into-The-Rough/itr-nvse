@@ -85,6 +85,7 @@
 #include "commands/GestureCommand.h"
 #include "commands/ToggleAllPrimitives.h"
 #include "commands/CenterOnCellAltCommand.h"
+#include "commands/StartNewGameCommand.h"
 #include "features/LocationVisitPopup.h"
 #include "features/QuickReadNote.h"
 #include "features/VATSExtender.h"
@@ -247,6 +248,18 @@ static CRITICAL_SECTION g_logLock;
 static volatile LONG g_logLockInit = 0;
 static bool g_vatsSpeechFixInitialized = false;
 static bool g_vatsSpeechFixDisabledByStewie = false;
+
+//gated by Debug\bDebugLog, all Log() calls are no-ops while closed
+static void OpenDebugLog()
+{
+	if (!Settings::bDebugLog || g_logFile) return;
+	char logPath[MAX_PATH];
+	GetModuleFileNameA(nullptr, logPath, MAX_PATH);
+	char* lastSlash = strrchr(logPath, '\\');
+	if (lastSlash) *lastSlash = '\0';
+	strcat_s(logPath, "\\itr-nvse.log");
+	fopen_s(&g_logFile, logPath, "w");
+}
 
 void Log(const char* fmt, ...)
 {
@@ -427,6 +440,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 		case NVSEMessagingInterface::kMessage_PreLoadGame:
 			g_isLoadingSave = true;
+			StartNewGameCommand::Abort();
 			HavokCommands::ClearState();
 			DetectionSoundCommands::ClearState();
 			BarterCommands::ClearState();
@@ -501,6 +515,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					bool oldSuppressObjectives = Settings::bSuppressObjectives != 0;
 					bool oldSuppressReputation = Settings::bSuppressReputation != 0;
 					Settings::Load();
+					OpenDebugLog();
 					DialogueCameraHandler::SetEnabled(Settings::bDialogueCamera != 0);
 
 					LocationVisitPopup::UpdateSettings(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
@@ -591,6 +606,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			ToggleAllPrimitives::Update();
 			DetectionSoundCommands::Update();
 			CenterOnCellAltCommand::Update();
+			StartNewGameCommand::Update();
 			break;
 	}
 }
@@ -658,6 +674,7 @@ namespace ITR
 			return false;
 
 		Settings::Load();
+		OpenDebugLog();
 
 		if (Settings::bAutoQuickLoad)
 			AutoQuickLoad::InstallHook();

@@ -34,6 +34,7 @@
 #include "commands/DetectionSoundCommands.h"
 #include "commands/BarterCommands.h"
 #include "commands/CenterOnCellAltCommand.h"
+#include "commands/StartNewGameCommand.h"
 #include "features/CameraOverride.h"
 #include "features/NoWeaponSearch.h"
 #include "features/PreventWeaponSwitch.h"
@@ -202,6 +203,9 @@ void RegisterAllCommands(void* nvsePtr)
 #ifdef _DEBUG
 	nvse->SetOpcodeBase(0x4067);
 	CommandBoundsCommand::RegisterCommands(nvse); //RunITRCommandBounds
+
+	nvse->SetOpcodeBase(0x4029);
+	ImperativeCommands::RegisterDebugCommands(nvse); //DumpCombatTarget
 #endif
 
 	nvse->SetOpcodeBase(0x40AC);
@@ -215,4 +219,7 @@ void RegisterAllCommands(void* nvsePtr)
 
 	nvse->SetOpcodeBase(0x40C4);
 	RaceEyeCommands::RegisterCommands(nvse); //AddRaceEye, RemoveRaceEye, ClearRaceEyes
+
+	nvse->SetOpcodeBase(0x40BE);
+	StartNewGameCommand::RegisterCommands(nvse); //StartNewGame
 }

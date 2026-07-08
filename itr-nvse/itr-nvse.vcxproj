@@ -227,6 +227,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="commands\DetectionSoundCommands.cpp" />
     <ClCompile Include="commands\BarterCommands.cpp" />
     <ClCompile Include="commands\CenterOnCellAltCommand.cpp" />
+    <ClCompile Include="commands\StartNewGameCommand.cpp" />
     <ClCompile Include="commands\GestureCommand.cpp" />
     <ClCompile Include="handlers\OnWitnessedHandler.cpp" />
     <ClCompile Include="handlers\OnImpactDataSpawnHandler.cpp" />
@@ -349,6 +350,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="commands\DetectionSoundCommands.h" />
     <ClInclude Include="commands\BarterCommands.h" />
     <ClInclude Include="commands\CenterOnCellAltCommand.h" />
+    <ClInclude Include="commands\StartNewGameCommand.h" />
     <ClInclude Include="commands\GestureCommand.h" />
     <ClInclude Include="handlers\OnWitnessedHandler.h" />
     <ClInclude Include="handlers\OnImpactDataSpawnHandler.h" />

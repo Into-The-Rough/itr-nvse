@@ -191,7 +191,7 @@
 - GetLineOfSightCrashFix - fix crash from a null node in the line-of-sight check
 - LockpickOwnerKarmaFix - no karma loss picking a lock you already own
 - InlineGlyphFix - correct inline control-glyph sizing/placement in UI text
-- ItemModFlagSafety - guard weapon mod flag writes against invalid entries. When JIP LN is present this patches a jnz inside JIP's GetEntryDataModFlagsHook, verified by byte signature - a future JIP update that reshapes that hook silently disables this feature (check the log)
+- ItemModFlagSafety - guard weapon mod flag writes against invalid entries. When JIP LN is present this patches a jnz inside JIP's GetEntryDataModFlagsHook, verified by byte signature - a future JIP update that reshapes that hook silently disables this feature (set bDebugLog=1 under [Debug] and check itr-nvse.log in the game folder)
 - ConsoleLogCleaner - delete console log on startup
 
 ## Configuration
