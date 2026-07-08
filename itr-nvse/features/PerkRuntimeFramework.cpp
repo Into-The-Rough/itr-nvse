@@ -48,7 +48,7 @@ namespace
 	constexpr UInt32 kCond_IsWeaponInList = 399;
 	constexpr UInt32 kCond_HasPerk = 449;
 	constexpr UInt32 kCond_GetPermanentActorValue = 495;
-	constexpr UInt8 kMaxEntryPointFilterTabs = 10;
+	constexpr UInt8 kMaxEntryPointFilterTabs = 3; //EntryPointConditions is exactly tab1..tab3, conditionTabs above 3 is malformed data
 
 	constexpr UInt16 kPerkEntryType_Quest = 0x0C24;
 	constexpr UInt16 kPerkEntryType_Ability = 0x0B27;
