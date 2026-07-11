@@ -52,6 +52,13 @@
 #include "handlers/OnVATSStateHandler.h"
 #include "handlers/OnCasinoBanHandler.h"
 #include "handlers/OnPrePickUpHandler.h"
+#include "handlers/OnPreWeaponSwitchHandler.h"
+#include "handlers/OnKnockdownHandler.h"
+#include "handlers/OnPreFastTravelHandler.h"
+#include "handlers/OnTileValueChangeHandler.h"
+#include "handlers/OnDialogueMenuBuildHandler.h"
+#include "handlers/OnPreDeathHandler.h"
+#include "handlers/OnPreDamageHandler.h"
 
 #include "fixes/SlowMotionPhysicsFix.h"
 #include "fixes/VATSProjectileFix.h"
@@ -80,6 +87,8 @@
 #include "fixes/InlineGlyphFix.h"
 #include "features/MessageBoxQuickClose.h"
 #include "features/PreventWeaponSwitch.h"
+#include "features/RadioInjection.h"
+#include "features/WakeyWakey.h"
 #include "features/ELMO.h"
 #include "commands/GroundCommands.h"
 #include "commands/GestureCommand.h"
@@ -415,10 +424,15 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				ToggleAllPrimitives::InstallHooks();
 				EventDispatch::RegisterEvents();
 				WeatherChangeEvent::Init();
+				WakeyWakey::Init(Settings::bWakeyWakey != 0, Settings::fWakeDistance,
+					Settings::fQuietWakeDistance, Settings::iWakeCooldownMs);
 				OnJumpLandHandler::InstallListenerProbes();
 				OnSoundPlayedHandler::InstallListenerProbes();
 				OnEntryPointHandler::InstallListenerProbe();
 				OnCombatProcedureHandler::InstallListenerProbe();
+				OnKnockdownHandler::InstallListenerProbe();
+				OnPreDeathHandler::InstallListenerProbe();
+				OnPreDamageHandler::InstallListenerProbe();
 				OnNearMissHandler::InstallListenerProbe();
 				PerkRuntimeFramework::BuildIndex();
 				g_hooksInstalled = true;
@@ -452,6 +466,12 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OnEffectHandler::ClearState();
 			NoWeaponSearch::ClearState();
 			PreventWeaponSwitch::ClearState();
+			OnPreWeaponSwitchHandler::ClearState();
+			OnKnockdownHandler::ClearState();
+			OnTileValueChangeHandler::ClearState();
+			OnDialogueMenuBuildHandler::ClearState();
+			OnDialogueMenuBuildHandler::ClearRules();
+			RadioInjection::ClearState();
 			OwnedBeds::ClearState();
 			OnWitnessedHandler::ClearState();
 			break;
@@ -478,6 +498,12 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OnVATSStateHandler::ClearState();
 			NoWeaponSearch::ClearState();
 			PreventWeaponSwitch::ClearState();
+			OnPreWeaponSwitchHandler::ClearState();
+			OnKnockdownHandler::ClearState();
+			OnTileValueChangeHandler::ClearState();
+			OnDialogueMenuBuildHandler::ClearState();
+			OnDialogueMenuBuildHandler::ClearRules();
+			RadioInjection::ClearState();
 			OwnedBeds::ClearState();
 			OnWitnessedHandler::ClearState();
 			ToggleAllPrimitives::Reset();
@@ -494,6 +520,9 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OnSoundPlayedHandler::InstallListenerProbes();
 			OnEntryPointHandler::InstallListenerProbe();
 			OnCombatProcedureHandler::InstallListenerProbe();
+			OnKnockdownHandler::InstallListenerProbe();
+			OnPreDeathHandler::InstallListenerProbe();
+			OnPreDamageHandler::InstallListenerProbe();
 			OnNearMissHandler::InstallListenerProbe();
 			DialogueTextFilter::ClearState();
 			OnNearMissHandler::ClearState();
@@ -585,6 +614,10 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OnJumpLandHandler::Update();
 			OnCasinoBanHandler::Update();
 			OnCombatProcedureHandler::Update();
+			OnPreWeaponSwitchHandler::Update();
+			OnKnockdownHandler::Update();
+			OnPreDeathHandler::Update();
+			OnPreDamageHandler::Update();
 			OnEntryPointHandler::Update();
 			OnNearMissHandler::Update();
 			OnEffectHandler::Update();
@@ -651,9 +684,21 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	logInit("OnVATSStateHandler", OnVATSStateHandler::Init((void*)nvse));
 	logInit("OnCasinoBanHandler", OnCasinoBanHandler::Init((void*)nvse));
 	logInit("OnPrePickUpHandler", OnPrePickUpHandler::Init((void*)nvse));
+	logInit("OnPreFastTravelHandler", OnPreFastTravelHandler::Init((void*)nvse));
+	logInit("OnKnockdownHandler", OnKnockdownHandler::Init((void*)nvse));
+	logInit("OnPreDeathHandler", OnPreDeathHandler::Init((void*)nvse));
+	logInit("OnPreDamageHandler", OnPreDamageHandler::Init((void*)nvse));
+	logInit("OnTileValueChangeHandler", OnTileValueChangeHandler::Init((void*)nvse));
+	logInit("OnDialogueMenuBuildHandler", OnDialogueMenuBuildHandler::Init((void*)nvse));
 	logInit("BarterCommands", BarterCommands::InitHooks());
 	NoWeaponSearch::Init();
+	bool preSwitchOk = OnPreWeaponSwitchHandler::Init((void*)nvse);
+	logInit("OnPreWeaponSwitchHandler", preSwitchOk);
+	if (!preSwitchOk)
+		Log("OnPreWeaponSwitchHandler: 0x9DA7C0 detour offline - SetPreventWeaponSwitch will NOT be enforced this session");
 	PreventWeaponSwitch::Init();
+	OnPreWeaponSwitchHandler::SetExternalBlockCheck(&PreventWeaponSwitch::Get);
+	RadioInjection::Init((void*)nvse);
 	logInit("PerkRuntimeFramework", PerkRuntimeFramework::Init((void*)nvse));
 }
 

@@ -45,6 +45,10 @@
 #include "handlers/DialogueCameraHandler.h"
 #include "commands/GroundCommands.h"
 #include "commands/GestureCommand.h"
+#include "commands/NavmeshCommands.h"
+#include "commands/DialogueTopicCommands.h"
+#include "features/RadioInjection.h"
+#include "handlers/OnTileValueChangeHandler.h"
 
 extern void Log(const char* fmt, ...);
 
@@ -222,4 +226,16 @@ void RegisterAllCommands(void* nvsePtr)
 
 	nvse->SetOpcodeBase(0x40BE);
 	StartNewGameCommand::RegisterCommands(nvse); //StartNewGame
+
+	nvse->SetOpcodeBase(0x410F);
+	RadioInjection::RegisterCommands(nvse); //PlayRadioFile, QueueRadioTrack, ClearRadioQueue, SetRadioQueueLoop, GetRadioQueueSize
+
+	nvse->SetOpcodeBase(0x4114);
+	NavmeshCommands::RegisterCommands(nvse); //GetPathLength, IsPointOnNavmesh, GetCoverPointsInRadius, GetBestCoverFromThreat
+
+	nvse->SetOpcodeBase(0x4118);
+	DialogueTopicCommands::RegisterCommands(nvse); //AddDialogueTopicEntry, SetDialogueTopicEntryAlpha, SetDialogueTopicHidden, SetDialogueTopicOrder, ClearDialogueTopicOverrides
+
+	nvse->SetOpcodeBase(0x411D);
+	OnTileValueChangeHandler::RegisterCommands(nvse); //WatchTileValue, UnwatchTileValue
 }

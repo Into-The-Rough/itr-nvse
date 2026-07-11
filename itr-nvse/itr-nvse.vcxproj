@@ -237,6 +237,17 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="handlers\OnVATSStateHandler.cpp" />
     <ClCompile Include="handlers\OnCasinoBanHandler.cpp" />
     <ClCompile Include="handlers\OnPrePickUpHandler.cpp" />
+    <ClCompile Include="handlers\OnPreWeaponSwitchHandler.cpp" />
+    <ClCompile Include="handlers\OnKnockdownHandler.cpp" />
+    <ClCompile Include="handlers\OnPreFastTravelHandler.cpp" />
+    <ClCompile Include="handlers\OnTileValueChangeHandler.cpp" />
+    <ClCompile Include="handlers\OnDialogueMenuBuildHandler.cpp" />
+    <ClCompile Include="handlers\OnPreDeathHandler.cpp" />
+    <ClCompile Include="handlers\OnPreDamageHandler.cpp" />
+    <ClCompile Include="commands\DialogueTopicCommands.cpp" />
+    <ClCompile Include="commands\NavmeshCommands.cpp" />
+    <ClCompile Include="features\RadioInjection.cpp" />
+    <ClCompile Include="features\WakeyWakey.cpp" />
     <ClCompile Include="internal\EventDispatch.cpp" />
     <ClCompile Include="internal\WitnessScan.cpp" />
   </ItemGroup>
@@ -360,6 +371,19 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="handlers\OnVATSStateHandler.h" />
     <ClInclude Include="handlers\OnCasinoBanHandler.h" />
     <ClInclude Include="handlers\OnPrePickUpHandler.h" />
+    <ClInclude Include="handlers\OnPreWeaponSwitchHandler.h" />
+    <ClInclude Include="handlers\OnKnockdownHandler.h" />
+    <ClInclude Include="handlers\OnPreFastTravelHandler.h" />
+    <ClInclude Include="handlers\OnTileValueChangeHandler.h" />
+    <ClInclude Include="handlers\OnDialogueMenuBuildHandler.h" />
+    <ClInclude Include="handlers\OnPreDeathHandler.h" />
+    <ClInclude Include="handlers\OnPreDamageHandler.h" />
+    <ClInclude Include="commands\DialogueTopicCommands.h" />
+    <ClInclude Include="commands\NavmeshCommands.h" />
+    <ClInclude Include="commands\PathingShared.h" />
+    <ClInclude Include="internal\RayCast.h" />
+    <ClInclude Include="features\RadioInjection.h" />
+    <ClInclude Include="features\WakeyWakey.h" />
     <ClInclude Include="internal\ConsoleCommand.h" />
     <ClInclude Include="internal\WitnessScan.h" />
   </ItemGroup>

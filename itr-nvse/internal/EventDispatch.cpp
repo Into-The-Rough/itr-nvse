@@ -242,6 +242,11 @@ void RegisterEvents()
 	g_eventManagerInterface->RegisterEvent("ITR:OnVATSLeave", 1, oneInt, F::kFlag_FlushOnLoad);
 	g_eventManagerInterface->RegisterEvent("ITR:OnKillCamStart", 1, oneForm, F::kFlag_FlushOnLoad);
 	g_eventManagerInterface->RegisterEvent("ITR:OnKillCamEnd", 1, oneForm, F::kFlag_FlushOnLoad);
+
+	//actor, cause (knockdown: 1 force, 2 paralysis, 3 havok) / actor, phase (getup: 0 begin, 1 complete)
+	static P actorIntParams[] = { P::eParamType_AnyForm, P::eParamType_Int };
+	g_eventManagerInterface->RegisterEvent("ITR:OnKnockdown", 2, actorIntParams, F::kFlag_FlushOnLoad);
+	g_eventManagerInterface->RegisterEvent("ITR:OnGetUp", 2, actorIntParams, F::kFlag_FlushOnLoad);
 }
 
 }

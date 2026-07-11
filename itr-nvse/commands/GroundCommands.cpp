@@ -5,6 +5,7 @@
 #include "internal/CallTemplates.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameSDK.h"
+#include "internal/RayCast.h"
 
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
@@ -33,27 +34,6 @@ namespace
 		UInt8 pad09[3];
 	};
 
-	struct alignas(16) RayCastData {
-		float pos0[4];
-		float pos1[4];
-		UInt8 byte20;
-		UInt8 pad21[3];
-		UInt8 layerType;
-		UInt8 filterFlags;
-		UInt16 group;
-		UInt32 unk28[6];
-		float hitFraction;
-		UInt32 unk44[15];
-		void* cdBody;
-		UInt32 unk84[3];
-		float vector90[4];
-		UInt32 unkA0[3];
-		UInt8 byteAC;
-		UInt8 padAD[3];
-	};
-	static_assert(sizeof(RayCastData) == 0xB0, "RayCastData size mismatch");
-
-	constexpr float kHavokScale = 0.1428571f;
 	constexpr float kGroundRayMaxRange = 50000.0f;
 	constexpr float kGroundRayStartOffset = 8.0f;
 	constexpr UInt8 kGroundRayLayer = 6;

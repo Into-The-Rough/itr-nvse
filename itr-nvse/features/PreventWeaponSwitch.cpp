@@ -67,47 +67,12 @@ static void SetBlocked(UInt32 refID, bool block)
 	}
 }
 
-//0x9DA7C0 = CombatProcedureSwitchWeapon::Update
-typedef void (__thiscall *SwitchWeaponUpdate_t)(void* procedure);
-static Detours::JumpDetour s_detour;
-
-
-void __fastcall Hook_SwitchWeaponUpdate(void* procedure, void* edx)
-{
-	bool shouldBlock = false;
-	{
-		ScopedLock lock(&g_lock);
-		if (g_count > 0)
-		{
-			void* controller = CombatProcedureGetCombatController(procedure);
-			if (controller)
-			{
-				Actor* actor = (Actor*)Engine::CombatController_GetPackageOwner(controller);
-				if (actor)
-				{
-					UInt32 refID = actor->refID;
-					if (IsBlocked_Unlocked(refID))
-						shouldBlock = true;
-				}
-			}
-		}
-	}
-
-	if (shouldBlock)
-	{
-		CombatProcedureSetStatus(procedure, 2);
-		return;
-	}
-	s_detour.GetTrampoline<SwitchWeaponUpdate_t>()(procedure);
-}
-
-//prologue: 6 bytes
+//the 0x9DA7C0 detour is owned by OnPreWeaponSwitchHandler, which calls
+//PreventWeaponSwitch::Get via SetExternalBlockCheck to preserve blocking
 namespace PreventWeaponSwitch {
 void Init()
 {
 	EnsureLockInit();
-	if (!s_detour.WriteRelJump(0x9DA7C0, Hook_SwitchWeaponUpdate, 6))
-		Log("ERROR: PreventWeaponSwitch hook failed");
 }
 
 void Set(Actor* actor, bool block)

@@ -81,15 +81,33 @@
 - GetPlayingRadioTrackFileName - returns file path of playing radio track
 - GetPlayingRadioText - returns dialogue text of playing radio voice line
 - ChangeRadioTrack - advances active radio station to next track
+- PlayRadioFile - skips the current track and plays a wav/ogg file (relative to Data\Sound\) on the active station. Subtitles are unavailable for injected files
+- QueueRadioTrack - queues a wav/ogg file to play on the next natural track advance (queue of 8, returns 0 when full)
+- ClearRadioQueue - clears the injected track queue, returns entries removed
+- SetRadioQueueLoop - 1 cycles the queue as a playlist instead of consuming it, 0 restores consume
+- GetRadioQueueSize - returns the injected queue count
 
 **Dialogue**
 - GetDialogueInfoFlags - get combined flags for a TESTopicInfo
 - SetDialogueInfoFlags - set combined flags for a TESTopicInfo (runtime)
 - GetDisplayedDialogueInfos - get array of topic infos shown in dialogue menu
+- AddDialogueTopicEntry - appends a synthetic row to the open dialogue menu that fires ITR:OnDialogueTopicSelected on click instead of running an INFO (prompt, syntheticId up to 24 bits). Call from an ITR:OnDialogueMenuBuild handler
+- SetDialogueTopicEntryAlpha - darken/disable the vanilla dialogue row topic_<index> via its _line_alpha trait
+- SetDialogueTopicHidden - hide or show a dialogue row by its TESTopic or TESTopicInfo (topicOrInfo, hidden). Applied on the next list rebuild (menu open or after each reply)
+- SetDialogueTopicOrder - sort a dialogue row by its TESTopic or TESTopicInfo, lower orders first (topicOrInfo, order). Applied on the next list rebuild
+- ClearDialogueTopicOverrides - clear all topic hide and order rules, returns the number removed
 
 **UI**
 - SetUIAlphaMap - applies an alpha-map texture to a UI image tile
 - SetUITexOffset - scrolls a UI image tile's texture coordinates
+- WatchTileValue - watch a tile trait ("menuname/path/to/tile", "traitname") for value changes via ITR:OnTileValueChange, returns a watch id. Watches are runtime-only and drop when the menu closes or a game loads
+- UnwatchTileValue - stop watching by watch id
+
+**Navmesh**
+- GetPathLength - complete solved-path length from source (default: calling ref, must be an actor) to target, -1 on failure
+- IsPointOnNavmesh - returns 1 if x,y,z resolves to a loaded navmesh triangle (optional anchor ref supplies the cell, default player)
+- GetCoverPointsInRadius - array of [x, y, z, coverFlags] for cover edges on loaded navmeshes near a point (unsorted, max 128). coverFlags: bits 0-3 cover height bucket (16 units each), bit 4 left open, bit 5 right open, bit 6 edge slot
+- GetBestCoverFromThreat - array of [x, y, z, coverFlags, distToSearch] for cover near a search point that hides the standing position from a threat (blocked line of sight), sorted nearest-first, empty when none. Args: threatX threatY threatZ searchX searchY searchZ radius [maxResults=8, cap 32]
 
 **Input**
 - DisableKeyEx - disable key with handler
@@ -135,6 +153,20 @@
 - ITR:OnCasinoBan - fires when the player is banned from a casino (casino)
 - ITR:OnEffectApplied - fires when a magic effect is applied (target, magicItem, effectItemIndex, caster). magicItem is the parent spell/ingestible; effectItemIndex selects the effect within it
 - ITR:OnEffectRemoved - fires when a magic effect is removed (target, magicItem, effectItemIndex, caster)
+- ITR:OnPreFastTravel - fires before fast travel commits, after the confirm dialog (player, destinationMarker, destWorldspace - null for interiors, distance - straight-line engine units). Cancellable: SetFunctionValue 0 to veto. Catches map menu, script and TTW train travel. Travel-hours cost is deliberately not replicated, derive cost from distance
+- ITR:OnPreWeaponSwitch - fires when combat AI decides to switch weapons (actor, proposedWeapon - 0 means unequip, currentWeapon - equipped at decision time). Cancellable: SetFunctionValue 0 to veto. The decision is deferred one AI tick while handlers run
+- ITR:OnKnockdown - fires when an actor is knocked down (actor, cause: 1 force/impulse, 2 paralysis, 3 physics)
+- ITR:OnGetUp - fires on get-up transitions (actor, phase: 0 animation begins, 1 fully upright)
+- ITR:OnTileValueChange - fires when a watched tile trait changes (menuID, traitID, oldValue, newValue, watchId). Register watches with WatchTileValue. Reaction-driven recomputes also fire
+- ITR:OnTileStrValueChange - fires when a watched string trait changes (menuID, traitID, oldStr, newStr, watchId)
+- ITR:OnRadioTrackChange - fires once per radio track advance (filePath, wasInjected)
+- ITR:OnPreDeath - fires when a non-essential actor is about to die, before the death commits (actor, killer). Cancellable: SetFunctionValue 0 to veto, which diverts the actor into the engine's own essential-down path (knocked down, recovers at engine-managed minimal health). Excludes player death, gib/dismember/explosion fatalities and VATS finishing moves. Vetoed kills still credit challenge counters and death perk entries, identical to vanilla essential behaviour
+- ITR:OnPreHitDamage - fires per combat hit (weapon, melee, explosion) after final damage is computed, before knockdown/dismember/death flags are read (target, attacker, weapon, damage, hitLocation). Mutable: SetFunctionValue a multiplier (0 negates, 0.5 halves, 2 doubles); multiple handlers multiply together. Scales health, limb and fatigue damage together
+- ITR:OnPreHealthDamage - catch-all fired before any final health reduction applies (target, source, delta - negative, post-mitigation). Covers falls, traps, damage-over-time ticks (once per tick), scripted DamageAV, and weapon hits again post-mitigation. Mutable: SetFunctionValue a multiplier. For weapon-hit scaling prefer ITR:OnPreHitDamage
+- WakeyWakeyNPC - fires per NPC woken by nearby player gunfire (actor). Legacy event name for third-party compatibility
+- ITR:OnNPCWokeByGunfire - fires per NPC woken by nearby player gunfire (actor, shooter)
+- ITR:OnDialogueMenuBuild - fires after the dialogue menu topic list (re)builds, on open and after each reply (speaker, topicCount). Add synthetic rows here with AddDialogueTopicEntry
+- ITR:OnDialogueTopicSelected - fires when a synthetic dialogue row is clicked (speaker, syntheticId)
 - ITR:OnVATSEnter - fires when VATS is entered (target)
 - ITR:OnVATSLeave - fires when VATS is left (reason)
 - ITR:OnKillCamStart - fires when a kill cam begins (target)

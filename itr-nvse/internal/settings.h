@@ -90,6 +90,11 @@ namespace Settings
 	inline float fNearMissRadius = 256.0f;
 	inline int iNearMissCooldownMs = 250;
 
+	inline int bWakeyWakey = 0;
+	inline float fWakeDistance = 2500.0f;
+	inline float fQuietWakeDistance = 1250.0f;
+	inline int iWakeCooldownMs = 250;
+
 	inline char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -185,6 +190,11 @@ namespace Settings
 		fWitnessSearchRadius = (float)GetINIInt("OnWitnessed", "iSearchRadius", 2048);
 
 		fNearMissRadius = (float)GetINIInt("OnNearMiss", "iRadius", 256);
+
+		bWakeyWakey = GetINIInt("WakeyWakey", "bEnable", 0);
+		fWakeDistance = (float)GetINIInt("WakeyWakey", "iWakeDistance", 2500);
+		fQuietWakeDistance = (float)GetINIInt("WakeyWakey", "iQuietWakeDistance", 1250);
+		iWakeCooldownMs = GetINIInt("WakeyWakey", "iCooldownMs", 250);
 		//a per-actor floor stops the forward corridor re-dispatching every projectile update
 		iNearMissCooldownMs = GetINIInt("OnNearMiss", "iCooldownMs", 250);
 		if (iNearMissCooldownMs < 50) iNearMissCooldownMs = 50;
