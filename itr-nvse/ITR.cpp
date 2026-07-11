@@ -111,6 +111,7 @@
 #include "features/AltTabMute.h"
 #include "features/PerkRuntimeFramework.h"
 #include "features/AimZoomFirstPersonOnly.h"
+#include "features/AggroThreshold.h"
 
 #include "commands/ImperativeCommands.h"
 #include "commands/StringCommands.h"
@@ -572,6 +573,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					NPCDoorUnlockBlock::SetLevel(Settings::iNPCDoorUnlockBlock);
 					LockpickOwnerKarmaFix::SetEnabled(Settings::bLockpickOwnerKarmaFix != 0);
 					InlineGlyphFix::SetEnabled(Settings::bInlineGlyphFix != 0);
+					AggroThreshold::SetEnabled(Settings::bAggroThreshold != 0);
 					AimZoomFirstPersonOnly::SetEnabled(Settings::bAimZoomFirstPersonOnly != 0);
 					if (Settings::bAutoQuickLoad)
 						AutoQuickLoad::InstallHook(); //idempotent, covers enabling at runtime
@@ -700,6 +702,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	OnPreWeaponSwitchHandler::SetExternalBlockCheck(&PreventWeaponSwitch::Get);
 	RadioInjection::Init((void*)nvse);
 	logInit("PerkRuntimeFramework", PerkRuntimeFramework::Init((void*)nvse));
+	AggroThreshold::Init(Settings::bAggroThreshold != 0);
 }
 
 namespace ITR

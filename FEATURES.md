@@ -207,6 +207,7 @@
 - ArmorDTDRFix - force NPC armor DT/DR cache update on equipment change
 - CombatItemTimerFix - fix stimpak timer using wrong game setting
 - FriendlyFire - enable player and ally friendly fire damage
+- AggroThreshold - NPCs absorb a configurable number of player hits before turning hostile (iAllyHit*/iFriendHit* thresholds, per-mode flags)
 - OwnedBeds - allow sleeping in owned beds with assault alarm consequences
 - OwnedCorpses - looting owned corpses counts as stealing
 - NoDoorFade - skip actor fade animation on door entry

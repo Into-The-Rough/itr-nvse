@@ -95,6 +95,16 @@ namespace Settings
 	inline float fQuietWakeDistance = 1250.0f;
 	inline int iWakeCooldownMs = 250;
 
+	inline int bAggroThreshold = 0;
+	inline int bIgnoreCreatures = 0;
+	inline int bOnlyCombat = 1;
+	inline int iSuppressionMode = 1; //0=friend, 1=ally
+	inline int bIgnoreFriendlyFire = 0;
+	inline int iAllyHitNonCombatAllowed = 3;
+	inline int iAllyHitCombatAllowed = 1000;
+	inline int iFriendHitNonCombatAllowed = 0;
+	inline int iFriendHitCombatAllowed = 4;
+
 	inline char iniPath[MAX_PATH];
 
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
@@ -195,6 +205,16 @@ namespace Settings
 		fWakeDistance = (float)GetINIInt("WakeyWakey", "iWakeDistance", 2500);
 		fQuietWakeDistance = (float)GetINIInt("WakeyWakey", "iQuietWakeDistance", 1250);
 		iWakeCooldownMs = GetINIInt("WakeyWakey", "iCooldownMs", 250);
+
+		bAggroThreshold = GetINIInt("AggroThreshold", "bAggroThreshold", 0);
+		bIgnoreCreatures = GetINIInt("AggroThreshold", "bIgnoreCreatures", 0);
+		bOnlyCombat = GetINIInt("AggroThreshold", "bOnlyCombat", 1);
+		iSuppressionMode = GetINIInt("AggroThreshold", "iSuppressionMode", 1);
+		bIgnoreFriendlyFire = GetINIInt("AggroThreshold", "bIgnoreFriendlyFire", 0);
+		iAllyHitNonCombatAllowed = GetINIInt("AggroThreshold", "iAllyHitNonCombatAllowed", 3);
+		iAllyHitCombatAllowed = GetINIInt("AggroThreshold", "iAllyHitCombatAllowed", 1000);
+		iFriendHitNonCombatAllowed = GetINIInt("AggroThreshold", "iFriendHitNonCombatAllowed", 0);
+		iFriendHitCombatAllowed = GetINIInt("AggroThreshold", "iFriendHitCombatAllowed", 4);
 		//a per-actor floor stops the forward corridor re-dispatching every projectile update
 		iNearMissCooldownMs = GetINIInt("OnNearMiss", "iCooldownMs", 250);
 		if (iNearMissCooldownMs < 50) iNearMissCooldownMs = 50;
