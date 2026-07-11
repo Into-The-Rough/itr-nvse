@@ -27,6 +27,9 @@ namespace AggroThreshold
 	static int* const g_iAllyHitNonCombatAllowed = (int*)0x11CD46C;
 	static int* const g_iAllyHitCombatAllowed = (int*)0x11CD4B8;
 
+	static bool g_gmstsCaptured = false;
+	static int g_origFriendHitNonCombat, g_origFriendHitCombat, g_origAllyHitNonCombat, g_origAllyHitCombat;
+
 	typedef uint32_t (__thiscall *_GetFactionRelation)(void* thisActor, void* targetActor, bool* isEnemy);
 
 	static bool IsPlayerInCombat()
@@ -46,10 +49,29 @@ namespace AggroThreshold
 
 	static void ApplyThresholds()
 	{
+		if (!g_gmstsCaptured)
+		{
+			g_origFriendHitNonCombat = *g_iFriendHitNonCombatAllowed;
+			g_origFriendHitCombat = *g_iFriendHitCombatAllowed;
+			g_origAllyHitNonCombat = *g_iAllyHitNonCombatAllowed;
+			g_origAllyHitCombat = *g_iAllyHitCombatAllowed;
+			g_gmstsCaptured = true;
+		}
+
 		*g_iFriendHitNonCombatAllowed = Settings::iFriendHitNonCombatAllowed;
 		*g_iFriendHitCombatAllowed = Settings::iFriendHitCombatAllowed;
 		*g_iAllyHitNonCombatAllowed = Settings::iAllyHitNonCombatAllowed;
 		*g_iAllyHitCombatAllowed = Settings::iAllyHitCombatAllowed;
+	}
+
+	//engine reads these GMSTs directly, so a runtime disable must put them back
+	static void RestoreThresholds()
+	{
+		if (!g_gmstsCaptured) return;
+		*g_iFriendHitNonCombatAllowed = g_origFriendHitNonCombat;
+		*g_iFriendHitCombatAllowed = g_origFriendHitCombat;
+		*g_iAllyHitNonCombatAllowed = g_origAllyHitNonCombat;
+		*g_iAllyHitCombatAllowed = g_origAllyHitCombat;
 	}
 
 	static uint32_t SuppressRelation(void* thisActor, void* targetActor, bool* isEnemy, _GetFactionRelation orig, bool forceAlly)
@@ -83,20 +105,35 @@ namespace AggroThreshold
 			(_GetFactionRelation)s_attackedByDetour.GetOverwrittenAddr(), false);
 	}
 
-	void SetEnabled(bool enabled)
+	//idempotent, standalone SuppressiveFireNVSE claims these call sites too, so
+	//itr must not install while off-by-default or it silently breaks the standalone dll
+	static void InstallHooks()
 	{
-		g_enabled = enabled && g_installed;
-		if (g_enabled)
-			ApplyThresholds();
-	}
+		if (g_installed) return;
 
-	void Init(bool enabled)
-	{
 		bool a = s_healthDamageDetour.WriteRelCall(0x898766, (UInt32)Hook_HandleHealthDamage);
 		bool b = s_attackedByDetour.WriteRelCall(0x898A54, (UInt32)Hook_AttackedBy);
 		if (!a || !b)
 			Log("AggroThreshold: hook install %d/%d (site already patched by another mod?)", a ? 1 : 0, b ? 1 : 0);
 		g_installed = a && b;
+	}
+
+	void SetEnabled(bool enabled)
+	{
+		if (enabled && !g_installed)
+			InstallHooks();
+
+		g_enabled = enabled && g_installed;
+		if (g_enabled)
+			ApplyThresholds();
+		else
+			RestoreThresholds();
+	}
+
+	void Init(bool enabled)
+	{
+		if (enabled)
+			InstallHooks();
 		SetEnabled(enabled);
 	}
 }

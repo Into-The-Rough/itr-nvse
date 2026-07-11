@@ -100,10 +100,10 @@ namespace Settings
 	inline int bOnlyCombat = 1;
 	inline int iSuppressionMode = 1; //0=friend, 1=ally
 	inline int bIgnoreFriendlyFire = 0;
-	inline int iAllyHitNonCombatAllowed = 3;
-	inline int iAllyHitCombatAllowed = 1000;
-	inline int iFriendHitNonCombatAllowed = 0;
-	inline int iFriendHitCombatAllowed = 4;
+	inline int iAllyHitNonCombatAllowed = 1;
+	inline int iAllyHitCombatAllowed = 2;
+	inline int iFriendHitNonCombatAllowed = 2;
+	inline int iFriendHitCombatAllowed = 2;
 
 	inline char iniPath[MAX_PATH];
 
@@ -211,10 +211,10 @@ namespace Settings
 		bOnlyCombat = GetINIInt("AggroThreshold", "bOnlyCombat", 1);
 		iSuppressionMode = GetINIInt("AggroThreshold", "iSuppressionMode", 1);
 		bIgnoreFriendlyFire = GetINIInt("AggroThreshold", "bIgnoreFriendlyFire", 0);
-		iAllyHitNonCombatAllowed = GetINIInt("AggroThreshold", "iAllyHitNonCombatAllowed", 3);
-		iAllyHitCombatAllowed = GetINIInt("AggroThreshold", "iAllyHitCombatAllowed", 1000);
-		iFriendHitNonCombatAllowed = GetINIInt("AggroThreshold", "iFriendHitNonCombatAllowed", 0);
-		iFriendHitCombatAllowed = GetINIInt("AggroThreshold", "iFriendHitCombatAllowed", 4);
+		iAllyHitNonCombatAllowed = GetINIInt("AggroThreshold", "iAllyHitNonCombatAllowed", 1);
+		iAllyHitCombatAllowed = GetINIInt("AggroThreshold", "iAllyHitCombatAllowed", 2);
+		iFriendHitNonCombatAllowed = GetINIInt("AggroThreshold", "iFriendHitNonCombatAllowed", 2);
+		iFriendHitCombatAllowed = GetINIInt("AggroThreshold", "iFriendHitCombatAllowed", 2);
 		//a per-actor floor stops the forward corridor re-dispatching every projectile update
 		iNearMissCooldownMs = GetINIInt("OnNearMiss", "iCooldownMs", 250);
 		if (iNearMissCooldownMs < 50) iNearMissCooldownMs = 50;
