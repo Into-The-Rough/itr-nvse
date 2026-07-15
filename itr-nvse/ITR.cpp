@@ -375,14 +375,19 @@ static NVSEInterface* s_nvseInterface = nullptr;
 
 static void ApplyProjectileSettings()
 {
+	//clamp direct ini edits so a bad value cannot produce negative or amplified damage/speed
+	auto pct = [](int v) { return (v < 0 ? 0 : (v > 100 ? 100 : v)) / 100.0f; };
+	auto angle = [](int v) { return (float)(v < 0 ? 0 : (v > 90 ? 90 : v)); };
+
 	ProjectileLogic::Config cfg = {};
 	cfg.ricochetEnabled = Settings::bProjectileRicochet != 0;
 	cfg.penetrationEnabled = Settings::bProjectilePenetration != 0;
-	cfg.maxRicochetAngleDeg = (float)Settings::iRicochetMaxAngleDeg;
-	cfg.minRicochetEnergy = Settings::iRicochetMinEnergyPct / 100.0f;
-	cfg.ricochetDamageFalloff = Settings::iRicochetDamagePct / 100.0f;
-	cfg.penetrationDamageFalloff = Settings::iPenetrationDamagePct / 100.0f;
-	cfg.penetrationEnergyFalloff = Settings::iPenetrationEnergyPct / 100.0f;
+	cfg.maxRicochetAngleDeg = angle(Settings::iRicochetMaxAngleDeg);
+	cfg.minRicochetEnergy = pct(Settings::iRicochetMinEnergyPct);
+	cfg.ricochetDamageFalloff = pct(Settings::iRicochetDamagePct);
+	cfg.penetrationDamageFalloff = pct(Settings::iPenetrationDamagePct);
+	//energy retention must stay below 100% or the continuation chain never decays and penetrates forever
+	cfg.penetrationEnergyFalloff = pct(Settings::iPenetrationEnergyPct > 95 ? 95 : Settings::iPenetrationEnergyPct);
 	OnProjectileImpactHandler::FillDefaultMaterials(cfg);
 	OnProjectileImpactHandler::UpdateSettings(cfg, Settings::bMaterialProjectiles != 0);
 }

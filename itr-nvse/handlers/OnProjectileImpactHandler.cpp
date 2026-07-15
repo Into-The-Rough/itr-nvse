@@ -27,10 +27,20 @@ constexpr UInt32 kVtblSlot_ProcessImpacts = 0x108FD58; //MissileProjectile vtbl 
 
 constexpr UInt32 kAddr_SpawnCollisionEffects = 0x9C20E0; //Projectile::SpawnCollisionEffects
 constexpr UInt32 kAddr_ClearImpactData       = 0x9C4DA0; //walks+frees proj+0x88 tList, resets impacts
+constexpr UInt32 kAddr_SpawnAndFireProjectile= 0x9BCA60; //__cdecl engine projectile spawn/launch
+
+//far side stand-off, past a typical FNV wall/door (~10-25 units thick) so the continuation clears the collider
+constexpr float kPenetrateBackoff = 30.0f;
 
 struct NiPoint3 { float x, y, z; };
 typedef void (__thiscall* SpawnCollisionEffects_t)(void*, TESObjectREFR*, NiPoint3*, NiPoint3*, int, UInt32);
 typedef void (__thiscall* ClearImpactData_t)(void*);
+//owner 0 / weapon 0 / a3 0 skips the weapon-discharge side effects (recoil, fire sound, perks) which are
+//gated on owner==pPlayer, so a clean projectile is created, we set owner/weapon/damage/dir on the result
+typedef void* (__cdecl* SpawnAndFireProjectile_t)(
+	void* base, void* owner, int a3, void* weapon,
+	float px, float py, float pz, float rotz, float rotx,
+	int a10, int a11, char a12, char a13, float a14, float a15, void* cell);
 
 static UInt32 s_originalProcessImpacts = 0;
 
@@ -110,6 +120,25 @@ static void SpawnImpactEffect(void* proj, void* node)
 	((SpawnCollisionEffects_t)kAddr_SpawnCollisionEffects)(proj, refr, pos, normal, arg5, material);
 }
 
+//emerge a fresh ballistic round on the far side, angles left at 0 since vector104+transform below drive it
+//and the engine re-orients from vector104 every frame (sub_9BF470 reads sub_9B7010 -> proj+0x104)
+static void SpawnContinuation(void* base, void* cell, float px, float py, float pz,
+	const float unitDir[3], float speedMult, float hitDamage, float distSeed,
+	TESObjectREFR* owner, TESObjectWEAP* weapon, float vecMag)
+{
+	void* cont = ((SpawnAndFireProjectile_t)kAddr_SpawnAndFireProjectile)(
+		base, nullptr, 0, nullptr, px, py, pz, 0.0f, 0.0f, 0, 0, 0, 0, 0.0f, 0.0f, cell);
+	if (!cont) return;
+	ProjectileImpactView* c = (ProjectileImpactView*)cont;
+	*(TESObjectREFR**)((UInt8*)cont + 0xFC) = owner;  //sourceRef, keeps our player-only+VATS gate and damage credit
+	*(TESObjectWEAP**)((UInt8*)cont + 0xF8) = weapon; //sourceWeap
+	c->hitDamage = hitDamage;
+	c->speedMult = speedMult;
+	c->vector104[0] = unitDir[0]*vecMag; c->vector104[1] = unitDir[1]*vecMag; c->vector104[2] = unitDir[2]*vecMag;
+	BuildForwardRotate(unitDir, c->transformRotate);
+	c->distTravelled = distSeed; //seeds the energy proxy so each penetration decays and the chain terminates
+}
+
 static char __cdecl HandleImpact(void* proj, int a2, int a3);
 
 //vtable slot ABI is __usercall - proj@ecx, a2@edi, a3@esi, returns al
@@ -170,9 +199,13 @@ static char __cdecl HandleImpact(void* proj, int a2, int a3)
 	void* projKey = (void*)((TESObjectREFR*)proj)->refID;
 
 	//a still-overlapping deflected round re-reports the same ref next frame, dedup on world refs only
-	//static geometry reports refID 0 and the reflected round leaves the surface, so no dedup needed there
-	if (strikeRefID && s_hitSet.AlreadyHit(projKey, strikeRefID))
-		return CallOriginalProcessImpacts(proj, a2, a3);
+	//static geometry reports refID 0 and the reflected round leaves the surface, so no dedup needed there.
+	//discard the repeat impact and keep the round alive, letting vanilla process it here would kill it
+	if (strikeRefID && s_hitSet.AlreadyHit(projKey, strikeRefID)) {
+		pv->hasImpacted = 0;
+		((ClearImpactData_t)kAddr_ClearImpactData)(proj);
+		return 0;
+	}
 
 	ProjectileLogic::ImpactContext ctx = {};
 	ctx.strikeRefID = strikeRefID;
@@ -240,17 +273,34 @@ static char __cdecl HandleImpact(void* proj, int a2, int a3)
 		return 0;
 	}
 
-	//penetrate - the round carries on straight with less energy and damage
-	pv->hitDamage = ProjectileLogic::PenetrationDamage(pv->hitDamage, s_cfg);
-	pv->speedMult = pv->speedMult * s_cfg.penetrationEnergyFalloff; //speed comes from speedMult, so this is the real energy loss
-	pv->vector104[0] *= s_cfg.penetrationEnergyFalloff;
-	pv->vector104[1] *= s_cfg.penetrationEnergyFalloff;
-	pv->vector104[2] *= s_cfg.penetrationEnergyFalloff;
-	SpawnImpactEffect(proj, node);
-	pv->hasImpacted = 0;
-	((ClearImpactData_t)kAddr_ClearImpactData)(proj);
-	EnqueueEvent(2, ctx.sourceWeapFormID, strikeRefID, ctx.material, pv->hitDamage);
-	return 0;
+	//penetrate - emerge a decayed continuation past the surface, then let the engine apply the full
+	//vanilla entry hit (damage/destruction/callbacks) to the struck ref and kill the original round
+	if (pv->range > 0.0f) { //no range means the energy proxy cannot decay, skip to avoid an endless chain
+		void* base = *(void**)((UInt8*)proj + 0x20); //refr baseForm = BGSProjectile
+		void* cell = *(void**)((UInt8*)proj + 0x40); //parentCell for placement
+		float dl = sqrtf(ctx.dir[0]*ctx.dir[0] + ctx.dir[1]*ctx.dir[1] + ctx.dir[2]*ctx.dir[2]);
+		if (base && cell && dl > 1e-6f) {
+			float ux = ctx.dir[0]/dl, uy = ctx.dir[1]/dl, uz = ctx.dir[2]/dl;
+			float unit[3] = { ux, uy, uz };
+			float px = ctx.pos[0] + ux*kPenetrateBackoff;
+			float py = ctx.pos[1] + uy*kPenetrateBackoff;
+			float pz = ctx.pos[2] + uz*kPenetrateBackoff;
+			//each hop multiplies energy by the falloff, distTravelled is seeded so energy = energyOld*falloff
+			//once it drops below minRicochetEnergy Decide returns Normal and the chain stops
+			float energyNew = ctx.energy * s_cfg.penetrationEnergyFalloff;
+			float distSeed = pv->range * (1.0f - energyNew);
+			if (distSeed < 0.0f) distSeed = 0.0f;
+			SpawnContinuation(base, cell, px, py, pz, unit,
+				pv->speedMult * s_cfg.penetrationEnergyFalloff,
+				ProjectileLogic::PenetrationDamage(pv->hitDamage, s_cfg),
+				distSeed, (TESObjectREFR*)*g_thePlayerPtr, weap, dl);
+		}
+	}
+	EnqueueEvent(2, ctx.sourceWeapFormID, strikeRefID, ctx.material,
+		ProjectileLogic::PenetrationDamage(pv->hitDamage, s_cfg));
+	char killed = CallOriginalProcessImpacts(proj, a2, a3);
+	if (killed) s_hitSet.Release(projKey); //original destroyed by the vanilla entry hit, free its slot
+	return killed;
 }
 
 bool Init(void* nvseInterface)
