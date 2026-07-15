@@ -70,14 +70,17 @@ static EventDispatch::ListenerProbe s_penetrateProbe = { kEvent_Penetrate, "ITR_
 
 static float Clamp01(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
 
-//per-projectile penetration depth keyed by refID, freed on death, cleared on load
-//256 slots so realistic projectile traffic never forces an eviction of a live chain.
-//residual: if all 256 hold live penetrating chains at once, RecordDepth returns without
-//storing (no live entry is reset to 0), and the energy decay + min-energy floor remain the
-//backstop - a chain past its slot simply loses its hard cap, not its soft bound
+//per-projectile penetration depth keyed by refID. entries are freed on impact death (prompt path)
+//and otherwise age out - a round that dies by range or lifetime leaves no impact, so its slot is
+//reclaimed only once it is provably stale (untouched longer than any bullet can live). a live entry
+//is never evicted, and slot availability is a penetration-feasibility gate, so the 5-hop cap is hard:
+//the table cannot permanently fill, and a table momentarily full of live chains just downgrades new
+//chains to a normal hit rather than losing the cap
 constexpr UInt32 kDepthSlots = 256;
-struct DepthEntry { UInt32 refID; UInt32 depth; };
+constexpr UInt32 kDepthStaleFrames = 600; //~10s at 60fps, far past any projectile lifetime, safe to reclaim
+struct DepthEntry { UInt32 refID; UInt32 depth; UInt32 stamp; };
 static DepthEntry s_depthTable[kDepthSlots];
+static UInt32 s_depthFrame = 0; //bumped once per Update(), wrap-safe via unsigned age subtraction
 
 static UInt32 DepthOf(UInt32 refID)
 {
@@ -87,20 +90,38 @@ static UInt32 DepthOf(UInt32 refID)
 	return 0;
 }
 
+//slot usable for refID - its existing slot, else a free slot, else the oldest entry but only when
+//provably stale. -1 = none available (table full of live chains)
+static int DepthSlotFor(UInt32 refID)
+{
+	int free = -1, oldest = -1;
+	for (UInt32 i = 0; i < kDepthSlots; i++) {
+		if (refID && s_depthTable[i].refID == refID) return (int)i;
+		if (!s_depthTable[i].refID) { if (free < 0) free = (int)i; }
+		else if (oldest < 0 || (UInt32)(s_depthFrame - s_depthTable[i].stamp) > (UInt32)(s_depthFrame - s_depthTable[oldest].stamp))
+			oldest = (int)i;
+	}
+	if (free >= 0) return free;
+	if (oldest >= 0 && (UInt32)(s_depthFrame - s_depthTable[oldest].stamp) > kDepthStaleFrames) return oldest;
+	return -1;
+}
+
+//can a fresh continuation obtain a slot - part of penetration feasibility, checked before we commit
+static bool CanAllocDepthSlot() { return DepthSlotFor(0) >= 0; }
+
 static void RecordDepth(UInt32 refID, UInt32 depth)
 {
 	if (!refID) return;
-	for (UInt32 i = 0; i < kDepthSlots; i++)
-		if (s_depthTable[i].refID == refID) { s_depthTable[i].depth = depth; return; }
-	for (UInt32 i = 0; i < kDepthSlots; i++) //only ever take a free slot, never overwrite a live entry
-		if (!s_depthTable[i].refID) { s_depthTable[i] = { refID, depth }; return; }
+	int slot = DepthSlotFor(refID);
+	if (slot < 0) return; //feasibility already gated on availability, this is the belt-and-braces guard
+	s_depthTable[slot] = { refID, depth, s_depthFrame };
 }
 
 static void RemoveDepth(UInt32 refID)
 {
 	if (!refID) return;
 	for (UInt32 i = 0; i < kDepthSlots; i++)
-		if (s_depthTable[i].refID == refID) { s_depthTable[i] = { 0, 0 }; return; }
+		if (s_depthTable[i].refID == refID) { s_depthTable[i] = { 0, 0, 0 }; return; }
 }
 
 //reverse raycast from deep on the far side back toward the entry, the first hit along that
@@ -231,7 +252,7 @@ static bool SpawnContinuation(ProjectileImpactView* orig, void* base, void* cell
 	*(UInt32*)((UInt8*)cont + 0xC8) = *(UInt32*)((UInt8*)orig + 0xC8);
 	c->lifeTime = orig->lifeTime;       //total flight time carries over for the lifetime kill checks
 	c->rangeEngine = orig->rangeEngine; //0xD4 engine range-kill field (Do3DLoaded sets it, copy anyway to match perk/context tweaks)
-	c->range = orig->range;             //0x14C secondary range consumed by OnNearMiss
+	c->range = orig->range;             //0x14C secondary constant range field, not the engine range-kill (that is 0xD4)
 	*(float*)((UInt8*)cont + 0xF4) = *(float*)((UInt8*)orig + 0xF4); //wpnHealthPerc damage context
 	c->hitDamage = hitDamage;
 	c->speedMult = speedMult;
@@ -354,8 +375,9 @@ static char __cdecl HandleImpact(void* proj, int a2, int a3)
 		void* base = *(void**)((UInt8*)proj + 0x20); //refr baseForm = BGSProjectile
 		void* cell = *(void**)((UInt8*)proj + 0x40); //parentCell for placement
 		//depth cap is the hard stop, energy decay + the ini min-energy floor are the soft bound.
-		//range 0 means the energy proxy cannot decay, skip to avoid an endless chain
-		if (chainDepth < kMaxPenetrationDepth && range > 0.0f && base && cell && dl > 1e-6f) {
+		//range 0 means the energy proxy cannot decay, skip to avoid an endless chain.
+		//require a depth slot up front so the continuation can always be tracked, else the cap could slip
+		if (chainDepth < kMaxPenetrationDepth && range > 0.0f && base && cell && dl > 1e-6f && CanAllocDepthSlot()) {
 			penUnit[0] = ctx.dir[0]/dl; penUnit[1] = ctx.dir[1]/dl; penUnit[2] = ctx.dir[2]/dl;
 			if (FindExitPoint(ctx.pos, penUnit, penExit)) {
 				//each hop multiplies energy by the falloff, distTravelled is seeded so energy = energyOld*falloff
@@ -376,8 +398,9 @@ static char __cdecl HandleImpact(void* proj, int a2, int a3)
 
 	//cancellable gate, dispatched synchronously because a veto must be known before we act.
 	//rare (only material-matched player deflections), reports the accurate feasible outcome.
-	//the projectile is not passed to handlers, so a listener has no handle to free it mid-dispatch,
-	//and re-entry is depth-capped
+	//note the outcome is the PROPOSED result - for penetrate a rare engine spawn failure can still
+	//resolve as a normal hit after a positive veto. the projectile is not passed to handlers, so a
+	//listener has no handle to free it mid-dispatch, and re-entry is depth-capped
 	if (s_preProbe.hasListeners && g_eventManagerInterface) {
 		static UInt32 s_depth = 0;
 		if (s_depth >= 8) //recursion cap, bail to non-deflection rather than deflect with the veto ignored
@@ -445,6 +468,7 @@ bool Init(void* nvseInterface)
 	using F = NVSEEventManagerInterface::EventFlags;
 	static P preParams[] = { P::eParamType_AnyForm, P::eParamType_AnyForm, P::eParamType_Int, P::eParamType_Int };
 	static P outParams[] = { P::eParamType_AnyForm, P::eParamType_AnyForm, P::eParamType_Int, P::eParamType_Float };
+	//the 4th arg is the PROPOSED/feasible outcome, a rare engine spawn failure can still land as a normal hit
 	g_eventManagerInterface->RegisterEvent(kEvent_Pre, 4, preParams, F::kFlag_FlushOnLoad);
 	g_eventManagerInterface->RegisterEvent(kEvent_Ricochet, 4, outParams, F::kFlag_FlushOnLoad);
 	g_eventManagerInterface->RegisterEvent(kEvent_Penetrate, 4, outParams, F::kFlag_FlushOnLoad);
@@ -484,6 +508,7 @@ void UpdateSettings(const ProjectileLogic::Config& cfg, bool masterEnabled)
 
 void Update()
 {
+	s_depthFrame++; //ages depth entries so range/lifetime deaths (no impact) get reclaimed
 	s_preProbe.Refresh(false);
 	s_ricochetProbe.Refresh(false);
 	s_penetrateProbe.Refresh(false);
@@ -511,6 +536,7 @@ void ClearState()
 {
 	s_hitSet.Clear();
 	memset(s_depthTable, 0, sizeof(s_depthTable));
+	s_depthFrame = 0;
 	if (s_queueLockInit) {
 		EnterCriticalSection(&s_queueLock);
 		s_queueCount = 0;
