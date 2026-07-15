@@ -234,6 +234,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="handlers\OnWitnessedHandler.cpp" />
     <ClCompile Include="handlers\OnImpactDataSpawnHandler.cpp" />
     <ClCompile Include="handlers\OnNearMissHandler.cpp" />
+    <ClCompile Include="handlers\OnProjectileImpactHandler.cpp" />
     <ClCompile Include="handlers\OnSprayDecalHandler.cpp" />
     <ClCompile Include="handlers\OnWoundSprayHandler.cpp" />
     <ClCompile Include="handlers\OnVATSStateHandler.cpp" />
@@ -371,6 +372,8 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="handlers\OnWitnessedHandler.h" />
     <ClInclude Include="handlers\OnImpactDataSpawnHandler.h" />
     <ClInclude Include="handlers\OnNearMissHandler.h" />
+    <ClInclude Include="handlers\OnProjectileImpactHandler.h" />
+    <ClInclude Include="internal\ProjectileLogic.h" />
     <ClInclude Include="handlers\OnSprayDecalHandler.h" />
     <ClInclude Include="handlers\OnWoundSprayHandler.h" />
     <ClInclude Include="handlers\OnVATSStateHandler.h" />

@@ -37,3 +37,48 @@ inline bool ProjectileRefHasFlag(void* projectileRef, UInt32 flag)
 {
 	return projectileRef && (reinterpret_cast<ProjectileRefFlagsView*>(projectileRef)->flags & flag) != 0;
 }
+
+//material-aware deflection reads these, all verified against the IDA Projectile struct
+//impactDataList 0x88 tList head, hasImpacted 0x90, transform 0x94 NiTransform (rotate[9] first)
+//power 0xCC speedMult 0xD0 lifeTime 0xD8 hitDamage 0xDC, vector104 0x104 move dir, distTravelled 0x110, range 0x14C
+struct ProjectileImpactView {
+	UInt8 pad00[0x90];
+	UInt8 hasImpacted;
+	UInt8 pad91[3];
+	float transformRotate[9]; //0x94, row-major NiMatrix3, columns are basis axes, local +Y is travel direction
+	UInt8 pad0B8[0xCC - 0xB8];
+	float power;              //0xCC
+	float speedMult;          //0xD0
+	UInt8 padD4[0xD8 - 0xD4];
+	float lifeTime;           //0xD8
+	float hitDamage;          //0xDC
+	UInt8 padE0[0x104 - 0xE0];
+	float vector104[3];       //0x104
+	float distTravelled;      //0x110
+	UInt8 pad114[0x14C - 0x114];
+	float range;              //0x14C
+};
+
+static_assert(offsetof(ProjectileImpactView, hasImpacted) == 0x90);
+static_assert(offsetof(ProjectileImpactView, transformRotate) == 0x94);
+static_assert(offsetof(ProjectileImpactView, power) == 0xCC);
+static_assert(offsetof(ProjectileImpactView, speedMult) == 0xD0);
+static_assert(offsetof(ProjectileImpactView, lifeTime) == 0xD8);
+static_assert(offsetof(ProjectileImpactView, hitDamage) == 0xDC);
+static_assert(offsetof(ProjectileImpactView, vector104) == 0x104);
+static_assert(offsetof(ProjectileImpactView, distTravelled) == 0x110);
+static_assert(offsetof(ProjectileImpactView, range) == 0x14C);
+
+//tList<ImpactData> head at proj+0x88, node[0] = ImpactData*, node[1] = next
+//ImpactData fields refr +0x00, pos +0x04, normal +0x10, hkpRigidBody* +0x1C, materialType +0x20
+inline constexpr UInt32 kProjImpact_ListHead = 0x88;
+
+//refr baseForm at +0x20 is the BGSProjectile, BGSProjectile::explosion at +0x84
+//a non-null explosion marks missile/grenade/rocket rounds, ballistic bullets have none
+inline bool ProjectileBaseHasExplosion(void* projectile)
+{
+	if (!projectile) return false;
+	void* base = *(void**)((UInt8*)projectile + 0x20);
+	if (!base) return false;
+	return *(void**)((UInt8*)base + 0x84) != nullptr;
+}

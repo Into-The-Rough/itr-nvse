@@ -48,6 +48,7 @@
     <ClCompile Include="test_safewrite.cpp" />
     <ClCompile Include="test_hooklogic.cpp" />
     <ClCompile Include="test_detours.cpp" />
+    <ClCompile Include="test_projectilelogic.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="test.h" />
