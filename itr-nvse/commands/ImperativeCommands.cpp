@@ -14,6 +14,8 @@
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
 #include <vector>
+
+extern void Log(const char* fmt, ...);
 #include <algorithm>
 #include <cmath>
 
@@ -222,9 +224,11 @@ bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 	{
 		if (!cell) return;
 
-		//filter under the cell ref lock into a bounded array, no allocation while it is held
-		constexpr UInt32 kMaxPerCell = 512;
-		RefWithDist found[kMaxPerCell];
+		//filter under the cell ref lock into a bounded buffer, no allocation while it is held.
+		//main-thread command with one collection live at a time, so a shared static buffer
+		//keeps this off the stack and holds enough that the cap never truncates a real cell
+		constexpr UInt32 kMaxPerCell = 8192;
+		static RefWithDist found[kMaxPerCell];
 		UInt32 foundCount = 0;
 
 		{
@@ -254,6 +258,9 @@ bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 				if (foundCount == kMaxPerCell) break;
 			}
 		}
+
+		if (foundCount == kMaxPerCell)
+			Log("GetRefsSortedByDistance: cell ref cap %u hit, nearest results may be incomplete", kMaxPerCell);
 
 		for (UInt32 i = 0; i < foundCount; i++)
 		{

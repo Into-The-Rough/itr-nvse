@@ -9,6 +9,8 @@
 
 #include "internal/globals.h"
 
+extern void Log(const char* fmt, ...);
+
 namespace ReversePickpocketNoKarmaFix
 {
 	static bool g_enabled = false;
@@ -83,9 +85,19 @@ namespace ReversePickpocketNoKarmaFix
 
 	void Init(bool enabled)
 	{
-		s_tryPickpocketCall1.WriteRelCall(0x75DBDA, Hook_TryPickpocket1);
-		s_tryPickpocketCall2.WriteRelCall(0x75DFA7, Hook_TryPickpocket2);
-		s_rewardKarmaCall.WriteRelCall(kAddr_RewardKarmaCall, Hook_RewardKarma);
+		//all three sites must take, a partial install leaves the karma leg live or the
+		//catch roll unsuppressed, so roll back and stay disabled if any fails
+		bool ok = s_tryPickpocketCall1.WriteRelCall(0x75DBDA, Hook_TryPickpocket1);
+		ok = s_tryPickpocketCall2.WriteRelCall(0x75DFA7, Hook_TryPickpocket2) && ok;
+		ok = s_rewardKarmaCall.WriteRelCall(kAddr_RewardKarmaCall, Hook_RewardKarma) && ok;
+		if (!ok)
+		{
+			if (s_tryPickpocketCall1.IsInstalled()) s_tryPickpocketCall1.Remove();
+			if (s_tryPickpocketCall2.IsInstalled()) s_tryPickpocketCall2.Remove();
+			if (s_rewardKarmaCall.IsInstalled()) s_rewardKarmaCall.Remove();
+			Log("ReversePickpocketNoKarma: detour install failed, feature disabled");
+			return;
+		}
 		g_enabled = enabled;
 	}
 }

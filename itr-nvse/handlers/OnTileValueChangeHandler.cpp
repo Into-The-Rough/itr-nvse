@@ -46,7 +46,7 @@ static int s_nextWatchId = 1;
 static CRITICAL_SECTION s_lock;               //guards s_table, s_watchCount, s_queue
 static volatile LONG s_lockInit = 0;
 
-static thread_local int t_inSetFloat = 0;     //SetFloat (0xA0A270) tail-calls UpdateReactions (0xA09410), suppress the inner capture so one write queues once
+static thread_local void* t_setFloatValue = nullptr;   //SetFloat (0xA0A270) tail-calls UpdateReactions (0xA09410) on the same value, suppress only that value's inner capture so one write queues once, dependent tiles still report
 static thread_local bool t_inDispatch = false; //handler writes during drain are not recaptured
 
 struct PendingChange {
@@ -214,9 +214,10 @@ static void* ResolvePathToTile(const char* path, UInt32& menuIDOut) {
 static int __fastcall Hook_SetFloat(void* thisV, void*, float value, char bPropagate) {
 	bool watched = s_watchCount != 0 && thisV && !t_inDispatch && IsWatched(thisV);
 	float oldNum = watched ? static_cast<UIMinimal::Tile::Value*>(thisV)->num : 0.0f;
-	t_inSetFloat++;
+	void* prevSetFloat = t_setFloatValue;
+	t_setFloatValue = thisV;
 	int ret = s_setFloat(thisV, value, bPropagate);
-	t_inSetFloat--;
+	t_setFloatValue = prevSetFloat;
 	if (watched) {
 		float newNum = static_cast<UIMinimal::Tile::Value*>(thisV)->num;
 		if (oldNum != newNum) QueueNumChange(thisV, oldNum, newNum);
@@ -241,7 +242,7 @@ static void* __fastcall Hook_SetString(void* thisV, void*, char* str, char bProp
 }
 
 static void* __fastcall Hook_UpdateReactions(void* thisV, void*, char bForce) {
-	if (s_watchCount == 0 || !thisV || t_inDispatch || t_inSetFloat || !IsWatched(thisV))
+	if (s_watchCount == 0 || !thisV || t_inDispatch || thisV == t_setFloatValue || !IsWatched(thisV))
 		return s_updateReactions(thisV, bForce);
 
 	auto* v = static_cast<UIMinimal::Tile::Value*>(thisV);
@@ -283,7 +284,8 @@ void Update() {
 		PendingChange& p = s_drain[i];
 		{
 			ScopedLock lock(&s_lock);
-			if (!FindRecord(p.value)) continue;   //watch evicted since capture, tile is gone
+			WatchRecord* r = FindRecord(p.value);
+			if (!r || r->watchId != p.watchId) continue;   //watch evicted, or the value was rewatched under a new id since capture
 		}
 		if (!IsMenuLive(p.menuID)) {              //menu closed, watched tiles gone, drop the stale watch
 			bool evicted;

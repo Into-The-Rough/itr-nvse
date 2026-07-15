@@ -1,6 +1,6 @@
-//polls the player's CasinoDataList for ban transitions. first sight of a
-//casino seeds a baseline entry, the event only fires on a tracked
-//unbanned-to-banned transition, so an entry we never saw unbanned stays silent.
+//polls the player's CasinoDataList for ban transitions. the first poll after a
+//load snapshots existing bans silently, after that the event fires on an
+//unbanned-to-banned transition or on a never-seen entry that is already banned.
 
 #include "OnCasinoBanHandler.h"
 #include "internal/NVSEPluginAPI.h"
@@ -17,6 +17,7 @@ constexpr UInt32 kMaxTracked = 64;
 struct Tracked { UInt32 refID; bool banned; };
 static Tracked g_tracked[kMaxTracked];
 static UInt32 g_trackedCount = 0;
+static bool g_baselineDone = false;   //the first poll after a load snapshots existing bans silently
 
 static Tracked* GetTracked(UInt32 refID)
 {
@@ -61,9 +62,14 @@ void Update()
 		bool nowBanned = entry->earnings >= max;
 		auto* tracked = GetTracked(entry->casinoRefID);
 
-		//untracked entries (first sight, or table overflow) seed baseline only,
-		//dispatching for them would re-fire every frame while untracked
-		bool crossedIntoBan = tracked && nowBanned && !tracked->banned;
+		bool crossedIntoBan;
+		if (tracked)
+			crossedIntoBan = nowBanned && !tracked->banned;
+		else
+			//first sight during the post-load baseline seeds silently, after that a
+			//never-seen entry that is already banned is a genuine new ban, but only
+			//fire when there is room to record it or it would re-fire every frame
+			crossedIntoBan = g_baselineDone && nowBanned && g_trackedCount < kMaxTracked;
 
 		if (crossedIntoBan && newlyBannedCount < 16)
 			newlyBanned[newlyBannedCount++] = casino;
@@ -74,6 +80,8 @@ void Update()
 			SetLastState(entry->casinoRefID, nowBanned);
 	}
 
+	g_baselineDone = true;
+
 	for (UInt32 i = 0; i < newlyBannedCount; ++i)
 		g_eventManagerInterface->DispatchEvent("ITR:OnCasinoBan", nullptr, newlyBanned[i]);
 }
@@ -81,6 +89,7 @@ void Update()
 void ClearState()
 {
 	g_trackedCount = 0;
+	g_baselineDone = false;
 }
 
 bool Init(void* nvseInterface)

@@ -115,6 +115,7 @@ namespace
 
 		if (IsGeometry(node))
 		{
+			if (!NiGeometryGetMaterialProperty(node)) return true;   //cache skips material-less geometry, keep the index aligned
 			if (idx >= s_count || s_originals[idx].node != node) return false;
 			idx++;
 			return true;
@@ -141,7 +142,8 @@ namespace
 		if (IsGeometry(node))
 		{
 			auto* matProp = NiGeometryGetMaterialProperty(node);
-			if (matProp && idx < s_count)
+			if (!matProp) return;   //cache skips material-less geometry, keep the index aligned
+			if (idx < s_count)
 			{
 				auto& orig = s_originals[idx];
 				NiMaterialPropertySetEmissive(matProp, orig.r, orig.g, orig.b, orig.mult);
