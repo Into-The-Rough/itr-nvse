@@ -169,15 +169,12 @@ namespace LocationVisitPopup
 		}
 	}
 
-	static int s_cooldownSeconds = 300;
-
 	void Init(int cooldownSeconds, bool disableSound) {
 		g_mainThreadId = GetCurrentThreadId();
 		if (!s_lockInitialized) {
 			InitializeCriticalSection(&s_stateLock);
 			s_lockInitialized = true;
 		}
-		s_cooldownSeconds = cooldownSeconds;
 		g_cooldownMs = cooldownSeconds * 1000;
 		g_disableSound = disableSound;
 		if (!s_markerRadiusDetour.WriteRelJump(0x7795DD, CheckDiscoveredMarkerHook, 7, &s_markerRadiusTrampoline))
@@ -188,6 +185,15 @@ namespace LocationVisitPopup
 	{
 		g_cooldownMs = cooldownSeconds * 1000;
 		g_disableSound = disableSound;
+	}
+
+	void ClearState()
+	{
+		if (!s_lockInitialized)
+			return;
+		ScopedLock lock(&s_stateLock);
+		s_tracker.Clear();
+		s_pendingPopups.clear();
 	}
 
 	void Update()

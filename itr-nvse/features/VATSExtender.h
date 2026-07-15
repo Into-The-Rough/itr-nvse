@@ -2,4 +2,5 @@
 
 namespace VATSExtender {
 	void Init();
+	void ClearState();
 }

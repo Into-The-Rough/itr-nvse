@@ -1,6 +1,8 @@
 //xNVSE event registration for ITR events
 #pragma once
 
+#include <Windows.h>
+
 struct NVSEEventManagerInterface;
 
 extern NVSEEventManagerInterface* g_eventManagerInterface;
@@ -37,9 +39,10 @@ namespace EventDispatch {
 		const char* eventName;
 		const char* handlerName;
 		ProbeHandlerFn handler;
-		volatile bool hasListeners = true;
+		//written with interlocked ops in Refresh, hooks on any thread may take a plain relaxed read of hasListeners
+		volatile LONG hasListeners = TRUE;
 		bool installed = false;
-		UInt32 refreshCounter = 0;
+		volatile LONG refreshCounter = 0;
 
 		bool Install();
 		bool Refresh(bool force);

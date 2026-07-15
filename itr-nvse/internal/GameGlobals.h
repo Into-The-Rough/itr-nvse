@@ -92,6 +92,7 @@ inline constexpr UInt32 kSetting_ReputationNegativeSound = 0x11CBA30;
 struct OSInputGlobalsView {
 	UInt8 pad00[0x18F8];
 	UInt8 currKeyStates[256];
+	UInt8 lastKeyStates[256];
 };
 
 struct OSGlobalsView {
@@ -105,6 +106,7 @@ struct SaveGameManagerView {
 };
 
 static_assert(offsetof(OSInputGlobalsView, currKeyStates) == 0x18F8);
+static_assert(offsetof(OSInputGlobalsView, lastKeyStates) == 0x19F8);
 static_assert(offsetof(OSGlobalsView, window) == 0x08);
 static_assert(offsetof(SaveGameManagerView, isLoading) == 0x26);
 static_assert(offsetof(GameSettingView, data) == 0x04);

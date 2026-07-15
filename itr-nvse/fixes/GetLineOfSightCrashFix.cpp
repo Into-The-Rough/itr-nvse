@@ -14,6 +14,7 @@
 
 #include "GetLineOfSightCrashFix.h"
 #include "internal/NVSEPluginAPI.h"
+#include "internal/SafeWrite.h"
 
 #include "internal/globals.h"
 
@@ -48,8 +49,17 @@ namespace GetLineOfSightCrashFix
 		}
 	}
 
+	//cmp [ebx+8],0 - jz 0x59CE53
+	static constexpr UInt8 kExpected[10] = { 0x83, 0x7B, 0x08, 0x00, 0x0F, 0x84, 0x72, 0x04, 0x00, 0x00 };
+
 	void Init()
 	{
+		if (memcmp((void*)kPatchAddr, kExpected, sizeof(kExpected)) != 0)
+		{
+			Log("GetLineOfSightCrashFix: 0x%X bytes changed, skipping", kPatchAddr);
+			return;
+		}
+
 		//replace 4-byte cmp + 6-byte jz (10 bytes) with 5-byte jmp + 5 NOPs
 		SafeWrite::WriteRelJump(kPatchAddr, (UInt32)Hook);
 		SafeWrite::WriteNop(kPatchAddr + 5, 5);

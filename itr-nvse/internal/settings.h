@@ -12,6 +12,7 @@ namespace Settings
 	inline int bQuickDrop = 0;
 	inline int bQuick180 = 0;
 	inline int bAimZoomFirstPersonOnly = 0;
+	inline int bSuppressInputInConsole = 1;
 	inline int bDebugLog = 0;
 
 	inline int iQuickDropModifierKey = VK_SHIFT;
@@ -128,6 +129,7 @@ namespace Settings
 		bQuickDrop = GetINIInt("Tweaks", "bQuickDrop", 0);
 		bQuick180 = GetINIInt("Tweaks", "bQuick180", 0);
 		bAimZoomFirstPersonOnly = GetINIInt("Tweaks", "bAimZoomFirstPersonOnly", 0);
+		bSuppressInputInConsole = GetINIInt("Tweaks", "bSuppressInputInConsole", 1);
 		iAutoQuickLoadDelayMs = GetINIInt("AutoQuickLoad", "iDelayMs", 1500);
 
 		iQuickDropModifierKey = GetINIInt("QuickDrop", "iModifierKey", VK_SHIFT);

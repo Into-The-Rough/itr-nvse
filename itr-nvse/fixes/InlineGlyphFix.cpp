@@ -44,6 +44,7 @@ namespace InlineGlyphFix
 	static Font_AddButton_t s_origAddButton = nullptr;
 	static TileText_MakeNode_t s_origMakeNode = nullptr;
 	static bool s_installed = false;
+	static bool g_enabled = false;
 
 	//UI pipeline is single-threaded. every Font::AddButton call chain originates inside
 	//TileText::MakeNode (sub_A21AF0, sole xref is vtable slot 0x1094880), so this is
@@ -113,9 +114,9 @@ namespace InlineGlyphFix
 	{
 		s_origComputeButtonMetrics(font, icon, character);
 
-		//hook may outlive a refused remove
+		//hooks stay installed, behaviour gated by the runtime flag
 		void* tile = s_currentTile;
-		if (!s_installed || !tile || !font || !icon) return;
+		if (!g_enabled || !tile || !font || !icon) return;
 
 		float scale = GetTileScale(tile, font);
 		if (scale > 0.999f && scale < 1.001f) return;
@@ -149,7 +150,7 @@ namespace InlineGlyphFix
 	void __fastcall Hook_AddButton(void* font, void*, int iconIdx, void* triShape, NiPoint3* cursor)
 	{
 		void* tile = s_currentTile;
-		if (!s_installed || !tile || !cursor)
+		if (!g_enabled || !tile || !cursor)
 		{
 			s_origAddButton(font, iconIdx, triShape, cursor);
 			return;
@@ -233,33 +234,13 @@ namespace InlineGlyphFix
 		return true;
 	}
 
-	static void UninstallHooks()
-	{
-		//only restore while the slot is still ours, a foreign hook may chain through us
-		if (s_origMakeNode && *(UInt32*)kAddr_TileTextVtable_MakeNode == (UInt32)Hook_MakeNode)
-		{
-			UInt32 dummy = 0;
-			SwapVtableSlot(kAddr_TileTextVtable_MakeNode, (UInt32)s_origMakeNode, dummy);
-			s_origMakeNode = nullptr;
-		}
-		//keep originals if Remove is refused, the still-live hooks need them to pass through
-		if (s_addButtonDetour.Remove())
-			s_origAddButton = nullptr;
-		if (s_metricsDetour.Remove())
-			s_origComputeButtonMetrics = nullptr;
-		s_currentTile = nullptr;
-	}
-
+	//hooks install once and stay resident, toggling only flips the runtime gate
+	//so a foreign hook chained on top of ours never has to be unwound
 	void SetEnabled(bool enabled)
 	{
-		if (enabled == s_installed) return;
-		if (enabled)
+		if (enabled && !s_installed)
 			s_installed = InstallHooks();
-		else
-		{
-			UninstallHooks();
-			s_installed = false;
-		}
+		g_enabled = enabled && s_installed;
 	}
 
 	void Init()

@@ -438,7 +438,7 @@ namespace DetectionSoundCommands
 			const DWORD now = GetTickCount();
 			for (std::size_t i = 0; i < g_forcedAlerts.size();)
 			{
-				const ForcedAlert alert = g_forcedAlerts[i];
+				ForcedAlert& alert = g_forcedAlerts[i];
 				if (!IsExpired(now, alert.expiresAt))
 				{
 					++i;
@@ -446,7 +446,15 @@ namespace DetectionSoundCommands
 				}
 
 				Actor* actor = LookupActor(alert.refID);
-				if (actor && GetAlert(actor) && !HasCombatTargets(actor))
+				if (actor && HasCombatTargets(actor))
+				{
+					//still fighting, keep the entry armed so the alert flag gets cleared by us once combat ends
+					alert.expiresAt = now + GetAlertTimerMs();
+					++i;
+					continue;
+				}
+
+				if (actor && GetAlert(actor))
 				{
 					SetAlert(actor, false);
 					EvaluatePackage(actor, false, false);

@@ -114,9 +114,39 @@ TEST(CooldownTracker_MaxCapacity)
 	tracker.Check(3, 1000, 60000);
 	tracker.Check(4, 1000, 60000);
 	ASSERT_EQ(tracker.Count(), 4);
-	//should not add more
+	//full table evicts rather than grows
 	tracker.Check(5, 1000, 60000);
 	ASSERT_EQ(tracker.Count(), 4);
+	return true;
+}
+
+TEST(CooldownTracker_FullTableInsertEvictsStalest)
+{
+	CooldownTracker<4> tracker;
+	uint32_t cooldown = 60000;
+	uint32_t leaveThreshold = 3000;
+
+	tracker.Check(1, 1000, cooldown);
+	tracker.Check(2, 2000, cooldown);
+	tracker.Check(3, 3000, cooldown);
+	tracker.Check(4, 4000, cooldown);
+	tracker.MarkShown(3, 3000);
+	ASSERT_EQ(tracker.Count(), 4);
+
+	//full table, id 1 is stalest and gets evicted for the new id
+	ASSERT_EQ(tracker.Check(5, 5000, cooldown), 1);
+	ASSERT_EQ(tracker.Count(), 4);
+
+	//new id was inserted and is tracked as present
+	ASSERT_EQ(tracker.Check(5, 5100, cooldown), 1);
+
+	tracker.UpdateCooldowns(9000, leaveThreshold);
+	//retained entry still in cooldown stays suppressed
+	ASSERT_EQ(tracker.Check(3, 9100, cooldown), 1);
+	//retained entry without cooldown triggers after leaving
+	ASSERT_EQ(tracker.Check(4, 9200, cooldown), 0);
+	//evicted id is a first visit again, not a retained left entry
+	ASSERT_EQ(tracker.Check(1, 9300, cooldown), 1);
 	return true;
 }
 

@@ -55,7 +55,9 @@ bool IsWakeableActor(Actor* actor)
 	if (actor->typeID != kFormType_ACHR && actor->typeID != kFormType_ACRE) return false;
 	if (Engine::Actor_IsDead(actor, false)) return false;
 	if (!actor->renderState || !actor->renderState->niNode) return false; //unloaded or disabled
-	if (GetSitSleepState(actor) != 3) return false; //3 = fully sleeping in bed
+	//raw vtbl+0x214 state, 1-5 sitting chain, 6-9 bed chain, 9 fully asleep in bed
+	//10 already wants wake and gets up on its own, GetSleeping maps raw 9 to script 3
+	if (GetSitSleepState(actor) != 9) return false;
 	if (Engine::Actor_GetCombatController(actor)) return false; //already fighting
 	return true;
 }
@@ -184,6 +186,13 @@ void Init(bool enable, float wakeDistance, float quietWakeDistance, int cooldown
 	} else {
 		Log("WakeyWakey: fire hook install failed at 0x95DE16");
 	}
+}
+
+void UpdateSettings(float wakeDistance, float quietWakeDistance, int cooldownMs)
+{
+	g_wakeDistance = wakeDistance;
+	g_quietWakeDistance = quietWakeDistance;
+	g_cooldownMs = cooldownMs > 0 ? (DWORD)cooldownMs : 0;
 }
 
 }

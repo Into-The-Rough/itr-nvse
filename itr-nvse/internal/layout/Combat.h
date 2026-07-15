@@ -27,9 +27,10 @@ struct BGSWorldLocationView {
 	float x;
 	float y;
 	float z;
-	UInt32 unk0C;
+	TESForm* form; //serialised as a refID via 0x865DF0
 };
 
+//verified: sub_9856E0 serialises six game-time floats at 0x4C..0x60 and the two byte counters at 0x64/0x65
 struct CombatTargetView {
 	Actor* target;
 	SInt32 detectionLevel;
@@ -39,10 +40,10 @@ struct CombatTargetView {
 	BGSWorldLocationView initialTargetLocation;
 	UInt16 searchCount;
 	UInt16 attackerCount;
+	float timestamps[6];
 	UInt8 inLOSCount;
 	UInt8 inFullLOSCount;
-	UInt8 pad4E[2];
-	float timestamps[6];
+	UInt8 pad66[2];
 };
 
 static_assert(offsetof(CombatControllerView, combatGroup) == 0x80);
@@ -59,9 +60,9 @@ static_assert(offsetof(CombatTargetView, lastFullyVisibleLocation) == 0x28);
 static_assert(offsetof(CombatTargetView, initialTargetLocation) == 0x38);
 static_assert(offsetof(CombatTargetView, searchCount) == 0x48);
 static_assert(offsetof(CombatTargetView, attackerCount) == 0x4A);
-static_assert(offsetof(CombatTargetView, inLOSCount) == 0x4C);
-static_assert(offsetof(CombatTargetView, inFullLOSCount) == 0x4D);
-static_assert(offsetof(CombatTargetView, timestamps) == 0x50);
+static_assert(offsetof(CombatTargetView, timestamps) == 0x4C);
+static_assert(offsetof(CombatTargetView, inLOSCount) == 0x64);
+static_assert(offsetof(CombatTargetView, inFullLOSCount) == 0x65);
 static_assert(sizeof(CombatTargetView) == 0x68);
 
 inline void* CombatControllerGetCombatGroup(void* combatController)

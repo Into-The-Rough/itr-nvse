@@ -192,7 +192,11 @@ inline void BhkWorldObjectUpdateCollisionFilter(void* worldObject)
 inline bool HkpRigidBodyIsMobile(void* rigidBody)
 {
 	auto* view = HkpRigidBodyAsView(rigidBody);
-	return view && (view->motionType & 2) != 0;
+	if (!view)
+		return false;
+	//motion ctors write m_type at motion+0x8: 0 invalid, 1 dynamic, 2 sphere, 3 box, 4 keyframed, 5 fixed, 6 thin box, 7 character
+	UInt8 type = view->motionType;
+	return type != 0 && type != 4 && type != 5;
 }
 
 inline bool HkpRigidBodyIsActive(void* rigidBody)

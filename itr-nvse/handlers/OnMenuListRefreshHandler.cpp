@@ -38,6 +38,11 @@ static DWORD s_mainThreadId = 0;
 
 static void Dispatch(UInt32 menuID) {
 	if (!g_eventManagerInterface) return;
+	//a handler mutating inventory retriggers the rebuild we dispatched from, which
+	//would recurse unbounded, so skip dispatch while one is already running
+	static thread_local bool s_inDispatch = false;
+	if (s_inDispatch) return;
+	s_inDispatch = true;
 	//these menu rebuilds can be pumped on an AI task thread when another mod routes the
 	//UI pump off-main. plain DispatchEvent races NVSE's handler list and runs handler
 	//scripts off-thread, so defer to the main thread there.
@@ -45,6 +50,7 @@ static void Dispatch(UInt32 menuID) {
 		g_eventManagerInterface->DispatchEvent("ITR:OnMenuListRefresh", nullptr, (int)menuID);
 	else if (g_eventManagerInterface->DispatchEventThreadSafe)
 		g_eventManagerInterface->DispatchEventThreadSafe("ITR:OnMenuListRefresh", nullptr, nullptr, (int)menuID);
+	s_inDispatch = false;
 }
 
 static void __cdecl Hook_InventoryMenu_UpdateList() {

@@ -63,9 +63,22 @@ bool __cdecl ShouldAllowFastTravel(TESObjectREFR* player, TESObjectREFR* marker)
 		}
 	}
 
+	//a handler triggering fast travel re-enters the executor synchronously, cap the
+	//depth and let travels past it proceed, breaking the cycle
+	static UInt32 s_depth = 0;
+	if (s_depth >= 16)
+	{
+		static volatile LONG loggedDepth = 0;
+		if (InterlockedCompareExchange(&loggedDepth, 1, 0) == 0)
+			Log("OnPreFastTravel: recursion cap hit, letting travel proceed");
+		return true;
+	}
+
 	UInt32 shouldTravel = 1;
+	s_depth++;
 	g_eventManagerInterface->DispatchEventAlt(kEventName, DispatchResultCb, &shouldTravel,
 		player, player, marker, destWorldspace, PackEventFloatArg(distance), &shouldTravel);
+	s_depth--;
 
 	if (!shouldTravel)
 		Log("OnPreFastTravel: vetoed (marker %08X)", marker ? marker->refID : 0);

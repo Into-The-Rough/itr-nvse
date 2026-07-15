@@ -1,5 +1,10 @@
 //cancellable pre-pickup event. handlers SetFunctionValue 0 to veto.
 //once any handler vetoes, later handlers can't un-veto.
+//covers world pickups (player and actor) and container-take. direct AddItem-style
+//insertions into the player skip this event, 0x574FA0 is crafting/reward delivery
+//(RecipeMenu::ItemSelectCallback and friends), not a pickup site
+
+#include <Windows.h>
 
 #include "OnPrePickUpHandler.h"
 #include "internal/NVSEPluginAPI.h"
@@ -18,21 +23,17 @@ constexpr char kEventName[] = "ITR:OnPrePickUp";
 
 constexpr UInt32 kAddr_PlayerPickUp           = 0x00953FF0;
 constexpr UInt32 kAddr_ActorPickUp            = 0x00891E00;
-constexpr UInt32 kAddr_AddObjecttoContainer   = 0x00574FA0;
 constexpr UInt32 kAddr_ContainerTransferItem  = 0x0075DC80;
 
 static Detours::JumpDetour s_playerPickUpDetour;
 static Detours::JumpDetour s_actorPickUpDetour;
-static Detours::JumpDetour s_addObjectToContainerDetour;
 static Detours::JumpDetour s_containerTransferItemDetour;
 
 typedef void(__thiscall* PlayerPickUp_t)(TESObjectREFR*, TESObjectREFR*, SInt32, UInt8);
 typedef int(__thiscall* ActorPickUp_t)(TESObjectREFR*, TESObjectREFR*, SInt32, UInt8);
-typedef int(__thiscall* AddObjecttoContainer_t)(TESObjectREFR*, TESForm*, ExtraDataList*, SInt32);
 typedef void(__cdecl* ContainerTransferItem_t)(SInt32);
 static PlayerPickUp_t s_playerPickUp = nullptr;
 static ActorPickUp_t s_actorPickUp = nullptr;
-static AddObjecttoContainer_t s_addObjectToContainer = nullptr;
 static ContainerTransferItem_t s_containerTransferItem = nullptr;
 
 typedef TESObjectREFR* (__stdcall *InvRefCreateEntry_t)(TESObjectREFR* container, TESForm* itemForm, SInt32 countDelta, ExtraDataList* xData);
@@ -56,9 +57,22 @@ static bool DispatchPrePickUp(TESObjectREFR* picker, TESForm* baseForm, TESObjec
 	if (!g_eventManagerInterface || !picker || !baseForm)
 		return true;
 
+	//a handler adding items retriggers a pickup site synchronously, cap the depth
+	//and let pickups past it proceed, breaking the cycle
+	static UInt32 s_depth = 0;
+	if (s_depth >= 16)
+	{
+		static volatile LONG loggedDepth = 0;
+		if (InterlockedCompareExchange(&loggedDepth, 1, 0) == 0)
+			Log("OnPrePickUp: recursion cap hit, letting pickup proceed");
+		return true;
+	}
+
 	UInt32 shouldPick = 1;
+	s_depth++;
 	g_eventManagerInterface->DispatchEventAlt(kEventName, DispatchResultCb, &shouldPick,
 		picker, baseForm, itemRef, &shouldPick);
+	s_depth--;
 	return shouldPick != 0;
 }
 
@@ -84,26 +98,6 @@ static int __fastcall ActorPickUp_Hook(TESObjectREFR* picker, void*, TESObjectRE
 		return 0;
 
 	return s_actorPickUp ? s_actorPickUp(picker, itemRef, count, playSounds) : 0;
-}
-
-//player-only filter keeps cell-load container fill and levelled-list npc init untouched
-static int __cdecl CheckAddObjecttoContainer(TESObjectREFR* this_, TESForm* item, ExtraDataList* xData, SInt32 count)
-{
-	if (!this_ || this_ != *(TESObjectREFR**)g_thePlayerPtr) return 1;
-
-	TESObjectREFR* invRef = nullptr;
-	if (g_invRefCreateEntry && item)
-		invRef = g_invRefCreateEntry(this_, item, count, xData);
-
-	return DispatchPrePickUp(this_, item, invRef, count) ? 1 : 0;
-}
-
-static int __fastcall AddObjecttoContainer_Hook(TESObjectREFR* container, void*, TESForm* item, ExtraDataList* xData, SInt32 count)
-{
-	if (!CheckAddObjecttoContainer(container, item, xData, count))
-		return 0;
-
-	return s_addObjectToContainer ? s_addObjectToContainer(container, item, xData, count) : 0;
 }
 
 static int __cdecl CheckContainerTransferItem(SInt32 count)
@@ -183,10 +177,9 @@ bool Init(void* nvseInterface)
 	int installed = 0;
 	installed += InstallEntryDetour("PlayerCharacter::PickUpObject", s_playerPickUpDetour, kAddr_PlayerPickUp, (void*)PlayerPickUp_Hook, 6, s_playerPickUp);
 	installed += InstallEntryDetour("Actor::PickUpObject", s_actorPickUpDetour, kAddr_ActorPickUp, (void*)ActorPickUp_Hook, 6, s_actorPickUp);
-	installed += InstallEntryDetour("TESObjectREFR::AddObjecttoContainer", s_addObjectToContainerDetour, kAddr_AddObjecttoContainer, (void*)AddObjecttoContainer_Hook, 6, s_addObjectToContainer);
 	installed += InstallEntryDetour("ContainerMenu::TransferItem", s_containerTransferItemDetour, kAddr_ContainerTransferItem, (void*)ContainerTransferItem_Hook, 9, s_containerTransferItem);
 
-	Log("OnPrePickUp: %d/4 hooks installed", installed);
+	Log("OnPrePickUp: %d/3 hooks installed", installed);
 	return installed > 0;
 }
 

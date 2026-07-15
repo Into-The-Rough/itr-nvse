@@ -1,5 +1,5 @@
 #pragma once
 
 namespace SaveFileSizeHandler {
-	bool Init();
+	bool Init(void* nvseInterface);
 }

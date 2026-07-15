@@ -1,7 +1,6 @@
-//polls the player's CasinoDataList for ban transitions. engine writes
-//earnings atomically on earningStage advance, so a first-session ban can
-//create the entry already at stage 4 before we see it - "new entry already
-//banned" after the baseline snapshot counts as a transition.
+//polls the player's CasinoDataList for ban transitions. first sight of a
+//casino seeds a baseline entry, the event only fires on a tracked
+//unbanned-to-banned transition, so an entry we never saw unbanned stays silent.
 
 #include "OnCasinoBanHandler.h"
 #include "internal/NVSEPluginAPI.h"
@@ -14,10 +13,10 @@
 struct SimpleListNode { void* item; SimpleListNode* next; };
 struct CasinoStats { UInt32 casinoRefID; UInt32 earnings; UInt32 unk08; };
 
+constexpr UInt32 kMaxTracked = 64;
 struct Tracked { UInt32 refID; bool banned; };
-static Tracked g_tracked[16];
+static Tracked g_tracked[kMaxTracked];
 static UInt32 g_trackedCount = 0;
-static bool g_needsBaseline = true;
 
 static Tracked* GetTracked(UInt32 refID)
 {
@@ -32,7 +31,7 @@ static void SetLastState(UInt32 refID, bool banned)
 		tracked->banned = banned;
 		return;
 	}
-	if (g_trackedCount < 16) {
+	if (g_trackedCount < kMaxTracked) {
 		g_tracked[g_trackedCount++] = { refID, banned };
 	}
 }
@@ -61,8 +60,10 @@ void Update()
 		UInt32 max = TESCasinoGetMaxWinnings(casino);
 		bool nowBanned = entry->earnings >= max;
 		auto* tracked = GetTracked(entry->casinoRefID);
-		bool crossedIntoBan = tracked ? (nowBanned && !tracked->banned)
-		                              : (!g_needsBaseline && nowBanned);
+
+		//untracked entries (first sight, or table overflow) seed baseline only,
+		//dispatching for them would re-fire every frame while untracked
+		bool crossedIntoBan = tracked && nowBanned && !tracked->banned;
 
 		if (crossedIntoBan && newlyBannedCount < 16)
 			newlyBanned[newlyBannedCount++] = casino;
@@ -73,8 +74,6 @@ void Update()
 			SetLastState(entry->casinoRefID, nowBanned);
 	}
 
-	g_needsBaseline = false;
-
 	for (UInt32 i = 0; i < newlyBannedCount; ++i)
 		g_eventManagerInterface->DispatchEvent("ITR:OnCasinoBan", nullptr, newlyBanned[i]);
 }
@@ -82,7 +81,6 @@ void Update()
 void ClearState()
 {
 	g_trackedCount = 0;
-	g_needsBaseline = true;
 }
 
 bool Init(void* nvseInterface)

@@ -41,15 +41,16 @@ namespace
 		TESObjectCELL* currentInterior;
 		TESObjectCELL** interiorsBuffer;
 		TESObjectCELL** exteriorsBuffer;
-		UInt32 interiorBufferSize;
-		UInt32 exteriorBufferSize;
 	};
 	static_assert(offsetof(TESView, gridCellArray) == 0x08);
 	static_assert(offsetof(TESView, currentInterior) == 0x34);
 	static_assert(offsetof(TESView, interiorsBuffer) == 0x38);
 	static_assert(offsetof(TESView, exteriorsBuffer) == 0x3C);
-	static_assert(offsetof(TESView, interiorBufferSize) == 0x40);
-	static_assert(offsetof(TESView, exteriorBufferSize) == 0x44);
+
+	//TES ctor 0x44FB20 sizes the +0x38/+0x3C buffers from these settings and zeroes every slot,
+	//TES+0x40/+0x44 are not live counts, iterators like 0x456D00 walk the full capacity with null checks
+	constexpr UInt32 kAddr_uInteriorCellBufferValue = 0x11C3E3C; //setting object 0x11C3E38, value union at +0x04
+	constexpr UInt32 kAddr_uExteriorCellBufferValue = 0x11C3C94; //setting object 0x11C3C90, value union at +0x04
 
 	constexpr UInt32 kAddr_TES_ShowCellNode = 0x456D00;
 	constexpr UInt32 kAddr_TES_TogglePrimitive = 0x456AA0;
@@ -445,7 +446,13 @@ namespace
 		{
 			s_alphaProperty = CdeclCall<void*>(kAddr_NiAlphaProperty_Create);
 			if (s_alphaProperty)
+			{
 				reinterpret_cast<NiAlphaPropertyView*>(s_alphaProperty)->flags = 0x10ED;
+				//NiRefObject ctor 0xA5D3A0 leaves the refcount (+0x04) at 0, expiring overlays
+				//would decref it to deletion, hold one reference so the cache owns the object
+				InterlockedIncrement(reinterpret_cast<volatile LONG*>(
+					reinterpret_cast<UInt8*>(s_alphaProperty) + 4));
+			}
 		}
 
 		return s_alphaProperty;
@@ -706,13 +713,15 @@ namespace
 
 		if (tes->interiorsBuffer)
 		{
-			for (UInt32 i = 0; i < tes->interiorBufferSize; i++)
+			const UInt32 capacity = *reinterpret_cast<UInt32*>(kAddr_uInteriorCellBufferValue);
+			for (UInt32 i = 0; i < capacity; i++)
 				AddUniqueCell(cells, tes->interiorsBuffer[i]);
 		}
 
 		if (tes->exteriorsBuffer)
 		{
-			for (UInt32 i = 0; i < tes->exteriorBufferSize; i++)
+			const UInt32 capacity = *reinterpret_cast<UInt32*>(kAddr_uExteriorCellBufferValue);
+			for (UInt32 i = 0; i < capacity; i++)
 				AddUniqueCell(cells, tes->exteriorsBuffer[i]);
 		}
 	}
@@ -822,7 +831,7 @@ namespace ToggleAllPrimitives
 {
 	void Update()
 	{
-		if (!s_enabled)
+		if (!s_enabled || g_isLoadingSave)
 			return;
 
 		const UInt32 now = GetTickCount();
@@ -844,6 +853,18 @@ namespace ToggleAllPrimitives
 
 	void Reset()
 	{
+		if (s_enabled)
+		{
+			//the primitives ini flag and cell node flags are global engine state that survives
+			//a load, flip them back so the new session starts hidden, skip the per-ref walk,
+			//the outgoing cells are being torn down and new cells inherit state from the flags
+			if (TESView* tes = GetTESView())
+			{
+				SetVisibleNodesEnabled(tes, false);
+				SetPrimitivesVisible(tes, false);
+			}
+		}
+
 		s_enabled = false;
 		s_debugNodeStates.clear();
 		s_lastRefreshMs = 0;

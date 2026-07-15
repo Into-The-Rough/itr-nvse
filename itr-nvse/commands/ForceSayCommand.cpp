@@ -223,6 +223,16 @@ bool ForceSay(Actor* speaker, TESTopic* topic, Actor* target)
 		speakerAnim, listenerAnim, target,
 		true, false, false, true, true); //abQueue=false for sync lip load
 
+	//0xAD8E60 skips registration for an invalid handle and can run the callback inline,
+	//so a missing voice file must bail before any sayto bookkeeping
+	if (soundHandle.uiSoundID == 0xFFFFFFFF)
+	{
+		ThisCall(0x83C670, item);
+		Engine::GameHeapFree(item);
+		*lipDist = oldLipDist;
+		return false;
+	}
+
 	ThisCall(0x57AD20, speaker, topic); //SetSayToTopic
 	ThisCall(0x57ACE0, speaker, topicInfo); //SetSayToTopicInfo
 	ThisCall(0x57AD60, speaker, 1); //SetSayToResponseNumber
@@ -231,11 +241,16 @@ bool ForceSay(Actor* speaker, TESTopic* topic, Actor* target)
 		(void*)0x936A20, //Actor::SayToCallBack
 		(void*)(speaker->refID));
 
-	ThisCall(0x8D8DC0, process, (UInt8)1); //SetDoingSayTo
+	//SetDoingSayTo via process vtbl+0x88, highprocess 0x8D8DC0 writes this+0x459,
+	//middlehigh override 0x4534F0 is a no-op stub, a direct highprocess call would write oob on smaller processes
+	UInt32 fnSetDoingSayTo = (*(UInt32**)process)[0x88 / 4];
+	ThisCall(fnSetDoingSayTo, process, (UInt8)1);
+
+	//restore before the result script, 0x83C850 runs it synchronously and a re-entering
+	//forcesay would capture the inflated value as its saved original
+	*lipDist = oldLipDist;
 
 	ThisCall(0x83C850, item, 0); //RunResult(TIRS_BEGIN)
-
-	*lipDist = oldLipDist;
 
 	ThisCall(0x83C670, item);
 	Engine::GameHeapFree(item);

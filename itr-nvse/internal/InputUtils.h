@@ -2,7 +2,7 @@
 #include <Windows.h>
 
 inline int MapDIKToVK(unsigned int dik) {
-	static const int dikToVk[256] = {
+	static const int dikToVk[0x59] = {
 		0, VK_ESCAPE, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', VK_OEM_MINUS, VK_OEM_PLUS, VK_BACK, VK_TAB,
 		'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', VK_OEM_4, VK_OEM_6, VK_RETURN, VK_LCONTROL,
 		'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', VK_OEM_1, VK_OEM_7, VK_OEM_3, VK_LSHIFT, VK_OEM_5,
@@ -11,7 +11,30 @@ inline int MapDIKToVK(unsigned int dik) {
 		VK_NUMLOCK, VK_SCROLL, VK_NUMPAD7, VK_NUMPAD8, VK_NUMPAD9, VK_SUBTRACT, VK_NUMPAD4, VK_NUMPAD5, VK_NUMPAD6,
 		VK_ADD, VK_NUMPAD1, VK_NUMPAD2, VK_NUMPAD3, VK_NUMPAD0, VK_DECIMAL, 0, 0, VK_OEM_102, VK_F11, VK_F12
 	};
-	return (dik < 256) ? dikToVk[dik] : 0;
+	if (dik < 0x59)
+		return dikToVk[dik];
+	switch (dik) { //extended scan codes
+	case 0x9C: return VK_RETURN;   //numpad enter
+	case 0x9D: return VK_RCONTROL;
+	case 0xB5: return VK_DIVIDE;
+	case 0xB7: return VK_SNAPSHOT;
+	case 0xB8: return VK_RMENU;
+	case 0xC5: return VK_PAUSE;
+	case 0xC7: return VK_HOME;
+	case 0xC8: return VK_UP;
+	case 0xC9: return VK_PRIOR;
+	case 0xCB: return VK_LEFT;
+	case 0xCD: return VK_RIGHT;
+	case 0xCF: return VK_END;
+	case 0xD0: return VK_DOWN;
+	case 0xD1: return VK_NEXT;
+	case 0xD2: return VK_INSERT;
+	case 0xD3: return VK_DELETE;
+	case 0xDB: return VK_LWIN;
+	case 0xDC: return VK_RWIN;
+	case 0xDD: return VK_APPS;
+	}
+	return 0;
 }
 
 inline bool IsRawKeyPressed(unsigned int keycode) {

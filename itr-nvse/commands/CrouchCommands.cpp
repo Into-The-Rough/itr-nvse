@@ -105,7 +105,8 @@ bool Cmd_ForceCrouch_Execute(COMMAND_ARGS)
 	typedef UInt32 (__thiscall *_GetFlags)(Actor*);
 	auto GetMoveFlags = (_GetFlags)0x8846E0;
 
-	if (!InstallCrouchHooks()) return true;
+	//hooks are prologue patches, installed once at PostLoad via InstallHooks, never from live command execution
+	if (!g_crouchHookInstalled) return true;
 
 	void* cc = Engine::Actor_GetCombatController(actor);
 	if (cc)
@@ -137,7 +138,7 @@ bool Cmd_DisableCrouching_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &disable)) return true;
 	if (!IsActorRef(thisObj)) return true;
 
-	if (!InstallCrouchHooks()) return true;
+	if (!g_crouchHookInstalled) return true;
 
 	auto* actor = (Actor*)thisObj;
 	if (disable) {
@@ -162,6 +163,11 @@ bool Cmd_DisableCrouching_Execute(COMMAND_ARGS)
 }
 
 namespace CrouchCommands {
+
+void InstallHooks()
+{
+	InstallCrouchHooks();
+}
 
 void ClearState()
 {

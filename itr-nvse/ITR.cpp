@@ -111,6 +111,7 @@
 #include "features/AltTabMute.h"
 #include "features/PerkRuntimeFramework.h"
 #include "features/AimZoomFirstPersonOnly.h"
+#include "features/ConsoleInputSuppression.h"
 #include "features/AggroThreshold.h"
 
 #include "commands/ImperativeCommands.h"
@@ -172,9 +173,10 @@ static void DispatchConsoleCommandEvent(const char* fullCommand, TESObjectREFR* 
 static int ConsoleScriptRunCommon(Script* script, void* scriptContext, int a3,
 	TESObjectREFR* calleeRef, ConsoleScriptRun_t orig)
 {
+	//dispatch before raising the flag so event handlers are not misattributed to typed input
+	DispatchConsoleCommandEvent(GetScriptText(script), calleeRef);
 	const bool prev = s_inConsoleDispatch;
 	s_inConsoleDispatch = true;
-	DispatchConsoleCommandEvent(GetScriptText(script), calleeRef);
 	const int result = orig(script, scriptContext, a3, calleeRef);
 	s_inConsoleDispatch = prev;
 	return result;
@@ -262,13 +264,23 @@ static bool g_vatsSpeechFixDisabledByStewie = false;
 //gated by Debug\bDebugLog, all Log() calls are no-ops while closed
 static void OpenDebugLog()
 {
-	if (!Settings::bDebugLog || g_logFile) return;
-	char logPath[MAX_PATH];
-	GetModuleFileNameA(nullptr, logPath, MAX_PATH);
-	char* lastSlash = strrchr(logPath, '\\');
-	if (lastSlash) *lastSlash = '\0';
-	strcat_s(logPath, "\\itr-nvse.log");
-	fopen_s(&g_logFile, logPath, "w");
+	if (Settings::bDebugLog && !g_logFile)
+	{
+		char logPath[MAX_PATH];
+		GetModuleFileNameA(nullptr, logPath, MAX_PATH);
+		char* lastSlash = strrchr(logPath, '\\');
+		if (lastSlash) *lastSlash = '\0';
+		strcat_s(logPath, "\\itr-nvse.log");
+		fopen_s(&g_logFile, logPath, "w");
+	}
+	else if (!Settings::bDebugLog && g_logFile)
+	{
+		InitCriticalSectionOnce(&g_logLockInit, &g_logLock);
+		ScopedLock lock(&g_logLock);
+		FILE* f = g_logFile;
+		g_logFile = nullptr;
+		fclose(f);
+	}
 }
 
 void Log(const char* fmt, ...)
@@ -276,6 +288,7 @@ void Log(const char* fmt, ...)
 	if (!g_logFile) return;
 	InitCriticalSectionOnce(&g_logLockInit, &g_logLock);
 	ScopedLock lock(&g_logLock);
+	if (!g_logFile) return; //closed by a config reload between the check and the lock
 	va_list args;
 	va_start(args, fmt);
 	vfprintf(g_logFile, fmt, args);
@@ -289,12 +302,7 @@ static void InitVATSSpeechFix()
 	g_vatsSpeechFixDisabledByStewie = false;
 	if (GetModuleHandleA("nvse_stewie_tweaks.dll"))
 	{
-		static const UInt8 kStewieTimescalePatch[] = {
-			0xD9, 0xE1, 0x66, 0x66, 0x66, 0x66, 0x0F,
-			0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00
-		};
-
-		if (memcmp((void*)0xAEDFBD, kStewieTimescalePatch, sizeof(kStewieTimescalePatch)) == 0)
+		if (memcmp((void*)0xAEDFBD, VATSSpeechFix::kStewieTimescalePatch, sizeof(VATSSpeechFix::kStewieTimescalePatch)) == 0)
 		{
 			g_vatsSpeechFixDisabledByStewie = true;
 		}
@@ -361,6 +369,7 @@ static void DeleteConsoleLog()
 }
 
 static bool g_hooksInstalled = false;
+static NVSEInterface* s_nvseInterface = nullptr;
 
 static void MessageHandler(NVSEMessagingInterface::Message* msg)
 {
@@ -379,7 +388,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				KillActorXPFix::Init(Settings::bKillActorXPFix != 0);
 				ReversePickpocketNoKarmaFix::Init(Settings::bReversePickpocketNoKarma != 0);
 				if (Settings::bSaveFileSize)
-					SaveFileSizeHandler::Init();
+					SaveFileSizeHandler::Init((void*)s_nvseInterface);
 				if (Settings::bVATSProjectileFix)
 					VATSProjectileFix::Init();
 				if (Settings::bVATSLimbFix)
@@ -421,6 +430,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bInlineGlyphFix)
 					InlineGlyphFix::Init();
 				AimZoomFirstPersonOnly::Init(Settings::bAimZoomFirstPersonOnly != 0);
+				CrouchCommands::InstallHooks();
+				ConsoleInputSuppression::InstallHook();
 				ItemModFlagSafety::Init();
 				ToggleAllPrimitives::InstallHooks();
 				EventDispatch::RegisterEvents();
@@ -475,6 +486,23 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			RadioInjection::ClearState();
 			OwnedBeds::ClearState();
 			OnWitnessedHandler::ClearState();
+			OnContactHandler::ClearState();
+			OnCasinoBanHandler::ClearState();
+			OnVATSStateHandler::ClearState();
+			OnCombatProcedureHandler::ClearState();
+			OnSoundPlayedHandler::ClearState();
+			FallDamageHandler::ClearState();
+			DialogueCameraHandler::ClearState();
+			ForceCombatTargetCommands::ClearState();
+			GroundCommands::ClearState();
+			WeaponEmissiveCommands::ClearState();
+			ExteriorDoorCommands::ClearCache();
+			GestureCommand::Reset();
+			ToggleAllPrimitives::Reset();
+			CrouchCommands::ClearState();
+			QuickReadNote::ClearState();
+			LocationVisitPopup::ClearState();
+			VATSExtender::ClearState();
 			break;
 
 		case NVSEMessagingInterface::kMessage_NewGame:
@@ -528,6 +556,13 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			DialogueTextFilter::ClearState();
 			OnNearMissHandler::ClearState();
 			OnEffectHandler::ClearState();
+			OnCombatProcedureHandler::ClearState();
+			OnSoundPlayedHandler::ClearState();
+			FallDamageHandler::ClearState();
+			DialogueCameraHandler::ClearState();
+			QuickReadNote::ClearState();
+			LocationVisitPopup::ClearState();
+			VATSExtender::ClearState();
 			if (Settings::bAutoGodMode && !g_godModeExecuted)
 			{
 				SetGodModeEnabled(true);
@@ -571,6 +606,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					CompanionNoBlock::UpdateSettings(Settings::bCompanionNoBlock != 0, Settings::iCompanionNoBlockReleaseFrames,
 					                                 Settings::iCompanionNoBlockRestoreDistance, Settings::bCompanionNoBlockInteriorOnly != 0);
 					NPCDoorUnlockBlock::SetLevel(Settings::iNPCDoorUnlockBlock);
+					WakeyWakey::UpdateSettings(Settings::fWakeDistance, Settings::fQuietWakeDistance, Settings::iWakeCooldownMs);
+					NPCAntidoteUse::UpdateSettings(Settings::fCombatItemCureTimer, Settings::fCureHealthThreshold);
 					LockpickOwnerKarmaFix::SetEnabled(Settings::bLockpickOwnerKarmaFix != 0);
 					InlineGlyphFix::SetEnabled(Settings::bInlineGlyphFix != 0);
 					AggroThreshold::SetEnabled(Settings::bAggroThreshold != 0);
@@ -625,6 +662,9 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OnEffectHandler::Update();
 			CompanionNoBlock::Update();
 			OnContactHandler::Update();
+			OnTileValueChangeHandler::Update();
+			OnWitnessedHandler::Update();
+			RadioInjection::Update();
 			OnMenuFilterChangeHandler::Update();
 			OnMenuSideChangeHandler::Update();
 			if (Settings::bQuickReadNote)
@@ -659,6 +699,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	logInit("OnConsoleHandler", OnConsoleHandler::Init((void*)nvse));
 	logInit("OnWeaponJamHandler", OnWeaponJamHandler::Init((void*)nvse));
 	logInit("OnKeyStateHandler", OnKeyStateHandler::Init((void*)nvse));
+	logInit("ConsoleInputSuppression", ConsoleInputSuppression::Init((void*)nvse));
 	logInit("KeyHeldHandler", KeyHeldHandler::Init());
 	logInit("DoubleTapHandler", DoubleTapHandler::Init());
 	logInit("OnFrenzyHandler", OnFrenzyHandler::Init((void*)nvse));
@@ -710,6 +751,7 @@ namespace ITR
 	bool Init(void* nvsePtr)
 	{
 		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		s_nvseInterface = nvse;
 
 		g_pluginHandle = nvse->GetPluginHandle();
 
@@ -736,6 +778,7 @@ namespace ITR
 		g_msgInterface->RegisterListener(g_pluginHandle, "NVSE", MessageHandler);
 
 		EventDispatch::InitEventManager((void*)nvse);
+		CameraOverride::Init();
 		ImperativeCommands::Init((void*)nvse);
 		ForceCombatTargetCommands::Init();
 		StringCommands::Init((void*)nvse);

@@ -344,7 +344,7 @@ static ParamInfo kParams_RunITRCommandBounds[1] = {
 
 DEFINE_COMMAND_PLUGIN(RunITRCommandBounds, "Runs debug-only itr-nvse command bounds smoke tests. Returns failure count.", 0, 1, kParams_RunITRCommandBounds);
 
-static bool Cmd_RunITRCommandBounds_Execute(COMMAND_ARGS)
+bool Cmd_RunITRCommandBounds_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 

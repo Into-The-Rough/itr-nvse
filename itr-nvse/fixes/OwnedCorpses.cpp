@@ -11,6 +11,7 @@
 namespace OwnedCorpses
 {
 	static bool g_enabled = false;
+	static bool g_installed = false;
 	static Detours::JumpDetour g_detour;
 	static Detours::JumpDetour g_stealAlarmDetour;
 
@@ -119,6 +120,7 @@ namespace OwnedCorpses
 
 	void SetEnabled(bool enabled)
 	{
+		if (!g_installed) return;
 		g_enabled = enabled;
 	}
 
@@ -136,9 +138,11 @@ namespace OwnedCorpses
 		if (!g_stealAlarmDetour.WriteRelJump(0x8BFBB3, StealAlarmWitnessHook, 11))
 		{
 			Log("OwnedCorpses: failed to hook StealAlarm");
+			g_detour.Remove();
 			return;
 		}
 
+		g_installed = true;
 		g_enabled = enabled;
 	}
 }

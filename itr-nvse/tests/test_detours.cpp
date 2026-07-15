@@ -143,6 +143,22 @@ TEST(JumpDetour_ChainsExistingRelJump)
 	return true;
 }
 
+TEST(CallDetour_RejectsNonCallSite)
+{
+	ScopedCodeBuffer source(32);
+	ASSERT(source.ptr != nullptr);
+
+	//site starts with nop, not E8
+	const UInt8 original[5] = { 0x90, 0xE8, 0x00, 0x00, 0x00 };
+	memcpy(source.ptr, original, sizeof(original));
+
+	Detours::CallDetour detour;
+	ASSERT(!detour.WriteRelCall(reinterpret_cast<UInt32>(source.ptr), reinterpret_cast<UInt32>(source.ptr + 16)));
+	ASSERT(!detour.IsInstalled());
+	ASSERT_EQ(memcmp(source.ptr, original, sizeof(original)), 0);
+	return true;
+}
+
 TEST(CallDetour_RemoveRefusesForeignPatch)
 {
 	ScopedCodeBuffer source(64);

@@ -6,6 +6,7 @@
 
 #include "DetectionFollowerCrashFix.h"
 #include "internal/NVSEPluginAPI.h"
+#include "internal/SafeWrite.h"
 
 #include "internal/globals.h"
 
@@ -27,8 +28,17 @@ namespace DetectionFollowerCrashFix
 		}
 	}
 
+	//mov ecx,eax - call Actor::GetCurrentPackage->GetPackType (0x41CA90)
+	static constexpr UInt8 kExpected[7] = { 0x8B, 0xC8, 0xE8, 0xDA, 0x93, 0xAA, 0xFF };
+
 	void Init()
 	{
+		if (memcmp((void*)0x9736AF, kExpected, sizeof(kExpected)) != 0)
+		{
+			Log("DetectionFollowerCrashFix: 0x9736AF bytes changed, skipping");
+			return;
+		}
+
 		SafeWrite::WriteRelJump(0x9736AF, (UInt32)Hook);
 		SafeWrite::Write8(0x9736B4, 0x90);
 		SafeWrite::Write8(0x9736B5, 0x90);

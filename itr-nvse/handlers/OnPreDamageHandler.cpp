@@ -16,6 +16,7 @@
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"
 #include "internal/SafeWrite.h"
+#include "internal/GameGlobals.h"
 #include "internal/globals.h"
 
 namespace OnPreDamageHandler {
@@ -131,13 +132,21 @@ static void* const kHitThunks[5] = {
 	(void*)Hook_CalcHit_3, (void*)Hook_CalcHit_4,
 };
 
-//our wrapper is only ever installed on these three vtables, so this always matches
+//our wrapper is installed on three vtables, but a cloned vtable can route a foreign
+//object through here. the player original reads player-only fields, so an unknown
+//vtable falls back to the Character original unless this really is the player
 static DamageActorValue_t PickDamageOrig(void* actor)
 {
 	UInt32 vtbl = *(UInt32*)actor;
 	if (vtbl == kVtbl_Character) return s_origDamageChar;
 	if (vtbl == kVtbl_Creature) return s_origDamageCreature;
-	return s_origDamagePlayer;
+	if (vtbl == kVtbl_PlayerCharacter || actor == (void*)*g_thePlayerPtr) return s_origDamagePlayer;
+	static bool s_unknownVtblLogged = false;
+	if (!s_unknownVtblLogged) {
+		s_unknownVtblLogged = true;
+		Log("OnPreHealthDamage: unknown vtable %08X, using Character original", vtbl);
+	}
+	return s_origDamageChar;
 }
 
 static void __fastcall Hook_DamageActorValue(void* actor, void*, UInt32 avCode, float delta, void* source)

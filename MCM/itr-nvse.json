@@ -420,6 +420,18 @@
 							"default": 0
 						}
 					]
+				},
+				"9": {
+					"title": "Suppress Input In Console",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Suppress modded keyboard and controller binds while the console is open",
+					"vars": [
+						{
+							"configINI": "Tweaks:bSuppressInputInConsole",
+							"default": 1
+						}
+					]
 				}
 			}
 		},

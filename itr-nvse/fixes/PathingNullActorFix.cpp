@@ -3,6 +3,7 @@
 
 #include "PathingNullActorFix.h"
 #include "internal/NVSEPluginAPI.h"
+#include "internal/SafeWrite.h"
 
 #include "internal/globals.h"
 
@@ -47,11 +48,27 @@ namespace PathingNullActorFix
 		}
 	}
 
+	//mov edx,[ebp-0x78] - mov eax,[edx]
+	static constexpr UInt8 kExpectedHook[5] = { 0x8B, 0x55, 0x88, 0x8B, 0x02 };
+	//push1 - push0 - mov ecx,[ebp-0x60] - add ecx,0x1C - call 0x559450
+	static constexpr UInt8 kExpectedSetPathingFailed[15] = {
+		0x6A, 0x01, 0x6A, 0x00, 0x8B, 0x4D, 0xA0, 0x83, 0xC1, 0x1C, 0xE8, 0xAD, 0xAE, 0xB7, 0xFF
+	};
+
 	void Init()
 	{
-		SafeWrite::WriteRelJump(0x9E57C6, (UInt32)Hook);
-		SafeWrite::WriteRelJump(0x9DE594, (UInt32)HookSetPathingFailed);
-		SafeWrite::WriteNop(0x9DE599, 10);
+		if (memcmp((void*)0x9E57C6, kExpectedHook, sizeof(kExpectedHook)) == 0)
+			SafeWrite::WriteRelJump(0x9E57C6, (UInt32)Hook);
+		else
+			Log("PathingNullActorFix: 0x9E57C6 bytes changed, skipping");
+
+		if (memcmp((void*)0x9DE594, kExpectedSetPathingFailed, sizeof(kExpectedSetPathingFailed)) == 0)
+		{
+			SafeWrite::WriteRelJump(0x9DE594, (UInt32)HookSetPathingFailed);
+			SafeWrite::WriteNop(0x9DE599, 10);
+		}
+		else
+			Log("PathingNullActorFix: 0x9DE594 bytes changed, skipping");
 	}
 }
 

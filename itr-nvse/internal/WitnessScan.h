@@ -1,5 +1,5 @@
 //shared witness scan used by both GetWitnesses command and OnWitnessed trespass hook
-//iterates nearby actors in the perpetrator's cell and filters by detection threshold
+//iterates nearby actors in the perpetrator's cell (plus the 3x3 exterior grid) and filters by detection threshold
 #pragma once
 
 #include <vector>

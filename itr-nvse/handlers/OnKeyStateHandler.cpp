@@ -3,53 +3,9 @@
 #include "OnKeyStateHandler.h"
 #include "internal/NVSEPluginAPI.h"
 #include "internal/EventDispatch.h"
+#include "internal/DIHookView.h"
 
-namespace
-{
-	enum {
-		kNVSEData_DIHookControl = 1,
-		kMacro_MouseButtonOffset = 256,
-		kMacro_MouseWheelOffset = kMacro_MouseButtonOffset + 8,
-		kMaxMacros = kMacro_MouseWheelOffset + 2,
-	};
-
-	class DIHookControl {
-	public:
-		enum {
-			kDisable_User = 1 << 0,
-			kDisable_Script = 1 << 1,
-			kDisable_All = kDisable_User | kDisable_Script,
-		};
-
-	private:
-		struct KeyInfo {
-			bool rawState;
-			bool gameState;
-			bool insertedState;
-			bool hold;
-			bool tap;
-			bool userDisable;
-			bool scriptDisable;
-		};
-
-		void* vtable;
-		KeyInfo m_keys[kMaxMacros];
-
-	public:
-		void SetKeyDisableState(UInt32 keycode, bool disable, UInt32 mask = 0) {
-			if (!mask)
-				mask = kDisable_All;
-			if (keycode >= kMaxMacros)
-				return;
-			if (mask & kDisable_User)
-				m_keys[keycode].userDisable = disable;
-			if (mask & kDisable_Script)
-				m_keys[keycode].scriptDisable = disable;
-		}
-	};
-}
-
-static DIHookControl* g_diHookControl = nullptr;
+static DIHook::ControlView* g_diHookControl = nullptr;
 static bool (*g_ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, ...) = nullptr;
 
 static void DispatchKeyDisabledEvent(UInt32 keycode, UInt32 mask)
@@ -88,7 +44,7 @@ bool Cmd_DisableKeyEx_Execute(COMMAND_ARGS)
 			&keycode, &mask))
 		return true;
 
-	UInt32 effectiveMask = mask ? mask : DIHookControl::kDisable_All;
+	UInt32 effectiveMask = mask ? mask : DIHook::kDisable_All;
 	g_diHookControl->SetKeyDisableState(keycode, true, effectiveMask);
 
 	DispatchKeyDisabledEvent(keycode, effectiveMask);
@@ -115,7 +71,7 @@ bool Cmd_EnableKeyEx_Execute(COMMAND_ARGS)
 			&keycode, &mask))
 		return true;
 
-	UInt32 effectiveMask = mask ? mask : DIHookControl::kDisable_All;
+	UInt32 effectiveMask = mask ? mask : DIHook::kDisable_All;
 	g_diHookControl->SetKeyDisableState(keycode, false, effectiveMask);
 
 	DispatchKeyEnabledEvent(keycode, effectiveMask);
@@ -136,7 +92,7 @@ bool Init(void* nvseInterface)
 	auto* dataInterface = reinterpret_cast<NVSEDataInterface*>(nvse->QueryInterface(kInterface_Data));
 	if (!dataInterface) return false;
 
-	g_diHookControl = reinterpret_cast<DIHookControl*>(dataInterface->GetSingleton(kNVSEData_DIHookControl));
+	g_diHookControl = reinterpret_cast<DIHook::ControlView*>(dataInterface->GetSingleton(DIHook::kNVSEData_DIHookControl));
 	if (!g_diHookControl) return false;
 
 	return true;

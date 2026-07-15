@@ -5,6 +5,7 @@
 
 #include "ItemModFlagSafety.h"
 #include "internal/NVSEPluginAPI.h"
+#include "internal/SafeWrite.h"
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"

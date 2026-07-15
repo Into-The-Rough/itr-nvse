@@ -194,6 +194,7 @@
 - AutoQuickLoad - auto-load quicksave on main menu
 - AutoGodMode - god mode on game start
 - AltTabMute - mute audio when alt-tabbed
+- ConsoleInputSuppression - suppress modded keyboard/controller binds while the console is open (typing, tilde close, Esc, screenshots and mouse ref-picking unaffected)
 - PlayerUpdateHook - host for QuickDrop and Quick180 input detection
 
 ## Fixes

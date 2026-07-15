@@ -188,6 +188,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="features\AltTabMute.cpp" />
     <ClCompile Include="features\AutoQuickLoad.cpp" />
     <ClCompile Include="features\AimZoomFirstPersonOnly.cpp" />
+    <ClCompile Include="features\ConsoleInputSuppression.cpp" />
     <ClCompile Include="features\AggroThreshold.cpp" />
     <ClCompile Include="features\CameraOverride.cpp" />
     <ClCompile Include="features\CompanionNoBlock.cpp" />
@@ -269,6 +270,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="internal\EventDispatch.h" />
     <ClInclude Include="internal\EngineFunctions.h" />
     <ClInclude Include="internal\EngineHelpers.h" />
+    <ClInclude Include="internal\DIHookView.h" />
     <ClInclude Include="internal\GameGlobals.h" />
     <ClInclude Include="handlers\DialogueTextFilter.h" />
     <ClInclude Include="handlers\OnStealHandler.h" />
@@ -334,6 +336,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="features\RaceEyeCommands.h" />
     <ClInclude Include="features\WeatherChangeEvent.h" />
     <ClInclude Include="features\AimZoomFirstPersonOnly.h" />
+    <ClInclude Include="features\ConsoleInputSuppression.h" />
     <ClInclude Include="features\AggroThreshold.h" />
     <ClInclude Include="features\PlayerUpdateHook.h" />
     <ClInclude Include="features\NPCAntidoteUse.h" />

@@ -28,31 +28,67 @@ void FindWitnesses(Actor* perpetrator, const float* crimeLocXYZ,
 	float cz = crimeLocXYZ ? crimeLocXYZ[2] : perpetrator->posZ;
 	float radiusSq = radius * radius;
 
-	TESObjectCELL* cell = perpetrator->parentCell;
-	ScopedCellRefLock refLock(cell);
+	//bounded scratch, detection and push_back run after the cell ref lock is released
+	Actor* candidates[256];
+	int candidateCount = 0;
 
-	for (auto iter = cell->objectList.Begin(); !iter.End(); ++iter)
+	auto collectCell = [&](TESObjectCELL* cell)
 	{
-		TESObjectREFR* ref = iter.Get();
-		if (!ref) continue;
-		if (ref->baseForm == nullptr) continue;
-		UInt8 baseType = ref->baseForm->typeID;
-		if (baseType != kFormType_NPC && baseType != kFormType_Creature) continue;
+		if (!cell) return;
+		ScopedCellRefLock refLock(cell);
 
-		Actor* actor = static_cast<Actor*>(ref);
-		if (actor == perpetrator) continue;
-		if (!actor->baseProcess) continue;
+		for (auto iter = cell->objectList.Begin(); !iter.End(); ++iter)
+		{
+			TESObjectREFR* ref = iter.Get();
+			if (!ref) continue;
+			if (ref->baseForm == nullptr) continue;
+			UInt8 baseType = ref->baseForm->typeID;
+			if (baseType != kFormType_NPC && baseType != kFormType_Creature) continue;
 
-		//teammates never raise alarms against their own side
-		if (ActorIsTeammate(actor))
-			continue;
+			Actor* actor = static_cast<Actor*>(ref);
+			if (actor == perpetrator) continue;
+			if (!actor->baseProcess) continue;
 
-		float dx = actor->posX - cx;
-		float dy = actor->posY - cy;
-		float dz = actor->posZ - cz;
-		float distSq = dx * dx + dy * dy + dz * dz;
-		if (distSq > radiusSq) continue;
+			//teammates never raise alarms against their own side
+			if (ActorIsTeammate(actor))
+				continue;
 
+			float dx = actor->posX - cx;
+			float dy = actor->posY - cy;
+			float dz = actor->posZ - cz;
+			float distSq = dx * dx + dy * dy + dz * dz;
+			if (distSq > radiusSq) continue;
+
+			if (candidateCount < 256)
+				candidates[candidateCount++] = actor;
+		}
+	};
+
+	TESObjectCELL* cell = perpetrator->parentCell;
+	collectCell(cell);
+
+	//the default radius crosses exterior cell boundaries, walk the 3x3 neighbour grid like ResurrectAll
+	TESWorldSpace* world = cell->worldSpace;
+	if (world && world->cellMap && !cell->IsInterior() && cell->coords)
+	{
+		SInt32 baseX = (SInt32)cell->coords->x;
+		SInt32 baseY = (SInt32)cell->coords->y;
+
+		for (SInt32 gx = -1; gx <= 1; gx++)
+		{
+			for (SInt32 gy = -1; gy <= 1; gy++)
+			{
+				if (gx == 0 && gy == 0) continue;
+				//mask before shifting, negative cell coords make the raw shift formally UB
+				UInt32 key = (((UInt32)(baseX + gx) & 0xFFFF) << 16) | ((UInt32)(baseY + gy) & 0xFFFF);
+				collectCell(world->cellMap->Lookup(key));
+			}
+		}
+	}
+
+	for (int i = 0; i < candidateCount; i++)
+	{
+		Actor* actor = candidates[i];
 		int detVal = Engine::Actor_GetDetectionValue(actor, perpetrator);
 		if (detVal >= detectionThreshold)
 			out.push_back({ actor, detVal, actor->refID });

@@ -41,6 +41,12 @@ namespace NPCAntidoteUse
 		g_enabled = true;
 	}
 
+	void UpdateSettings(float cureTimer, float healthThreshold)
+	{
+		g_cooldown = cureTimer;
+		g_healthThreshold = healthThreshold;
+	}
+
 	void Check(void* combatState)
 	{
 		if (!g_enabled) return;
@@ -48,6 +54,7 @@ namespace NPCAntidoteUse
 		auto* actor = CombatItemUse::GetCombatActor(combatState);
 		if (!actor) return;
 
+		//below the threshold the actor is dying, yield to vanilla low-health item use
 		if (GetHealthPercent(actor) < g_healthThreshold) return;
 		if (!IsPoisoned(actor)) return;
 
