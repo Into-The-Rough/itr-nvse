@@ -199,4 +199,82 @@ private:
 	}
 };
 
+//penetration depth per projectile refID with explicit slot reservation. liveness is proven by
+//refID RESOLUTION through an injected predicate, never by elapsed time, so a live continuation is
+//never reclaimed. a slot is Reserve()d before the synchronous pre-event dispatch and is invisible to
+//any re-entrant Reserve() until it is Commit()ed to the spawned child or Release()d (veto/failure),
+//so a re-entrant impact can never consume the slot we are about to hand to our continuation.
+//when capacity is needed an occupied slot is reclaimed only if isLive(refID) is false
+class DepthTracker {
+public:
+	static const int kSlots = 256;
+	static const int kNone = -1;
+
+	typedef bool (*LivePredicate)(UInt32 refID);
+
+	struct Slot { UInt32 refID; UInt32 depth; bool reserved; };
+	Slot slots[kSlots];
+
+	DepthTracker() { Clear(); }
+
+	void Clear() { std::memset(slots, 0, sizeof(slots)); }
+
+	UInt32 DepthOf(UInt32 refID) const
+	{
+		if (!refID) return 0;
+		for (int i = 0; i < kSlots; i++)
+			if (slots[i].refID == refID && !slots[i].reserved) return slots[i].depth;
+		return 0;
+	}
+
+	//reserve a slot for a continuation of parentRefID. prefers the parent's own slot (the parent is
+	//dying, its slot transfers to the child), else a free slot, else a slot whose refID is verified
+	//dead. returns the reserved slot index, or kNone when the table is full of live entries
+	int Reserve(UInt32 parentRefID, LivePredicate isLive)
+	{
+		int freeSlot = kNone, deadSlot = kNone;
+		for (int i = 0; i < kSlots; i++) {
+			if (slots[i].reserved) continue; //reserved slots are invisible to re-entrant callers
+			if (parentRefID && slots[i].refID == parentRefID) { slots[i].reserved = true; return i; }
+			if (!slots[i].refID) { if (freeSlot == kNone) freeSlot = i; }
+			else if (deadSlot == kNone && isLive && !isLive(slots[i].refID)) deadSlot = i;
+		}
+		int slot = freeSlot != kNone ? freeSlot : deadSlot;
+		if (slot == kNone) return kNone;
+		slots[slot].reserved = true;
+		return slot;
+	}
+
+	//hand the reserved slot to the spawned continuation, clearing the reservation
+	void Commit(int slot, UInt32 childRefID, UInt32 depth)
+	{
+		if (slot < 0 || slot >= kSlots) return;
+		slots[slot].refID = childRefID;
+		slots[slot].depth = depth;
+		slots[slot].reserved = false;
+	}
+
+	//give the reserved slot back - its prior contents are untouched by Reserve so they simply resume
+	void Release(int slot)
+	{
+		if (slot < 0 || slot >= kSlots) return;
+		slots[slot].reserved = false;
+	}
+
+	void Remove(UInt32 refID)
+	{
+		if (!refID) return;
+		for (int i = 0; i < kSlots; i++)
+			if (slots[i].refID == refID && !slots[i].reserved) { slots[i].refID = 0; slots[i].depth = 0; return; }
+	}
+
+	int ActiveCount() const
+	{
+		int n = 0;
+		for (int i = 0; i < kSlots; i++)
+			if (slots[i].refID || slots[i].reserved) n++;
+		return n;
+	}
+};
+
 }

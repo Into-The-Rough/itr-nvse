@@ -411,3 +411,154 @@ TEST(HitSet_ClearResets)
 	ASSERT(!hs.AlreadyHit(Ptr(0x1000), 5));
 	return true;
 }
+
+//liveness mocks - function pointers, so no captures
+static UInt32 g_deadRefID = 0;
+static bool MockIsLive(UInt32 refID) { return refID != g_deadRefID; }
+static bool AllLive(UInt32) { return true; }
+
+//fill every slot with a distinct committed live entry, refIDs base..base+kSlots-1
+static void FillLive(DepthTracker& t, UInt32 base)
+{
+	for (int i = 0; i < DepthTracker::kSlots; i++) {
+		int s = t.Reserve(base + (UInt32)i, AllLive);
+		t.Commit(s, base + (UInt32)i, 1);
+	}
+}
+
+TEST(Depth_InitiallyEmpty)
+{
+	DepthTracker t;
+	ASSERT_EQ(t.ActiveCount(), 0);
+	ASSERT_EQ(t.DepthOf(0x1000), 0u);
+	return true;
+}
+
+TEST(Depth_FullLiveTableRejectsReserve)
+{
+	DepthTracker t;
+	FillLive(t, 0x1000);
+	ASSERT_EQ(t.ActiveCount(), DepthTracker::kSlots);
+	//no free slot, every entry resolves live, so a fresh chain cannot reserve
+	ASSERT_EQ(t.Reserve(0x99999, AllLive), DepthTracker::kNone);
+	return true;
+}
+
+TEST(Depth_VerifiedDeadEntryReclaimed)
+{
+	DepthTracker t;
+	FillLive(t, 0x1000);
+	g_deadRefID = 0x1005;             //one entry is now a dead refID
+	int s = t.Reserve(0x99999, MockIsLive);
+	ASSERT(s != DepthTracker::kNone); //the dead slot is reclaimed
+	t.Commit(s, 0x99999, 1);
+	ASSERT_EQ(t.DepthOf(0x99999), 1u);
+	ASSERT_EQ(t.DepthOf(0x1005), 0u); //the dead entry is gone
+	g_deadRefID = 0;
+	return true;
+}
+
+TEST(Depth_ReservedSlotExcludedFromReentrantReserve)
+{
+	DepthTracker t;
+	//fill all but one slot with live entries, leaving exactly one free
+	for (int i = 0; i < DepthTracker::kSlots - 1; i++) {
+		int s = t.Reserve(0x1000 + (UInt32)i, AllLive);
+		t.Commit(s, 0x1000 + (UInt32)i, 1);
+	}
+	int mine = t.Reserve(0xA000, AllLive); //takes the last free slot, now reserved
+	ASSERT(mine != DepthTracker::kNone);
+	//a re-entrant impact cannot steal the reserved slot, and everything else is live
+	ASSERT_EQ(t.Reserve(0xB000, AllLive), DepthTracker::kNone);
+	return true;
+}
+
+TEST(Depth_ReleaseMakesSlotReusable)
+{
+	DepthTracker t;
+	for (int i = 0; i < DepthTracker::kSlots - 1; i++) {
+		int s = t.Reserve(0x1000 + (UInt32)i, AllLive);
+		t.Commit(s, 0x1000 + (UInt32)i, 1);
+	}
+	int mine = t.Reserve(0xA000, AllLive);
+	ASSERT(mine != DepthTracker::kNone);
+	t.Release(mine); //veto or spawn failure gives the slot back
+	int again = t.Reserve(0xB000, AllLive);
+	ASSERT(again != DepthTracker::kNone); //slot is reusable
+	return true;
+}
+
+TEST(Depth_ReleaseRestoresPriorFreeSlot)
+{
+	DepthTracker t;
+	int s = t.Reserve(0x1000, AllLive); //reserves a free slot, holds nothing
+	t.Release(s);
+	ASSERT_EQ(t.ActiveCount(), 0); //released free slot leaves the table empty
+	ASSERT_EQ(t.DepthOf(0x1000), 0u);
+	return true;
+}
+
+TEST(Depth_CommitTransfersParentSlotToChild)
+{
+	DepthTracker t;
+	int p = t.Reserve(0xBEEF, AllLive); //parent at depth 2
+	t.Commit(p, 0xBEEF, 2);
+	ASSERT_EQ(t.ActiveCount(), 1);
+	ASSERT_EQ(t.DepthOf(0xBEEF), 2u);
+	//the parent penetrates - reserve prefers its own slot, commit hands it to the child
+	int slot = t.Reserve(0xBEEF, AllLive);
+	ASSERT_EQ(slot, p);               //parent's own slot
+	t.Commit(slot, 0xCAFE, 3);
+	ASSERT_EQ(t.ActiveCount(), 1);    //no growth, the slot transferred
+	ASSERT_EQ(t.DepthOf(0xCAFE), 3u);
+	ASSERT_EQ(t.DepthOf(0xBEEF), 0u); //parent no longer tracked
+	return true;
+}
+
+TEST(Depth_MaxDepthChainCannotContinue)
+{
+	DepthTracker t;
+	int s = t.Reserve(0xC0DE, AllLive);
+	t.Commit(s, 0xC0DE, 5);
+	//the handler gates penetration on DepthOf < kMaxPenetrationDepth (5), so a depth-5 round is refused
+	UInt32 d = t.DepthOf(0xC0DE);
+	ASSERT_EQ(d, 5u);
+	ASSERT(!(d < 5u)); //the handler's cap check would fail here, no further continuation
+	return true;
+}
+
+TEST(Depth_RemoveFreesCommittedSlot)
+{
+	DepthTracker t;
+	int s = t.Reserve(0x1000, AllLive);
+	t.Commit(s, 0x1000, 1);
+	t.Remove(0x1000);
+	ASSERT_EQ(t.ActiveCount(), 0);
+	ASSERT_EQ(t.DepthOf(0x1000), 0u);
+	return true;
+}
+
+TEST(Depth_RemoveSkipsReservedSlot)
+{
+	DepthTracker t;
+	int p = t.Reserve(0xBEEF, AllLive);
+	t.Commit(p, 0xBEEF, 1);
+	int r = t.Reserve(0xBEEF, AllLive);  //reserves the parent's own slot (still holds 0xBEEF)
+	ASSERT_EQ(r, p);
+	t.Remove(0xBEEF);                    //must not clear a slot mid-reservation
+	ASSERT_EQ(t.DepthOf(0xBEEF), 0u);    //DepthOf skips reserved, so it reads as untracked
+	t.Release(r);
+	ASSERT_EQ(t.DepthOf(0xBEEF), 1u);    //release restores it, Remove did not wipe it
+	return true;
+}
+
+TEST(Depth_ClearResets)
+{
+	DepthTracker t;
+	int s = t.Reserve(0x1000, AllLive);
+	t.Commit(s, 0x1000, 3);
+	t.Clear();
+	ASSERT_EQ(t.ActiveCount(), 0);
+	ASSERT_EQ(t.DepthOf(0x1000), 0u);
+	return true;
+}

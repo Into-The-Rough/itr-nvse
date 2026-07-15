@@ -15,7 +15,6 @@
 #include "internal/RayCast.h"
 #include <Windows.h>
 #include <math.h>
-#include <string.h>
 
 extern void Log(const char* fmt, ...);
 
@@ -70,59 +69,32 @@ static EventDispatch::ListenerProbe s_penetrateProbe = { kEvent_Penetrate, "ITR_
 
 static float Clamp01(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
 
-//per-projectile penetration depth keyed by refID. entries are freed on impact death (prompt path)
-//and otherwise age out - a round that dies by range or lifetime leaves no impact, so its slot is
-//reclaimed only once it is provably stale (untouched longer than any bullet can live). a live entry
-//is never evicted, and slot availability is a penetration-feasibility gate, so the 5-hop cap is hard:
-//the table cannot permanently fill, and a table momentarily full of live chains just downgrades new
-//chains to a normal hit rather than losing the cap
-constexpr UInt32 kDepthSlots = 256;
-constexpr UInt32 kDepthStaleFrames = 600; //~10s at 60fps, far past any projectile lifetime, safe to reclaim
-struct DepthEntry { UInt32 refID; UInt32 depth; UInt32 stamp; };
-static DepthEntry s_depthTable[kDepthSlots];
-static UInt32 s_depthFrame = 0; //bumped once per Update(), wrap-safe via unsigned age subtraction
+//penetration depth tracker, liveness proven by refID resolution not elapsed time
+static ProjectileLogic::DepthTracker s_depth;
 
-static UInt32 DepthOf(UInt32 refID)
-{
-	if (!refID) return 0;
-	for (UInt32 i = 0; i < kDepthSlots; i++)
-		if (s_depthTable[i].refID == refID) return s_depthTable[i].depth;
-	return 0;
-}
+//a live continuation resolves to a form, a dead one does not - the tracker reclaims only dead slots
+static bool ProjIsLive(UInt32 refID) { return Engine::LookupFormByID(refID) != nullptr; }
 
-//slot usable for refID - its existing slot, else a free slot, else the oldest entry but only when
-//provably stale. -1 = none available (table full of live chains)
-static int DepthSlotFor(UInt32 refID)
-{
-	int free = -1, oldest = -1;
-	for (UInt32 i = 0; i < kDepthSlots; i++) {
-		if (refID && s_depthTable[i].refID == refID) return (int)i;
-		if (!s_depthTable[i].refID) { if (free < 0) free = (int)i; }
-		else if (oldest < 0 || (UInt32)(s_depthFrame - s_depthTable[i].stamp) > (UInt32)(s_depthFrame - s_depthTable[oldest].stamp))
-			oldest = (int)i;
+//RAII cover for a reserved depth slot. Commit hands it to the spawned child, Release gives it back,
+//both consume the handle so the dtor is a pure safety net. resolve it explicitly BEFORE the vanilla
+//call - Remove() skips reserved slots, so a parent slot must be released before the round is killed
+struct ReserveGuard {
+	int slot;
+	explicit ReserveGuard(int slot_) : slot(slot_) {}
+	~ReserveGuard() { Release(); }
+	void Commit(UInt32 childRefID, UInt32 depth)
+	{
+		if (slot == ProjectileLogic::DepthTracker::kNone) return;
+		s_depth.Commit(slot, childRefID, depth);
+		slot = ProjectileLogic::DepthTracker::kNone;
 	}
-	if (free >= 0) return free;
-	if (oldest >= 0 && (UInt32)(s_depthFrame - s_depthTable[oldest].stamp) > kDepthStaleFrames) return oldest;
-	return -1;
-}
-
-//can a fresh continuation obtain a slot - part of penetration feasibility, checked before we commit
-static bool CanAllocDepthSlot() { return DepthSlotFor(0) >= 0; }
-
-static void RecordDepth(UInt32 refID, UInt32 depth)
-{
-	if (!refID) return;
-	int slot = DepthSlotFor(refID);
-	if (slot < 0) return; //feasibility already gated on availability, this is the belt-and-braces guard
-	s_depthTable[slot] = { refID, depth, s_depthFrame };
-}
-
-static void RemoveDepth(UInt32 refID)
-{
-	if (!refID) return;
-	for (UInt32 i = 0; i < kDepthSlots; i++)
-		if (s_depthTable[i].refID == refID) { s_depthTable[i] = { 0, 0, 0 }; return; }
-}
+	void Release()
+	{
+		if (slot == ProjectileLogic::DepthTracker::kNone) return;
+		s_depth.Release(slot);
+		slot = ProjectileLogic::DepthTracker::kNone;
+	}
+};
 
 //reverse raycast from deep on the far side back toward the entry, the first hit along that
 //direction is the penetrated collider's backface, i.e. the true exit point. no hit within
@@ -230,10 +202,11 @@ static void SpawnImpactEffect(void* proj, void* node)
 }
 
 //emerge a fresh ballistic round on the far side, angles left at 0 since vector104+transform below drive it
-//and the engine re-orients from vector104 every frame (sub_9BF470 reads sub_9B7010 -> proj+0x104)
-static bool SpawnContinuation(ProjectileImpactView* orig, void* base, void* cell,
+//and the engine re-orients from vector104 every frame (sub_9BF470 reads sub_9B7010 -> proj+0x104).
+//returns the child refID (0 on spawn failure) so the caller commits the reserved depth slot to it
+static UInt32 SpawnContinuation(ProjectileImpactView* orig, void* base, void* cell,
 	const float spawnPos[3], const float unitDir[3], float speedMult, float hitDamage,
-	float distSeed, TESObjectREFR* owner, TESObjectWEAP* weapon, float vecMag, UInt32 depth)
+	float distSeed, TESObjectREFR* owner, TESObjectWEAP* weapon, float vecMag)
 {
 	void* cont;
 	{
@@ -242,7 +215,7 @@ static bool SpawnContinuation(ProjectileImpactView* orig, void* base, void* cell
 			base, nullptr, 0, nullptr, spawnPos[0], spawnPos[1], spawnPos[2],
 			0.0f, 0.0f, 0, 0, 0, 0, 0.0f, 0.0f, cell);
 	}
-	if (!cont) return false;
+	if (!cont) return 0;
 	ProjectileImpactView* c = (ProjectileImpactView*)cont;
 	*(TESObjectREFR**)((UInt8*)cont + 0xFC) = owner;  //sourceRef, keeps our player-only+VATS gate and damage credit
 	*(TESObjectWEAP**)((UInt8*)cont + 0xF8) = weapon; //sourceWeap
@@ -262,8 +235,7 @@ static bool SpawnContinuation(ProjectileImpactView* orig, void* base, void* cell
 	//drop anything the engine resolved during the spawn call so the round starts clean
 	c->hasImpacted = 0;
 	((ClearImpactData_t)kAddr_ClearImpactData)(cont);
-	RecordDepth(((TESObjectREFR*)cont)->refID, depth);
-	return true;
+	return ((TESObjectREFR*)cont)->refID;
 }
 
 static char __cdecl HandleImpact(void* proj, int a2, int a3);
@@ -306,7 +278,7 @@ static char CallOriginalReap(void* proj, int a2, int a3, void* projKey)
 	char killed = CallOriginalProcessImpacts(proj, a2, a3);
 	if (killed) {
 		s_hitSet.Release(projKey);
-		RemoveDepth((UInt32)(uintptr_t)projKey);
+		s_depth.Remove((UInt32)(uintptr_t)projKey);
 	}
 	return killed;
 }
@@ -362,36 +334,43 @@ static char __cdecl HandleImpact(void* proj, int a2, int a3)
 
 	ProjectileLogic::Outcome outcome = ProjectileLogic::Decide(ctx, s_cfg);
 
-	//resolve penetration feasibility up front so the pre-event reports the real outcome and the
-	//exit raycast is computed once and reused for the spawn. an infeasible penetration downgrades
-	//to Normal (vanilla hit), so listeners never see a penetration that will not happen
+	//resolve penetration feasibility up front so the pre-event reports the real outcome and the exit
+	//raycast is computed once and reused for the spawn. a depth slot is RESERVED here, before the
+	//pre-event, so a re-entrant impact cannot steal it, and the reservation is released on any path
+	//that does not spawn. an infeasible penetration downgrades to Normal (vanilla hit)
 	bool penReady = false;
 	float penExit[3], penUnit[3], penDistSeed = 0.0f, penVecMag = 0.0f;
 	void* penBase = nullptr; void* penCell = nullptr; UInt32 penDepth = 0;
+	int penSlot = ProjectileLogic::DepthTracker::kNone;
 	if (outcome == ProjectileLogic::kOutcome_Penetrate) {
-		UInt32 chainDepth = DepthOf((UInt32)(uintptr_t)projKey);
+		UInt32 chainDepth = s_depth.DepthOf((UInt32)(uintptr_t)projKey);
 		float range = EngineRange(pv);
 		float dl = sqrtf(ctx.dir[0]*ctx.dir[0] + ctx.dir[1]*ctx.dir[1] + ctx.dir[2]*ctx.dir[2]);
 		void* base = *(void**)((UInt8*)proj + 0x20); //refr baseForm = BGSProjectile
 		void* cell = *(void**)((UInt8*)proj + 0x40); //parentCell for placement
-		//depth cap is the hard stop, energy decay + the ini min-energy floor are the soft bound.
-		//range 0 means the energy proxy cannot decay, skip to avoid an endless chain.
-		//require a depth slot up front so the continuation can always be tracked, else the cap could slip
-		if (chainDepth < kMaxPenetrationDepth && range > 0.0f && base && cell && dl > 1e-6f && CanAllocDepthSlot()) {
+		//depth cap is the hard stop, energy decay is the soft bound.
+		//range 0 means the energy proxy cannot decay, skip to avoid an endless chain
+		if (chainDepth < kMaxPenetrationDepth && range > 0.0f && base && cell && dl > 1e-6f) {
 			penUnit[0] = ctx.dir[0]/dl; penUnit[1] = ctx.dir[1]/dl; penUnit[2] = ctx.dir[2]/dl;
+			//reserve last, only once the round is otherwise going to penetrate, so we never hold a slot we will not use
 			if (FindExitPoint(ctx.pos, penUnit, penExit)) {
-				//each hop multiplies energy by the falloff, distTravelled is seeded so energy = energyOld*falloff
-				//once it drops below minRicochetEnergy Decide returns Normal and the chain stops
-				float energyNew = ctx.energy * s_cfg.penetrationEnergyFalloff;
-				penDistSeed = range * (1.0f - energyNew);
-				if (penDistSeed < 0.0f) penDistSeed = 0.0f;
-				penBase = base; penCell = cell; penVecMag = dl; penDepth = chainDepth + 1;
-				penReady = true;
+				penSlot = s_depth.Reserve((UInt32)(uintptr_t)projKey, ProjIsLive);
+				if (penSlot != ProjectileLogic::DepthTracker::kNone) {
+					//each hop multiplies energy by the falloff, distTravelled is seeded so energy = energyOld*falloff
+					//once it drops below minRicochetEnergy Decide returns Normal and the chain stops
+					float energyNew = ctx.energy * s_cfg.penetrationEnergyFalloff;
+					penDistSeed = range * (1.0f - energyNew);
+					if (penDistSeed < 0.0f) penDistSeed = 0.0f;
+					penBase = base; penCell = cell; penVecMag = dl; penDepth = chainDepth + 1;
+					penReady = true;
+				}
 			}
 		}
 		if (!penReady)
 			outcome = ProjectileLogic::kOutcome_Normal;
 	}
+	//dtor releases the reservation on every path that does not spawn (Normal, veto, recursion, spawn failure)
+	ReserveGuard penGuard(penSlot);
 
 	if (outcome == ProjectileLogic::kOutcome_Normal)
 		return CallOriginalReap(proj, a2, a3, projKey);
@@ -402,11 +381,13 @@ static char __cdecl HandleImpact(void* proj, int a2, int a3)
 	//resolve as a normal hit after a positive veto. the projectile is not passed to handlers, so a
 	//listener has no handle to free it mid-dispatch, and re-entry is depth-capped
 	if (s_preProbe.hasListeners && g_eventManagerInterface) {
-		static UInt32 s_depth = 0;
-		if (s_depth >= 8) //recursion cap, bail to non-deflection rather than deflect with the veto ignored
+		static UInt32 s_reentry = 0;
+		if (s_reentry >= 8) { //recursion cap, bail to non-deflection rather than deflect with the veto ignored
+			penGuard.Release(); //free the reservation before the round is killed, Remove skips reserved slots
 			return CallOriginalReap(proj, a2, a3, projKey);
+		}
 		UInt32 allow = 1;
-		s_depth++;
+		s_reentry++;
 		struct Cb { static bool Fn(NVSEArrayVarInterface::Element& r, void* d) {
 			UInt32& a = *(UInt32*)d;
 			if (a && r.IsValid() && r.type == NVSEArrayVarInterface::Element::kType_Numeric)
@@ -415,9 +396,11 @@ static char __cdecl HandleImpact(void* proj, int a2, int a3)
 		}};
 		g_eventManagerInterface->DispatchEventAlt(kEvent_Pre, Cb::Fn, &allow,
 			nullptr, (TESForm*)weap, (TESForm*)strikeRefr, (int)ctx.material, (int)outcome);
-		s_depth--;
-		if (!allow)
+		s_reentry--;
+		if (!allow) {
+			penGuard.Release();
 			return CallOriginalReap(proj, a2, a3, projKey);
+		}
 	}
 
 	if (strikeRefID)
@@ -443,15 +426,19 @@ static char __cdecl HandleImpact(void* proj, int a2, int a3)
 		return 0;
 	}
 
-	//penetrate - feasibility and the exit point were resolved above, emerge the decayed continuation
-	//then let the engine apply the full vanilla entry hit (damage/destruction/callbacks) and kill the original
-	bool spawned = SpawnContinuation(pv, penBase, penCell, penExit, penUnit,
+	//penetrate - feasibility, exit point and depth slot were resolved above, emerge the decayed
+	//continuation then let the engine apply the full vanilla entry hit and kill the original
+	UInt32 childRefID = SpawnContinuation(pv, penBase, penCell, penExit, penUnit,
 		pv->speedMult * s_cfg.penetrationEnergyFalloff,
 		ProjectileLogic::PenetrationDamage(pv->hitDamage, s_cfg),
-		penDistSeed, (TESObjectREFR*)*g_thePlayerPtr, weap, penVecMag, penDepth);
-	if (spawned) //a rare null spawn still takes the vanilla hit, just no continuation and no event
+		penDistSeed, (TESObjectREFR*)*g_thePlayerPtr, weap, penVecMag);
+	if (childRefID) { //commit the reserved slot to the child (the parent's slot transfers to it)
+		penGuard.Commit(childRefID, penDepth);
 		EnqueueEvent(2, ctx.sourceWeapFormID, strikeRefID, ctx.material,
 			ProjectileLogic::PenetrationDamage(pv->hitDamage, s_cfg));
+	} else {
+		penGuard.Release(); //spawn failed, free the slot before the vanilla kill so Remove can clean the parent
+	}
 	return CallOriginalReap(proj, a2, a3, projKey);
 }
 
@@ -508,7 +495,6 @@ void UpdateSettings(const ProjectileLogic::Config& cfg, bool masterEnabled)
 
 void Update()
 {
-	s_depthFrame++; //ages depth entries so range/lifetime deaths (no impact) get reclaimed
 	s_preProbe.Refresh(false);
 	s_ricochetProbe.Refresh(false);
 	s_penetrateProbe.Refresh(false);
@@ -535,8 +521,7 @@ void Update()
 void ClearState()
 {
 	s_hitSet.Clear();
-	memset(s_depthTable, 0, sizeof(s_depthTable));
-	s_depthFrame = 0;
+	s_depth.Clear();
 	if (s_queueLockInit) {
 		EnterCriticalSection(&s_queueLock);
 		s_queueCount = 0;
