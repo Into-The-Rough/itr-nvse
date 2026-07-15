@@ -73,6 +73,11 @@ static_assert(offsetof(ProjectileImpactView, range) == 0x14C);
 //ImpactData fields refr +0x00, pos +0x04, normal +0x10, hkpRigidBody* +0x1C, materialType +0x20
 inline constexpr UInt32 kProjImpact_ListHead = 0x88;
 
+//BGSProjectile flags u16 at base+0x60, bit 1 = hitscan (BGSProjectile::IsHitScan 0x9A7F80
+//tests bit 1 of the field at this+0x60 via 0x4FD420/0x4EA950)
+inline constexpr UInt32 kBGSProjFlags_Offset = 0x60;
+inline constexpr UInt16 kBGSProjFlag_HitScan = 0x1;
+
 //refr baseForm at +0x20 is the BGSProjectile, BGSProjectile::explosion at +0x84
 //a non-null explosion marks missile/grenade/rocket rounds, ballistic bullets have none
 inline bool ProjectileBaseHasExplosion(void* projectile)

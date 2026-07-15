@@ -12,8 +12,10 @@
 #include "internal/SafeWrite.h"
 #include "internal/ProjectileLogic.h"
 #include "internal/layout/Projectile.h"
+#include "internal/RayCast.h"
 #include <Windows.h>
 #include <math.h>
+#include <string.h>
 
 extern void Log(const char* fmt, ...);
 
@@ -29,8 +31,12 @@ constexpr UInt32 kAddr_SpawnCollisionEffects = 0x9C20E0; //Projectile::SpawnColl
 constexpr UInt32 kAddr_ClearImpactData       = 0x9C4DA0; //walks+frees proj+0x88 tList, resets impacts
 constexpr UInt32 kAddr_SpawnAndFireProjectile= 0x9BCA60; //__cdecl engine projectile spawn/launch
 
-//far side stand-off, past a typical FNV wall/door (~10-25 units thick) so the continuation clears the collider
-constexpr float kPenetrateBackoff = 30.0f;
+//exit probe - a reverse raycast finds the true backface, thicker than this is a wall not a pane
+constexpr float kMaxPenetrateThickness = 48.0f;
+constexpr float kExitSkin = 0.5f;  //probe end just past the entry face so the ray cannot re-hit it
+constexpr float kExitEpsilon = 2.0f; //spawn this far beyond the found backface
+
+constexpr UInt32 kMaxPenetrationDepth = 5; //hard chain cap regardless of energy settings
 
 struct NiPoint3 { float x, y, z; };
 typedef void (__thiscall* SpawnCollisionEffects_t)(void*, TESObjectREFR*, NiPoint3*, NiPoint3*, int, UInt32);
@@ -63,6 +69,76 @@ static EventDispatch::ListenerProbe s_ricochetProbe  = { kEvent_Ricochet,  "ITR_
 static EventDispatch::ListenerProbe s_penetrateProbe = { kEvent_Penetrate, "ITR_OnPenetrateProbe",           PenetrateProbe };
 
 static float Clamp01(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
+
+//per-projectile penetration depth keyed by refID, ring-evicted, cleared on load
+struct DepthEntry { UInt32 refID; UInt32 depth; };
+static DepthEntry s_depthTable[64];
+static UInt32 s_depthNext = 0;
+
+static UInt32 DepthOf(UInt32 refID)
+{
+	if (!refID) return 0;
+	for (UInt32 i = 0; i < 64; i++)
+		if (s_depthTable[i].refID == refID) return s_depthTable[i].depth;
+	return 0;
+}
+
+static void RecordDepth(UInt32 refID, UInt32 depth)
+{
+	if (!refID) return;
+	for (UInt32 i = 0; i < 64; i++)
+		if (s_depthTable[i].refID == refID) { s_depthTable[i].depth = depth; return; }
+	s_depthTable[s_depthNext] = { refID, depth };
+	s_depthNext = (s_depthNext + 1) & 63;
+}
+
+static void RemoveDepth(UInt32 refID)
+{
+	if (!refID) return;
+	for (UInt32 i = 0; i < 64; i++)
+		if (s_depthTable[i].refID == refID) { s_depthTable[i] = { 0, 0 }; return; }
+}
+
+//reverse raycast from deep on the far side back toward the entry, the first hit along that
+//direction is the penetrated collider's backface, i.e. the true exit point. no hit within
+//kMaxPenetrateThickness means the wall is too thick to pass, caller skips the continuation.
+//stacked panels inside the probe window collapse into the nearest-to-far-side backface,
+//so multiples within 48 units traverse as one hit - documented residual gap
+static bool FindExitPoint(const float pos[3], const float unit[3], float out[3])
+{
+	float s[3], e[3]; //world-space probe start (far side) and end (just past the entry face)
+	for (int i = 0; i < 3; i++) {
+		s[i] = pos[i] + unit[i]*kMaxPenetrateThickness;
+		e[i] = pos[i] + unit[i]*kExitSkin;
+	}
+	RayCastData ray = {};
+	for (int i = 0; i < 3; i++) {
+		ray.pos0[i] = s[i] * kHavokScale;
+		ray.pos1[i] = e[i] * kHavokScale;
+	}
+	ray.hitFraction = 1.0f;
+	ray.unk44[0] = 0xFFFFFFFF;
+	ray.unk44[6] = 0xFFFFFFFF;
+	ray.layerType = 6; //static world geometry, same filter as the project's ground probe
+	if (!Engine::TESPickObject(&ray, true)) return false;
+	if (ray.hitFraction >= 1.0f) return false;
+	for (int i = 0; i < 3; i++)
+		out[i] = s[i] + (e[i] - s[i])*ray.hitFraction + unit[i]*kExitEpsilon;
+	return true;
+}
+
+//base BGSProjectile is shared, clear its hitscan bit only while the engine spawns from it so
+//an in-spawn hitscan resolve cannot fire along the zeroed trajectory, restore on scope exit
+struct HitscanBracket {
+	UInt16* flags;
+	UInt16 saved;
+	HitscanBracket(void* base) {
+		flags = (UInt16*)((UInt8*)base + kBGSProjFlags_Offset);
+		saved = *flags;
+		*flags = saved & ~kBGSProjFlag_HitScan;
+	}
+	~HitscanBracket() { *flags = saved; }
+};
 
 //first populated impact node - node[0] is the ImpactData, node[1] the next link
 static void* FirstImpactNode(void* proj)
@@ -122,21 +198,38 @@ static void SpawnImpactEffect(void* proj, void* node)
 
 //emerge a fresh ballistic round on the far side, angles left at 0 since vector104+transform below drive it
 //and the engine re-orients from vector104 every frame (sub_9BF470 reads sub_9B7010 -> proj+0x104)
-static void SpawnContinuation(void* base, void* cell, float px, float py, float pz,
-	const float unitDir[3], float speedMult, float hitDamage, float distSeed,
-	TESObjectREFR* owner, TESObjectWEAP* weapon, float vecMag)
+static bool SpawnContinuation(ProjectileImpactView* orig, void* base, void* cell,
+	const float spawnPos[3], const float unitDir[3], float speedMult, float hitDamage,
+	float distSeed, TESObjectREFR* owner, TESObjectWEAP* weapon, float vecMag, UInt32 depth)
 {
-	void* cont = ((SpawnAndFireProjectile_t)kAddr_SpawnAndFireProjectile)(
-		base, nullptr, 0, nullptr, px, py, pz, 0.0f, 0.0f, 0, 0, 0, 0, 0.0f, 0.0f, cell);
-	if (!cont) return;
+	void* cont;
+	{
+		HitscanBracket guard(base);
+		cont = ((SpawnAndFireProjectile_t)kAddr_SpawnAndFireProjectile)(
+			base, nullptr, 0, nullptr, spawnPos[0], spawnPos[1], spawnPos[2],
+			0.0f, 0.0f, 0, 0, 0, 0, 0.0f, 0.0f, cell);
+	}
+	if (!cont) return false;
 	ProjectileImpactView* c = (ProjectileImpactView*)cont;
 	*(TESObjectREFR**)((UInt8*)cont + 0xFC) = owner;  //sourceRef, keeps our player-only+VATS gate and damage credit
 	*(TESObjectWEAP**)((UInt8*)cont + 0xF8) = weapon; //sourceWeap
+	//runtime flags wholesale from the original so hitscan/gravity/VATS semantics survive
+	//(Do3DLoaded 0x9B7CC0 derives 0x1/0x2/0x8/0x20/0x2000/0x8000 from the base hitscan bit,
+	//which was masked during spawn, the original's word is the correct post-init state)
+	*(UInt32*)((UInt8*)cont + 0xC8) = *(UInt32*)((UInt8*)orig + 0xC8);
+	c->lifeTime = orig->lifeTime;   //total flight time carries over for the lifetime kill checks
+	c->range = orig->range;
+	*(float*)((UInt8*)cont + 0xF4) = *(float*)((UInt8*)orig + 0xF4); //wpnHealthPerc damage context
 	c->hitDamage = hitDamage;
 	c->speedMult = speedMult;
 	c->vector104[0] = unitDir[0]*vecMag; c->vector104[1] = unitDir[1]*vecMag; c->vector104[2] = unitDir[2]*vecMag;
 	BuildForwardRotate(unitDir, c->transformRotate);
 	c->distTravelled = distSeed; //seeds the energy proxy so each penetration decays and the chain terminates
+	//drop anything the engine resolved during the spawn call so the round starts clean
+	c->hasImpacted = 0;
+	((ClearImpactData_t)kAddr_ClearImpactData)(cont);
+	RecordDepth(((TESObjectREFR*)cont)->refID, depth);
+	return true;
 }
 
 static char __cdecl HandleImpact(void* proj, int a2, int a3);
@@ -224,7 +317,10 @@ static char __cdecl HandleImpact(void* proj, int a2, int a3)
 	ProjectileLogic::Outcome outcome = ProjectileLogic::Decide(ctx, s_cfg);
 	if (outcome == ProjectileLogic::kOutcome_Normal) {
 		char killed = CallOriginalProcessImpacts(proj, a2, a3);
-		if (killed) s_hitSet.Release(projKey); //non-zero return means the wrapper handled/killed the round, free its slot
+		if (killed) { //non-zero return means the wrapper handled/killed the round, free its bookkeeping
+			s_hitSet.Release(projKey);
+			RemoveDepth(((TESObjectREFR*)proj)->refID);
+		}
 		return killed;
 	}
 
@@ -275,31 +371,38 @@ static char __cdecl HandleImpact(void* proj, int a2, int a3)
 
 	//penetrate - emerge a decayed continuation past the surface, then let the engine apply the full
 	//vanilla entry hit (damage/destruction/callbacks) to the struck ref and kill the original round
-	if (pv->range > 0.0f) { //no range means the energy proxy cannot decay, skip to avoid an endless chain
+	bool spawned = false;
+	UInt32 chainDepth = DepthOf(((TESObjectREFR*)proj)->refID);
+	//depth cap is the hard stop, energy decay + the ini min-energy floor are the soft bound
+	//range 0 means the energy proxy cannot decay, skip to avoid an endless chain
+	if (pv->range > 0.0f && chainDepth < kMaxPenetrationDepth) {
 		void* base = *(void**)((UInt8*)proj + 0x20); //refr baseForm = BGSProjectile
 		void* cell = *(void**)((UInt8*)proj + 0x40); //parentCell for placement
 		float dl = sqrtf(ctx.dir[0]*ctx.dir[0] + ctx.dir[1]*ctx.dir[1] + ctx.dir[2]*ctx.dir[2]);
 		if (base && cell && dl > 1e-6f) {
-			float ux = ctx.dir[0]/dl, uy = ctx.dir[1]/dl, uz = ctx.dir[2]/dl;
-			float unit[3] = { ux, uy, uz };
-			float px = ctx.pos[0] + ux*kPenetrateBackoff;
-			float py = ctx.pos[1] + uy*kPenetrateBackoff;
-			float pz = ctx.pos[2] + uz*kPenetrateBackoff;
-			//each hop multiplies energy by the falloff, distTravelled is seeded so energy = energyOld*falloff
-			//once it drops below minRicochetEnergy Decide returns Normal and the chain stops
-			float energyNew = ctx.energy * s_cfg.penetrationEnergyFalloff;
-			float distSeed = pv->range * (1.0f - energyNew);
-			if (distSeed < 0.0f) distSeed = 0.0f;
-			SpawnContinuation(base, cell, px, py, pz, unit,
-				pv->speedMult * s_cfg.penetrationEnergyFalloff,
-				ProjectileLogic::PenetrationDamage(pv->hitDamage, s_cfg),
-				distSeed, (TESObjectREFR*)*g_thePlayerPtr, weap, dl);
+			float unit[3] = { ctx.dir[0]/dl, ctx.dir[1]/dl, ctx.dir[2]/dl };
+			float exitPos[3];
+			if (FindExitPoint(ctx.pos, unit, exitPos)) {
+				//each hop multiplies energy by the falloff, distTravelled is seeded so energy = energyOld*falloff
+				//once it drops below minRicochetEnergy Decide returns Normal and the chain stops
+				float energyNew = ctx.energy * s_cfg.penetrationEnergyFalloff;
+				float distSeed = pv->range * (1.0f - energyNew);
+				if (distSeed < 0.0f) distSeed = 0.0f;
+				spawned = SpawnContinuation(pv, base, cell, exitPos, unit,
+					pv->speedMult * s_cfg.penetrationEnergyFalloff,
+					ProjectileLogic::PenetrationDamage(pv->hitDamage, s_cfg),
+					distSeed, (TESObjectREFR*)*g_thePlayerPtr, weap, dl, chainDepth + 1);
+			}
 		}
 	}
-	EnqueueEvent(2, ctx.sourceWeapFormID, strikeRefID, ctx.material,
-		ProjectileLogic::PenetrationDamage(pv->hitDamage, s_cfg));
+	if (spawned)
+		EnqueueEvent(2, ctx.sourceWeapFormID, strikeRefID, ctx.material,
+			ProjectileLogic::PenetrationDamage(pv->hitDamage, s_cfg));
 	char killed = CallOriginalProcessImpacts(proj, a2, a3);
-	if (killed) s_hitSet.Release(projKey); //original destroyed by the vanilla entry hit, free its slot
+	if (killed) { //original destroyed by the vanilla entry hit, free its bookkeeping
+		s_hitSet.Release(projKey);
+		RemoveDepth(((TESObjectREFR*)proj)->refID);
+	}
 	return killed;
 }
 
@@ -381,6 +484,8 @@ void Update()
 void ClearState()
 {
 	s_hitSet.Clear();
+	memset(s_depthTable, 0, sizeof(s_depthTable));
+	s_depthNext = 0;
 	if (s_queueLockInit) {
 		EnterCriticalSection(&s_queueLock);
 		s_queueCount = 0;
