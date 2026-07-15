@@ -383,8 +383,7 @@ static void ApplyProjectileSettings()
 	cfg.ricochetEnabled = Settings::bProjectileRicochet != 0;
 	cfg.penetrationEnabled = Settings::bProjectilePenetration != 0;
 	cfg.maxRicochetAngleDeg = angle(Settings::iRicochetMaxAngleDeg);
-	//floor above zero: Decide gates on energy >= min, a zero minimum never terminates a decaying chain
-	cfg.minRicochetEnergy = pct(Settings::iRicochetMinEnergyPct < 5 ? 5 : Settings::iRicochetMinEnergyPct);
+	cfg.minRicochetEnergy = pct(Settings::iRicochetMinEnergyPct); //penetration chain is bounded by the hard depth cap, not this shared floor
 	cfg.ricochetDamageFalloff = pct(Settings::iRicochetDamagePct);
 	cfg.penetrationDamageFalloff = pct(Settings::iPenetrationDamagePct);
 	//energy retention must stay below 100% or the continuation chain never decays and penetrates forever

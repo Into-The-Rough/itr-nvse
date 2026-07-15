@@ -70,15 +70,19 @@ static EventDispatch::ListenerProbe s_penetrateProbe = { kEvent_Penetrate, "ITR_
 
 static float Clamp01(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
 
-//per-projectile penetration depth keyed by refID, ring-evicted, cleared on load
+//per-projectile penetration depth keyed by refID, freed on death, cleared on load
+//256 slots so realistic projectile traffic never forces an eviction of a live chain.
+//residual: if all 256 hold live penetrating chains at once, RecordDepth returns without
+//storing (no live entry is reset to 0), and the energy decay + min-energy floor remain the
+//backstop - a chain past its slot simply loses its hard cap, not its soft bound
+constexpr UInt32 kDepthSlots = 256;
 struct DepthEntry { UInt32 refID; UInt32 depth; };
-static DepthEntry s_depthTable[64];
-static UInt32 s_depthNext = 0;
+static DepthEntry s_depthTable[kDepthSlots];
 
 static UInt32 DepthOf(UInt32 refID)
 {
 	if (!refID) return 0;
-	for (UInt32 i = 0; i < 64; i++)
+	for (UInt32 i = 0; i < kDepthSlots; i++)
 		if (s_depthTable[i].refID == refID) return s_depthTable[i].depth;
 	return 0;
 }
@@ -86,16 +90,16 @@ static UInt32 DepthOf(UInt32 refID)
 static void RecordDepth(UInt32 refID, UInt32 depth)
 {
 	if (!refID) return;
-	for (UInt32 i = 0; i < 64; i++)
+	for (UInt32 i = 0; i < kDepthSlots; i++)
 		if (s_depthTable[i].refID == refID) { s_depthTable[i].depth = depth; return; }
-	s_depthTable[s_depthNext] = { refID, depth };
-	s_depthNext = (s_depthNext + 1) & 63;
+	for (UInt32 i = 0; i < kDepthSlots; i++) //only ever take a free slot, never overwrite a live entry
+		if (!s_depthTable[i].refID) { s_depthTable[i] = { refID, depth }; return; }
 }
 
 static void RemoveDepth(UInt32 refID)
 {
 	if (!refID) return;
-	for (UInt32 i = 0; i < 64; i++)
+	for (UInt32 i = 0; i < kDepthSlots; i++)
 		if (s_depthTable[i].refID == refID) { s_depthTable[i] = { 0, 0 }; return; }
 }
 
@@ -148,11 +152,19 @@ static void* FirstImpactNode(void* proj)
 	return nullptr;
 }
 
+//0xD4 is the engine range-kill field (Do3DLoaded copies BGSProjectile+0x6C here, Update kills when
+//distTravelled 0x110 exceeds it), 0x14C is a constant 10000 secondary field, only a fallback
+static float EngineRange(ProjectileImpactView* pv)
+{
+	return pv->rangeEngine > 0.0f ? pv->rangeEngine : pv->range;
+}
+
 //dampened remaining-flight energy in 0..1, drops as the round travels so a deflection chain self-limits
 static float EnergyProxy(ProjectileImpactView* pv)
 {
-	if (pv->range <= 0.0f) return 1.0f;
-	return Clamp01(1.0f - pv->distTravelled / pv->range);
+	float r = EngineRange(pv);
+	if (r <= 0.0f) return 1.0f;
+	return Clamp01(1.0f - pv->distTravelled / r);
 }
 
 //row-major NiMatrix3 with column 1 (local +Y) set to the travel direction, matching the engine convention
@@ -217,8 +229,9 @@ static bool SpawnContinuation(ProjectileImpactView* orig, void* base, void* cell
 	//(Do3DLoaded 0x9B7CC0 derives 0x1/0x2/0x8/0x20/0x2000/0x8000 from the base hitscan bit,
 	//which was masked during spawn, the original's word is the correct post-init state)
 	*(UInt32*)((UInt8*)cont + 0xC8) = *(UInt32*)((UInt8*)orig + 0xC8);
-	c->lifeTime = orig->lifeTime;   //total flight time carries over for the lifetime kill checks
-	c->range = orig->range;
+	c->lifeTime = orig->lifeTime;       //total flight time carries over for the lifetime kill checks
+	c->rangeEngine = orig->rangeEngine; //0xD4 engine range-kill field (Do3DLoaded sets it, copy anyway to match perk/context tweaks)
+	c->range = orig->range;             //0x14C secondary range consumed by OnNearMiss
 	*(float*)((UInt8*)cont + 0xF4) = *(float*)((UInt8*)orig + 0xF4); //wpnHealthPerc damage context
 	c->hitDamage = hitDamage;
 	c->speedMult = speedMult;
@@ -263,6 +276,18 @@ static __declspec(naked) void ProcessImpactsThunk()
 		add  esp, 0Ch
 		retn
 	}
+}
+
+//run vanilla, and on the kill-return free the round's bookkeeping using the pre-captured refID
+//(projKey = (void*)refID) so no field is read off proj after Projectile::Kill frees it
+static char CallOriginalReap(void* proj, int a2, int a3, void* projKey)
+{
+	char killed = CallOriginalProcessImpacts(proj, a2, a3);
+	if (killed) {
+		s_hitSet.Release(projKey);
+		RemoveDepth((UInt32)(uintptr_t)projKey);
+	}
+	return killed;
 }
 
 static char __cdecl HandleImpact(void* proj, int a2, int a3)
@@ -315,22 +340,48 @@ static char __cdecl HandleImpact(void* proj, int a2, int a3)
 	ctx.incidenceDeg = -1.0f; //let Decide derive the grazing angle from dir+normal
 
 	ProjectileLogic::Outcome outcome = ProjectileLogic::Decide(ctx, s_cfg);
-	if (outcome == ProjectileLogic::kOutcome_Normal) {
-		char killed = CallOriginalProcessImpacts(proj, a2, a3);
-		if (killed) { //non-zero return means the wrapper handled/killed the round, free its bookkeeping
-			s_hitSet.Release(projKey);
-			RemoveDepth(((TESObjectREFR*)proj)->refID);
+
+	//resolve penetration feasibility up front so the pre-event reports the real outcome and the
+	//exit raycast is computed once and reused for the spawn. an infeasible penetration downgrades
+	//to Normal (vanilla hit), so listeners never see a penetration that will not happen
+	bool penReady = false;
+	float penExit[3], penUnit[3], penDistSeed = 0.0f, penVecMag = 0.0f;
+	void* penBase = nullptr; void* penCell = nullptr; UInt32 penDepth = 0;
+	if (outcome == ProjectileLogic::kOutcome_Penetrate) {
+		UInt32 chainDepth = DepthOf((UInt32)(uintptr_t)projKey);
+		float range = EngineRange(pv);
+		float dl = sqrtf(ctx.dir[0]*ctx.dir[0] + ctx.dir[1]*ctx.dir[1] + ctx.dir[2]*ctx.dir[2]);
+		void* base = *(void**)((UInt8*)proj + 0x20); //refr baseForm = BGSProjectile
+		void* cell = *(void**)((UInt8*)proj + 0x40); //parentCell for placement
+		//depth cap is the hard stop, energy decay + the ini min-energy floor are the soft bound.
+		//range 0 means the energy proxy cannot decay, skip to avoid an endless chain
+		if (chainDepth < kMaxPenetrationDepth && range > 0.0f && base && cell && dl > 1e-6f) {
+			penUnit[0] = ctx.dir[0]/dl; penUnit[1] = ctx.dir[1]/dl; penUnit[2] = ctx.dir[2]/dl;
+			if (FindExitPoint(ctx.pos, penUnit, penExit)) {
+				//each hop multiplies energy by the falloff, distTravelled is seeded so energy = energyOld*falloff
+				//once it drops below minRicochetEnergy Decide returns Normal and the chain stops
+				float energyNew = ctx.energy * s_cfg.penetrationEnergyFalloff;
+				penDistSeed = range * (1.0f - energyNew);
+				if (penDistSeed < 0.0f) penDistSeed = 0.0f;
+				penBase = base; penCell = cell; penVecMag = dl; penDepth = chainDepth + 1;
+				penReady = true;
+			}
 		}
-		return killed;
+		if (!penReady)
+			outcome = ProjectileLogic::kOutcome_Normal;
 	}
 
+	if (outcome == ProjectileLogic::kOutcome_Normal)
+		return CallOriginalReap(proj, a2, a3, projKey);
+
 	//cancellable gate, dispatched synchronously because a veto must be known before we act.
-	//rare (only material-matched player deflections). the projectile is not passed to handlers,
-	//so a listener has no handle to free it mid-dispatch, and re-entry is depth-capped
+	//rare (only material-matched player deflections), reports the accurate feasible outcome.
+	//the projectile is not passed to handlers, so a listener has no handle to free it mid-dispatch,
+	//and re-entry is depth-capped
 	if (s_preProbe.hasListeners && g_eventManagerInterface) {
 		static UInt32 s_depth = 0;
 		if (s_depth >= 8) //recursion cap, bail to non-deflection rather than deflect with the veto ignored
-			return CallOriginalProcessImpacts(proj, a2, a3);
+			return CallOriginalReap(proj, a2, a3, projKey);
 		UInt32 allow = 1;
 		s_depth++;
 		struct Cb { static bool Fn(NVSEArrayVarInterface::Element& r, void* d) {
@@ -343,7 +394,7 @@ static char __cdecl HandleImpact(void* proj, int a2, int a3)
 			nullptr, (TESForm*)weap, (TESForm*)strikeRefr, (int)ctx.material, (int)outcome);
 		s_depth--;
 		if (!allow)
-			return CallOriginalProcessImpacts(proj, a2, a3);
+			return CallOriginalReap(proj, a2, a3, projKey);
 	}
 
 	if (strikeRefID)
@@ -369,41 +420,16 @@ static char __cdecl HandleImpact(void* proj, int a2, int a3)
 		return 0;
 	}
 
-	//penetrate - emerge a decayed continuation past the surface, then let the engine apply the full
-	//vanilla entry hit (damage/destruction/callbacks) to the struck ref and kill the original round
-	bool spawned = false;
-	UInt32 chainDepth = DepthOf(((TESObjectREFR*)proj)->refID);
-	//depth cap is the hard stop, energy decay + the ini min-energy floor are the soft bound
-	//range 0 means the energy proxy cannot decay, skip to avoid an endless chain
-	if (pv->range > 0.0f && chainDepth < kMaxPenetrationDepth) {
-		void* base = *(void**)((UInt8*)proj + 0x20); //refr baseForm = BGSProjectile
-		void* cell = *(void**)((UInt8*)proj + 0x40); //parentCell for placement
-		float dl = sqrtf(ctx.dir[0]*ctx.dir[0] + ctx.dir[1]*ctx.dir[1] + ctx.dir[2]*ctx.dir[2]);
-		if (base && cell && dl > 1e-6f) {
-			float unit[3] = { ctx.dir[0]/dl, ctx.dir[1]/dl, ctx.dir[2]/dl };
-			float exitPos[3];
-			if (FindExitPoint(ctx.pos, unit, exitPos)) {
-				//each hop multiplies energy by the falloff, distTravelled is seeded so energy = energyOld*falloff
-				//once it drops below minRicochetEnergy Decide returns Normal and the chain stops
-				float energyNew = ctx.energy * s_cfg.penetrationEnergyFalloff;
-				float distSeed = pv->range * (1.0f - energyNew);
-				if (distSeed < 0.0f) distSeed = 0.0f;
-				spawned = SpawnContinuation(pv, base, cell, exitPos, unit,
-					pv->speedMult * s_cfg.penetrationEnergyFalloff,
-					ProjectileLogic::PenetrationDamage(pv->hitDamage, s_cfg),
-					distSeed, (TESObjectREFR*)*g_thePlayerPtr, weap, dl, chainDepth + 1);
-			}
-		}
-	}
-	if (spawned)
+	//penetrate - feasibility and the exit point were resolved above, emerge the decayed continuation
+	//then let the engine apply the full vanilla entry hit (damage/destruction/callbacks) and kill the original
+	bool spawned = SpawnContinuation(pv, penBase, penCell, penExit, penUnit,
+		pv->speedMult * s_cfg.penetrationEnergyFalloff,
+		ProjectileLogic::PenetrationDamage(pv->hitDamage, s_cfg),
+		penDistSeed, (TESObjectREFR*)*g_thePlayerPtr, weap, penVecMag, penDepth);
+	if (spawned) //a rare null spawn still takes the vanilla hit, just no continuation and no event
 		EnqueueEvent(2, ctx.sourceWeapFormID, strikeRefID, ctx.material,
 			ProjectileLogic::PenetrationDamage(pv->hitDamage, s_cfg));
-	char killed = CallOriginalProcessImpacts(proj, a2, a3);
-	if (killed) { //original destroyed by the vanilla entry hit, free its bookkeeping
-		s_hitSet.Release(projKey);
-		RemoveDepth(((TESObjectREFR*)proj)->refID);
-	}
-	return killed;
+	return CallOriginalReap(proj, a2, a3, projKey);
 }
 
 bool Init(void* nvseInterface)
@@ -485,7 +511,6 @@ void ClearState()
 {
 	s_hitSet.Clear();
 	memset(s_depthTable, 0, sizeof(s_depthTable));
-	s_depthNext = 0;
 	if (s_queueLockInit) {
 		EnterCriticalSection(&s_queueLock);
 		s_queueCount = 0;

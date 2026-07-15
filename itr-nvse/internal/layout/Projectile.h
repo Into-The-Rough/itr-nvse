@@ -49,7 +49,7 @@ struct ProjectileImpactView {
 	UInt8 pad0B8[0xCC - 0xB8];
 	float power;              //0xCC
 	float speedMult;          //0xD0
-	UInt8 padD4[0xD8 - 0xD4];
+	float rangeEngine;        //0xD4, base range copy (Do3DLoaded 0x9BDD08 stores BGSProjectile+0x6C here), engine range-kill field
 	float lifeTime;           //0xD8
 	float hitDamage;          //0xDC
 	UInt8 padE0[0x104 - 0xE0];
@@ -63,6 +63,7 @@ static_assert(offsetof(ProjectileImpactView, hasImpacted) == 0x90);
 static_assert(offsetof(ProjectileImpactView, transformRotate) == 0x94);
 static_assert(offsetof(ProjectileImpactView, power) == 0xCC);
 static_assert(offsetof(ProjectileImpactView, speedMult) == 0xD0);
+static_assert(offsetof(ProjectileImpactView, rangeEngine) == 0xD4);
 static_assert(offsetof(ProjectileImpactView, lifeTime) == 0xD8);
 static_assert(offsetof(ProjectileImpactView, hitDamage) == 0xDC);
 static_assert(offsetof(ProjectileImpactView, vector104) == 0x104);
