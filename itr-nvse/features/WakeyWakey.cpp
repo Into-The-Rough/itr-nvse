@@ -35,6 +35,7 @@ static const StopCombatCmd_t StopCombatCommand = (StopCombatCmd_t)0x5C1A50; //va
 
 Detours::CallDetour g_fireDetour;
 RemoveAmmoOnFire_t g_origRemoveAmmo = nullptr;
+bool g_enabled = false;   //hook installs once, this gates its scan so reload can toggle it
 
 float g_wakeDistance = 2500.0f;
 float g_quietWakeDistance = 1250.0f;
@@ -138,6 +139,8 @@ int __fastcall Hook_RemoveAmmoOnFire(Actor* actor, void* /*edx*/, int shotCount)
 {
 	int result = g_origRemoveAmmo(actor, shotCount);
 
+	if (!g_enabled) return result;
+
 	if (GetCurrentThreadId() != g_mainThreadId) {
 		static volatile LONG loggedOffThread = 0;
 		if (InterlockedCompareExchange(&loggedOffThread, 1, 0) == 0)
@@ -158,14 +161,15 @@ namespace WakeyWakey {
 
 void Init(bool enable, float wakeDistance, float quietWakeDistance, int cooldownMs)
 {
-	if (!enable) return;
-
 	//third-party script mod ships this file; native port stands down to avoid double-waking
 	if (GetFileAttributesA("Data\\NVSE\\Plugins\\scripts\\ln_wakey_wakey.txt") != INVALID_FILE_ATTRIBUTES) {
 		Log("WakeyWakey: script mod detected, native port disabled");
 		return;
 	}
 
+	//install the fire hook regardless of the startup flag and gate its scan on g_enabled,
+	//so ReloadPluginConfig can turn the feature on or off without a restart
+	g_enabled = enable;
 	g_wakeDistance = wakeDistance;
 	g_quietWakeDistance = quietWakeDistance;
 	g_cooldownMs = cooldownMs > 0 ? (DWORD)cooldownMs : 0;
@@ -188,8 +192,9 @@ void Init(bool enable, float wakeDistance, float quietWakeDistance, int cooldown
 	}
 }
 
-void UpdateSettings(float wakeDistance, float quietWakeDistance, int cooldownMs)
+void UpdateSettings(bool enable, float wakeDistance, float quietWakeDistance, int cooldownMs)
 {
+	g_enabled = enable;   //inert if Init stood down for the script mod, no hook is installed then
 	g_wakeDistance = wakeDistance;
 	g_quietWakeDistance = quietWakeDistance;
 	g_cooldownMs = cooldownMs > 0 ? (DWORD)cooldownMs : 0;

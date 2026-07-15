@@ -41,8 +41,9 @@ namespace NPCAntidoteUse
 		g_enabled = true;
 	}
 
-	void UpdateSettings(float cureTimer, float healthThreshold)
+	void UpdateSettings(bool enabled, float cureTimer, float healthThreshold)
 	{
+		g_enabled = enabled;   //reloadable, Check is called every combat frame and gates on this
 		g_cooldown = cureTimer;
 		g_healthThreshold = healthThreshold;
 	}

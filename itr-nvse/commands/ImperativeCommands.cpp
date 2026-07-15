@@ -226,7 +226,9 @@ bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 
 		//filter under the cell ref lock into a bounded buffer, no allocation while it is held.
 		//main-thread command with one collection live at a time, so a shared static buffer
-		//keeps this off the stack and holds enough that the cap never truncates a real cell
+		//keeps this off the stack. hard cap per cell, chosen well above any real cell ref
+		//count, a cell that exceeds it truncates in list order (logged below) and can miss
+		//the nearest ref, the trade is bounded collection under the lock
 		constexpr UInt32 kMaxPerCell = 8192;
 		static RefWithDist found[kMaxPerCell];
 		UInt32 foundCount = 0;

@@ -606,8 +606,9 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					CompanionNoBlock::UpdateSettings(Settings::bCompanionNoBlock != 0, Settings::iCompanionNoBlockReleaseFrames,
 					                                 Settings::iCompanionNoBlockRestoreDistance, Settings::bCompanionNoBlockInteriorOnly != 0);
 					NPCDoorUnlockBlock::SetLevel(Settings::iNPCDoorUnlockBlock);
-					WakeyWakey::UpdateSettings(Settings::fWakeDistance, Settings::fQuietWakeDistance, Settings::iWakeCooldownMs);
-					NPCAntidoteUse::UpdateSettings(Settings::fCombatItemCureTimer, Settings::fCureHealthThreshold);
+					WakeyWakey::UpdateSettings(Settings::bWakeyWakey != 0, Settings::fWakeDistance, Settings::fQuietWakeDistance, Settings::iWakeCooldownMs);
+					NPCAntidoteUse::UpdateSettings(Settings::bNPCAntidoteUse != 0, Settings::fCombatItemCureTimer, Settings::fCureHealthThreshold);
+					NPCDoctorsBagUse::UpdateSettings(Settings::bNPCDoctorsBagUse != 0, Settings::fDoctorsBagUseTimer);
 					LockpickOwnerKarmaFix::SetEnabled(Settings::bLockpickOwnerKarmaFix != 0);
 					InlineGlyphFix::SetEnabled(Settings::bInlineGlyphFix != 0);
 					AggroThreshold::SetEnabled(Settings::bAggroThreshold != 0);

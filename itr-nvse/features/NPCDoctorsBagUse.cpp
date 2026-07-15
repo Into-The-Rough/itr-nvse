@@ -33,6 +33,12 @@ namespace NPCDoctorsBagUse
 		g_enabled = true;
 	}
 
+	void UpdateSettings(bool enabled, float useTimer)
+	{
+		g_enabled = enabled;   //reloadable, Check is called every combat frame and gates on this
+		g_cooldown = useTimer;
+	}
+
 	void Check(void* combatState)
 	{
 		if (!g_enabled) return;
