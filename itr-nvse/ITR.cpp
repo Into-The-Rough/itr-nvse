@@ -399,13 +399,10 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 {
 	switch (msg->type)
 	{
-		case NVSEMessagingInterface::kMessage_SaveGame:
-			AlertCommands::OnSaveGame(); //drop non-savebaked alert bits before serialisation, restored next frame
-			break;
-
 		case NVSEMessagingInterface::kMessage_PostLoad:
 			if (!g_hooksInstalled)
 			{
+				AlertCommands::Init(); //mask SetAlertNS out of the save bake
 				if (Settings::bQuickDrop || Settings::bQuick180)
 					PlayerUpdateHook::Init(Settings::bQuickDrop, Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
 					                       Settings::bQuick180, Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);

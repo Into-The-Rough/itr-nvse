@@ -1,6 +1,7 @@
 #include "AlertCommands.h"
 #include "internal/EngineFunctions.h"
 #include "internal/layout/Combat.h"
+#include "internal/Detours.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
@@ -31,8 +32,14 @@ namespace
 	};
 
 	std::vector<TimedAlert> g_alerts;
-	std::vector<UInt32> g_clearedForSave; //actors whose alert bit we dropped for an in-progress save
-	bool g_restorePending = false;
+
+	constexpr UInt8 kAlertBit = 0x08;      //process+0x30 Alert bit
+	constexpr UInt32 kBakeSite = 0x90FB1B; //LowProcess::SaveGame writes process+0x30 here
+	constexpr UInt32 kWriter = 0x8579B0;   //save-buffer byte writer, __thiscall(buf, ptr, len)
+
+	Detours::CallDetour s_bakeMaskDetour;
+	using WriteSaveBytes_t = int(__thiscall*)(void*, void*, int);
+	UInt8 g_maskedFlag = 0;
 
 	bool IsActorRef(TESObjectREFR* ref)
 	{
@@ -79,6 +86,32 @@ namespace
 	bool IsExpired(DWORD now, DWORD expiresAt)
 	{
 		return static_cast<SInt32>(now - expiresAt) >= 0;
+	}
+
+	bool ProcessIsTracked(void* process)
+	{
+		for (const auto& alert : g_alerts)
+		{
+			Actor* actor = LookupActor(alert.refID);
+			//actor+0x68 = process pointer (SetAlert 0x8A5E40 uses this[26])
+			if (actor && *reinterpret_cast<void**>(reinterpret_cast<UInt8*>(actor) + 0x68) == process)
+				return true;
+		}
+		return false;
+	}
+
+	//mask the Alert bit out of the serialised process flag byte for plugin-tracked
+	//actors so SetAlertNS never bakes, without touching live state
+	int __fastcall Hook_SerialiseProcessFlags(void* saveBuf, void*, UInt8* flagByte, int len)
+	{
+		auto original = reinterpret_cast<WriteSaveBytes_t>(s_bakeMaskDetour.GetOverwrittenAddr());
+		if (!g_alerts.empty() && flagByte && (*flagByte & kAlertBit)
+			&& ProcessIsTracked(reinterpret_cast<UInt8*>(flagByte) - 0x30))
+		{
+			g_maskedFlag = *flagByte & ~kAlertBit;
+			return original(saveBuf, &g_maskedFlag, len);
+		}
+		return original(saveBuf, flagByte, len);
 	}
 }
 
@@ -168,38 +201,16 @@ namespace AlertCommands
 		nvse->RegisterCommand(&kCommandInfo_GetAlertNS);
 	}
 
-	void OnSaveGame()
+	void Init()
 	{
-		//drop the real alert bit for tracked actors so no serialisation path writes it,
-		//then restore next frame. SetAlert is a pure process+0x30 bit-8 flip with no package
-		//eval, and the save freezes the sim, so the actor never animates the holster
-		g_clearedForSave.clear();
-		for (const auto& alert : g_alerts)
-		{
-			Actor* actor = LookupActor(alert.refID);
-			if (actor && GetAlert(actor))
-			{
-				SetAlert(actor, false);
-				g_clearedForSave.push_back(alert.refID);
-			}
-		}
-		g_restorePending = !g_clearedForSave.empty();
+		//mask the Alert bit at the save-bake site instead of stripping the live bit on
+		//kMessage_SaveGame, which xNVSE dispatches after the .fos is already written
+		if (!s_bakeMaskDetour.WriteRelCallIfTarget(kBakeSite, kWriter, Hook_SerialiseProcessFlags))
+			Log("AlertCommands: save-bake site %08X not vanilla; SetAlertNS may persist across saves", kBakeSite);
 	}
 
 	void Update()
 	{
-		if (g_restorePending)
-		{
-			for (UInt32 refID : g_clearedForSave)
-			{
-				Actor* actor = LookupActor(refID);
-				if (actor)
-					SetAlert(actor, true);
-			}
-			g_clearedForSave.clear();
-			g_restorePending = false;
-		}
-
 		if (g_alerts.empty())
 			return;
 
@@ -237,7 +248,5 @@ namespace AlertCommands
 	void ClearState()
 	{
 		g_alerts.clear();
-		g_clearedForSave.clear();
-		g_restorePending = false;
 	}
 }

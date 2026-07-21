@@ -888,7 +888,7 @@ bool Cmd_SetRaceAlt_Execute(COMMAND_ARGS)
 			DataHandler_DoAddForm(*g_dataHandlerPtr, cloneForm);
 
 		targetNPC = (TESNPC*)cloneForm;
-		//runtime 0xFF clone is not serialized, the swap does not survive save/load,
+		//runtime 0xFF clone is not serialised, the swap does not survive save/load,
 		//callers must reapply on load (documented in FEATURES.md)
 		thisObj->baseForm = cloneForm;
 
