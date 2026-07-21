@@ -32,6 +32,7 @@
 #include "commands/HavokCommands.h"
 #include "commands/WorldspaceOffsetCommands.h"
 #include "commands/DetectionSoundCommands.h"
+#include "commands/AlertCommands.h"
 #include "commands/BarterCommands.h"
 #include "commands/CenterOnCellAltCommand.h"
 #include "commands/StartNewGameCommand.h"
@@ -239,4 +240,7 @@ void RegisterAllCommands(void* nvsePtr)
 
 	nvse->SetOpcodeBase(0x40D5);
 	OnTileValueChangeHandler::RegisterCommands(nvse); //WatchTileValue, UnwatchTileValue
+
+	nvse->SetOpcodeBase(0x40D9);
+	AlertCommands::RegisterCommands(nvse); //SetAlertNS, GetAlertNS
 }

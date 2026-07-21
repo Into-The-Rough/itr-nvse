@@ -1,6 +1,7 @@
 #include "ITR.h"
 #include "commands/CommandTable.h"
 #include "commands/DetectionSoundCommands.h"
+#include "commands/AlertCommands.h"
 #include "commands/BarterCommands.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
@@ -78,6 +79,8 @@
 #include "fixes/NPCDoorUnlockBlock.h"
 #include "fixes/VATSSpeechFix.h"
 #include "fixes/CombatItemTimerFix.h"
+#include "fixes/StuckCombatStateFix.h"
+#include "fixes/LoopingSoundLoadFix.h"
 #include "fixes/CompanionNoInfamy.h"
 #include "fixes/PathingNullActorFix.h"
 #include "fixes/NavMeshInfoCrashFix.h"
@@ -396,6 +399,10 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 {
 	switch (msg->type)
 	{
+		case NVSEMessagingInterface::kMessage_SaveGame:
+			AlertCommands::OnSaveGame(); //drop non-savebaked alert bits before serialisation, restored next frame
+			break;
+
 		case NVSEMessagingInterface::kMessage_PostLoad:
 			if (!g_hooksInstalled)
 			{
@@ -430,6 +437,10 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				NPCDoorUnlockBlock::Init(Settings::iNPCDoorUnlockBlock);
 				if (Settings::bCombatItemTimerFix)
 					CombatItemTimerFix::Init();
+				if (Settings::bStuckCombatStateFix)
+					StuckCombatStateFix::Init();
+				if (Settings::bLoopingSoundLoadFix)
+					LoopingSoundLoadFix::Init();
 				if (Settings::bNPCAntidoteUse)
 					NPCAntidoteUse::Init(Settings::fCombatItemCureTimer, Settings::fCureHealthThreshold);
 				if (Settings::bNPCDoctorsBagUse)
@@ -492,6 +503,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			StartNewGameCommand::Abort();
 			HavokCommands::ClearState();
 			DetectionSoundCommands::ClearState();
+			AlertCommands::ClearState();
+			StuckCombatStateFix::ClearState();
 			BarterCommands::ClearState();
 			CompanionNoBlock::ClearState();
 			DoorPinchFix::ClearState();
@@ -540,10 +553,13 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			{
 				ResetMusicStateForLoad();
 			}
+			if (msg->type == NVSEMessagingInterface::kMessage_PostLoadGame && Settings::bLoopingSoundLoadFix)
+				LoopingSoundLoadFix::OnPostLoadGame();
 			WeaponEmissiveCommands::ClearState();
 			GroundCommands::ClearState();
 			HavokCommands::ClearState();
 			GestureCommand::Reset();
+			StuckCombatStateFix::ClearState();
 			CrouchCommands::ClearState();
 			ForceCombatTargetCommands::ClearState();
 			OnCasinoBanHandler::ClearState();
@@ -562,6 +578,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			ToggleAllPrimitives::Reset();
 			ExteriorDoorCommands::ClearCache();
 			DetectionSoundCommands::ClearState();
+			AlertCommands::ClearState();
 			BarterCommands::ClearState();
 			CompanionNoBlock::ClearState();
 			DoorPinchFix::ClearState();
@@ -670,6 +687,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 		case kMessage_MainGameLoop:
 			AshPileNames::Update();
+			if (Settings::bStuckCombatStateFix)
+				StuckCombatStateFix::Update();
 			OnConsoleHandler::Update();
 			DialogueTextFilter::Update();
 			if (Settings::bLocationVisitPopup)
@@ -709,6 +728,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			GestureCommand::Update();
 			ToggleAllPrimitives::Update();
 			DetectionSoundCommands::Update();
+			AlertCommands::Update();
 			CenterOnCellAltCommand::Update();
 			StartNewGameCommand::Update();
 			break;

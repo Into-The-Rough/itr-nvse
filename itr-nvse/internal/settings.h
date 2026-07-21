@@ -70,6 +70,8 @@ namespace Settings
 
 	inline int bVATSSpeechFix = 0;
 	inline int bCombatItemTimerFix = 1;
+	inline int bStuckCombatStateFix = 1;
+	inline int bLoopingSoundLoadFix = 1;
 
 	inline int bNPCAntidoteUse = 0;
 	inline float fCombatItemCureTimer = 10.0f;
@@ -190,6 +192,8 @@ namespace Settings
 		iNPCDoorUnlockBlock = GetINIInt("Tweaks", "iNPCDoorUnlockBlock", 0);
 		bVATSSpeechFix = GetINIInt("Tweaks", "bVATSSpeechFix", 0);
 		bCombatItemTimerFix = GetINIInt("Tweaks", "bCombatItemTimerFix", 1);
+		bStuckCombatStateFix = GetINIInt("Tweaks", "bStuckCombatStateFix", 1);
+		bLoopingSoundLoadFix = GetINIInt("Tweaks", "bLoopingSoundLoadFix", 1);
 
 		bNPCAntidoteUse = GetINIInt("Tweaks", "bNPCAntidoteUse", 0);
 		fCombatItemCureTimer = (float)GetINIInt("NPCAntidoteUse", "iCureTimer", 10);

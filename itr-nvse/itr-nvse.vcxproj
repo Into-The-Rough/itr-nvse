@@ -164,6 +164,8 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="fixes\NPCDoorUnlockBlock.cpp" />
     <ClCompile Include="fixes\VATSSpeechFix.cpp" />
     <ClCompile Include="fixes\CombatItemTimerFix.cpp" />
+    <ClCompile Include="fixes\StuckCombatStateFix.cpp" />
+    <ClCompile Include="fixes\LoopingSoundLoadFix.cpp" />
     <ClCompile Include="fixes\CompanionNoInfamy.cpp" />
     <ClCompile Include="fixes\PathingNullActorFix.cpp" />
     <ClCompile Include="fixes\NavMeshInfoCrashFix.cpp" />
@@ -226,6 +228,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="commands\ExteriorDoorCommands.cpp" />
     <ClCompile Include="commands\ContainerCommands.cpp" />
     <ClCompile Include="commands\WorldspaceOffsetCommands.cpp" />
+    <ClCompile Include="commands\AlertCommands.cpp" />
     <ClCompile Include="commands\DetectionSoundCommands.cpp" />
     <ClCompile Include="commands\BarterCommands.cpp" />
     <ClCompile Include="commands\CenterOnCellAltCommand.cpp" />
@@ -314,6 +317,8 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="fixes\NPCDoorUnlockBlock.h" />
     <ClInclude Include="fixes\VATSSpeechFix.h" />
     <ClInclude Include="fixes\CombatItemTimerFix.h" />
+    <ClInclude Include="fixes\StuckCombatStateFix.h" />
+    <ClInclude Include="fixes\LoopingSoundLoadFix.h" />
     <ClInclude Include="fixes\CompanionNoInfamy.h" />
     <ClInclude Include="fixes\PathingNullActorFix.h" />
     <ClInclude Include="fixes\NavMeshInfoCrashFix.h" />
@@ -364,6 +369,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="commands\ExteriorDoorCommands.h" />
     <ClInclude Include="commands\ContainerCommands.h" />
     <ClInclude Include="commands\WorldspaceOffsetCommands.h" />
+    <ClInclude Include="commands\AlertCommands.h" />
     <ClInclude Include="commands\DetectionSoundCommands.h" />
     <ClInclude Include="commands\BarterCommands.h" />
     <ClInclude Include="commands\CenterOnCellAltCommand.h" />
