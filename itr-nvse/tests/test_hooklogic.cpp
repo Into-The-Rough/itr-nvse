@@ -13,6 +13,37 @@ typedef unsigned short UInt16;
 typedef unsigned char UInt8;
 typedef signed int SInt32;
 
+#include "internal/PickpocketHookLogic.h"
+
+namespace
+{
+	void* g_pickpocketSelection = nullptr;
+	SInt32 g_pickpocketCount = 0;
+	void* g_pickpocketActor = nullptr;
+	SInt32 g_pickpocketItemValue = 0;
+
+	bool __fastcall CapturePickpocketArgs(void* selection, SInt32 count, void* actor, SInt32 itemValue)
+	{
+		g_pickpocketSelection = selection;
+		g_pickpocketCount = count;
+		g_pickpocketActor = actor;
+		g_pickpocketItemValue = itemValue;
+		return true;
+	}
+}
+
+TEST(PickpocketHook_ForwardsAllFastcallArguments)
+{
+	void* selection = reinterpret_cast<void*>(0x11223344);
+	void* actor = reinterpret_cast<void*>(0x55667788);
+	ASSERT(PickpocketHookLogic::ForwardTryPickpocket(CapturePickpocketArgs, selection, 3, actor, 9876));
+	ASSERT_EQ(g_pickpocketSelection, selection);
+	ASSERT_EQ(g_pickpocketCount, 3);
+	ASSERT_EQ(g_pickpocketActor, actor);
+	ASSERT_EQ(g_pickpocketItemValue, 9876);
+	return true;
+}
+
 TEST(FormatFileSize_Bytes)
 {
 	char buf[32];

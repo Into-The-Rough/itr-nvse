@@ -327,15 +327,36 @@ public:
 		return WriteRelCall(src, (UInt32)dst);
 	}
 
+	bool WriteRelCallIfTarget(UInt32 src, UInt32 expectedTarget, UInt32 dst) {
+		if (sourceAddr || *reinterpret_cast<UInt8*>(src) != 0xE8)
+			return false;
+
+		const UInt32 currentTarget = *reinterpret_cast<UInt32*>(src + 1) + src + 5;
+		if (currentTarget != expectedTarget)
+			return false;
+
+		return WriteRelCall(src, dst);
+	}
+
+	template<typename T>
+	bool WriteRelCallIfTarget(UInt32 src, UInt32 expectedTarget, T dst) {
+		return WriteRelCallIfTarget(src, expectedTarget, (UInt32)dst);
+	}
+
 	UInt32 GetOverwrittenAddr() const { return overwritten_addr; }
 	bool IsInstalled() const { return sourceAddr != 0; }
+	bool OwnsPatch() const {
+		return sourceAddr != 0 &&
+			*reinterpret_cast<UInt8*>(sourceAddr) == 0xE8 &&
+			*reinterpret_cast<UInt32*>(sourceAddr + 1) == installedRel;
+	}
 
 	bool Remove() {
 		if (!sourceAddr)
 			return false;
 
 		//refuse to restore if someone re-patched the site after us
-		if (*(UInt8*)sourceAddr != 0xE8 || *(UInt32*)(sourceAddr + 1) != installedRel)
+		if (!OwnsPatch())
 			return false;
 
 		DWORD oldProtect;
