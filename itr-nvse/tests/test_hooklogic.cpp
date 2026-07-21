@@ -13,6 +13,71 @@ typedef unsigned short UInt16;
 typedef unsigned char UInt8;
 typedef signed int SInt32;
 
+#include "internal/PickpocketHookLogic.h"
+
+namespace
+{
+	void* g_pickpocketMenu = nullptr;
+	SInt32 g_pickpocketEdx = 0;
+	void* g_pickpocketActor = nullptr;
+	SInt32 g_pickpocketCount = 0;
+
+	bool __fastcall CapturePickpocketArgs(void* menu, SInt32 incomingEdx, void* actor, SInt32 count)
+	{
+		g_pickpocketMenu = menu;
+		g_pickpocketEdx = incomingEdx;
+		g_pickpocketActor = actor;
+		g_pickpocketCount = count;
+		return true;
+	}
+}
+
+TEST(PickpocketHook_ForwardsAllFastcallArguments)
+{
+	void* menu = reinterpret_cast<void*>(0x11223344);
+	void* actor = reinterpret_cast<void*>(0x55667788);
+	ASSERT(PickpocketHookLogic::ForwardTryPickpocket(CapturePickpocketArgs, menu, 3, actor, 9876));
+	ASSERT_EQ(g_pickpocketMenu, menu);
+	ASSERT_EQ(g_pickpocketEdx, 3);
+	ASSERT_EQ(g_pickpocketActor, actor);
+	ASSERT_EQ(g_pickpocketCount, 9876);
+	return true;
+}
+
+TEST(PickpocketHook_UsesSelectedEntryForGrenadeCheck)
+{
+	void* menu = reinterpret_cast<void*>(0x11223344);
+	void* selectedEntry = reinterpret_cast<void*>(0x22334455);
+	void* player = reinterpret_cast<void*>(0x33445566);
+	void* actor = reinterpret_cast<void*>(0x44556677);
+	void* observedEntry = nullptr;
+
+	auto liveGrenade = [&observedEntry](void*, void* entry, void*, void*) {
+		observedEntry = entry;
+		return true;
+	};
+
+	ASSERT(!PickpocketHookLogic::ShouldSkipKarma(menu, selectedEntry, player, actor, true, liveGrenade));
+	ASSERT_EQ(observedEntry, selectedEntry);
+	ASSERT(observedEntry != menu);
+	return true;
+}
+
+TEST(PickpocketHook_SkipsKarmaOnlyForReverseNonGrenades)
+{
+	void* menu = reinterpret_cast<void*>(0x11223344);
+	void* selectedEntry = reinterpret_cast<void*>(0x22334455);
+	void* player = reinterpret_cast<void*>(0x33445566);
+	void* actor = reinterpret_cast<void*>(0x44556677);
+
+	auto notLiveGrenade = [](void*, void*, void*, void*) { return false; };
+	auto liveGrenade = [](void*, void*, void*, void*) { return true; };
+	ASSERT(PickpocketHookLogic::ShouldSkipKarma(menu, selectedEntry, player, actor, true, notLiveGrenade));
+	ASSERT(!PickpocketHookLogic::ShouldSkipKarma(menu, selectedEntry, player, actor, true, liveGrenade));
+	ASSERT(!PickpocketHookLogic::ShouldSkipKarma(menu, selectedEntry, player, actor, false, notLiveGrenade));
+	return true;
+}
+
 TEST(FormatFileSize_Bytes)
 {
 	char buf[32];

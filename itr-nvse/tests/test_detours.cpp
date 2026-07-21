@@ -97,6 +97,31 @@ TEST(CallDetour_RejectsSecondInstallPreservesOriginal)
 	return true;
 }
 
+TEST(CallDetour_ExpectedTargetProtectsForeignHook)
+{
+	ScopedCodeBuffer source(64);
+	ASSERT(source.ptr != nullptr);
+
+	const UInt32 callSite = reinterpret_cast<UInt32>(source.ptr);
+	const UInt32 foreignTarget = reinterpret_cast<UInt32>(source.ptr + 24);
+	const UInt32 expectedTarget = reinterpret_cast<UInt32>(source.ptr + 32);
+	const UInt32 hookTarget = reinterpret_cast<UInt32>(source.ptr + 40);
+
+	source.ptr[0] = 0xE8;
+	*reinterpret_cast<SInt32*>(source.ptr + 1) = static_cast<SInt32>(foreignTarget - (callSite + 5));
+
+	Detours::CallDetour detour;
+	ASSERT(!detour.WriteRelCallIfTarget(callSite, expectedTarget, hookTarget));
+	ASSERT(!detour.IsInstalled());
+	ASSERT_EQ(callSite + 5 + *reinterpret_cast<SInt32*>(source.ptr + 1), foreignTarget);
+
+	ASSERT(detour.WriteRelCallIfTarget(callSite, foreignTarget, hookTarget));
+	ASSERT(detour.IsInstalled());
+	ASSERT(detour.OwnsPatch());
+	ASSERT(detour.Remove());
+	return true;
+}
+
 TEST(JumpDetour_AcceptsCmovccPrologue)
 {
 	ScopedCodeBuffer source(32);
@@ -180,6 +205,7 @@ TEST(CallDetour_RemoveRefusesForeignPatch)
 
 	ASSERT(!detour.Remove());
 	ASSERT(detour.IsInstalled());
+	ASSERT(!detour.OwnsPatch());
 	ASSERT_EQ(source.ptr[0], 0xE8);
 	const UInt32 currentTarget = callSite + 5 + *reinterpret_cast<SInt32*>(source.ptr + 1);
 	ASSERT_EQ(currentTarget, foreignTarget);
