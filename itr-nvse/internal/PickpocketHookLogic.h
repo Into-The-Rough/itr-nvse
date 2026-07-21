@@ -2,11 +2,22 @@
 
 namespace PickpocketHookLogic
 {
-	//The game passes selection/count in ECX/EDX and actor/itemValue on the stack.
-	using TryPickpocket_t = bool (__fastcall*)(void* selection, SInt32 count, void* actor, SInt32 itemValue);
+	//Use the complete call-site machine shape so chaining preserves ECX, EDX and both
+	//stack arguments. Vanilla ignores EDX; another hook may not.
+	using TryPickpocket_t = bool (__fastcall*)(void* menu, SInt32 incomingEdx, void* actor, SInt32 count);
 
-	inline bool ForwardTryPickpocket(TryPickpocket_t target, void* selection, SInt32 count, void* actor, SInt32 itemValue)
+	inline bool ForwardTryPickpocket(TryPickpocket_t target, void* menu, SInt32 incomingEdx, void* actor, SInt32 count)
 	{
-		return target ? target(selection, count, actor, itemValue) : false;
+		return target ? target(menu, incomingEdx, actor, count) : false;
+	}
+
+	template <typename IsLiveGrenadeFn>
+	inline bool ShouldSkipKarma(void* menu, void* selectedEntry, void* player, void* actor,
+		bool isReverse, IsLiveGrenadeFn isLiveGrenade)
+	{
+		if (!menu || !selectedEntry || !player || !actor || !isReverse)
+			return false;
+
+		return !isLiveGrenade(menu, selectedEntry, player, actor);
 	}
 }

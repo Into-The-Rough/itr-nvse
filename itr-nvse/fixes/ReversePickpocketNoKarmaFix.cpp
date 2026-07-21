@@ -22,46 +22,43 @@ namespace ReversePickpocketNoKarmaFix
 
 	using IsLiveGrenade_t = bool (__thiscall*)(void*, void*, void*, void*);
 
-	static bool ShouldSkipKarma(void* selection, void* actor)
+	static bool ShouldSkipKarma(void* menu, void* actor)
 	{
-		void* menu = GetContainerMenu();
+		void* selectedEntry = GetContainerMenuSelection();
 		void* player = *(void**)g_thePlayerPtr;
-		if (!menu || !selection || !player || !actor)
+		if (!menu || !selectedEntry || !player || !actor)
 			return false;
 
 		bool isReverse = ContainerMenuGetCurrentItems(menu) == ContainerMenuGetLeftItems(menu);
 
-		if (isReverse)
-		{
-			bool isLiveGrenade = ((IsLiveGrenade_t)0x75D510)(menu, selection, player, actor);
-			if (!isLiveGrenade)
-				return true;
-		}
-		return false;
+		return PickpocketHookLogic::ShouldSkipKarma(menu, selectedEntry, player, actor, isReverse,
+			[](void* menuArg, void* entryArg, void* playerArg, void* actorArg) {
+				return ((IsLiveGrenade_t)0x75D510)(menuArg, entryArg, playerArg, actorArg);
+			});
 	}
 
-	static bool CallOriginal(Detours::CallDetour& detour, void* selection, SInt32 count, void* actor, SInt32 itemValue)
+	static bool CallOriginal(Detours::CallDetour& detour, void* menu, SInt32 incomingEdx, void* actor, SInt32 count)
 	{
 		auto original = reinterpret_cast<PickpocketHookLogic::TryPickpocket_t>(detour.GetOverwrittenAddr());
-		return PickpocketHookLogic::ForwardTryPickpocket(original, selection, count, actor, itemValue);
+		return PickpocketHookLogic::ForwardTryPickpocket(original, menu, incomingEdx, actor, count);
 	}
 
-	static bool Hook_TryPickpocket(Detours::CallDetour& detour, void* selection, SInt32 count, void* actor, SInt32 itemValue)
+	static bool Hook_TryPickpocket(Detours::CallDetour& detour, void* menu, SInt32 incomingEdx, void* actor, SInt32 count)
 	{
-		if (g_enabled && ShouldSkipKarma(selection, actor))
+		if (g_enabled && ShouldSkipKarma(menu, actor))
 			return true;
 
-		return CallOriginal(detour, selection, count, actor, itemValue);
+		return CallOriginal(detour, menu, incomingEdx, actor, count);
 	}
 
-	bool __fastcall Hook_TryPickpocket1(void* selection, SInt32 count, void* actor, SInt32 itemValue)
+	bool __fastcall Hook_TryPickpocket1(void* menu, SInt32 incomingEdx, void* actor, SInt32 count)
 	{
-		return Hook_TryPickpocket(s_tryPickpocketCall1, selection, count, actor, itemValue);
+		return Hook_TryPickpocket(s_tryPickpocketCall1, menu, incomingEdx, actor, count);
 	}
 
-	bool __fastcall Hook_TryPickpocket2(void* selection, SInt32 count, void* actor, SInt32 itemValue)
+	bool __fastcall Hook_TryPickpocket2(void* menu, SInt32 incomingEdx, void* actor, SInt32 count)
 	{
-		return Hook_TryPickpocket(s_tryPickpocketCall2, selection, count, actor, itemValue);
+		return Hook_TryPickpocket(s_tryPickpocketCall2, menu, incomingEdx, actor, count);
 	}
 
 	static_assert(std::is_same_v<decltype(&Hook_TryPickpocket1), PickpocketHookLogic::TryPickpocket_t>);

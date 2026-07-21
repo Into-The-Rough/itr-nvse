@@ -17,30 +17,64 @@ typedef signed int SInt32;
 
 namespace
 {
-	void* g_pickpocketSelection = nullptr;
-	SInt32 g_pickpocketCount = 0;
+	void* g_pickpocketMenu = nullptr;
+	SInt32 g_pickpocketEdx = 0;
 	void* g_pickpocketActor = nullptr;
-	SInt32 g_pickpocketItemValue = 0;
+	SInt32 g_pickpocketCount = 0;
 
-	bool __fastcall CapturePickpocketArgs(void* selection, SInt32 count, void* actor, SInt32 itemValue)
+	bool __fastcall CapturePickpocketArgs(void* menu, SInt32 incomingEdx, void* actor, SInt32 count)
 	{
-		g_pickpocketSelection = selection;
-		g_pickpocketCount = count;
+		g_pickpocketMenu = menu;
+		g_pickpocketEdx = incomingEdx;
 		g_pickpocketActor = actor;
-		g_pickpocketItemValue = itemValue;
+		g_pickpocketCount = count;
 		return true;
 	}
 }
 
 TEST(PickpocketHook_ForwardsAllFastcallArguments)
 {
-	void* selection = reinterpret_cast<void*>(0x11223344);
+	void* menu = reinterpret_cast<void*>(0x11223344);
 	void* actor = reinterpret_cast<void*>(0x55667788);
-	ASSERT(PickpocketHookLogic::ForwardTryPickpocket(CapturePickpocketArgs, selection, 3, actor, 9876));
-	ASSERT_EQ(g_pickpocketSelection, selection);
-	ASSERT_EQ(g_pickpocketCount, 3);
+	ASSERT(PickpocketHookLogic::ForwardTryPickpocket(CapturePickpocketArgs, menu, 3, actor, 9876));
+	ASSERT_EQ(g_pickpocketMenu, menu);
+	ASSERT_EQ(g_pickpocketEdx, 3);
 	ASSERT_EQ(g_pickpocketActor, actor);
-	ASSERT_EQ(g_pickpocketItemValue, 9876);
+	ASSERT_EQ(g_pickpocketCount, 9876);
+	return true;
+}
+
+TEST(PickpocketHook_UsesSelectedEntryForGrenadeCheck)
+{
+	void* menu = reinterpret_cast<void*>(0x11223344);
+	void* selectedEntry = reinterpret_cast<void*>(0x22334455);
+	void* player = reinterpret_cast<void*>(0x33445566);
+	void* actor = reinterpret_cast<void*>(0x44556677);
+	void* observedEntry = nullptr;
+
+	auto liveGrenade = [&observedEntry](void*, void* entry, void*, void*) {
+		observedEntry = entry;
+		return true;
+	};
+
+	ASSERT(!PickpocketHookLogic::ShouldSkipKarma(menu, selectedEntry, player, actor, true, liveGrenade));
+	ASSERT_EQ(observedEntry, selectedEntry);
+	ASSERT(observedEntry != menu);
+	return true;
+}
+
+TEST(PickpocketHook_SkipsKarmaOnlyForReverseNonGrenades)
+{
+	void* menu = reinterpret_cast<void*>(0x11223344);
+	void* selectedEntry = reinterpret_cast<void*>(0x22334455);
+	void* player = reinterpret_cast<void*>(0x33445566);
+	void* actor = reinterpret_cast<void*>(0x44556677);
+
+	auto notLiveGrenade = [](void*, void*, void*, void*) { return false; };
+	auto liveGrenade = [](void*, void*, void*, void*) { return true; };
+	ASSERT(PickpocketHookLogic::ShouldSkipKarma(menu, selectedEntry, player, actor, true, notLiveGrenade));
+	ASSERT(!PickpocketHookLogic::ShouldSkipKarma(menu, selectedEntry, player, actor, true, liveGrenade));
+	ASSERT(!PickpocketHookLogic::ShouldSkipKarma(menu, selectedEntry, player, actor, false, notLiveGrenade));
 	return true;
 }
 
