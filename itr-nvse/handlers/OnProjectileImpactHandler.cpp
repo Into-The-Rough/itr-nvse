@@ -325,7 +325,7 @@ static char __cdecl HandleImpact(void* proj, int a2, int a3)
 	ctx.pos[0]=npos[0]; ctx.pos[1]=npos[1]; ctx.pos[2]=npos[2];
 	ctx.normal[0]=nnrm[0]; ctx.normal[1]=nnrm[1]; ctx.normal[2]=nnrm[2];
 	ctx.dir[0]=pv->vector104[0]; ctx.dir[1]=pv->vector104[1]; ctx.dir[2]=pv->vector104[2];
-	ctx.material = *(UInt32*)((UInt8*)node + 0x20);
+	ctx.material = ProjectileLogic::CanonicalMaterial(*(UInt32*)((UInt8*)node + 0x20));
 	ctx.energy = EnergyProxy(pv);
 	ctx.hitDamage = pv->hitDamage;
 	TESObjectWEAP* weap = ProjectileGetSourceWeapon(proj);
@@ -477,8 +477,7 @@ void InstallHook()
 	SafeWrite::Write32(kVtblSlot_ProcessImpacts, (UInt32)&ProcessImpactsThunk);
 }
 
-//MaterialType ids read at ImpactData+0x20 (engine MaterialType enum)
-//hard ricochet-prone: Stone 0, Metal 4, HollowMetal 9  thin penetration-prone: Glass 3, Wood 5, Cloth 7
+//hard ricochet-prone: stone 0, metal 4, hollow metal 9; thin penetration-prone: glass 3, wood 5, cloth 7
 void FillDefaultMaterials(ProjectileLogic::Config& cfg)
 {
 	cfg.hardMaterials[0] = 0; cfg.hardMaterials[1] = 4; cfg.hardMaterials[2] = 9;

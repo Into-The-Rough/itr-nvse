@@ -4,25 +4,14 @@
 #include "OnConsoleHandler.h"
 #include "internal/NVSEPluginAPI.h"
 #include "internal/EventDispatch.h"
-#include "internal/CallTemplates.h"
-#include "internal/GameGlobals.h"
+#include "internal/EngineFunctions.h"
 
 static bool g_lastVisible = false;
 
 namespace OnConsoleHandler {
 void Update()
 {
-	bool visible = false;
-	if (IsConsoleStateOpen())
-	{
-		//MenuConsole::Instance(0) at 0x71B160
-		void* console = CdeclCall<void*>(0x71B160, 0);
-		if (console)
-		{
-			//MenuConsole::IsConsoleActive at 0x4A4020
-			visible = ThisCall<bool>(0x4A4020, console);
-		}
-	}
+	const bool visible = Engine::IsConsoleVisible();
 
 	if (visible != g_lastVisible)
 	{

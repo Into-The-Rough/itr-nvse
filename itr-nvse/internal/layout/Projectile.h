@@ -71,7 +71,7 @@ static_assert(offsetof(ProjectileImpactView, distTravelled) == 0x110);
 static_assert(offsetof(ProjectileImpactView, range) == 0x14C);
 
 //tList<ImpactData> head at proj+0x88, node[0] = ImpactData*, node[1] = next
-//ImpactData fields refr +0x00, pos +0x04, normal +0x10, hkpRigidBody* +0x1C, materialType +0x20
+//impactdata fields refr +0x00, pos +0x04, normal +0x10, hkpRigidBody* +0x1C, raw material +0x20
 inline constexpr UInt32 kProjImpact_ListHead = 0x88;
 
 //BGSProjectile flags u16 at base+0x60, bit 1 = hitscan (BGSProjectile::IsHitScan 0x9A7F80

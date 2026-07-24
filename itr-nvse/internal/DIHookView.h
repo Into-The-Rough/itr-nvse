@@ -52,15 +52,20 @@ namespace DIHook
 				keys[keycode].scriptDisable = disable;
 		}
 
+		void ClearKeyState(UInt32 keycode)
+		{
+			if (keycode >= kMaxMacros)
+				return;
+			keys[keycode].rawState = false;
+			keys[keycode].gameState = false;
+			keys[keycode].insertedState = false;
+		}
+
 		//zeroes the per-frame state fields, leaves script requests (hold/tap) and disable flags
 		void ClearKeyStates(UInt32 first, UInt32 count)
 		{
 			for (UInt32 i = first; i < first + count && i < kMaxMacros; ++i)
-			{
-				keys[i].rawState = false;
-				keys[i].gameState = false;
-				keys[i].insertedState = false;
-			}
+				ClearKeyState(i);
 		}
 	};
 

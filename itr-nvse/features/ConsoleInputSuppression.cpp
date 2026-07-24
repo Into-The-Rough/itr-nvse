@@ -6,9 +6,9 @@
 //pipeline (GetDeviceData) and are unaffected, mouse is left alone for ref-picking
 
 #include "ConsoleInputSuppression.h"
-#include "internal/CallTemplates.h"
 #include "internal/Detours.h"
 #include "internal/DIHookView.h"
+#include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
 #include "internal/NVSEPluginAPI.h"
 #include "internal/globals.h"
@@ -49,10 +49,9 @@ namespace ConsoleInputSuppression
 				continue;
 			view->currKeyStates[i] = 0;
 			view->lastKeyStates[i] = 0;
+			if (s_diHookControl)
+				s_diHookControl->ClearKeyState(i);
 		}
-
-		if (s_diHookControl)
-			s_diHookControl->ClearKeyStates(0, 256);
 
 		memset(kStoredGamepadCurr, 0, kGamepadSize);
 		memset(kStoredGamepadPrev, 0, kGamepadSize);
@@ -63,7 +62,7 @@ namespace ConsoleInputSuppression
 		if (s_pollOriginal)
 			s_pollOriginal(inputGlobals);
 
-		const bool active = Settings::bSuppressInputInConsole && inputGlobals && CdeclCall<bool>(0x4A4040);
+		const bool active = Settings::bSuppressInputInConsole && inputGlobals && Engine::IsConsoleVisible();
 		if (active != s_suppressing)
 		{
 			s_suppressing = active;

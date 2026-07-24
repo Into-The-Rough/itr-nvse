@@ -36,6 +36,37 @@ static ImpactContext MakeCtx(UInt32 material, float energy, float grazingDeg)
 	return ctx;
 }
 
+TEST(Material_RawMetalConvertsToMetal)
+{
+	ASSERT_EQ(CanonicalMaterial(5), 4u);
+	return true;
+}
+
+TEST(Material_RawWoodConvertsToWood)
+{
+	ASSERT_EQ(CanonicalMaterial(9), 5u);
+	return true;
+}
+
+TEST(Material_RawClothConvertsToCloth)
+{
+	ASSERT_EQ(CanonicalMaterial(1), 7u);
+	return true;
+}
+
+TEST(Material_RawHollowMetalConvertsToHollowMetal)
+{
+	ASSERT_EQ(CanonicalMaterial(16), 9u);
+	ASSERT_EQ(CanonicalMaterial(29), 9u);
+	return true;
+}
+
+TEST(Material_OutOfRangeIsUnknown)
+{
+	ASSERT_EQ(CanonicalMaterial(32), 0xFFFFFFFFu);
+	return true;
+}
+
 TEST(Decide_HeadOnHardHitNormal)
 {
 	Config cfg = MakeConfig();

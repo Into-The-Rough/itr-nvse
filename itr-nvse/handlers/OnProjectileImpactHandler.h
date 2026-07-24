@@ -8,6 +8,6 @@ namespace OnProjectileImpactHandler {
 	void Update();
 	void ClearState();
 	void UpdateSettings(const ProjectileLogic::Config& cfg, bool masterEnabled);
-	//seeds cfg.hardMaterials/thinMaterials with verified FNV MaterialType ids
+	//seeds cfg.hardMaterials/thinMaterials with canonical material ids
 	void FillDefaultMaterials(ProjectileLogic::Config& cfg);
 }

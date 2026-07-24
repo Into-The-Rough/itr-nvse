@@ -84,6 +84,17 @@ inline auto BSSoundHandle_SetVolume = (void(__thiscall*)(void*, float))0xAD89E0;
 //input
 inline auto OSInputGlobals_GetControlState = (bool(__thiscall*)(void*, UInt32, UInt8))0xA24660;
 
+inline auto MenuConsole_GetSingleton = (void*(__cdecl*)(bool))0x71B160;
+inline auto MenuConsole_IsActive = (bool(__thiscall*)(void*))0x4A4020;
+
+inline bool IsConsoleVisible()
+{
+	if (!IsConsoleStateOpen())
+		return false;
+	void* console = MenuConsole_GetSingleton(false);
+	return console && MenuConsole_IsActive(console);
+}
+
 //settings
 inline auto Setting_GetDataPtr = (void*(__thiscall*)(void*))0x403E20;
 

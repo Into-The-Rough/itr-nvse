@@ -10,6 +10,18 @@ namespace ProjectileLogic {
 
 enum Outcome { kOutcome_Normal, kOutcome_Ricochet, kOutcome_Penetrate };
 
+//impactdata stores a 0..31 havok material id; jip converts it to the 12 game material categories
+inline UInt32 CanonicalMaterial(UInt32 raw)
+{
+	static const unsigned char map[32] = {
+		0, 7, 1, 3, 2, 4, 6, 6,
+		8, 5, 0, 4, 5, 4, 4, 4,
+		9, 9, 1, 0, 4, 4, 9, 9,
+		3, 9, 4, 4, 9, 9, 5, 5
+	};
+	return raw < 32 ? map[raw] : 0xFFFFFFFF;
+}
+
 struct ImpactContext {
 	UInt32 strikeRefID;
 	float pos[3];

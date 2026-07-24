@@ -14,6 +14,7 @@
 #include "internal/GameGlobals.h"
 #include "internal/EngineFunctions.h"
 #include "internal/globals.h"
+#include "features/RadioInjection.h"
 #include <cstddef>
 #include <cstring>
 #include <cctype>
@@ -533,6 +534,7 @@ static bool AdvanceDynamicRadios(double* result)
 static bool AdvanceCurrentRadioTrack(double* result)
 {
 	*result = 0;
+	RadioInjection::BeginTrackAdvance();
 
 	auto* radio = IsRadioEnabled() ? static_cast<RadioEntry*>(GetCurrentRadio()) : nullptr;
 

@@ -4,6 +4,7 @@
 #include "internal/ConsoleCommand.h"
 #include "internal/FallDamageLogic.h"
 #include "internal/FormatLogic.h"
+#include "internal/RadioInjectionLogic.h"
 #include <cstdio>
 #include <cstring>
 #include <unordered_map>
@@ -75,6 +76,29 @@ TEST(PickpocketHook_SkipsKarmaOnlyForReverseNonGrenades)
 	ASSERT(PickpocketHookLogic::ShouldSkipKarma(menu, selectedEntry, player, actor, true, notLiveGrenade));
 	ASSERT(!PickpocketHookLogic::ShouldSkipKarma(menu, selectedEntry, player, actor, true, liveGrenade));
 	ASSERT(!PickpocketHookLogic::ShouldSkipKarma(menu, selectedEntry, player, actor, false, notLiveGrenade));
+	return true;
+}
+
+TEST(RadioInjection_BuildsDataSoundPath)
+{
+	char path[256];
+	ASSERT(RadioInjectionLogic::BuildEnginePath("fx\\Stingers\\Cave\\1.wav", path, sizeof(path)));
+	ASSERT_STREQ(path, "data\\sound\\fx\\Stingers\\Cave\\1.wav");
+	return true;
+}
+
+TEST(RadioInjection_PreservesDataSoundPath)
+{
+	char path[256];
+	ASSERT(RadioInjectionLogic::BuildEnginePath("Data\\Sound\\fx\\Stingers\\Cave\\1.wav", path, sizeof(path)));
+	ASSERT_STREQ(path, "Data\\Sound\\fx\\Stingers\\Cave\\1.wav");
+	return true;
+}
+
+TEST(RadioInjection_RejectsTruncatedEnginePath)
+{
+	char path[16];
+	ASSERT(!RadioInjectionLogic::BuildEnginePath("fx\\Stingers\\Cave\\1.wav", path, sizeof(path)));
 	return true;
 }
 

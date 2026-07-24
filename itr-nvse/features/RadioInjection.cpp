@@ -14,6 +14,7 @@
 #include "internal/globals.h"
 #include "internal/ScopedLock.h"
 #include "internal/EventDispatch.h"
+#include "internal/RadioInjectionLogic.h"
 
 #define EXTRACT_ARGS paramInfo, scriptData, opcodeOffsetPtr, thisObj, containingObj, scriptObj, eventList
 typedef bool (*ExtractArgs_t)(ParamInfo*, void*, UInt32*, TESObjectREFR*, TESObjectREFR*, Script*, ScriptEventList*, ...);
@@ -167,31 +168,37 @@ static void* GetSoundHandleWork(GetSoundHandle_t orig, void* thisPtr, void* edx,
 		return orig ? orig(thisPtr, edx, handleOut, filename, flags, baseForm) : nullptr;
 
 	const char* usePath = filename;
+	bool wasInjected = false;
 	{
 		ScopedLock lock(&s_lock);
 		DWORD now = GetTickCount();
 		if (s_lastPopTick && (now - s_lastPopTick) < kSameTrackWindowMs && s_activePath[0])
 		{
 			usePath = s_activePath; //same track burst, reuse without popping
+			wasInjected = true;
 		}
 		else if (s_count > 0)
 		{
+			char queuedPath[kPathLen];
 			if (s_loopMode)
-				RotateFront_Unlocked(s_activePath, sizeof(s_activePath));
+				RotateFront_Unlocked(queuedPath, sizeof(queuedPath));
 			else
-				PopFront_Unlocked(s_activePath, sizeof(s_activePath));
-			s_lastPopTick = now;
-			usePath = s_activePath;
+				PopFront_Unlocked(queuedPath, sizeof(queuedPath));
+			if (RadioInjectionLogic::BuildEnginePath(queuedPath, s_activePath, sizeof(s_activePath)))
+			{
+				s_lastPopTick = now;
+				usePath = s_activePath;
+				wasInjected = true;
+			}
 		}
 	}
 
-	bool wasInjected = (usePath != filename);
 	if (wasInjected)
 		Log("RadioInjection: substituting radio track '%s'", usePath);
 
 	s_inSubstitute = true;
 	QueueTrackChange(usePath, wasInjected);
-	void* ret = orig ? orig(thisPtr, edx, handleOut, usePath, flags, baseForm) : nullptr;
+	void* ret = orig ? orig(thisPtr, edx, handleOut, usePath, flags, wasInjected ? nullptr : baseForm) : nullptr;
 	s_inSubstitute = false;
 	return ret;
 }
@@ -407,6 +414,15 @@ void RegisterCommands(void* nvse)
 	nvseIntf->RegisterCommand(&kCommandInfo_ClearRadioQueue);
 	nvseIntf->RegisterCommand(&kCommandInfo_SetRadioQueueLoop);
 	nvseIntf->RegisterCommand(&kCommandInfo_GetRadioQueueSize);
+}
+
+void BeginTrackAdvance()
+{
+	EnsureLockInit();
+	ScopedLock lock(&s_lock);
+	s_lastPopTick = 0;
+	s_activePath[0] = '\0';
+	s_lastDispatchTick = 0;
 }
 
 void ClearState()
