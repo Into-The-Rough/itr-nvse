@@ -1,5 +1,5 @@
 //native port of the WakeyWakey script mod - nearby sleeping NPCs wake on player gunfire
-//hooks the ammo-consume call inside the fire handler, scans high-process actors, wakes sleepers
+//hooks the weapon-fire call, scans high-process actors, wakes sleepers
 
 #include "WakeyWakey.h"
 
@@ -13,8 +13,6 @@
 #include "internal/Detours.h"
 #include "internal/layout/Process.h"
 
-#include "commands/ForceSayCommand.h"
-
 extern void Log(const char* fmt, ...);
 
 namespace {
@@ -22,19 +20,28 @@ namespace {
 constexpr UInt32 kFormID_AvoidThreat = 0xED; //base-game AvoidThreat DIAL, load-order stable
 constexpr int kMaxWokenPerShot = 16;
 
-using RemoveAmmoOnFire_t = int(__thiscall*)(Actor*, int);
+using FireWeapon_t = void(__thiscall*)(TESObjectWEAP*, Actor*);
 using SetAlerted_t = void(__thiscall*)(Actor*, UInt8);
 using StartCombat_t = void(__thiscall*)(Actor*, Actor*, void*, char, char, char, UInt32, char, void*);
 using GetSitSleepState_t = int(__thiscall*)(Actor*);
+using StopCurrentDialogue_t = void(__thiscall*)(Actor*);
+using SetDialogueTarget_t = void(__thiscall*)(Actor*, Actor*);
+using ProcessSetByte_t = void(__thiscall*)(void*, UInt8);
+using ProcessSetActor_t = void(__thiscall*)(void*, Actor*);
+using ProcessNoArgs_t = void(__thiscall*)(void*);
+using ProcessGreet_t = void(__thiscall*)(void*, Actor*, TESTopic*, bool, bool, bool, bool);
 //StopCombat script command handler, numParams 0 so it reads only thisObj (3rd COMMAND_ARG)
 using StopCombatCmd_t = char(__cdecl*)(void*, void*, TESObjectREFR*, void*, void*, void*, double*, void*);
 
 static const SetAlerted_t Actor_SetAlerted = (SetAlerted_t)0x8A5E40;   //Actor::SetAlerted, SetAlert command call
 static const StartCombat_t Actor_StartCombat = (StartCombat_t)0x89FCF0; //Actor::StartCombat, wakes via InitGetUpPackage
 static const StopCombatCmd_t StopCombatCommand = (StopCombatCmd_t)0x5C1A50; //vanilla StopCombat command handler
+static const StopCurrentDialogue_t Actor_StopCurrentDialogue = (StopCurrentDialogue_t)0x934250;
+static const SetDialogueTarget_t Actor_SetDialogueTarget = (SetDialogueTarget_t)0x57BD60;
+static const ProcessGreet_t ProcessGreet = (ProcessGreet_t)0x8DBE30;
 
 Detours::CallDetour g_fireDetour;
-RemoveAmmoOnFire_t g_origRemoveAmmo = nullptr;
+FireWeapon_t g_origFireWeapon = nullptr;
 bool g_enabled = false;   //hook installs once, this gates its scan so reload can toggle it
 
 float g_wakeDistance = 2500.0f;
@@ -63,6 +70,43 @@ bool IsWakeableActor(Actor* actor)
 	return true;
 }
 
+void SetProcessDialogueTarget(void* process, Actor* target)
+{
+	auto** vtbl = *reinterpret_cast<void***>(process);
+	reinterpret_cast<ProcessSetByte_t>(vtbl[0x648 / sizeof(void*)])(process, 0);
+	reinterpret_cast<ProcessSetActor_t>(vtbl[0x628 / sizeof(void*)])(process, target);
+}
+
+bool SayTo(Actor* speaker, TESTopic* topic, Actor* target)
+{
+	if (!speaker || !topic || !target)
+		return false;
+
+	auto* speakerProcess = static_cast<BaseProcess*>(Engine::Actor_GetProcess(speaker));
+	auto* targetProcess = static_cast<BaseProcess*>(Engine::Actor_GetProcess(target));
+	if (!speakerProcess || !targetProcess || speakerProcess->processLevel != 0)
+		return false;
+
+	UInt32* lipDistance = GetVoiceLipDistanceLimit();
+	UInt32 oldLipDistance = *lipDistance;
+	*lipDistance = 0x7FFFFFFF;
+
+	Actor_StopCurrentDialogue(speaker);
+
+	auto** speakerVtbl = *reinterpret_cast<void***>(speakerProcess);
+	reinterpret_cast<ProcessSetByte_t>(speakerVtbl[0x370 / sizeof(void*)])(speakerProcess, 0);
+	reinterpret_cast<ProcessNoArgs_t>(speakerVtbl[0x224 / sizeof(void*)])(speakerProcess);
+
+	SetProcessDialogueTarget(targetProcess, speaker);
+	Actor_SetDialogueTarget(target, speaker);
+	SetProcessDialogueTarget(speakerProcess, target);
+	Actor_SetDialogueTarget(speaker, target);
+	ProcessGreet(speakerProcess, speaker, topic, false, false, true, true);
+
+	*lipDistance = oldLipDistance;
+	return true;
+}
+
 void WakeActor(Actor* actor, Actor* player)
 {
 	Actor_SetAlerted(actor, 1);
@@ -71,7 +115,7 @@ void WakeActor(Actor* actor, Actor* player)
 	StopCombatCommand(nullptr, nullptr, reinterpret_cast<TESObjectREFR*>(actor), nullptr, nullptr, nullptr, &dummy, nullptr);
 	Actor_SetAlerted(actor, 0);
 
-	ForceSayCommand::ForceSay(actor, g_avoidThreatTopic, player);
+	SayTo(actor, g_avoidThreatTopic, player);
 
 	if (g_eventManagerInterface) {
 		g_eventManagerInterface->DispatchEvent("WakeyWakeyNPC", reinterpret_cast<TESObjectREFR*>(actor),
@@ -81,13 +125,12 @@ void WakeActor(Actor* actor, Actor* player)
 	}
 }
 
-void ScanAndWake(Actor* player)
+void ScanAndWake(Actor* player, TESObjectWEAP* weapon)
 {
 	DWORD now = GetTickCount();
 	if (now - g_lastScanTick < g_cooldownMs) return;
 	g_lastScanTick = now;
 
-	auto* weapon = reinterpret_cast<TESObjectWEAP*>(Engine::Actor_GetEquippedWeapon(player));
 	if (!weapon) return;
 	UInt32 soundLevel = weapon->soundLevel; //0x364 - 0 loud, 1 quiet, 2 silent
 	if (soundLevel == 2) return;
@@ -113,9 +156,11 @@ void ScanAndWake(Actor* player)
 	//the process lists, so we must not dispatch while walking the live array
 	UInt32 wakeIDs[kMaxWokenPerShot];
 	int wakeCount = 0;
+	UInt32 wakeableCount = 0;
 	for (UInt32 i = begin; i < end && wakeCount < kMaxWokenPerShot; i++) {
 		auto* actor = reinterpret_cast<Actor*>(pm->objects.data[i]);
 		if (!IsWakeableActor(actor)) continue;
+		wakeableCount++;
 
 		float dx = actor->posX - px;
 		float dy = actor->posY - py;
@@ -123,6 +168,7 @@ void ScanAndWake(Actor* player)
 
 		wakeIDs[wakeCount++] = actor->refID;
 	}
+	Log("WakeyWakey: scan high=%u wakeable=%u nearby=%d sound=%u", end - begin, wakeableCount, wakeCount, soundLevel);
 
 	UInt32 playerID = player->refID;
 	for (int i = 0; i < wakeCount; i++) {
@@ -135,24 +181,21 @@ void ScanAndWake(Actor* player)
 	}
 }
 
-int __fastcall Hook_RemoveAmmoOnFire(Actor* actor, void* /*edx*/, int shotCount)
+void __fastcall Hook_FireWeapon(TESObjectWEAP* weapon, void* /*edx*/, Actor* actor)
 {
-	int result = g_origRemoveAmmo(actor, shotCount);
-
-	if (!g_enabled) return result;
-
-	if (GetCurrentThreadId() != g_mainThreadId) {
-		static volatile LONG loggedOffThread = 0;
-		if (InterlockedCompareExchange(&loggedOffThread, 1, 0) == 0)
-			Log("WakeyWakey: fire hook ran off main thread, skipping scan");
-		return result;
+	if (g_enabled) {
+		if (GetCurrentThreadId() != g_mainThreadId) {
+			static volatile LONG loggedOffThread = 0;
+			if (InterlockedCompareExchange(&loggedOffThread, 1, 0) == 0)
+				Log("WakeyWakey: fire hook ran off main thread, skipping scan");
+		} else {
+			void** playerPtr = reinterpret_cast<void**>(g_thePlayerPtr);
+			if (playerPtr && actor == reinterpret_cast<Actor*>(*playerPtr))
+				ScanAndWake(actor, weapon);
+		}
 	}
 
-	void** playerPtr = reinterpret_cast<void**>(g_thePlayerPtr);
-	if (playerPtr && actor == reinterpret_cast<Actor*>(*playerPtr))
-		ScanAndWake(actor);
-
-	return result;
+	g_origFireWeapon(weapon, actor);
 }
 
 } //namespace
@@ -184,11 +227,11 @@ void Init(bool enable, float wakeDistance, float quietWakeDistance, int cooldown
 		g_eventManagerInterface->RegisterEvent("ITR:OnNPCWokeByGunfire", 2, twoForms, F::kFlag_FlushOnLoad);
 	}
 
-	if (g_fireDetour.WriteRelCall(0x95DE16, Hook_RemoveAmmoOnFire)) {
-		g_origRemoveAmmo = reinterpret_cast<RemoveAmmoOnFire_t>(g_fireDetour.GetOverwrittenAddr());
+	if (g_fireDetour.WriteRelCall(0x8BADE9, Hook_FireWeapon)) {
+		g_origFireWeapon = reinterpret_cast<FireWeapon_t>(g_fireDetour.GetOverwrittenAddr());
 		Log("WakeyWakey: installed (wake %.0f, quiet %.0f, cooldown %ums)", wakeDistance, quietWakeDistance, g_cooldownMs);
 	} else {
-		Log("WakeyWakey: fire hook install failed at 0x95DE16");
+		Log("WakeyWakey: fire hook install failed at 0x8BADE9");
 	}
 }
 
