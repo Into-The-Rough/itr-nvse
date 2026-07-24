@@ -254,4 +254,3 @@ enum ParamType {
         Cmd_##name##_Execute, nullptr, nullptr, 0 \
     }
 
-#include "SafeWrite.h"

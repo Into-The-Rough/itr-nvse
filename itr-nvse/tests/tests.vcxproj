@@ -48,6 +48,7 @@
     <ClCompile Include="test_safewrite.cpp" />
     <ClCompile Include="test_hooklogic.cpp" />
     <ClCompile Include="test_detours.cpp" />
+    <ClCompile Include="test_projectilelogic.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="test.h" />
@@ -57,6 +58,8 @@
     <ClInclude Include="..\internal\CooldownTracker.h" />
     <ClInclude Include="..\internal\FallDamageLogic.h" />
     <ClInclude Include="..\internal\FormatLogic.h" />
+    <ClInclude Include="..\internal\PickpocketHookLogic.h" />
+    <ClInclude Include="..\internal\RadioInjectionLogic.h" />
     <ClInclude Include="..\internal\GestureMath.h" />
     <ClInclude Include="..\internal\ConsoleCommand.h" />
     <ClInclude Include="..\internal\SafeWrite.h" />

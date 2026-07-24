@@ -14,6 +14,8 @@
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
 #include <vector>
+
+extern void Log(const char* fmt, ...);
 #include <algorithm>
 #include <cmath>
 
@@ -135,6 +137,8 @@ enum {
 	kFormTypeFilter_InventoryItem = kFilter_InventoryItem,
 };
 
+constexpr UInt32 kPlayerBaseFormID = 7;
+
 static bool IsTakenRef(TESObjectREFR* refr)
 {
 	if (!refr->IsDeleted()) return false;
@@ -160,12 +164,12 @@ static bool MatchesFormType(TESObjectREFR* refr, UInt32 formType, bool includeTa
 		case kFormTypeFilter_AnyType:
 			return true;
 		case kFormTypeFilter_Actor:
-			if (refr->baseForm->refID == 7) return false;
+			if (refr->baseForm->refID == kPlayerBaseFormID) return false;
 			return baseType == kFormType_Creature || baseType == kFormType_NPC;
 		case kFormTypeFilter_InventoryItem:
 			return FormUtils::IsInventoryItemType(baseType);
 		default:
-			if (baseType == kFormType_NPC && refr->baseForm->refID == 7) return false;
+			if (baseType == kFormType_NPC && refr->baseForm->refID == kPlayerBaseFormID) return false;
 			return baseType == formType;
 	}
 }
@@ -214,32 +218,56 @@ bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 	TESObjectCELL* playerCell = player->parentCell;
 
 	if (cellDepth == -1) cellDepth = 5;
+	if (cellDepth > 10) cellDepth = 10;
 
 	auto ProcessCell = [&](TESObjectCELL* cell)
 	{
 		if (!cell) return;
-		for (auto iter = cell->objectList.Begin(); !iter.End(); ++iter)
+
+		//filter under the cell ref lock into a bounded buffer, no allocation while it is held.
+		//main-thread command with one collection live at a time, so a shared static buffer
+		//keeps this off the stack. hard cap per cell, chosen well above any real cell ref
+		//count, a cell that exceeds it truncates in list order (logged below) and can miss
+		//the nearest ref, the trade is bounded collection under the lock
+		constexpr UInt32 kMaxPerCell = 8192;
+		static RefWithDist found[kMaxPerCell];
+		UInt32 foundCount = 0;
+
 		{
-			TESObjectREFR* refr = iter.Get();
-			if (!refr || refr == player) continue;
-			if (!MatchesFormType(refr, formType, includeTakenRefs != 0)) continue;
-			if (!MatchesBaseForm(refr, baseForm)) continue;
-
-			float distSq = FormUtils::CalcDistanceSquared(refr, (TESObjectREFR*)player);
-			if (distSq > maxDistSq) continue;
-
-			if (useHeading)
+			ScopedCellRefLock lock(cell);
+			for (auto iter = cell->objectList.Begin(); !iter.End(); ++iter)
 			{
-				//FNV: rotZ measured from +Y, clockwise (matches atan2(dx,dy))
-				float dx = refr->posX - player->posX;
-				float dy = refr->posY - player->posY;
-				float delta = atan2f(dx, dy) - playerRotZ;
-				while (delta > kPi)  delta -= 2.0f * kPi;
-				while (delta < -kPi) delta += 2.0f * kPi;
-				if (fabsf(delta) > maxHeadingRad) continue;
-			}
+				TESObjectREFR* refr = iter.Get();
+				if (!refr || refr == player) continue;
+				if (!MatchesFormType(refr, formType, includeTakenRefs != 0)) continue;
+				if (!MatchesBaseForm(refr, baseForm)) continue;
 
-			float dist = sqrtf(distSq);
+				float distSq = FormUtils::CalcDistanceSquared(refr, (TESObjectREFR*)player);
+				if (distSq > maxDistSq) continue;
+
+				if (useHeading)
+				{
+					//FNV: rotZ measured from +Y, clockwise (matches atan2(dx,dy))
+					float dx = refr->posX - player->posX;
+					float dy = refr->posY - player->posY;
+					float delta = atan2f(dx, dy) - playerRotZ;
+					while (delta > kPi)  delta -= 2.0f * kPi;
+					while (delta < -kPi) delta += 2.0f * kPi;
+					if (fabsf(delta) > maxHeadingRad) continue;
+				}
+
+				found[foundCount++] = { refr, sqrtf(distSq) };
+				if (foundCount == kMaxPerCell) break;
+			}
+		}
+
+		if (foundCount == kMaxPerCell)
+			Log("GetRefsSortedByDistance: cell ref cap %u hit, nearest results may be incomplete", kMaxPerCell);
+
+		for (UInt32 i = 0; i < foundCount; i++)
+		{
+			TESObjectREFR* refr = found[i].ref;
+			float dist = found[i].distance;
 
 			if (limit > 0)
 			{
@@ -318,7 +346,8 @@ bool Cmd_Duplicate_Execute(COMMAND_ARGS)
 
 	UInt32 count = 1;
 
-	ExtractArgs(EXTRACT_ARGS, &count);
+	if (!ExtractArgs(EXTRACT_ARGS, &count))
+		return true;
 
 	if (count < 1) count = 1;
 	if (count > 1000) count = 1000;
@@ -368,7 +397,8 @@ bool Cmd_Duplicate_Execute(COMMAND_ARGS)
 typedef bool (__thiscall *_ConditionList_Evaluate)(void* conditionList, TESObjectREFR* runOnRef, TESForm* arg2, bool* result, bool arg4);
 static const _ConditionList_Evaluate ConditionList_Evaluate = (_ConditionList_Evaluate)0x680C60;
 
-typedef SInt32 (__thiscall *_GetActorValue)(void* actorValueOwner, UInt32 avCode);
+//0x66EF50 returns float in st0 (fld/retn 4), an int-typed call reads eax garbage and leaks an x87 slot
+typedef double (__thiscall *_GetActorValue)(void* actorValueOwner, UInt32 avCode);
 static const _GetActorValue GetActorValue = (_GetActorValue)0x66EF50;
 
 typedef SInt32 (__thiscall *_GetItemCount)(TESObjectREFR* container, TESForm* item);
@@ -421,7 +451,7 @@ bool Cmd_GetAvailableRecipes_Execute(COMMAND_ARGS)
 		if (recipe->reqSkill != (UInt32)-1 && recipe->reqSkillLevel > 0)
 		{
 			void* actorValueOwner = ActorGetActorValueOwner(player);
-			SInt32 playerSkill = GetActorValue(actorValueOwner, recipe->reqSkill);
+			SInt32 playerSkill = (SInt32)GetActorValue(actorValueOwner, recipe->reqSkill);
 			if (playerSkill < (SInt32)recipe->reqSkillLevel)
 				continue;
 		}
@@ -533,11 +563,11 @@ bool Cmd_DumpCombatTarget_Execute(COMMAND_ARGS)
 	printLocation("  +38 kInitialTargetLocation: %.1f, %.1f, %.1f", combatTargetView->initialTargetLocation);
 
 	Console_Print("  +48 searchCount: %d, attackerCount: %d", combatTargetView->searchCount, combatTargetView->attackerCount);
-	Console_Print("  +4C inLOSCount: %d, inFullLOSCount: %d", combatTargetView->inLOSCount, combatTargetView->inFullLOSCount);
-
 	float* timestamps = combatTargetView->timestamps;
-	Console_Print("  +50 timestamps: %.2f, %.2f, %.2f, %.2f, %.2f, %.2f",
+	Console_Print("  +4C timestamps: %.2f, %.2f, %.2f, %.2f, %.2f, %.2f",
 		timestamps[0], timestamps[1], timestamps[2], timestamps[3], timestamps[4], timestamps[5]);
+
+	Console_Print("  +64 inLOSCount: %d, inFullLOSCount: %d", combatTargetView->inLOSCount, combatTargetView->inFullLOSCount);
 
 	//also print target's actual position for comparison
 	Console_Print("  Target actual pos: %.1f, %.1f, %.1f", target->posX, target->posY, target->posZ);
@@ -665,6 +695,10 @@ bool Cmd_UseAidItem_Execute(COMMAND_ARGS)
 
 	ExtraContainerChanges::EntryData* entry = xChanges->data->objList->Find(ItemInEntryDataListMatcher(item));
 	if (!entry)
+		return true;
+
+	//an entry can linger with countDelta <= 0, require a real available count (base container plus delta)
+	if (GetItemCount(actor, item) <= 0)
 		return true;
 
 	if (!CanUseAidItemVanilla(actor, item))
@@ -820,6 +854,14 @@ bool Cmd_SetRaceAlt_Execute(COMMAND_ARGS)
 		return true;
 	}
 
+	//a runtime form variable can hold any form type
+	if (raceForm->typeID != kFormType_Race)
+	{
+		if (IsConsoleMode())
+			Console_Print("SetRaceAlt >> Not a race form");
+		return true;
+	}
+
 	TESNPC* origNPC = (TESNPC*)thisObj->baseForm;
 	TESRace* newRace = (TESRace*)raceForm;
 	TESNPC* targetNPC = origNPC;
@@ -846,7 +888,7 @@ bool Cmd_SetRaceAlt_Execute(COMMAND_ARGS)
 			DataHandler_DoAddForm(*g_dataHandlerPtr, cloneForm);
 
 		targetNPC = (TESNPC*)cloneForm;
-		//runtime 0xFF clone is not serialized, the swap does not survive save/load,
+		//runtime 0xFF clone is not serialised, the swap does not survive save/load,
 		//callers must reapply on load (documented in FEATURES.md)
 		thisObj->baseForm = cloneForm;
 

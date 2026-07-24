@@ -83,7 +83,7 @@ bool Cmd_AddDialogueTopicEntry_Execute(COMMAND_ARGS)
 	}
 
 	void* listbox = (char*)dialogMenu + 0x40; //ListBox control object
-	int index = (int)*(UInt32*)((char*)listbox + 0x1C); //0x1C entry count
+	int index = (int)*(UInt16*)((char*)listbox + 0x1C); //0x1C entry count, engine reads it movzx word (0x7645E4)
 
 	void* tile = ListBoxAddEntry(listbox, index, prompt, 0, 0);
 	if (!tile)

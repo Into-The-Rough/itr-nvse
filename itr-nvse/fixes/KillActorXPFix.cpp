@@ -2,6 +2,7 @@
 
 #include "KillActorXPFix.h"
 #include "internal/NVSEPluginAPI.h"
+#include "internal/SafeWrite.h"
 
 #include "internal/globals.h"
 
@@ -45,12 +46,21 @@ namespace KillActorXPFix
 		}
 	}
 
+	//mov ecx,[ebp-0x10] - call Actor::GetLevel (0x87F9F0)
+	static constexpr UInt8 kExpected[8] = { 0x8B, 0x4D, 0xF0, 0xE8, 0x6F, 0x16, 0x2C, 0x00 };
+
 	void SetEnabled(bool enabled) {
 		g_enabled = enabled;
 	}
 
 	void Init(bool enabled)
 	{
+		if (memcmp((void*)kAddr_XPBlockStart, kExpected, sizeof(kExpected)) != 0)
+		{
+			Log("KillActorXPFix: 0x%X bytes changed, another plugin owns this site, skipping", kAddr_XPBlockStart);
+			return;
+		}
+
 		SafeWrite::WriteRelJump(kAddr_XPBlockStart, (UInt32)Hook_XPBlockStart);
 		SafeWrite::Write8(kAddr_XPBlockStart + 5, 0x90);
 		SafeWrite::Write8(kAddr_XPBlockStart + 6, 0x90);

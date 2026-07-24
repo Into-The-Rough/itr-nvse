@@ -1,13 +1,3 @@
-//two mutable damage events, multiplier-combine semantics (handlers multiply together,
-//negatives clamp to 0).
-//tier 1 ITR:OnPreHitDamage - CallDetour the 5 E8 sites that call CalculateHitDamage
-//(0x9B5A30) and mutate ActorHitData after the original returns, so we read the final
-//value including JIP's perk/ammo modifiers. JIP prologue-jumps 0x9B5A30 itself, so we
-//never patch it - our recorded call target runs JIP's version when present, vanilla
-//otherwise, order-independent.
-//tier 2 ITR:OnPreHealthDamage - chain-tolerant vtable swap of DamageActorValue
-//(slot 0xEB) on the three actor classes, scaling the negative health delta before apply.
-//JIP prologue-jumps the downstream dispatcher 0x66EE72, which we never touch.
 
 #include <Windows.h>
 
@@ -16,6 +6,7 @@
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"
 #include "internal/SafeWrite.h"
+#include "internal/GameGlobals.h"
 #include "internal/globals.h"
 
 namespace OnPreDamageHandler {
@@ -131,13 +122,18 @@ static void* const kHitThunks[5] = {
 	(void*)Hook_CalcHit_3, (void*)Hook_CalcHit_4,
 };
 
-//our wrapper is only ever installed on these three vtables, so this always matches
 static DamageActorValue_t PickDamageOrig(void* actor)
 {
 	UInt32 vtbl = *(UInt32*)actor;
 	if (vtbl == kVtbl_Character) return s_origDamageChar;
 	if (vtbl == kVtbl_Creature) return s_origDamageCreature;
-	return s_origDamagePlayer;
+	if (vtbl == kVtbl_PlayerCharacter || actor == (void*)*g_thePlayerPtr) return s_origDamagePlayer;
+	static bool s_unknownVtblLogged = false;
+	if (!s_unknownVtblLogged) {
+		s_unknownVtblLogged = true;
+		Log("OnPreHealthDamage: unknown vtable %08X, using Character original", vtbl);
+	}
+	return s_origDamageChar;
 }
 
 static void __fastcall Hook_DamageActorValue(void* actor, void*, UInt32 avCode, float delta, void* source)

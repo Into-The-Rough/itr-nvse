@@ -41,14 +41,20 @@ public:
 				return 0;
 			}
 		}
-		//new entry
+		//new entry, on a full table evict the entry not seen for the longest
+		int slot = count;
 		if (count < MaxSize) {
-			ids[count] = id;
-			popupTime[count] = 0;
-			hasLeft[count] = false;
-			lastSeen[count] = now;
 			count++;
+		} else {
+			slot = 0;
+			for (int i = 1; i < MaxSize; i++)
+				if (now - lastSeen[i] > now - lastSeen[slot])
+					slot = i;
 		}
+		ids[slot] = id;
+		popupTime[slot] = 0;
+		hasLeft[slot] = false;
+		lastSeen[slot] = now;
 		return 1; //first visit, don't trigger
 	}
 

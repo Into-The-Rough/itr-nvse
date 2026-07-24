@@ -156,6 +156,12 @@ static void CleanFactionName(const char* input, char* output, size_t outputSize)
 	strncpy_s(output, outputSize, start, _TRUNCATE);
 }
 
+//engine Tile::SetString frees and reallocs the trait string and runs the tile
+//reaction chain on every call, so track what we last wrote for the current
+//crosshair ref and skip the write when nothing changed
+static char g_lastWritten[512] = {0};
+static UInt32 g_lastCrosshairID = 0;
+
 namespace OwnerNameInfoHandler {
 void Update()
 {
@@ -168,7 +174,18 @@ void Update()
 
 	auto* ref = HUDMainMenuGetCrosshairRef(hud);
 	if (!ref)
+	{
+		g_lastCrosshairID = 0;
+		g_lastWritten[0] = '\0';
 		return;
+	}
+
+	UInt32 refID = ref->refID;
+	if (refID != g_lastCrosshairID)
+	{
+		g_lastCrosshairID = refID;
+		g_lastWritten[0] = '\0';
+	}
 
 	UInt8 refType = ref->typeID;
 
@@ -233,6 +250,10 @@ void Update()
 		}
 	}
 
+	if (strcmp(modifiedName, g_lastWritten) == 0)
+		return;
+	strcpy_s(g_lastWritten, modifiedName);
+
 	Engine::Tile_SetString(tile, 0xFC4, modifiedName, true); //kTileValue_string
 }
 
@@ -250,7 +271,7 @@ static void LoadINIPath()
 bool Init()
 {
 	LoadINIPath();
-	g_bOwnerNameInfo = GetPrivateProfileIntA("Tweaks", "bOwnerNameInfo", 1, g_iniPath) != 0;
+	g_bOwnerNameInfo = GetPrivateProfileIntA("Tweaks", "bOwnerNameInfo", 0, g_iniPath) != 0;
 	g_bCompatMode = GetPrivateProfileIntA("OwnerNameInfo", "bCompatibilityMode", 1, g_iniPath) != 0;
 	g_bShowFactionName = GetPrivateProfileIntA("OwnerNameInfo", "bShowFactionName", 1, g_iniPath) != 0;
 	g_bShowNameOnlyCrime = GetPrivateProfileIntA("OwnerNameInfo", "bShowNameOnlyCrime", 1, g_iniPath) != 0;
@@ -260,7 +281,7 @@ bool Init()
 void UpdateSettings()
 {
 	LoadINIPath();
-	g_bOwnerNameInfo = GetPrivateProfileIntA("Tweaks", "bOwnerNameInfo", 1, g_iniPath) != 0;
+	g_bOwnerNameInfo = GetPrivateProfileIntA("Tweaks", "bOwnerNameInfo", 0, g_iniPath) != 0;
 	g_bCompatMode = GetPrivateProfileIntA("OwnerNameInfo", "bCompatibilityMode", 1, g_iniPath) != 0;
 	g_bShowFactionName = GetPrivateProfileIntA("OwnerNameInfo", "bShowFactionName", 1, g_iniPath) != 0;
 	g_bShowNameOnlyCrime = GetPrivateProfileIntA("OwnerNameInfo", "bShowNameOnlyCrime", 1, g_iniPath) != 0;

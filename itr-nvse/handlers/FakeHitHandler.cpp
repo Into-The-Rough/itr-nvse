@@ -126,7 +126,7 @@ static Sound_SetPos_t Sound_SetPos = (Sound_SetPos_t)0xAD8B60;
 static Sound_SetNiNode_t Sound_SetNiNode = (Sound_SetNiNode_t)0xAD8F20;
 
 //0x522BA0 - TESObjectWEAP::GetImpactData(material). reads weapon+0x24C, remaps raw
-//material 0-31 to an impactDatas slot via 0x58E8F0. null if the weapon has no set
+//material 0-31 to an impactDatas slot via 0x4FB7A0. null if the weapon has no set
 typedef BGSImpactData* (__thiscall* GetWeaponImpactData_t)(TESObjectWEAP*, UInt32);
 static GetWeaponImpactData_t GetWeaponImpactData = (GetWeaponImpactData_t)0x522BA0;
 
@@ -302,6 +302,9 @@ static BaseExtraList* GetExtraDataList(TESObjectREFR* ref) {
 static ActorHitData BuildHitData(Actor* target, Actor* attacker, TESObjectWEAP* weapon,
 	float damage, float fatigueDmg, float limbDmg, SInt32 hitLocation, UInt32 flags)
 {
+	if (hitLocation < 0) hitLocation = 0;
+	else if (hitLocation > 14) hitLocation = 14;
+
 	ActorHitData hitData;
 	memset(&hitData, 0, sizeof(ActorHitData));
 	hitData.source = attacker;
@@ -338,11 +341,12 @@ static void ApplyHit(Actor* target, Actor* attacker, ActorHitData* hitData,
 	DamageHealthAndFatigue(target, damage, fatigueDmg, attacker);
 	//limb damage hits the body part's condition AV. resolve it from the actor's
 	//body part data - the AV varies per part and per race. DamageActorValue takes
-	//a positive damage amount (it gates out negatives for condition AVs 0x19-0x1F)
+	//a signed delta where negative damages, positive restores (god-mode gate
+	//0x952730 drops negative deltas for AV 16 and condition AVs 25-31)
 	if (limbDmg > 0.0f && hitLocation >= 0 && hitLocation <= 14) {
 		if (BGSBodyPartData* bpd = GetActorBodyPartData(target))
 			if (BGSBodyPart* part = bpd->bodyParts[hitLocation])
-				DamageActorValue(target, part->actorValue, limbDmg, attacker);
+				DamageActorValue(target, part->actorValue, -limbDmg, attacker);
 	}
 
 	if (!skipOnHit) {

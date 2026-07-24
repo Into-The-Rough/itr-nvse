@@ -67,8 +67,8 @@ static bool AppendListItem(TList* list, TItem* item)
 	Node* head = list->Head();
 	if (!head->item)
 	{
+		//keep head->next intact, a null head item can front a populated tail
 		head->item = item;
-		head->next = nullptr;
 		return true;
 	}
 
@@ -319,7 +319,10 @@ bool Cmd_ResurrectAll_Execute(COMMAND_ARGS)
 	PlayerCharacter* player = PlayerCharacter::GetSingleton();
 	if (!player || !player->parentCell) return true;
 
-	auto ProcessCell = [&](TESObjectCELL* cell)
+	//resurrection mutates cell object lists, snapshot dead actor refids first,
+	//then resurrect from the snapshot once iteration is done
+	std::vector<UInt32> deadRefIDs;
+	auto CollectCell = [&](TESObjectCELL* cell)
 	{
 		if (!cell) return;
 		for (auto iter = cell->objectList.Begin(); !iter.End(); ++iter)
@@ -330,22 +333,12 @@ bool Cmd_ResurrectAll_Execute(COMMAND_ARGS)
 			UInt8 baseType = refr->baseForm ? refr->baseForm->typeID : 0;
 			if (baseType != kFormType_Creature && baseType != kFormType_NPC) continue;
 
-			Actor* actor = (Actor*)refr;
-			if (actor->lifeState != 2) continue;
-
-			//clear 3D first so resurrection doesn't reuse dismembered model
-			Engine::TESObjectREFR_Set3D(refr, nullptr, true);
-
-			ActorResurrect(actor, true, true, false);
-
-			//queue model reload
-			Engine::ModelLoaderQueueReference(refr, 1, false);
-
-			count++;
+			if (((Actor*)refr)->lifeState != 2) continue;
+			deadRefIDs.push_back(refr->refID);
 		}
 	};
 
-	ProcessCell(player->parentCell);
+	CollectCell(player->parentCell);
 
 	TESWorldSpace* world = player->parentCell->worldSpace;
 	if (world && world->cellMap && !player->parentCell->IsInterior() && player->parentCell->coords)
@@ -358,11 +351,33 @@ bool Cmd_ResurrectAll_Execute(COMMAND_ARGS)
 			for (SInt32 dy = -1; dy <= 1; dy++)
 			{
 				if (dx == 0 && dy == 0) continue;
-				UInt32 key = ((baseX + dx) << 16) | ((baseY + dy) & 0xFFFF);
-				TESObjectCELL* cell = world->cellMap->Lookup(key);
-				ProcessCell(cell);
+				//mask before shifting, negative cell coords make the raw shift formally UB
+				UInt32 key = (((UInt32)(baseX + dx) & 0xFFFF) << 16) | ((UInt32)(baseY + dy) & 0xFFFF);
+				CollectCell(world->cellMap->Lookup(key));
 			}
 		}
+	}
+
+	for (UInt32 refID : deadRefIDs)
+	{
+		auto* refr = (TESObjectREFR*)Engine::LookupFormByID(refID);
+		if (!IsActorRef(refr)) continue;
+
+		Actor* actor = (Actor*)refr;
+		if (actor->lifeState != 2) continue;
+
+		//clear 3D first so resurrection doesn't reuse dismembered model
+		Engine::TESObjectREFR_Set3D(refr, nullptr, true);
+
+		{
+			BSSpinLockScope actorLock(GetProcessListsActorLock());
+			ActorResurrect(actor, true, true, false);
+		}
+
+		//queue model reload
+		Engine::ModelLoaderQueueReference(refr, 1, false);
+
+		count++;
 	}
 
 	*result = count;

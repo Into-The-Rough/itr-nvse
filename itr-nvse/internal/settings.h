@@ -12,7 +12,17 @@ namespace Settings
 	inline int bQuickDrop = 0;
 	inline int bQuick180 = 0;
 	inline int bAimZoomFirstPersonOnly = 0;
+	inline int bSuppressInputInConsole = 0;
 	inline int bDebugLog = 0;
+
+	inline int bMaterialProjectiles = 0;
+	inline int bProjectileRicochet = 0;
+	inline int bProjectilePenetration = 0;
+	inline int iRicochetMaxAngleDeg = 55;   //grazing angle from the surface, cinematic tuning is generous
+	inline int iRicochetMinEnergyPct = 15;  //below this remaining-flight fraction a round just stops
+	inline int iRicochetDamagePct = 60;     //damage retained after a bounce, dangerous ricochets
+	inline int iPenetrationDamagePct = 65;
+	inline int iPenetrationEnergyPct = 70;
 
 	inline int iQuickDropModifierKey = VK_SHIFT;
 	inline int iQuickDropControlID = 7; //ready weapon
@@ -60,6 +70,8 @@ namespace Settings
 
 	inline int bVATSSpeechFix = 0;
 	inline int bCombatItemTimerFix = 1;
+	inline int bStuckCombatStateFix = 0;
+	inline int bLoopingSoundLoadFix = 0;
 
 	inline int bNPCAntidoteUse = 0;
 	inline float fCombatItemCureTimer = 10.0f;
@@ -120,6 +132,15 @@ namespace Settings
 		strcat_s(iniPath, "\\Data\\config\\itr-nvse.ini");
 
 		bDebugLog = GetINIInt("Debug", "bDebugLog", 0);
+
+		bMaterialProjectiles = GetINIInt("MaterialProjectiles", "bEnable", 0);
+		bProjectileRicochet = GetINIInt("MaterialProjectiles", "bRicochet", 0);
+		bProjectilePenetration = GetINIInt("MaterialProjectiles", "bPenetration", 0);
+		iRicochetMaxAngleDeg = GetINIInt("MaterialProjectiles", "iRicochetMaxAngleDeg", 55);
+		iRicochetMinEnergyPct = GetINIInt("MaterialProjectiles", "iRicochetMinEnergyPct", 15);
+		iRicochetDamagePct = GetINIInt("MaterialProjectiles", "iRicochetDamagePct", 60);
+		iPenetrationDamagePct = GetINIInt("MaterialProjectiles", "iPenetrationDamagePct", 65);
+		iPenetrationEnergyPct = GetINIInt("MaterialProjectiles", "iPenetrationEnergyPct", 70);
 		bAutoGodMode = GetINIInt("Tweaks", "bAutoGodMode", 0);
 		bAutoQuickLoad = GetINIInt("Tweaks", "bAutoQuickLoad", 0);
 		bMessageBoxQuickClose = GetINIInt("Tweaks", "bMessageBoxQuickClose", 1);
@@ -128,6 +149,7 @@ namespace Settings
 		bQuickDrop = GetINIInt("Tweaks", "bQuickDrop", 0);
 		bQuick180 = GetINIInt("Tweaks", "bQuick180", 0);
 		bAimZoomFirstPersonOnly = GetINIInt("Tweaks", "bAimZoomFirstPersonOnly", 0);
+		bSuppressInputInConsole = GetINIInt("Tweaks", "bSuppressInputInConsole", 0);
 		iAutoQuickLoadDelayMs = GetINIInt("AutoQuickLoad", "iDelayMs", 1500);
 
 		iQuickDropModifierKey = GetINIInt("QuickDrop", "iModifierKey", VK_SHIFT);
@@ -170,6 +192,8 @@ namespace Settings
 		iNPCDoorUnlockBlock = GetINIInt("Tweaks", "iNPCDoorUnlockBlock", 0);
 		bVATSSpeechFix = GetINIInt("Tweaks", "bVATSSpeechFix", 0);
 		bCombatItemTimerFix = GetINIInt("Tweaks", "bCombatItemTimerFix", 1);
+		bStuckCombatStateFix = GetINIInt("Tweaks", "bStuckCombatStateFix", 0);
+		bLoopingSoundLoadFix = GetINIInt("Tweaks", "bLoopingSoundLoadFix", 0);
 
 		bNPCAntidoteUse = GetINIInt("Tweaks", "bNPCAntidoteUse", 0);
 		fCombatItemCureTimer = (float)GetINIInt("NPCAntidoteUse", "iCureTimer", 10);

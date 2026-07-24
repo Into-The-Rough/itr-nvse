@@ -14,6 +14,7 @@
 #include "internal/GameGlobals.h"
 #include "internal/EngineFunctions.h"
 #include "internal/globals.h"
+#include "features/RadioInjection.h"
 #include <cstddef>
 #include <cstring>
 #include <cctype>
@@ -428,6 +429,17 @@ static bool AdvanceDynamicRadios(double* result)
 
 	UInt32 stoppedCount = 0, advancedCount = 0, reseatCount = 0;
 
+	//s_setNPCRadio head-inserts into g_dynamicRadios and s_disableNPCRadio can unlink from it,
+	//so reseat actions collect here and apply after the walk. pointers are used immediately
+	//within this call, nothing frees them before the apply loop runs
+	struct ReseatAction {
+		Actor* actor;
+		TESObjectREFR* stationRef;
+	};
+	constexpr UInt32 kMaxReseats = 64;
+	ReseatAction reseats[kMaxReseats];
+	UInt32 reseatPending = 0;
+
 	for (auto iter = dynamicRadios->Begin(); !iter.End(); ++iter)
 	{
 		DynamicRadio* dr = iter.Get();
@@ -485,17 +497,24 @@ static bool AdvanceDynamicRadios(double* result)
 			stoppedCount++;
 		}
 
-		//if station entry couldn't be advanced directly, reseat the radio
-		if (!advancedThisRadio && stationRef)
+		//if station entry couldn't be advanced directly, reseat the radio after the walk
+		if (!advancedThisRadio && stationRef && reseatPending < kMaxReseats)
 		{
 			Actor* reseatActor = sourceActor ? sourceActor : PlayerCharacter::GetSingleton();
 			if (reseatActor && s_disableNPCRadio && s_setNPCRadio)
 			{
-				s_disableNPCRadio(reseatActor);
-				s_setNPCRadio(reseatActor, stationRef);
-				reseatCount++;
+				reseats[reseatPending].actor = reseatActor;
+				reseats[reseatPending].stationRef = stationRef;
+				reseatPending++;
 			}
 		}
+	}
+
+	for (UInt32 i = 0; i < reseatPending; i++)
+	{
+		s_disableNPCRadio(reseats[i].actor);
+		s_setNPCRadio(reseats[i].actor, reseats[i].stationRef);
+		reseatCount++;
 	}
 
 	if (stoppedCount || advancedCount || reseatCount)
@@ -515,6 +534,7 @@ static bool AdvanceDynamicRadios(double* result)
 static bool AdvanceCurrentRadioTrack(double* result)
 {
 	*result = 0;
+	RadioInjection::BeginTrackAdvance();
 
 	auto* radio = IsRadioEnabled() ? static_cast<RadioEntry*>(GetCurrentRadio()) : nullptr;
 

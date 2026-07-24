@@ -1,8 +1,6 @@
 //hooks BSAudioManager::GetSoundHandleByFilePath at 0xAE5A50 to catch ALL sounds
 //uses a queue to dispatch events on the main thread (audio may run on separate thread)
 
-#include <vector>
-#include <algorithm>
 #include <cstring>
 #include <Windows.h>
 
@@ -49,12 +47,18 @@ struct TrackedVoiceSound
     UInt32 pollCount;
 };
 
+static constexpr UInt32 kMaxQueueSize = 256;
+static constexpr UInt32 kMaxTrackedSounds = 64;
+static constexpr UInt32 kMaxPollsWithoutPlayback = 180;
+
 namespace OnSoundPlayedHandler {
     bool g_hookInstalled = false;
-    std::vector<QueuedSoundEvent> g_pendingEvents;
+    QueuedSoundEvent g_pendingEvents[kMaxQueueSize];
+    UInt32 g_pendingCount = 0;
     CRITICAL_SECTION g_stateLock;
     volatile LONG g_stateLockInit = 0;
-    std::vector<TrackedVoiceSound> g_trackedSounds;
+    TrackedVoiceSound g_trackedSounds[kMaxTrackedSounds];
+    UInt32 g_trackedCount = 0;
     DWORD g_mainThreadId = 0;
 }
 
@@ -135,8 +139,6 @@ static void QueueSoundEvent(const char* filePath, UInt32 flags, UInt32 soundForm
 {
     if (OnSoundPlayedHandler::g_stateLockInit != 2) return;
 
-    constexpr size_t kMaxQueueSize = 256;
-
     QueuedSoundEvent evt;
     if (filePath && filePath[0])
         strncpy_s(evt.filePath, sizeof(evt.filePath), filePath, _TRUNCATE);
@@ -146,16 +148,14 @@ static void QueueSoundEvent(const char* filePath, UInt32 flags, UInt32 soundForm
     evt.soundFormID = soundFormID;
 
     ScopedLock lock(&OnSoundPlayedHandler::g_stateLock);
-    if (OnSoundPlayedHandler::g_pendingEvents.size() >= kMaxQueueSize) return;
-    OnSoundPlayedHandler::g_pendingEvents.push_back(evt);
+    if (OnSoundPlayedHandler::g_pendingCount >= kMaxQueueSize) return;
+    OnSoundPlayedHandler::g_pendingEvents[OnSoundPlayedHandler::g_pendingCount++] = evt;
 }
 
 static void QueueVoiceTracking(UInt32 soundID, const char* filePath, UInt32 flags, UInt32 soundFormID, const BSSoundHandle* handle)
 {
     if (OnSoundPlayedHandler::g_stateLockInit != 2) return;
     if (soundID == 0 || soundID == 0xFFFFFFFF) return;
-
-    constexpr size_t kMaxTrackedSounds = 64;
 
     TrackedVoiceSound tracked;
     tracked.soundID = soundID;
@@ -179,8 +179,8 @@ static void QueueVoiceTracking(UInt32 soundID, const char* filePath, UInt32 flag
         tracked.filePath[0] = '\0';
 
     ScopedLock lock(&OnSoundPlayedHandler::g_stateLock);
-    if (OnSoundPlayedHandler::g_trackedSounds.size() >= kMaxTrackedSounds) return;
-    OnSoundPlayedHandler::g_trackedSounds.push_back(tracked);
+    if (OnSoundPlayedHandler::g_trackedCount >= kMaxTrackedSounds) return;
+    OnSoundPlayedHandler::g_trackedSounds[OnSoundPlayedHandler::g_trackedCount++] = tracked;
 }
 
 enum { kSoundFlag_IsVoice = 0x4 };
@@ -208,6 +208,12 @@ static BSSoundHandle* __fastcall HookedGetSoundHandle(
     return result;
 }
 
+static bool IsSameTracked(const TrackedVoiceSound& a, const TrackedVoiceSound& b)
+{
+    return a.soundID == b.soundID && a.soundFormID == b.soundFormID &&
+           std::strcmp(a.filePath, b.filePath) == 0;
+}
+
 namespace OnSoundPlayedHandler {
 void InstallListenerProbes()
 {
@@ -222,100 +228,101 @@ void InstallListenerProbes()
 
 void Update()
 {
-    if (OnSoundPlayedHandler::g_stateLockInit != 2) return;
+    if (g_stateLockInit != 2) return;
     if (!g_eventManagerInterface) return;
 
     DWORD currentThreadId = GetCurrentThreadId();
-    if (!OnSoundPlayedHandler::g_mainThreadId)
-        OnSoundPlayedHandler::g_mainThreadId = currentThreadId;
-    if (currentThreadId != OnSoundPlayedHandler::g_mainThreadId)
+    if (!g_mainThreadId)
+        g_mainThreadId = currentThreadId;
+    if (currentThreadId != g_mainThreadId)
         return;
 
     RefreshListenerState(false);
 
-    std::vector<QueuedSoundEvent> eventsToProcess;
-    std::vector<TrackedVoiceSound> soundsToCheck;
+    static QueuedSoundEvent s_drainEvents[kMaxQueueSize];
+    static TrackedVoiceSound s_snapshot[kMaxTrackedSounds];
+    UInt32 drainCount, snapCount;
     {
-        ScopedLock lock(&OnSoundPlayedHandler::g_stateLock);
-        eventsToProcess.swap(OnSoundPlayedHandler::g_pendingEvents);
-        soundsToCheck = OnSoundPlayedHandler::g_trackedSounds;
+        ScopedLock lock(&g_stateLock);
+        drainCount = g_pendingCount;
+        if (drainCount)
+            memcpy(s_drainEvents, g_pendingEvents, drainCount * sizeof(QueuedSoundEvent));
+        g_pendingCount = 0;
+        snapCount = g_trackedCount;
+        if (snapCount)
+            memcpy(s_snapshot, g_trackedSounds, snapCount * sizeof(TrackedVoiceSound));
     }
 
-    for (const auto& evt : eventsToProcess)
+    for (UInt32 i = 0; i < drainCount; ++i)
     {
-        const char* filePath = evt.filePath[0] ? evt.filePath : "";
+        const QueuedSoundEvent& evt = s_drainEvents[i];
         //sounds played by file path carry no TESSound form, dispatch them with a null source
         TESForm* sourceSound = evt.soundFormID ? (TESForm*)Engine::LookupFormByID(evt.soundFormID) : nullptr;
 
         g_eventManagerInterface->DispatchEvent(kSoundPlayedEvent, nullptr,
-            filePath, (int)evt.soundFlags, (TESObjectREFR*)sourceSound);
+            evt.filePath, (int)evt.soundFlags, (TESObjectREFR*)sourceSound);
     }
 
-    if (!soundsToCheck.empty())
+    if (!snapCount)
+        return;
+
+    //poll outside the lock, IsPlaying may take audio locks the hook thread holds
+    UInt8 action[kMaxTrackedSounds]; //0 keep, 1 remove, 2 remove and dispatch completed
+    for (UInt32 i = 0; i < snapCount; ++i)
     {
-        std::vector<TrackedVoiceSound> completedSounds;
-        std::vector<TrackedVoiceSound> updatedSounds;
-        completedSounds.reserve(soundsToCheck.size());
-        updatedSounds.reserve(soundsToCheck.size());
+        TrackedVoiceSound& tracked = s_snapshot[i];
+        ++tracked.pollCount;
+        bool stillPlaying = Engine::BSSoundHandle_IsPlaying(&tracked.handleState);
+        if (stillPlaying)
+            tracked.hasEverPlayed = true;
 
-        for (auto& tracked : soundsToCheck)
+        if (!stillPlaying && tracked.hasEverPlayed)
+            action[i] = 2;
+        else if (!tracked.hasEverPlayed && tracked.pollCount >= kMaxPollsWithoutPlayback)
+            action[i] = 1;
+        else
+            action[i] = 0;
+    }
+
+    {
+        ScopedLock lock(&g_stateLock);
+        for (UInt32 i = 0; i < snapCount; ++i)
         {
-            ++tracked.pollCount;
-            bool stillPlaying = Engine::BSSoundHandle_IsPlaying(&tracked.handleState);
-            if (stillPlaying)
-                tracked.hasEverPlayed = true;
-
-            if (!stillPlaying && tracked.hasEverPlayed)
+            //match by identity, the hook thread may have appended or ClearState wiped the array
+            for (UInt32 j = 0; j < g_trackedCount; ++j)
             {
-                completedSounds.push_back(tracked);
-                TESForm* sourceSound = tracked.soundFormID ? (TESForm*)Engine::LookupFormByID(tracked.soundFormID) : nullptr;
-
-                if (sourceSound)
-                    g_eventManagerInterface->DispatchEvent(kSoundCompletedEvent, nullptr,
-                        tracked.filePath, (int)tracked.soundFlags, (TESObjectREFR*)sourceSound);
-            }
-            else
-            {
-                constexpr UInt32 kMaxPollsWithoutPlayback = 180;
-                if (!tracked.hasEverPlayed && tracked.pollCount >= kMaxPollsWithoutPlayback)
-                    completedSounds.push_back(tracked);
-                else
-                    updatedSounds.push_back(tracked);
-            }
-        }
-
-        auto isSameTracked = [](const TrackedVoiceSound& a, const TrackedVoiceSound& b) -> bool {
-            return a.soundID == b.soundID && a.soundFormID == b.soundFormID &&
-                   std::strcmp(a.filePath, b.filePath) == 0;
-        };
-
-        {
-            ScopedLock lock(&OnSoundPlayedHandler::g_stateLock);
-            auto& liveTracked = OnSoundPlayedHandler::g_trackedSounds;
-
-            for (const auto& updated : updatedSounds) {
-                for (auto& live : liveTracked) {
-                    if (isSameTracked(live, updated)) {
-                        live.handleState = updated.handleState;
-                        live.hasEverPlayed = updated.hasEverPlayed;
-                        live.pollCount = updated.pollCount;
-                        break;
-                    }
+                TrackedVoiceSound& live = g_trackedSounds[j];
+                if (!IsSameTracked(live, s_snapshot[i])) continue;
+                if (action[i])
+                    g_trackedSounds[j] = g_trackedSounds[--g_trackedCount];
+                else {
+                    live.handleState = s_snapshot[i].handleState;
+                    live.hasEverPlayed = s_snapshot[i].hasEverPlayed;
+                    live.pollCount = s_snapshot[i].pollCount;
                 }
-            }
-
-            if (!completedSounds.empty()) {
-                liveTracked.erase(
-                    std::remove_if(liveTracked.begin(), liveTracked.end(),
-                        [&](const TrackedVoiceSound& live) {
-                            for (const auto& completed : completedSounds)
-                                if (isSameTracked(live, completed)) return true;
-                            return false;
-                        }),
-                    liveTracked.end());
+                break;
             }
         }
     }
+
+    for (UInt32 i = 0; i < snapCount; ++i)
+    {
+        if (action[i] != 2) continue;
+        const TrackedVoiceSound& tracked = s_snapshot[i];
+        //voice lines played by file path carry no TESSound form, dispatch with a null source
+        TESForm* sourceSound = tracked.soundFormID ? (TESForm*)Engine::LookupFormByID(tracked.soundFormID) : nullptr;
+
+        g_eventManagerInterface->DispatchEvent(kSoundCompletedEvent, nullptr,
+            tracked.filePath, (int)tracked.soundFlags, (TESObjectREFR*)sourceSound);
+    }
+}
+
+void ClearState()
+{
+    if (g_stateLockInit != 2) return;
+    ScopedLock lock(&g_stateLock);
+    g_pendingCount = 0;
+    g_trackedCount = 0;
 }
 
 bool Init(void* nvseInterface)

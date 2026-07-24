@@ -1,6 +1,5 @@
-//Havok callbacks can arrive off the main thread.
-//Queue contact events here and dispatch them from Update().
-//g_activeContacts coalesces multiple contact points for the same watched pair.
+//havok callbacks arrive off the main thread, so contacts are queued here and dispatched from
+//Update(). g_activeContacts coalesces multiple contact points for the same watched pair
 
 #include "OnContactHandler.h"
 #include "internal/NVSEPluginAPI.h"
@@ -102,7 +101,7 @@ static const _bhkNiCollisionObject_Getbhk bhkNiCollisionObject_Getbhk = (_bhkNiC
 static bool HasAnyWatchSnapshot();
 static bool ShouldQueueCandidateLocked(UInt32 refID, UInt32 baseID = 0);
 
-//Reads refID and base formID straight off the resolved ref, no form-table lookup.
+//straight off the resolved ref, no form-table lookup - safe on the havok thread
 static UInt32 RefrToRefIDBase(TESObjectREFR* refr, UInt32* outBaseID) {
 	UInt32 refID = refr->refID;
 	if (outBaseID) {
@@ -131,7 +130,7 @@ static UInt32 ResolveCollidableToRefID(void* collidable, UInt32* outBaseID = nul
 	}
 
 	void* worldObj = HkpWorldObjectFromCollidableRoot(root);
-	//Use bhkNiCollisionObject_Getbhk here; the manual wrapper walk is not reliable for phantoms.
+	//0x4B5A20, the manual wrapper walk above is unreliable for phantoms
 	void* collObj = bhkNiCollisionObject_Getbhk(worldObj);
 	if (collObj) {
 		void* niNode = reinterpret_cast<BhkCollisionObjectView*>(collObj)->niNode;
@@ -403,7 +402,7 @@ static void PollDeadActorProximityContacts() {
 	}
 }
 
-//Removed callbacks are not enough to close rigid-body and proxy contacts reliably.
+//removed callbacks do not reliably close rigid-body and proxy contacts, so poll for stale pairs
 static void PollContactEnd() {
 	std::vector<ContactPair> stale;
 
@@ -675,7 +674,7 @@ void Update()
 		std::vector<WatchedActorCandidate> watchedActors;
 		CollectLoadedWatchedActors(watchedActors);
 
-		//Seed existing contacts when watch state changes; add callbacks only see new contacts.
+		//add callbacks only fire for new contacts, so seed the ones already touching
 		for (const auto& watchedActor : watchedActors) {
 			UInt32 refID = watchedActor.refID;
 			auto* form = watchedActor.ref;
@@ -686,7 +685,7 @@ void Update()
 			BhkCharacterControllerView* ctrl = GetActorController(actor);
 			if (!ctrl) continue;
 
-			//Collect seed events first so handlers cannot mutate watch state mid-scan.
+			//collect first, dispatching here would let a handler mutate watch state mid-scan
 			auto& contactBodies = ctrl->proxy.pointCollector.contactBodies;
 			for (SInt32 i = 0; i < contactBodies.size && contactBodies.data; i++) {
 				if (!contactBodies.data[i]) continue;
@@ -722,7 +721,7 @@ void Update()
 	}
 
 	for (const auto& evt : events) {
-		//Watch state can change during handler callbacks.
+		//re-check per event, a handler callback can drop the watch mid-drain
 		if (!IsRefWatchedOnMain(evt.watchedRefID)) continue;
 
 		ContactPair pair = {evt.watchedRefID, evt.otherRefID, evt.channel};

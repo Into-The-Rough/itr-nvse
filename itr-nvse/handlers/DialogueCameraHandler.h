@@ -16,6 +16,7 @@ namespace DialogueCameraHandler {
 
 	bool Init(void* nvse);
 	void Update();
+	void ClearState();
 	bool InstallCameraHooks();
 	void SetEnabled(bool enabled);
 	bool IsEnabled();

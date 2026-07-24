@@ -420,6 +420,18 @@
 							"default": 0
 						}
 					]
+				},
+				"9": {
+					"title": "Suppress Input In Console",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Suppress modded keyboard and controller binds while the console is open",
+					"vars": [
+						{
+							"configINI": "Tweaks:bSuppressInputInConsole",
+							"default": 0
+						}
+					]
 				}
 			}
 		},
@@ -973,6 +985,35 @@
 							"default": 1
 						}
 					]
+				},
+				"29": {
+					"title": "Runtime Fixes",
+					"enable": 1,
+					"type": 0
+				},
+				"30": {
+					"title": "Stuck Combat State Fix",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Fix caution or combat mode and combat music remaining active after enemies die or unload. Requires restart after changing.",
+					"vars": [
+						{
+							"configINI": "Tweaks:bStuckCombatStateFix",
+							"default": 0
+						}
+					]
+				},
+				"31": {
+					"title": "Looping Sound Load Fix",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Fix looping weapon sounds surviving death reloads or NPC cell transitions. Requires restart after changing.",
+					"vars": [
+						{
+							"configINI": "Tweaks:bLoopingSoundLoadFix",
+							"default": 0
+						}
+					]
 				}
 			}
 		},
@@ -1192,6 +1233,368 @@
 						"valueMin": 256,
 						"valueMax": 8192,
 						"suffix": "u"
+					}
+				}
+			}
+		},
+		"6": {
+			"listTitle": "Material Projectiles",
+			"pageTitle": "Material Projectiles",
+			"columns": 1,
+			"enable": 1,
+			"options": {
+				"1": {
+					"title": "Enable Material Projectiles",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Your bullets ricochet off hard surfaces and penetrate thin ones. Player-fired ballistic rounds only.",
+					"vars": [
+						{
+							"configINI": "MaterialProjectiles:bEnable",
+							"default": 0
+						}
+					]
+				},
+				"2": {
+					"title": "Ricochet",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Bullets bounce off metal and stone at shallow angles, keeping reduced damage.",
+					"vars": [
+						{
+							"configINI": "MaterialProjectiles:bRicochet",
+							"default": 0
+						}
+					]
+				},
+				"3": {
+					"title": "Penetration",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Bullets pass through thin wood, glass and cloth with reduced damage.",
+					"vars": [
+						{
+							"configINI": "MaterialProjectiles:bPenetration",
+							"default": 0
+						}
+					]
+				},
+				"4": {
+					"title": "Ricochet Max Angle",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Grazing angle from the surface below which a round ricochets. Higher is more frequent.",
+					"vars": [
+						{
+							"configINI": "MaterialProjectiles:iRicochetMaxAngleDeg",
+							"default": 55
+						}
+					],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 5,
+						"valueMin": 10,
+						"valueMax": 85,
+						"suffix": " deg"
+					}
+				},
+				"5": {
+					"title": "Ricochet Damage",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Percent of damage a ricocheted round keeps for its next hit.",
+					"vars": [
+						{
+							"configINI": "MaterialProjectiles:iRicochetDamagePct",
+							"default": 60
+						}
+					],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 5,
+						"valueMin": 0,
+						"valueMax": 100,
+						"suffix": "%"
+					}
+				},
+				"6": {
+					"title": "Penetration Damage",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Percent of damage a penetrating round deals through a surface.",
+					"vars": [
+						{
+							"configINI": "MaterialProjectiles:iPenetrationDamagePct",
+							"default": 65
+						}
+					],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 5,
+						"valueMin": 0,
+						"valueMax": 100,
+						"suffix": "%"
+					}
+				},
+				"7": {
+					"title": "Penetration Speed",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Percent of speed a round keeps after penetrating.",
+					"vars": [
+						{
+							"configINI": "MaterialProjectiles:iPenetrationEnergyPct",
+							"default": 70
+						}
+					],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 5,
+						"valueMin": 0,
+						"valueMax": 100,
+						"suffix": "%"
+					}
+				},
+				"8": {
+					"title": "Ricochet Minimum Energy",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Minimum remaining flight energy required for a bullet to ricochet.",
+					"vars": [
+						{
+							"configINI": "MaterialProjectiles:iRicochetMinEnergyPct",
+							"default": 15
+						}
+					],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 5,
+						"valueMin": 0,
+						"valueMax": 100,
+						"suffix": "%"
+					}
+				}
+			}
+		},
+		"7": {
+			"listTitle": "NPC Reactions",
+			"pageTitle": "NPC Reactions",
+			"columns": 1,
+			"enable": 1,
+			"options": {
+				"1": {
+					"title": "WakeyWakey",
+					"enable": 1,
+					"type": 0
+				},
+				"2": {
+					"title": "Enable WakeyWakey",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Nearby sleeping NPCs wake when the player fires a loud or quiet weapon.",
+					"vars": [
+						{
+							"configINI": "WakeyWakey:bEnable",
+							"default": 0
+						}
+					]
+				},
+				"3": {
+					"title": "Loud Weapon Wake Distance",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Maximum distance in game units at which loud player gunfire wakes sleeping NPCs.",
+					"vars": [
+						{
+							"configINI": "WakeyWakey:iWakeDistance",
+							"default": 2500
+						}
+					],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 250,
+						"valueMin": 0,
+						"valueMax": 10000,
+						"suffix": "u"
+					}
+				},
+				"4": {
+					"title": "Quiet Weapon Wake Distance",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Maximum distance in game units at which quiet player gunfire wakes sleeping NPCs. Silent weapons never wake them.",
+					"vars": [
+						{
+							"configINI": "WakeyWakey:iQuietWakeDistance",
+							"default": 1250
+						}
+					],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 250,
+						"valueMin": 0,
+						"valueMax": 10000,
+						"suffix": "u"
+					}
+				},
+				"5": {
+					"title": "Wake Scan Cooldown",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Minimum time between sleeping-NPC scans during rapid fire.",
+					"vars": [
+						{
+							"configINI": "WakeyWakey:iCooldownMs",
+							"default": 250
+						}
+					],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 50,
+						"valueMin": 0,
+						"valueMax": 5000,
+						"suffix": "ms"
+					}
+				},
+				"6": {
+					"title": "Aggro Threshold",
+					"enable": 1,
+					"type": 0
+				},
+				"7": {
+					"title": "Enable Aggro Threshold",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Let friendly NPCs absorb configurable player hits before becoming hostile. Disable the standalone SuppressiveFireNVSE mod first.",
+					"vars": [
+						{
+							"configINI": "AggroThreshold:bAggroThreshold",
+							"default": 0
+						}
+					]
+				},
+				"8": {
+					"title": "Ignore Creatures",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Do not give creatures extra hit tolerance; they use vanilla hostility behaviour.",
+					"vars": [
+						{
+							"configINI": "AggroThreshold:bIgnoreCreatures",
+							"default": 0
+						}
+					]
+				},
+				"9": {
+					"title": "Only While Player Is In Combat",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Only apply the extra hit tolerance while the player is already in combat.",
+					"vars": [
+						{
+							"configINI": "AggroThreshold:bOnlyCombat",
+							"default": 1
+						}
+					]
+				},
+				"10": {
+					"title": "Relation Thresholds",
+					"type": 1,
+					"enable": 1,
+					"mouse": "Choose whether the engine uses its friend-hit or ally-hit tolerance settings.",
+					"vars": [
+						{
+							"configINI": "AggroThreshold:iSuppressionMode",
+							"default": 1
+						}
+					],
+					"strings": [
+						"Friend",
+						"Ally"
+					]
+				},
+				"11": {
+					"title": "Ignore Friendly Fire Permanently",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Permanently flag affected NPCs so player hits never make them hostile.",
+					"vars": [
+						{
+							"configINI": "AggroThreshold:bIgnoreFriendlyFire",
+							"default": 0
+						}
+					]
+				},
+				"12": {
+					"title": "Peaceful Ally Hits",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Player hits a peaceful ally may absorb before becoming hostile.",
+					"vars": [
+						{
+							"configINI": "AggroThreshold:iAllyHitNonCombatAllowed",
+							"default": 1
+						}
+					],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 1,
+						"valueMin": 0,
+						"valueMax": 20
+					}
+				},
+				"13": {
+					"title": "Combat Ally Hits",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Player hits an ally already in combat may absorb before becoming hostile.",
+					"vars": [
+						{
+							"configINI": "AggroThreshold:iAllyHitCombatAllowed",
+							"default": 2
+						}
+					],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 1,
+						"valueMin": 0,
+						"valueMax": 20
+					}
+				},
+				"14": {
+					"title": "Peaceful Friend Hits",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Player hits a peaceful friend may absorb before becoming hostile.",
+					"vars": [
+						{
+							"configINI": "AggroThreshold:iFriendHitNonCombatAllowed",
+							"default": 2
+						}
+					],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 1,
+						"valueMin": 0,
+						"valueMax": 20
+					}
+				},
+				"15": {
+					"title": "Combat Friend Hits",
+					"type": 2,
+					"enable": 1,
+					"mouse": "Player hits a friend already in combat may absorb before becoming hostile.",
+					"vars": [
+						{
+							"configINI": "AggroThreshold:iFriendHitCombatAllowed",
+							"default": 2
+						}
+					],
+					"scale": {
+						"valueDecimal": 0,
+						"valueIncrement": 1,
+						"valueMin": 0,
+						"valueMax": 20
 					}
 				}
 			}

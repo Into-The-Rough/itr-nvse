@@ -1,12 +1,5 @@
 //cancellable pre-fast-travel event. handlers SetFunctionValue 0 to veto.
 //once any handler vetoes, later handlers can't un-veto.
-//
-//we hook the prologue of the universal fast travel executor sub_93CDF0 rather than
-//the single E8 call site at 0x93BF22. JIP LN owns that call site with
-//HOOK_INIT_CALL(0x93BF22) and ends its hook with a hardcoded jmp to 0x93CDF0, not a
-//chained call. itr loads before jip alphabetically, so a call-site detour would be
-//silently bypassed once JIP installs. detouring the executor prologue makes JIP's
-//jmp land on our detour, order-independent.
 
 #include <cmath>
 
@@ -63,9 +56,22 @@ bool __cdecl ShouldAllowFastTravel(TESObjectREFR* player, TESObjectREFR* marker)
 		}
 	}
 
+	//a handler triggering fast travel re-enters the executor synchronously, cap the
+	//depth and let travels past it proceed, breaking the cycle
+	static UInt32 s_depth = 0;
+	if (s_depth >= 16)
+	{
+		static volatile LONG loggedDepth = 0;
+		if (InterlockedCompareExchange(&loggedDepth, 1, 0) == 0)
+			Log("OnPreFastTravel: recursion cap hit, letting travel proceed");
+		return true;
+	}
+
 	UInt32 shouldTravel = 1;
+	s_depth++;
 	g_eventManagerInterface->DispatchEventAlt(kEventName, DispatchResultCb, &shouldTravel,
 		player, player, marker, destWorldspace, PackEventFloatArg(distance), &shouldTravel);
+	s_depth--;
 
 	if (!shouldTravel)
 		Log("OnPreFastTravel: vetoed (marker %08X)", marker ? marker->refID : 0);

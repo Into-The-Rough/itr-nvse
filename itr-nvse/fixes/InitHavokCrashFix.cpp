@@ -7,6 +7,7 @@
 
 #include "InitHavokCrashFix.h"
 #include "internal/NVSEPluginAPI.h"
+#include "internal/SafeWrite.h"
 
 #include "internal/globals.h"
 
@@ -32,8 +33,17 @@ namespace InitHavokCrashFix
 		}
 	}
 
+	//mov eax,[edx+0x94]
+	static constexpr UInt8 kExpected[6] = { 0x8B, 0x82, 0x94, 0x00, 0x00, 0x00 };
+
 	void Init()
 	{
+		if (memcmp((void*)kPatchAddr, kExpected, sizeof(kExpected)) != 0)
+		{
+			Log("InitHavokCrashFix: 0x%X bytes changed, skipping", kPatchAddr);
+			return;
+		}
+
 		SafeWrite::WriteRelJump(kPatchAddr, (UInt32)Hook);
 		//nop the 6th byte (original instruction was 6 bytes, jmp is 5)
 		SafeWrite::Write8(kPatchAddr + 5, 0x90);

@@ -95,10 +95,25 @@ static void DispatchEntryPointEvent()
 
     BGSPerk* perk = it->second;
 
+    //a handler can trigger a nested entry point synchronously, cap the depth
+    //and drop dispatches past it, breaking the cycle
+    static UInt32 s_depth = 0;
+    if (s_depth >= 16)
+    {
+        static volatile LONG loggedDepth = 0;
+        if (InterlockedCompareExchange(&loggedDepth, 1, 0) == 0)
+            Log("OnEntryPointHandler: recursion cap hit, dropping nested dispatch");
+        return;
+    }
+
     if (g_eventManagerInterface && ctx.actor)
+    {
+        s_depth++;
         g_eventManagerInterface->DispatchEventThreadSafe("ITR:OnEntryPoint",
             nullptr, reinterpret_cast<TESObjectREFR*>(ctx.actor),
             (TESForm*)perk, (int)ctx.entryPoint, (TESForm*)ctx.actor, ctx.filterForm1);
+        s_depth--;
+    }
 }
 
 static void __cdecl DoDispatchAndPop()

@@ -14,12 +14,9 @@ static std::unordered_map<UInt32, float> g_actorFallDamageMults;
 static CRITICAL_SECTION g_fdhLock;
 static volatile LONG g_fdhLockInit = 0;
 
-static UInt32 s_setMultOpcode = 0;
-static UInt32 s_getMultOpcode = 0;
-
 #include "internal/globals.h"
 
-//Returns the effective multiplier in st(0) for the asm hook.
+//returns in st(0), the asm hook below consumes it there
 static float __cdecl GetFallDamageMultForActor(UInt32 refID)
 {
 	InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
@@ -31,12 +28,6 @@ namespace FallDamageHook
 {
 	static const UInt32 kHookAddr = 0x8A63EC;
 	static const UInt32 kRetnAddr = 0x8A63F5;
-
-	void __fastcall ApplyFallDamageMult(Actor* actor, float* damage)
-	{
-		float mult = GetFallDamageMultForActor(actor ? actor->refID : 0);
-		*damage *= mult;
-	}
 
 	__declspec(naked) void Hook()
 	{
@@ -195,8 +186,6 @@ namespace FallDamageHandler {
 bool Init(void* nvse)
 {
 	FallDamageHook::Init();
-	s_setMultOpcode = 0x4017;
-	s_getMultOpcode = 0x4018;
 	return true;
 }
 
@@ -249,6 +238,14 @@ void ClearMultiplier(Actor* actor)
 	}
 }
 
+//load teardown, refIDs from the previous session go stale across loads
+void ClearState()
+{
+	InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
+	ScopedLock lock(&g_fdhLock);
+	g_actorFallDamageMults.clear();
+}
+
 void RegisterCommands(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
@@ -256,7 +253,4 @@ void RegisterCommands(void* nvsePtr)
 	nvse->RegisterCommand(&kCommandInfo_GetFallDamageMult);
 	nvse->RegisterCommand(&kCommandInfo_ClearFallDamageMult);
 }
-
-UInt32 GetSetMultOpcode() { return s_setMultOpcode; }
-UInt32 GetGetMultOpcode() { return s_getMultOpcode; }
 }

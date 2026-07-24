@@ -9,6 +9,8 @@ inline char* CopyCString(const char* src)
 
 	const size_t size = src ? strlen(src) : 0;
 	auto* result = static_cast<char*>(FormHeapAllocate(static_cast<UInt32>(size + 1)));
+	if (!result)
+		return nullptr;
 	result[size] = 0;
 	if (size)
 		memcpy(result, src, size);

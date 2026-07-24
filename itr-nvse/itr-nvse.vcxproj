@@ -164,6 +164,8 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="fixes\NPCDoorUnlockBlock.cpp" />
     <ClCompile Include="fixes\VATSSpeechFix.cpp" />
     <ClCompile Include="fixes\CombatItemTimerFix.cpp" />
+    <ClCompile Include="fixes\StuckCombatStateFix.cpp" />
+    <ClCompile Include="fixes\LoopingSoundLoadFix.cpp" />
     <ClCompile Include="fixes\CompanionNoInfamy.cpp" />
     <ClCompile Include="fixes\PathingNullActorFix.cpp" />
     <ClCompile Include="fixes\NavMeshInfoCrashFix.cpp" />
@@ -188,6 +190,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="features\AltTabMute.cpp" />
     <ClCompile Include="features\AutoQuickLoad.cpp" />
     <ClCompile Include="features\AimZoomFirstPersonOnly.cpp" />
+    <ClCompile Include="features\ConsoleInputSuppression.cpp" />
     <ClCompile Include="features\AggroThreshold.cpp" />
     <ClCompile Include="features\CameraOverride.cpp" />
     <ClCompile Include="features\CompanionNoBlock.cpp" />
@@ -225,6 +228,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="commands\ExteriorDoorCommands.cpp" />
     <ClCompile Include="commands\ContainerCommands.cpp" />
     <ClCompile Include="commands\WorldspaceOffsetCommands.cpp" />
+    <ClCompile Include="commands\AlertCommands.cpp" />
     <ClCompile Include="commands\DetectionSoundCommands.cpp" />
     <ClCompile Include="commands\BarterCommands.cpp" />
     <ClCompile Include="commands\CenterOnCellAltCommand.cpp" />
@@ -233,6 +237,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="handlers\OnWitnessedHandler.cpp" />
     <ClCompile Include="handlers\OnImpactDataSpawnHandler.cpp" />
     <ClCompile Include="handlers\OnNearMissHandler.cpp" />
+    <ClCompile Include="handlers\OnProjectileImpactHandler.cpp" />
     <ClCompile Include="handlers\OnSprayDecalHandler.cpp" />
     <ClCompile Include="handlers\OnWoundSprayHandler.cpp" />
     <ClCompile Include="handlers\OnVATSStateHandler.cpp" />
@@ -262,6 +267,8 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="internal\CooldownTracker.h" />
     <ClInclude Include="internal\FallDamageLogic.h" />
     <ClInclude Include="internal\FormatLogic.h" />
+    <ClInclude Include="internal\PickpocketHookLogic.h" />
+    <ClInclude Include="internal\RadioInjectionLogic.h" />
     <ClInclude Include="internal\StringAlloc.h" />
     <ClInclude Include="commands\CommandBoundsCommand.h" />
     <ClInclude Include="commands\ToggleAllPrimitives.h" />
@@ -269,6 +276,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="internal\EventDispatch.h" />
     <ClInclude Include="internal\EngineFunctions.h" />
     <ClInclude Include="internal\EngineHelpers.h" />
+    <ClInclude Include="internal\DIHookView.h" />
     <ClInclude Include="internal\GameGlobals.h" />
     <ClInclude Include="handlers\DialogueTextFilter.h" />
     <ClInclude Include="handlers\OnStealHandler.h" />
@@ -311,6 +319,8 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="fixes\NPCDoorUnlockBlock.h" />
     <ClInclude Include="fixes\VATSSpeechFix.h" />
     <ClInclude Include="fixes\CombatItemTimerFix.h" />
+    <ClInclude Include="fixes\StuckCombatStateFix.h" />
+    <ClInclude Include="fixes\LoopingSoundLoadFix.h" />
     <ClInclude Include="fixes\CompanionNoInfamy.h" />
     <ClInclude Include="fixes\PathingNullActorFix.h" />
     <ClInclude Include="fixes\NavMeshInfoCrashFix.h" />
@@ -334,6 +344,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="features\RaceEyeCommands.h" />
     <ClInclude Include="features\WeatherChangeEvent.h" />
     <ClInclude Include="features\AimZoomFirstPersonOnly.h" />
+    <ClInclude Include="features\ConsoleInputSuppression.h" />
     <ClInclude Include="features\AggroThreshold.h" />
     <ClInclude Include="features\PlayerUpdateHook.h" />
     <ClInclude Include="features\NPCAntidoteUse.h" />
@@ -360,6 +371,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="commands\ExteriorDoorCommands.h" />
     <ClInclude Include="commands\ContainerCommands.h" />
     <ClInclude Include="commands\WorldspaceOffsetCommands.h" />
+    <ClInclude Include="commands\AlertCommands.h" />
     <ClInclude Include="commands\DetectionSoundCommands.h" />
     <ClInclude Include="commands\BarterCommands.h" />
     <ClInclude Include="commands\CenterOnCellAltCommand.h" />
@@ -368,6 +380,8 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="handlers\OnWitnessedHandler.h" />
     <ClInclude Include="handlers\OnImpactDataSpawnHandler.h" />
     <ClInclude Include="handlers\OnNearMissHandler.h" />
+    <ClInclude Include="handlers\OnProjectileImpactHandler.h" />
+    <ClInclude Include="internal\ProjectileLogic.h" />
     <ClInclude Include="handlers\OnSprayDecalHandler.h" />
     <ClInclude Include="handlers\OnWoundSprayHandler.h" />
     <ClInclude Include="handlers\OnVATSStateHandler.h" />

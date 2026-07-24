@@ -32,6 +32,7 @@
 #include "commands/HavokCommands.h"
 #include "commands/WorldspaceOffsetCommands.h"
 #include "commands/DetectionSoundCommands.h"
+#include "commands/AlertCommands.h"
 #include "commands/BarterCommands.h"
 #include "commands/CenterOnCellAltCommand.h"
 #include "commands/StartNewGameCommand.h"
@@ -227,15 +228,19 @@ void RegisterAllCommands(void* nvsePtr)
 	nvse->SetOpcodeBase(0x40BE);
 	StartNewGameCommand::RegisterCommands(nvse); //StartNewGame
 
-	nvse->SetOpcodeBase(0x410F);
+	//0x4110+ is externally reserved (Float Prices, CacheUI) per opcodes.txt, these live in the free 0x40C7-0x40FF block
+	nvse->SetOpcodeBase(0x40C7);
 	RadioInjection::RegisterCommands(nvse); //PlayRadioFile, QueueRadioTrack, ClearRadioQueue, SetRadioQueueLoop, GetRadioQueueSize
 
-	nvse->SetOpcodeBase(0x4114);
+	nvse->SetOpcodeBase(0x40CC);
 	NavmeshCommands::RegisterCommands(nvse); //GetPathLength, IsPointOnNavmesh, GetCoverPointsInRadius, GetBestCoverFromThreat
 
-	nvse->SetOpcodeBase(0x4118);
+	nvse->SetOpcodeBase(0x40D0);
 	DialogueTopicCommands::RegisterCommands(nvse); //AddDialogueTopicEntry, SetDialogueTopicEntryAlpha, SetDialogueTopicHidden, SetDialogueTopicOrder, ClearDialogueTopicOverrides
 
-	nvse->SetOpcodeBase(0x411D);
+	nvse->SetOpcodeBase(0x40D5);
 	OnTileValueChangeHandler::RegisterCommands(nvse); //WatchTileValue, UnwatchTileValue
+
+	nvse->SetOpcodeBase(0x40D9);
+	AlertCommands::RegisterCommands(nvse); //SetAlertNS, GetAlertNS
 }

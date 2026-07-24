@@ -14,6 +14,7 @@
 #include "internal/globals.h"
 #include "internal/ScopedLock.h"
 #include "internal/EventDispatch.h"
+#include "internal/RadioInjectionLogic.h"
 
 #define EXTRACT_ARGS paramInfo, scriptData, opcodeOffsetPtr, thisObj, containingObj, scriptObj, eventList
 typedef bool (*ExtractArgs_t)(ParamInfo*, void*, UInt32*, TESObjectREFR*, TESObjectREFR*, Script*, ScriptEventList*, ...);
@@ -102,11 +103,22 @@ typedef void* (__fastcall* GetSoundHandle_t)(void* thisPtr, void* edx, void* han
 static const UInt32 kSites[4] = { 0x833722, 0x833791, 0x8353B1, 0x835454 };
 static Detours::CallDetour s_calls[4];
 
-//fire once per logical advance, not once per speaker in the burst. dispatch only when the
-//used path differs from the last dispatched one or the burst window has expired
-static void DispatchTrackChange(const char* usePath, bool wasInjected)
+//the hook runs inside FalloutRadio::PipboyUpdate/UpdateStation, so events are not
+//dispatched there. captured track changes queue as plain values and Update drains
+//them on the main loop
+struct PendingTrackChange {
+	char path[256];
+	int wasInjected;
+};
+static const int kMaxPendingEvents = 8;
+static PendingTrackChange s_pendingEvents[kMaxPendingEvents];
+static int s_pendingEventCount = 0;
+
+//fire once per logical advance, not once per speaker in the burst. queue only when the
+//used path differs from the last queued one or the burst window has expired
+static void QueueTrackChange(const char* usePath, bool wasInjected)
 {
-	if (!g_eventManagerInterface || !usePath)
+	if (!usePath)
 		return;
 
 	DWORD now = GetTickCount();
@@ -116,14 +128,38 @@ static void DispatchTrackChange(const char* usePath, bool wasInjected)
 
 	strncpy_s(s_lastDispatchedPath, usePath, _TRUNCATE);
 	s_lastDispatchTick = now;
-	g_eventManagerInterface->DispatchEvent(kTrackChangeEvent, nullptr, usePath, (int)(wasInjected ? 1 : 0));
+
+	ScopedLock lock(&s_lock);
+	if (s_pendingEventCount >= kMaxPendingEvents)
+		return;
+	strncpy_s(s_pendingEvents[s_pendingEventCount].path, usePath, _TRUNCATE);
+	s_pendingEvents[s_pendingEventCount].wasInjected = wasInjected ? 1 : 0;
+	s_pendingEventCount++;
+}
+
+void Update()
+{
+	if (!s_pendingEventCount || !g_eventManagerInterface)
+		return;
+
+	PendingTrackChange local[kMaxPendingEvents];
+	int n;
+	{
+		EnsureLockInit();
+		ScopedLock lock(&s_lock);
+		n = s_pendingEventCount;
+		memcpy(local, s_pendingEvents, n * sizeof(PendingTrackChange));
+		s_pendingEventCount = 0;
+	}
+
+	for (int i = 0; i < n; i++)
+		g_eventManagerInterface->DispatchEvent(kTrackChangeEvent, nullptr, local[i].path, local[i].wasInjected);
 }
 
 //worker holds the shared substitution logic; per-site thunks pass their own recorded original
 //so each site chains correctly even if another plugin patched one of the four separately
-//the track-change dispatch can run a handler that pops the queue again, overwriting the shared
-//s_activePath the outer call still holds. guard so a nested call passes through untouched.
-//main thread only, plain bool suffices
+//a reentrant engine call would overwrite the shared s_activePath the outer call still holds,
+//guard so a nested call passes through untouched. main thread only, plain bool suffices
 static bool s_inSubstitute = false;
 
 static void* GetSoundHandleWork(GetSoundHandle_t orig, void* thisPtr, void* edx, void* handleOut, const char* filename, UInt32 flags, void* baseForm)
@@ -132,31 +168,37 @@ static void* GetSoundHandleWork(GetSoundHandle_t orig, void* thisPtr, void* edx,
 		return orig ? orig(thisPtr, edx, handleOut, filename, flags, baseForm) : nullptr;
 
 	const char* usePath = filename;
+	bool wasInjected = false;
 	{
 		ScopedLock lock(&s_lock);
 		DWORD now = GetTickCount();
 		if (s_lastPopTick && (now - s_lastPopTick) < kSameTrackWindowMs && s_activePath[0])
 		{
 			usePath = s_activePath; //same track burst, reuse without popping
+			wasInjected = true;
 		}
 		else if (s_count > 0)
 		{
+			char queuedPath[kPathLen];
 			if (s_loopMode)
-				RotateFront_Unlocked(s_activePath, sizeof(s_activePath));
+				RotateFront_Unlocked(queuedPath, sizeof(queuedPath));
 			else
-				PopFront_Unlocked(s_activePath, sizeof(s_activePath));
-			s_lastPopTick = now;
-			usePath = s_activePath;
+				PopFront_Unlocked(queuedPath, sizeof(queuedPath));
+			if (RadioInjectionLogic::BuildEnginePath(queuedPath, s_activePath, sizeof(s_activePath)))
+			{
+				s_lastPopTick = now;
+				usePath = s_activePath;
+				wasInjected = true;
+			}
 		}
 	}
 
-	bool wasInjected = (usePath != filename);
 	if (wasInjected)
 		Log("RadioInjection: substituting radio track '%s'", usePath);
 
 	s_inSubstitute = true;
-	DispatchTrackChange(usePath, wasInjected);
-	void* ret = orig ? orig(thisPtr, edx, handleOut, usePath, flags, baseForm) : nullptr;
+	QueueTrackChange(usePath, wasInjected);
+	void* ret = orig ? orig(thisPtr, edx, handleOut, usePath, flags, wasInjected ? nullptr : baseForm) : nullptr;
 	s_inSubstitute = false;
 	return ret;
 }
@@ -374,6 +416,15 @@ void RegisterCommands(void* nvse)
 	nvseIntf->RegisterCommand(&kCommandInfo_GetRadioQueueSize);
 }
 
+void BeginTrackAdvance()
+{
+	EnsureLockInit();
+	ScopedLock lock(&s_lock);
+	s_lastPopTick = 0;
+	s_activePath[0] = '\0';
+	s_lastDispatchTick = 0;
+}
+
 void ClearState()
 {
 	EnsureLockInit();
@@ -385,6 +436,7 @@ void ClearState()
 	s_loopMode = false;
 	s_lastDispatchedPath[0] = '\0';
 	s_lastDispatchTick = 0;
+	s_pendingEventCount = 0;
 }
 
 }

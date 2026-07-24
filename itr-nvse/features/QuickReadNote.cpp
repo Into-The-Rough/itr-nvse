@@ -193,6 +193,8 @@ namespace QuickReadNote
 		} else if (noteType == kBGSNoteType_Voice) {
 			CharacterView* character = static_cast<CharacterView*>(Engine::GameHeapAlloc(sizeof(CharacterView)));
 			ThisCall<void>(0x8D1F40, character, false);
+			//form flag 0x4000 marks the scratch character temporary so it never saves,
+			//vanilla MapMenu::DoClick sets it via TESForm::MarkAsTemporary 0x484490
 			character->flags |= 0x00004000;
 			ThisCall<void>(0x575690, character, BGSNoteGetSpeaker(note));
 
@@ -350,6 +352,8 @@ namespace QuickReadNote
 		*currentNotePtr = note;
 		Engine::Tile_SetFloat(foundTile, selectedTrait, 1.0f, true);
 
+		//0xFA5 is a standard tile trait id (0xFA1 block), vanilla note select sets it
+		//to 1 on the data panel tile to reveal the note content pane
 		if (dataPanelTile)
 			Engine::Tile_SetFloat(dataPanelTile, 0xFA5, 1.0f, true);
 
@@ -487,9 +491,14 @@ namespace QuickReadNote
 		"QuickSave", "QuickLoad", "Grab"
 	};
 
+	//note being added by the current PlayerCharacter::AddNote call, captured by the naked
+	//thunk so the append only fires for the note that set g_pendingNote, not a stale one
+	//reaching the QueueUIMessage site via the already-owned path
+	static BGSNote* s_addNoteArg = nullptr;
+
 	char __cdecl OnQueueUIMessageHook(char* msg, UInt32 emotion, char* imagePath,
 		char* soundName, float time, char instantEnd) {
-		if (msg && g_pendingNote) {
+		if (msg && g_pendingNote && g_pendingNote == s_addNoteArg) {
 			const char* controlName = (g_controlID >= 0 && g_controlID <= 27) ? kControlNames[g_controlID] : "Key";
 			const char* action = (g_pendingNoteType == 0 || g_pendingNoteType == 3) ? "listen" : "view";
 			snprintf(s_modifiedMessage, sizeof(s_modifiedMessage), "%s. Press %s to %s.", msg, controlName, action);
@@ -498,6 +507,14 @@ namespace QuickReadNote
 		typedef char(__cdecl* QueueUIMessageFn)(char*, UInt32, char*, char*, float, char);
 		auto original = reinterpret_cast<QueueUIMessageFn>(s_queueUIMessageCall.GetOverwrittenAddr());
 		return original ? original(msg, emotion, imagePath, soundName, time, instantEnd) : 0;
+	}
+
+	__declspec(naked) void OnQueueUIMessageNakedHook() {
+		__asm {
+			mov eax, [ebp + 8] //BGSNote* arg_0 of AddNote, the 0x966B53 site shares its frame
+			mov s_addNoteArg, eax
+			jmp OnQueueUIMessageHook
+		}
 	}
 
 	class OSInputGlobals {
@@ -514,7 +531,7 @@ namespace QuickReadNote
 		g_maxLines = maxLines;
 
 		s_noteAddedCall.WriteRelCall(0x966B0A, OnNoteAddedHook);
-		s_queueUIMessageCall.WriteRelCall(0x966B53, OnQueueUIMessageHook);
+		s_queueUIMessageCall.WriteRelCall(0x966B53, OnQueueUIMessageNakedHook);
 
 		if (MessageBoxQuickClose::IsInstalled()) {
 			MessageBoxQuickClose::SetHandleClickObserver(OnMessageMenuHandleClick);
@@ -558,5 +575,18 @@ namespace QuickReadNote
 		g_timeoutMs = timeoutMs;
 		g_controlID = controlID;
 		g_maxLines = maxLines;
+	}
+
+	void ClearState() {
+		g_pendingNote = nullptr;
+		g_pendingNoteType = 0;
+		g_noteAddedTime = 0;
+		g_controlWasPressed = false;
+		g_noteWasTruncated = false;
+		g_truncatedNote = nullptr;
+		g_noteToSelect = nullptr;
+		g_openPipBoyPending = false;
+		g_switchToMiscPending = false;
+		s_addNoteArg = nullptr;
 	}
 }

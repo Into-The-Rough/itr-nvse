@@ -17,7 +17,7 @@ void InitEventManager(void* nvseInterface)
 }
 
 static constexpr int kProbePriority = -9999;
-static constexpr UInt32 kProbeRefreshFrames = 30;
+static constexpr LONG kProbeRefreshFrames = 30;
 
 bool ListenerProbe::Install()
 {
@@ -27,15 +27,15 @@ bool ListenerProbe::Install()
 		g_pluginHandle == kPluginHandle_Invalid)
 	{
 		installed = false;
-		hasListeners = true;
+		InterlockedExchange(&hasListeners, TRUE);
 		return false;
 	}
 
 	g_eventManagerInterface->RemoveNativeEventHandlerWithPriority(eventName, handler, kProbePriority);
 	installed = g_eventManagerInterface->SetNativeEventHandlerWithPriority(
 		eventName, handler, g_pluginHandle, handlerName, kProbePriority);
-	refreshCounter = kProbeRefreshFrames;
-	hasListeners = true;
+	InterlockedExchange(&refreshCounter, kProbeRefreshFrames);
+	InterlockedExchange(&hasListeners, TRUE);
 	return installed;
 }
 
@@ -45,18 +45,20 @@ bool ListenerProbe::Refresh(bool force)
 		Install();
 
 	if (!installed || !g_eventManagerInterface || !g_eventManagerInterface->IsEventHandlerFirst) {
-		hasListeners = true;
+		InterlockedExchange(&hasListeners, TRUE);
 		return true;
 	}
 
-	if (!force && refreshCounter++ < kProbeRefreshFrames)
-		return hasListeners;
+	//increment returns the new value, <= keeps the old-value-vs-budget cadence
+	if (!force && InterlockedIncrement(&refreshCounter) <= kProbeRefreshFrames)
+		return hasListeners != 0;
 
-	refreshCounter = 0;
-	hasListeners = !g_eventManagerInterface->IsEventHandlerFirst(
+	InterlockedExchange(&refreshCounter, 0);
+	LONG listeners = g_eventManagerInterface->IsEventHandlerFirst(
 		eventName, handler, kProbePriority,
-		nullptr, 0, nullptr, 0, nullptr, 0);
-	return hasListeners;
+		nullptr, 0, nullptr, 0, nullptr, 0) ? FALSE : TRUE;
+	InterlockedExchange(&hasListeners, listeners);
+	return listeners != 0;
 }
 
 bool DispatchConsoleCommand(const char* commandName, const char* fullCommand, TESObjectREFR* calleeRef)

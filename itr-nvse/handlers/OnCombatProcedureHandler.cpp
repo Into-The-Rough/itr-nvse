@@ -154,6 +154,15 @@ void Update()
                 actor, (int)evt.procType, evt.isActionProcedure ? 1 : 0);
     }
 }
+
+//events queued on the AI thread just before a load would otherwise survive into
+//the next save, wired into both load blocks
+void ClearState()
+{
+    if (OnCombatProcedureHandler::g_stateLockInit != 2) return;
+    ScopedLock lock(&OnCombatProcedureHandler::g_stateLock);
+    OnCombatProcedureHandler::g_pendingEvents.clear();
+}
 }
 
 static int __fastcall Hook_SetActionProcedure(void* combatController, void*, void* procedure)

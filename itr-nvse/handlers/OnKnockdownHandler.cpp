@@ -84,14 +84,15 @@ static ProcessStateEntry* FindCacheEntry(void* process)
 }
 
 //when full, replaces the stalest entry rather than dropping the new actor
-static ProcessStateEntry* AllocCacheEntry(void* process)
+static ProcessStateEntry* AllocCacheEntry(void* process, bool* evicted)
 {
+	*evicted = false;
 	ProcessStateEntry* stalest = nullptr;
 	for (ProcessStateEntry& e : s_stateCache) {
 		if (!e.process) { e.process = process; return &e; }
 		if (!stalest || e.lastTouchFrame < stalest->lastTouchFrame) stalest = &e;
 	}
-	if (stalest) stalest->process = process;
+	if (stalest) { stalest->process = process; *evicted = true; }
 	return stalest;
 }
 
@@ -118,10 +119,20 @@ static void ObserveTransition(void* process, TESObjectREFR* actor, SInt8 before,
 
 	SInt8 prev;
 	bool fresh = false;
+	bool continuing = false;
 	{
 		ScopedLock lock(&OnKnockdownHandler::g_stateLock);
 		ProcessStateEntry* entry = FindCacheEntry(process);
-		if (!entry) { entry = AllocCacheEntry(process); fresh = true; }
+		if (!entry) {
+			bool evicted = false;
+			entry = AllocCacheEntry(process, &evicted);
+			fresh = true;
+			//a full-cache eviction can throw out a still-ragdolled actor, whose next tick
+			//re-creates it as fresh at a ragdoll state and would re-fire the knockdown.
+			//first sight already mid-ragdoll on a reused slot counts as continuing
+			continuing = evicted &&
+				(before == kState_RagdollImpulse || before == kState_Paralysis || before == kState_RagdollHavok);
+		}
 		else if (entry->actorRefID != actorRefID) fresh = true; //process address recycled for a new actor
 		if (entry) {
 			if (fresh) entry->actorRefID = actorRefID;
@@ -135,7 +146,7 @@ static void ObserveTransition(void* process, TESObjectREFR* actor, SInt8 before,
 
 	//force knockdown: PushActorAway writes state 2 outside the FSM. upright actors aren't cached,
 	//so a fresh entry at state 2 is a new knockdown (prev seeds to before and would mask it)
-	if (before == kState_RagdollImpulse && (fresh || prev != kState_RagdollImpulse)) {
+	if (before == kState_RagdollImpulse && !continuing && (fresh || prev != kState_RagdollImpulse)) {
 		if (s_probeKnockdown.hasListeners) QueueEvent(actorRefID, false, kCauseForce);
 	}
 

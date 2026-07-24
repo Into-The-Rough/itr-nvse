@@ -368,6 +368,8 @@ bool Cmd_GetCoverPointsInRadius_Execute(COMMAND_ARGS)
 	GatherCoverAround(query, radius, points, count);
 
 	NVSEArrayVarInterface::Array* arr = g_arrInterface->CreateArray(nullptr, 0, scriptObj);
+	if (!arr)
+		return true;
 	for (UInt32 i = 0; i < count; ++i)
 	{
 		NVSEArrayVarInterface::Array* sub = g_arrInterface->CreateArray(nullptr, 0, scriptObj);
@@ -423,6 +425,8 @@ bool Cmd_GetBestCoverFromThreat_Execute(COMMAND_ARGS)
 	}
 
 	NVSEArrayVarInterface::Array* arr = g_arrInterface->CreateArray(nullptr, 0, scriptObj);
+	if (!arr)
+		return true;
 	for (UInt32 i = 0; i < bestCount; ++i)
 	{
 		NVSEArrayVarInterface::Array* sub = g_arrInterface->CreateArray(nullptr, 0, scriptObj);

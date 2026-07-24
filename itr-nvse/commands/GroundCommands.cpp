@@ -118,7 +118,8 @@ bool Cmd_MoveToTerrain_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 	float distance = 0;
-	ExtractArgs(EXTRACT_ARGS, &distance);
+	if (!ExtractArgs(EXTRACT_ARGS, &distance))
+		return true;
 
 	if (!thisObj) return true;
 
@@ -150,7 +151,8 @@ bool Cmd_MoveToGround_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 	float distance = 0;
-	ExtractArgs(EXTRACT_ARGS, &distance);
+	if (!ExtractArgs(EXTRACT_ARGS, &distance))
+		return true;
 
 	if (!thisObj) return true;
 

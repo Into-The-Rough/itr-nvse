@@ -50,12 +50,10 @@ namespace AltTabMute
 
 	void Update()
 	{
-		static UInt32 s_findAttempts = 0;
 		if (!g_gameWindow)
 		{
-			if (s_findAttempts >= 600) return; //title never matched, stop scanning every frame
-			++s_findAttempts;
-			g_gameWindow = FindWindowA(nullptr, "Fallout: New Vegas");
+			//engine-owned hwnd from OSGlobals, set once at startup and never changes
+			g_gameWindow = (HWND)OSGlobalsGetWindow(*g_osGlobalsPtr);
 			if (!g_gameWindow) return;
 		}
 

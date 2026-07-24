@@ -90,11 +90,6 @@ namespace VATSSpeechFix
 		0x16, 0x8D, 0x3D, 0x00, 0x83, 0xC4, 0x08
 	};
 
-	static constexpr UInt8 kStewieTimescalePatch[] = {
-		0xD9, 0xE1, 0x66, 0x66, 0x66, 0x66, 0x0F,
-		0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00
-	};
-
 	enum class TimescalePatchOwner {
 		Vanilla,
 		Stewie,
@@ -119,7 +114,10 @@ namespace VATSSpeechFix
 			cmp g_enabled, 0
 			je skip_to_original
 
-			test dword ptr [esi+kBSGameSoundSoundFlagsOffset], kVatsSpeechIgnoreTimescaleFlag
+			push eax                               //eax is the only reg we touch to read the sound this-ptr
+			mov eax, [ebp-0x144]                    //BSWin32GameSound this, sub_AED990 stores ecx here at 0xAED999
+			test dword ptr [eax+kBSGameSoundSoundFlagsOffset], kVatsSpeechIgnoreTimescaleFlag
+			pop eax                                 //pop preserves ZF from the test
 			jnz skip_timescale
 
 		skip_to_original:

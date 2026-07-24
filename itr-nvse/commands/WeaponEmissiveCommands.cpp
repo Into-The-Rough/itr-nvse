@@ -115,6 +115,7 @@ namespace
 
 		if (IsGeometry(node))
 		{
+			if (!NiGeometryGetMaterialProperty(node)) return true;   //cache skips material-less geometry, keep the index aligned
 			if (idx >= s_count || s_originals[idx].node != node) return false;
 			idx++;
 			return true;
@@ -141,7 +142,8 @@ namespace
 		if (IsGeometry(node))
 		{
 			auto* matProp = NiGeometryGetMaterialProperty(node);
-			if (matProp && idx < s_count)
+			if (!matProp) return;   //cache skips material-less geometry, keep the index aligned
+			if (idx < s_count)
 			{
 				auto& orig = s_originals[idx];
 				NiMaterialPropertySetEmissive(matProp, orig.r, orig.g, orig.b, orig.mult);
@@ -186,11 +188,30 @@ namespace
 		void* weaponNode = GetObjectByName(root1st, "Weapon");
 		if (!weaponNode) return true;
 
-		//first call: cache originals from live nodes
+		//a weapon switch rebuilds the geometry, a stale cache would tint the new model
+		//with no matching originals to restore, verify and re-cache on mismatch
+		if (s_active)
+		{
+			UInt32 vidx = 0;
+			if (!TraverseVerify(weaponNode, vidx) || vidx != s_count)
+			{
+				s_count = 0;
+				s_active = false;
+			}
+		}
+
 		if (!s_active)
 		{
 			s_count = 0;
-			TraverseCacheOriginals(weaponNode);
+			UInt32 found = TraverseCacheOriginals(weaponNode);
+			if (found != s_count)
+			{
+				//more geometries than the cache holds, tinting untracked geometry would be unrecoverable
+				s_count = 0;
+				if (IsConsoleMode())
+					Console_Print("SetWeaponEmissiveColor >> model has %u geometries, cache cap is 64, refused", found);
+				return true;
+			}
 			s_active = true;
 		}
 
@@ -260,6 +281,23 @@ void RegisterCommands(void* nvsePtr)
 
 void ClearState()
 {
+	//restore the live model before dropping the cache when it still matches
+	if (s_active)
+	{
+		if (void* root1st = GetPlayer1stPersonNode())
+		{
+			if (void* weaponNode = GetObjectByName(root1st, "Weapon"))
+			{
+				UInt32 vidx = 0;
+				if (TraverseVerify(weaponNode, vidx) && vidx == s_count)
+				{
+					UInt32 idx = 0;
+					TraverseRestore(weaponNode, idx);
+				}
+			}
+		}
+	}
+
 	s_count = 0;
 	s_active = false;
 }

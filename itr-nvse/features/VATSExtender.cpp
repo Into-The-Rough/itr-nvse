@@ -141,6 +141,14 @@ namespace VATSExtender
 			original(camera, accumulator);
 	}
 
+	void ClearState()
+	{
+		g_overflowCount = 0;
+		g_lastVanillaCount = 0;
+		g_lastLocationID = 0;
+		g_lastWasInterior = false;
+	}
+
 	void Init()
 	{
 		if (*(UInt8*)0x800DA4 == 0x68)

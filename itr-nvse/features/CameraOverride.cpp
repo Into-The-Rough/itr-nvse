@@ -14,7 +14,8 @@ extern const _ExtractArgs ExtractArgs;
 
 namespace CameraOverride
 {
-	static Mat3 g_rotation;
+	//identity at definition, SetRotation multiplies into this so it must never start zeroed
+	static Mat3 g_rotation = {{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}};
 
 	void SetRotation(bool enable, int axis, float degrees) {
 		if (!enable) {
@@ -26,7 +27,7 @@ namespace CameraOverride
 		float rad = degrees * 0.01745329252f;
 		Mat3 rot;
 		switch (axis) {
-			case 0: g_rotation.Identity(); return;
+			case 0: g_rotation.Identity(); DialogueCameraHandler::ClearExternalRotation(); return;
 			case 1: rot.RotateX(rad); break;
 			case 2: rot.RotateY(rad); break;
 			case 3: rot.RotateZ(rad); break;

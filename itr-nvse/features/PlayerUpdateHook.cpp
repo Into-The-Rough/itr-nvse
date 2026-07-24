@@ -12,7 +12,8 @@
 namespace PlayerUpdateHook
 {
 	constexpr float PI = 3.14159265358979323846f;
-	constexpr uint32_t kAddr_PlayerUpdateCall = 0x940C78;
+	//E8 call to PlayerCharacter::UpdateMenuModeButton(float) inside PlayerCharacter::Update
+	constexpr uint32_t kAddr_UpdateMenuModeButtonCall = 0x940C78;
 
 	enum KeyState { isHeld, isPressed, isDepressed, isChanged };
 
@@ -25,8 +26,8 @@ namespace PlayerUpdateHook
 
 	bool g_quickDropLastPressed = false;
 	bool g_quick180LastPressed = false;
-	static Detours::CallDetour s_playerUpdateCall;
-	typedef void(__thiscall* PlayerUpdate_t)(void*, float);
+	static Detours::CallDetour s_menuModeButtonCall;
+	typedef void(__thiscall* UpdateMenuModeButton_t)(void*, float);
 
 	bool GetControlState(void* input, uint32_t controlCode, KeyState state) {
 		return Engine::OSInputGlobals_GetControlState(input, controlCode, (UInt8)state);
@@ -48,15 +49,15 @@ namespace PlayerUpdateHook
 		while (*rotZ < -PI) *rotZ += 2.0f * PI;
 	}
 
-	void __fastcall PlayerUpdate_Hook(void* player, void* edx, float timeDelta) {
-		auto original = reinterpret_cast<PlayerUpdate_t>(s_playerUpdateCall.GetOverwrittenAddr());
+	void __fastcall UpdateMenuModeButton_Hook(void* player, void* edx, float timeDelta) {
+		auto original = reinterpret_cast<UpdateMenuModeButton_t>(s_menuModeButtonCall.GetOverwrittenAddr());
 		if (original)
 			original(player, timeDelta);
 
 		void* osGlobals = *g_osGlobalsPtr;
 		void* inputGlobals = *g_inputGlobalsPtr;
 
-		if (!osGlobals) {
+		if (!osGlobals || !inputGlobals) {
 			g_quickDropLastPressed = false;
 			g_quick180LastPressed = false;
 			return;
@@ -101,7 +102,7 @@ namespace PlayerUpdateHook
 		g_quick180Enabled = quick180;
 		g_quick180ModifierKey = quick180ModKey;
 		g_quick180ControlID = quick180ControlID;
-		s_playerUpdateCall.WriteRelCall(kAddr_PlayerUpdateCall, PlayerUpdate_Hook);
+		s_menuModeButtonCall.WriteRelCall(kAddr_UpdateMenuModeButtonCall, UpdateMenuModeButton_Hook);
 	}
 
 	void UpdateSettings(int quickDropModKey, int quickDropControlID,

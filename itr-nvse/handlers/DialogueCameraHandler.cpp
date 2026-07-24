@@ -1052,6 +1052,24 @@ void SetEnabled(bool enabled) {
 	}
 }
 
+//load teardown, drop state without touching engine objects so the first
+//post-load Update neither forces first person nor applies stale overrides
+void ClearState() {
+	g_inDialogue = false;
+	g_cameraActive = false;
+	g_wasFirstPerson = false;
+	g_dialogueTarget = nullptr;
+	g_dialogueTargetID = 0;
+	g_lastTopicInfoID = 0;
+	g_dialogueLineCount = 0;
+	g_hasPrevShot = false;
+	g_transProgress = 1.0f;
+	g_dollyProgress = 0.0f;
+	g_dollyFirstDone = false;
+	CameraHooks::Disable();
+	CameraHooks::ClearExternalRotation();
+}
+
 bool IsEnabled() {
 	return Settings::bDialogueCamera != 0;
 }

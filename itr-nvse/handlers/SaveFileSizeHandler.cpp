@@ -1,5 +1,5 @@
 #include "SaveFileSizeHandler.h"
-#include "internal/SafeWrite.h"
+#include "internal/NVSEPluginAPI.h"
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
@@ -37,8 +37,11 @@ namespace SaveFileSizeHandler
 			ConstructSavegamePath(*g_saveGameManagerPtr, g_savePath);
 	}
 
+	//0x7D6931 sets the _initialized trait at the end of the one-shot tile setup in
+	//StartMenu::InitializeSaveLoadListItem. the engine's jnz at 0x7D6806 short-circuits
+	//already-initialised tiles, and trait 0x1005 keeps our size-appended string for the
+	//tile's lifetime, so the setup (and this hook) only needs to run once per tile
 	static const UInt32 kAddr_HookSite = 0x7D6931;
-	static const UInt32 kAddr_JnzPatch = 0x7D6806;
 
 	void __cdecl OnSetupTile(void* tile, BGSSaveLoadFileEntry* entry)
 	{
@@ -61,7 +64,7 @@ namespace SaveFileSizeHandler
 		FormatLogic::FormatFileSize(fileSize, sizeStr, sizeof(sizeStr));
 
 		static char newLoc[512];
-		sprintf_s(newLoc, "%s - %s", entry->location, sizeStr);
+		_snprintf_s(newLoc, sizeof(newLoc), _TRUNCATE, "%s - %s", entry->location, sizeStr);
 		Engine::Tile_SetString(tile, kTileValue_user1, newLoc, true);
 	}
 
@@ -97,11 +100,13 @@ namespace SaveFileSizeHandler
 		if (!s_setupTileCall.WriteRelCall(kAddr_HookSite, Hook))
 			return;
 		g_chainTarget = s_setupTileCall.GetOverwrittenAddr();
-		SafeWrite::WriteNop(kAddr_JnzPatch, 6);
 	}
 
-	bool Init()
+	bool Init(void* nvseInterface)
 	{
+		NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
+		if (nvse->isEditor) return false;
+
 		InstallHooks();
 		return true;
 	}
