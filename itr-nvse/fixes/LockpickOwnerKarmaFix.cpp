@@ -8,12 +8,15 @@
 
 namespace LockpickOwnerKarmaFix
 {
+	using GetOwner_t = void* (__thiscall*)(void*);
+
 	static bool g_enabled = false;
 	static Detours::CallDetour s_callDetour;
 
 	static void* __fastcall Hook_GetOwnerForLockpickKarma(void* ref, void*)
 	{
-		void* owner = Engine::TESObjectREFR_GetOwnerRawForm(ref);
+		auto getOwner = reinterpret_cast<GetOwner_t>(s_callDetour.GetOverwrittenAddr());
+		void* owner = getOwner ? getOwner(ref) : Engine::TESObjectREFR_GetOwnerRawForm(ref);
 		if (!g_enabled || !owner)
 			return owner;
 
@@ -26,7 +29,6 @@ namespace LockpickOwnerKarmaFix
 
 	void Init(bool enabled)
 	{
-		//LockPickMenu::Update successful-pick owner check
 		if (!s_callDetour.WriteRelCall(0x78F74D, (UInt32)Hook_GetOwnerForLockpickKarma))
 			return;
 		g_enabled = enabled;
