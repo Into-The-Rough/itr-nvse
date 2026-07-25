@@ -14,6 +14,7 @@
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
 #include <vector>
+#include <unordered_set>
 
 extern void Log(const char* fmt, ...);
 #include <algorithm>
@@ -826,6 +827,14 @@ static const _CreateFormInstance CreateFormInstance = (_CreateFormInstance)0x465
 typedef UInt32 (__thiscall *_DataHandler_DoAddForm)(void*, TESForm*);
 static const _DataHandler_DoAddForm DataHandler_DoAddForm = (_DataHandler_DoAddForm)0x4603B0;
 
+//xNVSE's TESForm::CloneForm is this same sequence plus a TESBoundObject bounds fixup, but it
+//reaches it through DYNAMIC_CAST, which drags the whole RTTI table into the build. NPC_ records
+//carry OBND as zeros, so the fixup would copy zeros onto zeros here
+//
+//0xFF form IDs are recycled per session, so this must be cleared on load or a stale ID can match
+//a foreign form
+static std::unordered_set<UInt32> s_raceCloneIDs;
+
 static ParamInfo kParams_SetRaceAlt[1] = {
 	{ "race", kParamType_Race, 0 },
 };
@@ -866,8 +875,9 @@ bool Cmd_SetRaceAlt_Execute(COMMAND_ARGS)
 	TESRace* newRace = (TESRace*)raceForm;
 	TESNPC* targetNPC = origNPC;
 
-	//if base is already a runtime clone (0xFF prefix), reuse it
-	if ((origNPC->refID >> 24) == 0xFF)
+	//reuse only a clone this command made, a foreign 0xFF base can be shared by other references
+	//and setting race on it would move them too
+	if (s_raceCloneIDs.count(origNPC->refID))
 	{
 		targetNPC = origNPC;
 	}
@@ -888,6 +898,7 @@ bool Cmd_SetRaceAlt_Execute(COMMAND_ARGS)
 			DataHandler_DoAddForm(*g_dataHandlerPtr, cloneForm);
 
 		targetNPC = (TESNPC*)cloneForm;
+		s_raceCloneIDs.insert(cloneForm->refID);
 		//runtime 0xFF clone is not serialised, the swap does not survive save/load,
 		//callers must reapply on load (documented in FEATURES.md)
 		thisObj->baseForm = cloneForm;
@@ -911,6 +922,11 @@ bool Cmd_SetRaceAlt_Execute(COMMAND_ARGS)
 }
 
 namespace ImperativeCommands {
+void ClearState()
+{
+	s_raceCloneIDs.clear();
+}
+
 bool Init(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;

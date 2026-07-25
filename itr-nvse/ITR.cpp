@@ -531,6 +531,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			ForceCombatTargetCommands::ClearState();
 			GroundCommands::ClearState();
 			WeaponEmissiveCommands::ClearState();
+			ImperativeCommands::ClearState();
 			ExteriorDoorCommands::ClearCache();
 			GestureCommand::Reset();
 			ToggleAllPrimitives::Reset();
@@ -555,6 +556,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				LoopingSoundLoadFix::OnPostLoadGame();
 			WeaponEmissiveCommands::ClearState();
 			GroundCommands::ClearState();
+			ImperativeCommands::ClearState();
 			HavokCommands::ClearState();
 			GestureCommand::Reset();
 			StuckCombatStateFix::ClearState();
