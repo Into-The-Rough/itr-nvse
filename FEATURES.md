@@ -243,3 +243,4 @@ Supported keys:
 | Section | Key | Effect |
 |---------|-----|--------|
 | CornerMessage | bSuppressSound | Strip sound from vanilla ShowNotify, let event handler play it at display time |
+| Tweaks | bVATSLimbFix | Force VATS limb hiding on for dismemberment integrations |

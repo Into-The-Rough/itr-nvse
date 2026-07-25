@@ -124,6 +124,39 @@ namespace Settings
 		return GetPrivateProfileIntA(section, key, defaultValue, iniPath);
 	}
 
+	inline bool IntegrationEnables(const char* section, const char* key)
+	{
+		char dirPath[MAX_PATH];
+		DWORD len = GetModuleFileNameA(nullptr, dirPath, MAX_PATH);
+		if (!len || len >= MAX_PATH) return false;
+		char* slash = strrchr(dirPath, '\\');
+		if (!slash) return false;
+		strcpy_s(slash + 1, MAX_PATH - (slash + 1 - dirPath), "Data\\config\\itr\\");
+
+		char searchPath[MAX_PATH];
+		strcpy_s(searchPath, dirPath);
+		strcat_s(searchPath, "*.ini");
+
+		WIN32_FIND_DATAA fd;
+		HANDLE find = FindFirstFileA(searchPath, &fd);
+		if (find == INVALID_HANDLE_VALUE) return false;
+
+		bool enabled = false;
+		do {
+			if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+			char path[MAX_PATH];
+			strcpy_s(path, dirPath);
+			strcat_s(path, fd.cFileName);
+			if (GetPrivateProfileIntA(section, key, 0, path)) {
+				enabled = true;
+				break;
+			}
+		} while (FindNextFileA(find, &fd));
+
+		FindClose(find);
+		return enabled;
+	}
+
 	inline void Load()
 	{
 		GetModuleFileNameA(nullptr, iniPath, MAX_PATH);
@@ -168,6 +201,8 @@ namespace Settings
 		iShakeAmplitude = GetINIInt("DialogueCamera", "iShakeAmplitude", 3);
 		bVATSProjectileFix = GetINIInt("Tweaks", "bVATSProjectileFix", 1);
 		bVATSLimbFix = GetINIInt("Tweaks", "bVATSLimbFix", 0);
+		if (IntegrationEnables("Tweaks", "bVATSLimbFix"))
+			bVATSLimbFix = 1;
 		bOwnedBeds = GetINIInt("Tweaks", "bOwnedBeds", 0);
 		bAshPileNames = GetINIInt("Tweaks", "bAshPileNames", 0);
 		bLocationVisitPopup = GetINIInt("Tweaks", "bLocationVisitPopup", 0);
