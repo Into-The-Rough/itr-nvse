@@ -5,7 +5,7 @@
 #include "nvse/ParamInfos.h"
 #include "FallDamageHandler.h"
 #include "internal/FallDamageLogic.h"
-#include "internal/SafeWrite.h"
+#include "internal/Detours.h"
 #include "internal/ScopedLock.h"
 #include <unordered_map>
 
@@ -27,7 +27,12 @@ static float __cdecl GetFallDamageMultForActor(UInt32 refID)
 namespace FallDamageHook
 {
 	static const UInt32 kHookAddr = 0x8A63EC;
-	static const UInt32 kRetnAddr = 0x8A63F5;
+	//fld [ebp-0x28] / fcomp qword ds:[0x1012060], the compare that gates applying the damage.
+	//stewie's bPowerArmorScalesFallDamage takes the same bytes, so chain rather than assume vanilla
+	static const UInt8 kVanillaBytes[9] = { 0xD9, 0x45, 0xD8, 0xDC, 0x1D, 0x60, 0x20, 0x01, 0x01 };
+
+	static Detours::JumpDetour s_detour;
+	static UInt8* s_trampoline = nullptr;
 
 	__declspec(naked) void Hook()
 	{
@@ -53,19 +58,23 @@ namespace FallDamageHook
 			pop edx
 			pop ecx
 
-			fmul dword ptr [ebp-0x28]           //replay stolen bytes: scale the damage float
+			fmul dword ptr [ebp-0x28]           //st(0) holds the multiplier, scale the damage float
 			fstp dword ptr [ebp-0x28]
 
-			fld dword ptr [ebp-0x28]
-			fcomp qword ptr ds:[0x01012060]     //hardcoded kFallDamageThreshold double literal
-			jmp kRetnAddr                       //resume past the 9-byte stolen region
+			//trampoline replays the compare and returns to 0x8A63F5, or enters the previous owner
+			//which scales the same float again and replays it there
+			jmp s_trampoline
 		}
 	}
 
-	void Init()
+	void Install()
 	{
-		SafeWrite::WriteRelJump(kHookAddr, (UInt32)Hook);
-		SafeWrite::WriteNop(kHookAddr + 5, 4);
+		const bool chained = *(UInt8*)kHookAddr == 0xE9;
+		if (!chained && memcmp((void*)kHookAddr, kVanillaBytes, sizeof(kVanillaBytes)) != 0)
+			return;
+		//5 bytes when chaining so the trampoline re-emits the foreign jump, 9 when vanilla so it
+		//replays the whole compare
+		s_detour.WriteRelJumpChainable(kHookAddr, (UInt32)Hook, chained ? 5 : 9, &s_trampoline);
 	}
 }
 
@@ -183,10 +192,11 @@ bool Cmd_ClearFallDamageMult_Execute(COMMAND_ARGS)
 }
 
 namespace FallDamageHandler {
-bool Init(void* nvse)
+//called at PostPostLoad so a plugin that took 0x8A63EC during its own load is already visible
+//and can be chained
+void InstallHook()
 {
-	FallDamageHook::Init();
-	return true;
+	FallDamageHook::Install();
 }
 
 bool HasOverride(Actor* actor)

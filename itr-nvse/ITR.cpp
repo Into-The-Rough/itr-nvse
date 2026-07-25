@@ -484,6 +484,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 		case NVSEMessagingInterface::kMessage_PostPostLoad:
 			ItemModFlagSafety::InitJIPModFlagGate(); //after JIP's PostLoad installs GetEntryDataModFlagsHook
+			FallDamageHandler::InstallHook(); //after Stewie's bPowerArmorScalesFallDamage claims 0x8A63EC
 			DialogueCameraHandler::InstallCameraHooks(); //always install - hooks check bDialogueCamera at runtime
 			InitVATSSpeechFix();
 			AshPileNames::Init();
@@ -756,7 +757,6 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	logInit("OnSoundPlayedHandler", OnSoundPlayedHandler::Init((void*)nvse));
 	logInit("OnJumpLandHandler", OnJumpLandHandler::Init((void*)nvse));
 	logInit("OnContactHandler", OnContactHandler::Init((void*)nvse));
-	logInit("FallDamageHandler", FallDamageHandler::Init((void*)nvse));
 	if (Settings::bDialogueCamera)
 		logInit("DialogueCameraHandler", DialogueCameraHandler::Init((void*)nvse));
 	logInit("FakeHitHandler", FakeHitHandler::Init((void*)nvse));
