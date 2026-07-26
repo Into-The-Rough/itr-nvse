@@ -22,7 +22,6 @@ constexpr char kEventSelected[] = "ITR:OnDialogueTopicSelected";
 constexpr UInt32 kSyntheticFlag = 0x40000000; //trait 4012 discriminator, out of sub_83E430 index range
 constexpr int kTrait_ListIndex = 4012;
 
-constexpr UInt32 kAddr_LoadTopicsList = 0x7638B0; //DialogMenu::LoadTopicsList, __thiscall(this)
 constexpr UInt32 kAddr_TopicClick     = 0x7624F0; //DialogMenu topic click handler
 
 //0xA011B0 Tile::GetFloatTraitValue: __thiscall, ecx=tile, stack=traitID, returns float value as double
@@ -32,9 +31,8 @@ static const GetFloatTrait_t TileGetFloatTrait = (GetFloatTrait_t)0xA011B0;
 typedef void(__thiscall* LoadTopicsList_t)(void* dialogMenu);
 typedef unsigned int(__fastcall* TopicClick_t)(void* dialogMenu, void* edx, int a3, void* tile);
 
-static Detours::JumpDetour s_buildDetour;
+static Detours::CallDetour s_buildDetour;
 static Detours::JumpDetour s_clickDetour;
-static LoadTopicsList_t s_origLoadTopics = nullptr;
 static TopicClick_t s_origTopicClick = nullptr;
 
 struct SyntheticEntry { void* tile; UInt32 id; };
@@ -363,9 +361,11 @@ static void __fastcall Hook_LoadTopicsList(void* dialogMenu, void* /*edx*/)
 {
 	TopicTransaction tx;
 	tx.applied = false;
+	tx.hiddenCount = 0;
 	if (dialogMenu) ApplyTopicRules(dialogMenu, tx);
 
-	if (s_origLoadTopics) s_origLoadTopics(dialogMenu);
+	LoadTopicsList_t orig = (LoadTopicsList_t)s_buildDetour.GetOverwrittenAddr();
+	if (orig) orig(dialogMenu);
 
 	if (dialogMenu) AppendHiddenRows(dialogMenu, tx);
 
@@ -439,13 +439,10 @@ bool Init(void* nvseInterface)
 
 	int installed = 0;
 
-	if (s_buildDetour.WriteRelJump(kAddr_LoadTopicsList, (UInt32)Hook_LoadTopicsList, 9))
-	{
-		s_origLoadTopics = s_buildDetour.GetTrampoline<LoadTopicsList_t>();
-		if (s_origLoadTopics) installed++;
-		else { Log("OnDialogueMenuBuildHandler: LoadTopicsList trampoline missing"); s_buildDetour.Remove(); }
-	}
-	else Log("OnDialogueMenuBuildHandler: failed to hook LoadTopicsList");
+	if (s_buildDetour.WriteRelCall(0x76385E, (UInt32)Hook_LoadTopicsList))
+		installed++;
+	else
+		Log("OnDialogueMenuBuildHandler: LoadTopicsList call site not hookable");
 
 	if (s_clickDetour.WriteRelJump(kAddr_TopicClick, (UInt32)Hook_TopicClick, 6))
 	{
