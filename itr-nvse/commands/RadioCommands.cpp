@@ -181,13 +181,18 @@ static VoiceEntry* GetCurrentVoiceEntry()
 	return (node && node->item) ? node->item : nullptr;
 }
 
+static bool IsPipboyRadioActive()
+{
+	return IsRadioEnabled() && GetCurrentRadio();
+}
+
 //get playing track path - pipboy radio or world radio
 static const char* GetPlayingTrackPath()
 {
 	char* currentSong = GetCurrentRadioSong();
 
 	//pipboy radio song
-	if (currentSong[0])
+	if (IsPipboyRadioActive() && currentSong[0])
 		return currentSong;
 
 	//world/dynamic radios
@@ -560,16 +565,16 @@ bool Cmd_IsRadioPlaying_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 
-	if (GetCurrentRadioSong()[0])
+	if (IsPipboyRadioActive())
 	{
-		*result = 1;
-		return true;
-	}
+		if (GetCurrentRadioSong()[0])
+		{
+			*result = 1;
+			return true;
+		}
 
-	if (IsRadioEnabled())
-	{
 		auto* radio = static_cast<RadioEntry*>(GetCurrentRadio());
-		if (radio && radio->data.soundTimeRemaining)
+		if (radio->data.soundTimeRemaining)
 		{
 			*result = 1;
 			return true;
