@@ -2,7 +2,7 @@
 //loaded, in combat and high-processed, so actors that die or unload outside that window stay
 //grouped and keep the player flagged in combat. the engine's own prune (0x98EB30) is wired
 //only to savegame load, so run it on combat-state change, stop combat for actors demoted out
-//of high process, and reconcile the bIsDetected flag
+//of the combat-capable levels into middle-low, and reconcile the bIsDetected flag
 
 #include "StuckCombatStateFix.h"
 #include "internal/NVSEPluginAPI.h"
@@ -17,7 +17,7 @@
 namespace StuckCombatStateFix
 {
 	static Detours::JumpDetour s_stopCombatDetour;
-	static Detours::CallDetour s_demoteDetours[3];
+	static Detours::CallDetour s_demoteDetour;
 	static UInt8* s_stopCombatOrig = nullptr;
 
 	static bool s_dirty = false;
@@ -26,9 +26,8 @@ namespace StuckCombatStateFix
 
 	constexpr UInt32 kCombatManagerPtr = 0x11F1958;
 	constexpr UInt32 kGroupMemberCount = 0x990890;
-	//E8 sites calling ProcessLists::RemoveActorFromDetectionLists (0x973CB0) in the three
-	//high->low demotion virtuals 0x882B90/0x883240/0x883800
-	constexpr UInt32 kDemoteSites[3] = { 0x882E7B, 0x883468, 0x883C3A };
+	//0 high, 1 middle-high, 2 middle-low, 3 low
+	constexpr UInt32 kProcessLevelMiddleLow = 2;
 
 	static bool ActorInCombat(Actor* apActor)
 	{
@@ -48,6 +47,11 @@ namespace StuckCombatStateFix
 	{
 		if (!apActor || !ActorInCombat(apActor))
 			return;
+		//MovetoMiddleLow installs the new process after this call site, so baseProcess is still
+		//the level being left - only a drop from a combat-capable level is a demotion
+		BaseProcess* process = apActor->baseProcess;
+		if (!process || process->processLevel >= kProcessLevelMiddleLow)
+			return;
 		UInt32 refID = ((TESForm*)apActor)->refID;
 		for (UInt32 i = 0; i < s_demotedCount; i++)
 			if (s_demotedRefIDs[i] == refID)
@@ -60,10 +64,9 @@ namespace StuckCombatStateFix
 		s_demotedRefIDs[s_demotedCount++] = refID;
 	}
 
-	template <int Index>
 	static void __fastcall Hook_Demote(void* apProcessLists, void*, Actor* apActor)
 	{
-		ThisCall<void>(s_demoteDetours[Index].GetOverwrittenAddr(), apProcessLists, apActor);
+		ThisCall<void>(s_demoteDetour.GetOverwrittenAddr(), apProcessLists, apActor);
 		QueueDemoted(apActor);
 	}
 
@@ -120,7 +123,10 @@ namespace StuckCombatStateFix
 			Actor* actor = (Actor*)form;
 			if (!ActorInCombat(actor))
 				continue;
-			//mirrors the teammate-gated StopCombat in MiddleLowProcess::Update 0x90ADAA
+			//an actor that reached low process was spared by the engine's own exclusion, leave it
+			BaseProcess* process = actor->baseProcess;
+			if (!process || process->processLevel != kProcessLevelMiddleLow)
+				continue;
 			Log("StuckCombatStateFix: stopping combat for demoted actor %08X", form->refID);
 			//through the vtable so other plugins' StopCombat hooks chain
 			void** vtbl = *(void***)actor;
@@ -158,12 +164,11 @@ namespace StuckCombatStateFix
 			Log("StuckCombatStateFix: StopCombat prologue already patched, fix disabled");
 			return;
 		}
-		if (!s_demoteDetours[0].WriteRelCall(kDemoteSites[0], Hook_Demote<0>))
-			Log("StuckCombatStateFix: demote site %08X not hookable", kDemoteSites[0]);
-		if (!s_demoteDetours[1].WriteRelCall(kDemoteSites[1], Hook_Demote<1>))
-			Log("StuckCombatStateFix: demote site %08X not hookable", kDemoteSites[1]);
-		if (!s_demoteDetours[2].WriteRelCall(kDemoteSites[2], Hook_Demote<2>))
-			Log("StuckCombatStateFix: demote site %08X not hookable", kDemoteSites[2]);
-		Log("StuckCombatStateFix: installed");
+		//E8 site calling ProcessLists::RemoveActorFromDetectionLists (0x973CB0) on the tail of
+		//Actor::MovetoMiddleLow 0x883240
+		if (s_demoteDetour.WriteRelCall(0x883468, Hook_Demote))
+			Log("StuckCombatStateFix: installed");
+		else
+			Log("StuckCombatStateFix: demote site not hookable, group prune and detection reconcile only");
 	}
 }
