@@ -6,6 +6,7 @@
 
 class BGSNote;
 class TESObjectREFR;
+class TESTopic;
 class TESTopicInfo;
 
 struct TESFormIDView {
@@ -159,6 +160,21 @@ struct DialogMenuView {
 struct MenuTopicView {
 	UInt8 pad00[0x18];
 	TESTopicInfo* topicInfo;
+	TESTopic* topic;
+};
+
+//8 byte tList node, data is a MenuTopic. iteration ends at the first null data, and a null-data node
+//with a live next faults the chain free sub_83E2D0, which stops only on next and data both null
+struct MenuTopicNodeView {
+	void* menuTopic;
+	MenuTopicNodeView* next;
+};
+
+//24 bytes. +0x04/+0x08 are the data/next of a tList of screens, +0x08 is the older-screens link
+struct MenuTopicManagerView {
+	MenuTopicNodeView* cursor;
+	MenuTopicNodeView* topicList;
+	UInt8 pad08[0x18 - 0x08];
 };
 
 enum BGSNoteType : UInt8 {
@@ -222,6 +238,10 @@ static_assert(offsetof(VATSHighlightDataView, refCount) == 0x0C);
 static_assert(offsetof(DialogMenuView, currentInfo) == 0x48);
 static_assert(offsetof(DialogMenuView, topicManager) == 0x70);
 static_assert(offsetof(MenuTopicView, topicInfo) == 0x18);
+static_assert(offsetof(MenuTopicView, topic) == 0x1C);
+static_assert(sizeof(MenuTopicNodeView) == 0x08);
+static_assert(offsetof(MenuTopicManagerView, topicList) == 0x04);
+static_assert(sizeof(MenuTopicManagerView) == 0x18);
 
 inline BGSNoteView* BGSNoteAsView(BGSNote* note)
 {
@@ -428,4 +448,26 @@ inline void* DialogMenuGetCurrentInfo(void* dialogMenu)
 inline TESTopicInfo* MenuTopicGetTopicInfo(void* menuTopic)
 {
 	return menuTopic ? reinterpret_cast<MenuTopicView*>(menuTopic)->topicInfo : nullptr;
+}
+
+inline TESTopic* MenuTopicGetTopic(void* menuTopic)
+{
+	return menuTopic ? reinterpret_cast<MenuTopicView*>(menuTopic)->topic : nullptr;
+}
+
+//node 0 carries the greeting, both engine consumers skip exactly one node
+inline MenuTopicNodeView* MenuTopicManagerGetTopicList(void* menuTopicMgr)
+{
+	return menuTopicMgr ? reinterpret_cast<MenuTopicManagerView*>(menuTopicMgr)->topicList : nullptr;
+}
+
+//topic ListBox at DialogMenu+0x40, item count is a UInt16 and the two bytes above it are never written
+inline UInt32 DialogMenuGetTopicRowCount(void* dialogMenu)
+{
+	return dialogMenu ? *(UInt16*)((char*)dialogMenu + 0x40 + 0x1C) : 0;
+}
+
+inline UInt32 FormViewGetRefID(const void* form)
+{
+	return form ? reinterpret_cast<const TESFormIDView*>(form)->refID : 0;
 }

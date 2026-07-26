@@ -19,6 +19,7 @@ extern NVSEArrayVarInterface* g_arrInterface;
 #include "internal/GameSDK.h"
 
 #include "internal/MenuLayout.h"
+#include "handlers/OnDialogueMenuBuildHandler.h"
 
 constexpr UInt8 kFormType_TopicInfo = 0x46;
 
@@ -101,22 +102,24 @@ bool Cmd_GetDisplayedDialogueInfos_Execute(COMMAND_ARGS)
 	if (!arr)
 		return true;
 
-	//FirstTopic/NextTopic return bool, not pointer
-	bool hasTopic = ThisCall<bool>(0x83E370, menuTopicMgr, true);
+	//hidden rows stay linked past the rendered run. walking the chain directly leaves the manager
+	//cursor the engine resolves clicks through untouched
+	const UInt32 rowCount = OnDialogueMenuBuildHandler::GetRenderedRowCount();
+	UInt32 walked = 0;
 
-	while (hasTopic)
+	MenuTopicNodeView* head = MenuTopicManagerGetTopicList(menuTopicMgr);
+	for (MenuTopicNodeView* node = head ? head->next : nullptr; node && node->menuTopic; node = node->next)
 	{
-		void* menuTopic = ThisCall<void*>(0x83E4C0, menuTopicMgr);
-		if (menuTopic)
+		if (rowCount != OnDialogueMenuBuildHandler::kRowCountUnknown && walked >= rowCount)
+			break;
+		walked++;
+
+		TESTopicInfo* topicInfo = MenuTopicGetTopicInfo(node->menuTopic);
+		if (topicInfo)
 		{
-			TESTopicInfo* topicInfo = MenuTopicGetTopicInfo(menuTopic);
-			if (topicInfo)
-			{
-				NVSEArrayVarInterface::Element elem(topicInfo);
-				g_arrInterface->AppendElement(arr, elem);
-			}
+			NVSEArrayVarInterface::Element elem(topicInfo);
+			g_arrInterface->AppendElement(arr, elem);
 		}
-		hasTopic = ThisCall<bool>(0x83E3E0, menuTopicMgr);
 	}
 
 	g_arrInterface->AssignCommandResult(arr, result);

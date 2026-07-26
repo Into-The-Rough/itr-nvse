@@ -8,6 +8,7 @@
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"
 #include "internal/GameGlobals.h"
+#include "internal/MenuLayout.h"
 #include "internal/ScopedLock.h"
 #include "internal/globals.h"
 
@@ -28,7 +29,7 @@ constexpr UInt32 kAddr_TopicClick     = 0x7624F0; //DialogMenu topic click handl
 typedef double(__thiscall* GetFloatTrait_t)(void* tile, int traitID);
 static const GetFloatTrait_t TileGetFloatTrait = (GetFloatTrait_t)0xA011B0;
 
-typedef int(__thiscall* LoadTopicsList_t)(void* dialogMenu);
+typedef void(__thiscall* LoadTopicsList_t)(void* dialogMenu);
 typedef unsigned int(__fastcall* TopicClick_t)(void* dialogMenu, void* edx, int a3, void* tile);
 
 static Detours::JumpDetour s_buildDetour;
@@ -53,8 +54,7 @@ static void EnsureLock() { InitCriticalSectionOnce(&s_lockInit, &s_lock); }
 //topic hide/order rules, session-persistent, flushed only by ClearRules on game load
 constexpr int kMaxHideRules = 32;
 constexpr int kMaxOrderRules = 32;
-constexpr int kMaxVisibleNodes = 64;
-constexpr int kMaxHiddenNodes = 32;
+constexpr int kMaxTopicRows = 96; //all or nothing, a longer chain is left untouched
 constexpr int kNoOrder = 0x7FFFFFFF; //default sort key, keeps original relative order
 
 struct OrderRule { UInt32 formID; int order; };
@@ -67,21 +67,42 @@ static volatile LONG s_ruleLockInit = 0;
 
 static void EnsureRuleLock() { InitCriticalSectionOnce(&s_ruleLockInit, &s_ruleLock); }
 
-//8-byte tList node, null-terminated. data is MenuTopic*
-struct TopicNode { void* data; TopicNode* next; };
+//the chain as the engine last built it, sub_83EC30 reaches LoadTopicsList on three paths that leave
+//the previous chain in place
+static MenuTopicNodeView* s_vanillaHead = nullptr;
+static MenuTopicNodeView* s_vanillaTerminator = nullptr;
+static MenuTopicNodeView* s_vanillaRows[kMaxTopicRows];
+static void* s_vanillaTopics[kMaxTopicRows];
+static int s_vanillaCount = 0;
 
-//nodes unlinked before the trampoline, relinked onto the tail after it
-static TopicNode* s_hiddenHold[kMaxHiddenNodes];
-static int s_hiddenCount = 0;
+static void ClearVanillaOrder()
+{
+	s_vanillaHead = nullptr;
+	s_vanillaTerminator = nullptr;
+	s_vanillaCount = 0;
+}
+
+static UInt32 s_renderedRowCount = kRowCountUnknown;
+
+UInt32 GetRenderedRowCount() { return s_renderedRowCount; }
+
+//rows held out of the build, lives in the hook's frame so a nested build gets its own
+struct TopicTransaction
+{
+	MenuTopicNodeView* head;         //greeting node, never moved
+	MenuTopicNodeView* lastVisible;  //end of the rendered run, hidden rows go after it
+	MenuTopicNodeView* terminator;
+	MenuTopicNodeView* hidden[kMaxTopicRows];
+	int hiddenCount;
+	bool applied;
+};
 
 //assumes s_ruleLock held
 static bool MenuTopicMatches(void* menuTopic, UInt32 formID)
 {
 	if (!menuTopic || !formID) return false;
-	void* info = *(void**)((char*)menuTopic + 0x18); //TESTopicInfo*
-	void* topic = *(void**)((char*)menuTopic + 0x1C); //TESTopic*
-	UInt32 infoID = info ? *(UInt32*)((char*)info + 0x0C) : 0; //TESForm::refID
-	UInt32 topicID = topic ? *(UInt32*)((char*)topic + 0x0C) : 0;
+	UInt32 infoID = FormViewGetRefID(MenuTopicGetTopicInfo(menuTopic));
+	UInt32 topicID = FormViewGetRefID(MenuTopicGetTopic(menuTopic));
 	return infoID == formID || topicID == formID;
 }
 
@@ -150,81 +171,153 @@ void ClearRules()
 	ScopedLock lock(&s_ruleLock);
 	s_hideCount = 0;
 	s_orderCount = 0;
+	ClearVanillaOrder();
+	s_renderedRowCount = kRowCountUnknown;
 }
 
-//unlink hidden nodes and stable-sort the visible ones by order rule, sentinel untouched
-//returns true when the chain was modified, held-aside nodes stored in s_hiddenHold
-static bool ApplyTopicRules(void* dialogMenu)
+//puts the chain back in engine order, only when the live nodes still match the snapshot exactly.
+//compares pointer values and never dereferences a snapshot entry, so a stale one cannot fault
+static bool RestoreVanillaOrder(MenuTopicNodeView* head)
 {
+	if (s_vanillaCount == 0 || head != s_vanillaHead) return false;
+
+	int seen = 0;
+	MenuTopicNodeView* cur = head->next;
+	for (; cur && cur->menuTopic; cur = cur->next)
+	{
+		if (seen >= s_vanillaCount) return false;
+		bool known = false;
+		for (int i = 0; i < s_vanillaCount; i++)
+		{
+			if (s_vanillaRows[i] == cur && s_vanillaTopics[i] == cur->menuTopic) { known = true; break; }
+		}
+		if (!known) return false;
+		seen++;
+	}
+	if (seen != s_vanillaCount) return false;
+	if (cur != s_vanillaTerminator) return false;
+
+	MenuTopicNodeView* prev = head;
+	for (int i = 0; i < s_vanillaCount; i++) { prev->next = s_vanillaRows[i]; prev = s_vanillaRows[i]; }
+	prev->next = s_vanillaTerminator;
+	return true;
+}
+
+//cut hidden rows out of the chain and stable-sort the rest, LoadTopicsList renders every node it
+//can reach so truncating is what hides a row. the greeting node never moves
+static bool ApplyTopicRules(void* dialogMenu, TopicTransaction& tx)
+{
+	tx.applied = false;
+	tx.hiddenCount = 0;
+
 	EnsureRuleLock();
 	ScopedLock lock(&s_ruleLock);
 
-	s_hiddenCount = 0;
-	if (s_hideCount == 0 && s_orderCount == 0) return false;
+	const bool haveRules = (s_hideCount != 0 || s_orderCount != 0);
+	if (!haveRules && s_vanillaCount == 0) return false;
 
-	void* manager = (char*)dialogMenu + 0x70; //MenuTopicManager
-	TopicNode* sentinel = *(TopicNode**)((char*)manager + 0x4); //head node, greeting bucket
-	if (!sentinel) return false;
-	TopicNode* first = sentinel->next; //never move the sentinel
-	if (!first) return false;
+	//DialogMenu+0x70 holds the manager pointer, the dword above it is the menu's BSSoundHandle
+	void* manager = DialogMenuGetTopicManager(dialogMenu);
+	if (!manager) return false;
 
-	TopicNode* visible[kMaxVisibleNodes];
-	int visCount = 0;
-	for (TopicNode* cur = first; cur; cur = cur->next)
+	MenuTopicNodeView* head = MenuTopicManagerGetTopicList(manager);
+	if (!head || !head->menuTopic) return false;
+
+	RestoreVanillaOrder(head);
+	if (!haveRules)
 	{
-		bool hide = IsMenuTopicHidden(cur->data);
-		if (hide)
+		ClearVanillaOrder();
+		return false;
+	}
+
+	MenuTopicNodeView* visible[kMaxTopicRows];
+	int keys[kMaxTopicRows];
+	int visCount = 0;
+
+	s_vanillaCount = 0;
+	s_vanillaHead = nullptr;
+
+	MenuTopicNodeView* cur = head->next;
+	int total = 0;
+	while (cur && cur->menuTopic)
+	{
+		if (total >= kMaxTopicRows)
 		{
-			if (s_hiddenCount < kMaxHiddenNodes) { s_hiddenHold[s_hiddenCount++] = cur; continue; }
-			Log("ApplyTopicRules: hidden node cap reached, keeping row visible");
-			hide = false;
-		}
-		if (visCount >= kMaxVisibleNodes)
-		{
-			//exceeds sort capacity - leave the chain untouched, unlink nothing
-			s_hiddenCount = 0;
-			Log("ApplyTopicRules: topic list exceeds %d visible rows, skipping reorder", kMaxVisibleNodes);
+			Log("ApplyTopicRules: chain exceeds %d rows, leaving it untouched", kMaxTopicRows);
 			return false;
 		}
-		visible[visCount++] = cur;
+		s_vanillaRows[total] = cur;
+		s_vanillaTopics[total] = cur->menuTopic;
+		total++;
+		if (IsMenuTopicHidden(cur->menuTopic))
+		{
+			tx.hidden[tx.hiddenCount++] = cur;
+		}
+		else
+		{
+			visible[visCount] = cur;
+			keys[visCount] = GetMenuTopicOrder(cur->menuTopic);
+			visCount++;
+		}
+		cur = cur->next;
 	}
+	if (total == 0) return false;
+
+	s_vanillaHead = head;
+	s_vanillaTerminator = cur;
+	s_vanillaCount = total;
 
 	//stable insertion sort ascending by order, ties keep original sequence
 	for (int i = 1; i < visCount; i++)
 	{
-		TopicNode* key = visible[i];
-		int keyOrder = GetMenuTopicOrder(key->data);
+		MenuTopicNodeView* node = visible[i];
+		int key = keys[i];
 		int j = i - 1;
-		while (j >= 0 && GetMenuTopicOrder(visible[j]->data) > keyOrder)
+		while (j >= 0 && keys[j] > key)
 		{
 			visible[j + 1] = visible[j];
+			keys[j + 1] = keys[j];
 			j--;
 		}
-		visible[j + 1] = key;
+		visible[j + 1] = node;
+		keys[j + 1] = key;
 	}
 
-	TopicNode* prev = sentinel;
+	MenuTopicNodeView* prev = head;
 	for (int i = 0; i < visCount; i++) { prev->next = visible[i]; prev = visible[i]; }
-	prev->next = nullptr;
+	prev->next = cur;
+
+	tx.head = head;
+	tx.lastVisible = prev;
+	tx.terminator = cur;
+	tx.applied = true;
+
+	if (visCount == 0)
+		Log("ApplyTopicRules: every row hidden, the menu will draw topics empty");
+
 	return true;
 }
 
-//relink held-aside hidden nodes onto the chain tail so the engine clear frees them
-//no-op when nothing was held - must leave s_hiddenHold empty on every path
-static void RestoreHiddenNodes(void* dialogMenu)
+//relinks the hidden rows after the rendered run, never at their original positions: the click
+//resolver sub_83E430 counts nodes from head->next, so the chain has to stay in rendered order while
+//the rows are clickable. parked there they are still reachable for the engine's chain free
+static void AppendHiddenRows(void* dialogMenu, TopicTransaction& tx)
 {
-	if (s_hiddenCount == 0) return;
+	if (!tx.applied) return;
+	tx.applied = false;
+	if (tx.hiddenCount == 0) return;
 
-	void* manager = (char*)dialogMenu + 0x70; //MenuTopicManager
-	TopicNode* head = *(TopicNode**)((char*)manager + 0x4);
-	if (head)
+	//a different head means something else rebuilt the chain and tx.hidden may already be freed
+	void* manager = DialogMenuGetTopicManager(dialogMenu);
+	if (!manager || MenuTopicManagerGetTopicList(manager) != tx.head)
 	{
-		TopicNode* tail = head;
-		while (tail->next) tail = tail->next;
-		for (int i = 0; i < s_hiddenCount; i++) { tail->next = s_hiddenHold[i]; tail = s_hiddenHold[i]; }
-		tail->next = nullptr;
+		Log("AppendHiddenRows: topic chain changed during the build, hidden rows left detached");
+		return;
 	}
-	s_hiddenCount = 0;
+
+	MenuTopicNodeView* prev = tx.lastVisible;
+	for (int i = 0; i < tx.hiddenCount; i++) { prev->next = tx.hidden[i]; prev = tx.hidden[i]; }
+	prev->next = tx.terminator;
 }
 
 bool HasSyntheticCapacity()
@@ -266,33 +359,29 @@ static void* GetSpeaker(void* dialogMenu)
 	return *(void**)((char*)dialogMenu + 0x80); //0x80 speaker Actor*
 }
 
-//vanilla row count from the listbox running counter, set per entry in ListBox::AddEntry
-static UInt32 GetVanillaTopicCount(void* dialogMenu)
+static void __fastcall Hook_LoadTopicsList(void* dialogMenu, void* /*edx*/)
 {
-	void* listbox = (char*)dialogMenu + 0x40; //ListBox control object
-	return *(UInt32*)((char*)listbox + 0x1C); //0x1C entry count
-}
+	TopicTransaction tx;
+	tx.applied = false;
+	if (dialogMenu) ApplyTopicRules(dialogMenu, tx);
 
-static int __fastcall Hook_LoadTopicsList(void* dialogMenu, void* /*edx*/)
-{
-	if (dialogMenu) ApplyTopicRules(dialogMenu);
+	if (s_origLoadTopics) s_origLoadTopics(dialogMenu);
 
-	int result = s_origLoadTopics ? s_origLoadTopics(dialogMenu) : 0;
-
-	if (dialogMenu) RestoreHiddenNodes(dialogMenu);
+	if (dialogMenu) AppendHiddenRows(dialogMenu, tx);
 
 	ClearState();
+
+	//captured before handlers run, AddEntry bumps the same counter for every synthetic row
+	s_renderedRowCount = dialogMenu ? DialogMenuGetTopicRowCount(dialogMenu) : kRowCountUnknown;
 
 	if (g_eventManagerInterface && !g_isLoadingSave && dialogMenu && !s_inDispatch)
 	{
 		void* speaker = GetSpeaker(dialogMenu);
-		UInt32 count = GetVanillaTopicCount(dialogMenu);
+		UInt32 count = s_renderedRowCount;
 		s_inDispatch = true;
 		g_eventManagerInterface->DispatchEvent(kEventBuild, (TESObjectREFR*)speaker, speaker, (int)count);
 		s_inDispatch = false;
 	}
-
-	return result;
 }
 
 static unsigned int __fastcall Hook_TopicClick(void* dialogMenu, void* edx, int a3, void* tile)

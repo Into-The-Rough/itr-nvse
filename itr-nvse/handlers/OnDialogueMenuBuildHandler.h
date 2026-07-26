@@ -22,4 +22,9 @@ namespace OnDialogueMenuBuildHandler {
 	bool SetTopicHidden(UInt32 formID, bool hidden);
 	bool SetTopicOrder(UInt32 formID, int order);
 	int ClearTopicOverrides();
+
+	//rows the last rebuild rendered. the live listbox counter is not a substitute, ListBox::AddEntry
+	//bumps it for every synthetic row a handler adds
+	constexpr UInt32 kRowCountUnknown = 0xFFFFFFFF;
+	UInt32 GetRenderedRowCount();
 }
