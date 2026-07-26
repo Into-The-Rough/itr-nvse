@@ -1,7 +1,7 @@
 //lets NPCs absorb a configurable number of player hits before turning hostile
-//intercepts the faction-relation getter at the two hit-reaction call sites and
-//reports player-neutral actors as ally/friend, so the game applies the
-//iAllyHit*/iFriendHit* tolerance thresholds instead of aggroing on the first hit
+//intercepts the faction-relation getter inside Actor::AttackedBy and reports
+//player-neutral actors as ally/friend, then feeds the configured tolerance into
+//the four iAllyHit*/iFriendHit* setting reads that follow on that same path
 
 #include "AggroThreshold.h"
 #include <Windows.h>
@@ -17,20 +17,18 @@ namespace AggroThreshold
 	static bool g_enabled = false;
 	static bool g_installed = false;
 
-	//both sites call GetFactionRelation (sub_8B87A0), verified E8 to 0x8B87A0
-	static Detours::CallDetour s_healthDamageDetour; //0x898766 in HandleHealthDamage, nulls attacker on lethal ally hit
-	static Detours::CallDetour s_attackedByDetour;   //0x898A54 in AttackedBy, picks friend/ally hit thresholds
+	static Detours::CallDetour s_attackedByDetour;      //0x898A54 GetFactionRelation, picks the friend/ally branch
+	static Detours::CallDetour s_friendCombatDetour;    //0x898A98 iFriendHitCombatAllowed
+	static Detours::CallDetour s_friendNonCombatDetour; //0x898AA9 iFriendHitNonCombatAllowed
+	static Detours::CallDetour s_allyCombatDetour;      //0x898AC6 iAllyHitCombatAllowed
+	static Detours::CallDetour s_allyNonCombatDetour;   //0x898AD7 iAllyHitNonCombatAllowed
 
-	//Setting struct value is at +4 (sub_43D4D0 returns setting+4)
-	static int* const g_iFriendHitNonCombatAllowed = (int*)0x11CD5B4;
-	static int* const g_iFriendHitCombatAllowed = (int*)0x11CD208;
-	static int* const g_iAllyHitNonCombatAllowed = (int*)0x11CD46C;
-	static int* const g_iAllyHitCombatAllowed = (int*)0x11CD4B8;
-
-	static bool g_gmstsCaptured = false;
-	static int g_origFriendHitNonCombat, g_origFriendHitCombat, g_origAllyHitNonCombat, g_origAllyHitCombat;
+	//set by the relation hook, read by the four setting hooks later in the same AttackedBy call
+	//main thread only
+	static bool s_thresholdPending = false;
 
 	typedef uint32_t (__thiscall *_GetFactionRelation)(void* thisActor, void* targetActor, bool* isEnemy);
+	typedef int* (__thiscall *_GetSettingValue)(void* setting);
 
 	static bool IsPlayerInCombat()
 	{
@@ -47,36 +45,12 @@ namespace AggroThreshold
 		return ((_IsCreature)vtbl[0x21C / 4])(actor); //vtable slot 135 IsCreature
 	}
 
-	static void ApplyThresholds()
-	{
-		if (!g_gmstsCaptured)
-		{
-			g_origFriendHitNonCombat = *g_iFriendHitNonCombatAllowed;
-			g_origFriendHitCombat = *g_iFriendHitCombatAllowed;
-			g_origAllyHitNonCombat = *g_iAllyHitNonCombatAllowed;
-			g_origAllyHitCombat = *g_iAllyHitCombatAllowed;
-			g_gmstsCaptured = true;
-		}
-
-		*g_iFriendHitNonCombatAllowed = Settings::iFriendHitNonCombatAllowed;
-		*g_iFriendHitCombatAllowed = Settings::iFriendHitCombatAllowed;
-		*g_iAllyHitNonCombatAllowed = Settings::iAllyHitNonCombatAllowed;
-		*g_iAllyHitCombatAllowed = Settings::iAllyHitCombatAllowed;
-	}
-
-	//engine reads these GMSTs directly, so a runtime disable must put them back
-	static void RestoreThresholds()
-	{
-		if (!g_gmstsCaptured) return;
-		*g_iFriendHitNonCombatAllowed = g_origFriendHitNonCombat;
-		*g_iFriendHitCombatAllowed = g_origFriendHitCombat;
-		*g_iAllyHitNonCombatAllowed = g_origAllyHitNonCombat;
-		*g_iAllyHitCombatAllowed = g_origAllyHitCombat;
-	}
-
-	static uint32_t SuppressRelation(void* thisActor, void* targetActor, bool* isEnemy, _GetFactionRelation orig, bool forceAlly)
+	//assigned on every invocation, never merely set, because the 0x100000 form-flag check
+	//right after this call can leave AttackedBy before any setting is read
+	static uint32_t SuppressRelation(void* thisActor, void* targetActor, bool* isEnemy, _GetFactionRelation orig)
 	{
 		uint32_t result = orig(thisActor, targetActor, isEnemy);
+		s_thresholdPending = false;
 		if (!g_enabled || result != 0) return result;
 
 		if (Settings::bOnlyCombat && !IsPlayerInCombat()) return result;
@@ -88,34 +62,63 @@ namespace AggroThreshold
 			*formFlags |= 0x100000; //permanently ignore player hits
 		}
 
-		//HandleHealthDamage only nulls attacker for ALLY, so always report ally there
-		if (forceAlly) return 2;
+		s_thresholdPending = true;
 		return (Settings::iSuppressionMode == 0) ? 3 : 2; //0=friend, 1=ally
-	}
-
-	static uint32_t __fastcall Hook_HandleHealthDamage(void* thisActor, void*, void* targetActor, bool* isEnemy)
-	{
-		return SuppressRelation(thisActor, targetActor, isEnemy,
-			(_GetFactionRelation)s_healthDamageDetour.GetOverwrittenAddr(), true);
 	}
 
 	static uint32_t __fastcall Hook_AttackedBy(void* thisActor, void*, void* targetActor, bool* isEnemy)
 	{
 		return SuppressRelation(thisActor, targetActor, isEnemy,
-			(_GetFactionRelation)s_attackedByDetour.GetOverwrittenAddr(), false);
+			(_GetFactionRelation)s_attackedByDetour.GetOverwrittenAddr());
 	}
 
-	//idempotent, standalone SuppressiveFireNVSE claims these call sites too, so
+	//engine dereferences the returned pointer immediately, so a pointer to the ini-backed
+	//int is enough, a value of 1000 or more still means unlimited to the caller
+	static int* ThresholdOverride(void* setting, const Detours::CallDetour& detour, int& value)
+	{
+		if (!s_thresholdPending)
+			return ((_GetSettingValue)detour.GetOverwrittenAddr())(setting);
+
+		s_thresholdPending = false;
+		return &value;
+	}
+
+	static int* __fastcall Hook_FriendHitCombat(void* setting, void*)
+	{
+		return ThresholdOverride(setting, s_friendCombatDetour, Settings::iFriendHitCombatAllowed);
+	}
+
+	static int* __fastcall Hook_FriendHitNonCombat(void* setting, void*)
+	{
+		return ThresholdOverride(setting, s_friendNonCombatDetour, Settings::iFriendHitNonCombatAllowed);
+	}
+
+	static int* __fastcall Hook_AllyHitCombat(void* setting, void*)
+	{
+		return ThresholdOverride(setting, s_allyCombatDetour, Settings::iAllyHitCombatAllowed);
+	}
+
+	static int* __fastcall Hook_AllyHitNonCombat(void* setting, void*)
+	{
+		return ThresholdOverride(setting, s_allyNonCombatDetour, Settings::iAllyHitNonCombatAllowed);
+	}
+
+	//idempotent, standalone SuppressiveFireNVSE claims the relation call site too, so
 	//itr must not install while off-by-default or it silently breaks the standalone dll
 	static void InstallHooks()
 	{
 		if (g_installed) return;
 
-		bool a = s_healthDamageDetour.WriteRelCall(0x898766, (UInt32)Hook_HandleHealthDamage);
-		bool b = s_attackedByDetour.WriteRelCall(0x898A54, (UInt32)Hook_AttackedBy);
-		if (!a || !b)
-			Log("AggroThreshold: hook install %d/%d (site already patched by another mod?)", a ? 1 : 0, b ? 1 : 0);
-		g_installed = a && b;
+		int relation = s_attackedByDetour.WriteRelCall(0x898A54, (UInt32)Hook_AttackedBy) ? 1 : 0;
+		int friendCombat = s_friendCombatDetour.WriteRelCall(0x898A98, (UInt32)Hook_FriendHitCombat) ? 1 : 0;
+		int friendNonCombat = s_friendNonCombatDetour.WriteRelCall(0x898AA9, (UInt32)Hook_FriendHitNonCombat) ? 1 : 0;
+		int allyCombat = s_allyCombatDetour.WriteRelCall(0x898AC6, (UInt32)Hook_AllyHitCombat) ? 1 : 0;
+		int allyNonCombat = s_allyNonCombatDetour.WriteRelCall(0x898AD7, (UInt32)Hook_AllyHitNonCombat) ? 1 : 0;
+
+		g_installed = relation && friendCombat && friendNonCombat && allyCombat && allyNonCombat;
+		if (!g_installed)
+			Log("AggroThreshold: hook install %d%d%d%d%d (site already patched by another mod?)",
+				relation, friendCombat, friendNonCombat, allyCombat, allyNonCombat);
 	}
 
 	void SetEnabled(bool enabled)
@@ -124,10 +127,8 @@ namespace AggroThreshold
 			InstallHooks();
 
 		g_enabled = enabled && g_installed;
-		if (g_enabled)
-			ApplyThresholds();
-		else
-			RestoreThresholds();
+		if (!g_enabled)
+			s_thresholdPending = false;
 	}
 
 	void Init(bool enabled)
