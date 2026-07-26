@@ -40,8 +40,8 @@ constexpr UInt32 kMaxPenetrationDepth = 5; //hard chain cap regardless of energy
 struct NiPoint3 { float x, y, z; };
 typedef void (__thiscall* SpawnCollisionEffects_t)(void*, TESObjectREFR*, NiPoint3*, NiPoint3*, int, UInt32);
 typedef void (__thiscall* ClearImpactData_t)(void*);
-//owner 0 / weapon 0 / a3 0 skips the weapon-discharge side effects (recoil, fire sound, perks) which are
-//gated on owner==pPlayer, so a clean projectile is created, we set owner/weapon/damage/dir on the result
+//owner must be non-null, the flight sound branch derefs it unguarded at 0x9BD28C. a non-actor owner
+//plus weapon 0 / a3 0 skips the discharge side effects, gated on IsActor or owner==pPlayer
 typedef void* (__cdecl* SpawnAndFireProjectile_t)(
 	void* base, void* owner, int a3, void* weapon,
 	float px, float py, float pz, float rotz, float rotx,
@@ -202,13 +202,15 @@ static void SpawnImpactEffect(void* proj, void* node)
 //vector104 every frame (sub_9BF470 reads sub_9B7010 -> proj+0x104)
 static UInt32 SpawnContinuation(ProjectileImpactView* orig, void* base, void* cell,
 	const float spawnPos[3], const float unitDir[3], float speedMult, float hitDamage,
-	float distSeed, TESObjectREFR* owner, TESObjectWEAP* weapon, float vecMag)
+	float distSeed, TESObjectREFR* spawnAnchor, TESObjectREFR* owner, TESObjectWEAP* weapon, float vecMag)
 {
 	void* cont;
 	{
 		HitscanBracket guard(base);
+		//the parent round is the anchor, not the player: it answers false to IsActor so the perk,
+		//ownership and muzzle re-aim branches stay skipped. alive here, we run before CallOriginalReap
 		cont = ((SpawnAndFireProjectile_t)kAddr_SpawnAndFireProjectile)(
-			base, nullptr, 0, nullptr, spawnPos[0], spawnPos[1], spawnPos[2],
+			base, spawnAnchor, 0, nullptr, spawnPos[0], spawnPos[1], spawnPos[2],
 			0.0f, 0.0f, 0, 0, 0, 0, 0.0f, 0.0f, cell);
 	}
 	if (!cont) return 0;
@@ -421,7 +423,7 @@ static char __cdecl HandleImpact(void* proj, int a2, int a3)
 	UInt32 childRefID = SpawnContinuation(pv, penBase, penCell, penExit, penUnit,
 		pv->speedMult * s_cfg.penetrationEnergyFalloff,
 		ProjectileLogic::PenetrationDamage(pv->hitDamage, s_cfg),
-		penDistSeed, (TESObjectREFR*)*g_thePlayerPtr, weap, penVecMag);
+		penDistSeed, (TESObjectREFR*)proj, (TESObjectREFR*)*g_thePlayerPtr, weap, penVecMag);
 	if (childRefID) {
 		penGuard.Commit(childRefID, penDepth);
 		EnqueueEvent(2, ctx.sourceWeapFormID, strikeRefID, ctx.material,
