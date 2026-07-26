@@ -100,3 +100,34 @@ struct ScopedPathingSolution
 		return reinterpret_cast<PathingSolutionLayout*>(data);
 	}
 };
+
+//NavMeshPtr, the owning NiPointer<NavMesh> the engine hands back from a NavMeshInfo
+struct ScopedNavMeshPtr
+{
+	void* navMesh = nullptr;
+
+	~ScopedNavMeshPtr()
+	{
+		Release();
+	}
+
+	void Release()
+	{
+		if (navMesh)
+		{
+			ThisCall<void>(0x42FDA0, &navMesh); //NavMeshPtr dtor, drops the strong ref
+			navMesh = nullptr;
+		}
+	}
+
+	//the engine assigns through NiPointer::operator=, which releases whatever the slot already holds
+	void** Slot()
+	{
+		return &navMesh;
+	}
+
+	void* Get() const
+	{
+		return navMesh;
+	}
+};

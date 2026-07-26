@@ -1,7 +1,7 @@
 //navmesh probes exposed as script commands
 //GetPathLength reuses the standalone PathingRequest/Solution flow from PathingCommands
 //IsPointOnNavmesh resolves a triangle via a stack PathingLocation
-//GetCoverPointsInRadius walks the cell navmesh list and reads per-edge cover data
+//GetCoverPointsInRadius resolves each cell NavMeshInfo to its NavMesh and reads the cover triangle array
 
 #include "NavmeshCommands.h"
 #include "commands/PathingShared.h"
@@ -112,42 +112,77 @@ namespace
 	{
 		PathPoint3 pos;
 		UInt32 flags;
+		float distSq;
 	};
 
 	constexpr UInt32 kMaxCoverPoints = 128;
 
-	void GatherCellCover(TESObjectCELL* cell, const PathPoint3& query, float radiusSq,
-		CoverPoint* out, UInt32& count)
+	//nearest-N by distance to the query point, so the result never depends on cell scan order
+	struct CoverPool
 	{
-		if (!cell || count >= kMaxCoverPoints)
+		CoverPoint items[kMaxCoverPoints];
+		UInt32 count = 0;
+	};
+
+	void InsertCover(CoverPool& pool, const CoverPoint& item)
+	{
+		if (pool.count == kMaxCoverPoints && item.distSq >= pool.items[kMaxCoverPoints - 1].distSq)
+			return;
+		UInt32 pos = (pool.count < kMaxCoverPoints) ? pool.count : (kMaxCoverPoints - 1);
+		while (pos > 0 && pool.items[pos - 1].distSq > item.distSq)
+		{
+			pool.items[pos] = pool.items[pos - 1];
+			--pos;
+		}
+		pool.items[pos] = item;
+		if (pool.count < kMaxCoverPoints)
+			++pool.count;
+	}
+
+	void GatherCellCover(TESObjectCELL* cell, const PathPoint3& query, float radiusSq, CoverPool& pool)
+	{
+		if (!cell)
 			return;
 
-		//cell navmesh list, resolves interior/exterior navmeshes for the cell
-		void* container = CdeclCall<void*>(0x6D6F40, cell); //PathManager::GetCellNavMeshes
+		//array of NavMeshInfo*, one per navmesh that could serve this cell
+		void* container = CdeclCall<void*>(0x6D6F40, cell); //Pathing::GetPotentialNavMeshInfoForLocation
 		if (!container)
 			return;
 
-		auto* navArr = reinterpret_cast<BSSimpleArrayLayout<void*>*>(container);
-		for (UInt32 n = 0; n < navArr->size && count < kMaxCoverPoints; ++n)
+		auto* infoArr = reinterpret_cast<BSSimpleArrayLayout<void*>*>(container);
+		if (!infoArr->data)
+			return;
+
+		for (UInt32 n = 0; n < infoArr->size; ++n)
 		{
-			void* navMesh = navArr->data ? navArr->data[n] : nullptr;
-			if (!navMesh)
+			void* info = infoArr->data[n];
+			if (!info)
 				continue;
 
-			//triangle BSSimpleArray embedded at navMesh+0x38, data at +0x3C, size at +0x40, stride 0x10
-			auto* triArr = reinterpret_cast<BSSimpleArrayLayout<UInt8>*>(reinterpret_cast<UInt8*>(navMesh) + 0x38);
-			UInt8* triData = triArr->data;
+			//fills an owning NiPointer<NavMesh> from NavMeshInfo+0x54, false when the info is invalid or the mesh is not loaded
+			ScopedNavMeshPtr navMesh;
+			if (!ThisCall<bool>(0x69AD00, info, navMesh.Slot()))
+				continue;
+
+			UInt8* mesh = static_cast<UInt8*>(navMesh.Get());
+			auto* coverArr = reinterpret_cast<BSSimpleArrayLayout<UInt16>*>(mesh + 0x78); //cover triangle indices
+			auto* triArr = reinterpret_cast<BSSimpleArrayLayout<UInt8>*>(mesh + 0x38); //triangles, stride 0x10
+			if (!coverArr->data || !triArr->data)
+				continue;
+
+			const UInt32 coverCount = coverArr->size;
 			const UInt32 triCount = triArr->size;
-			if (!triData)
-				continue;
-
-			for (UInt32 i = 0; i < triCount && i < 0x10000 && count < kMaxCoverPoints; ++i)
+			for (UInt32 c = 0; c < coverCount; ++c)
 			{
-				void* tri = triData + i * 0x10;
-				if (!ThisCall<UInt32>(0x690770, tri)) //NavMeshTriangle::HasCover ((flags & 0x0FBE0000) != 0)
+				const UInt16 triIndex = coverArr->data[c];
+				if (triIndex >= triCount)
 					continue;
 
-				for (UInt32 slot = 0; slot < 2 && count < kMaxCoverPoints; ++slot)
+				void* tri = triArr->data + triIndex * 0x10;
+				if (ThisCall<bool>(0x691140, tri, 0x20)) //NavMeshTriangle::IsFlagSet, 0x20 = disabled
+					continue;
+
+				for (UInt32 slot = 0; slot < 2; ++slot)
 				{
 					UInt16 bucket = 0;
 					bool leftOpen = false, rightOpen = false;
@@ -157,28 +192,33 @@ namespace
 						continue;
 
 					EdgeEndpoints edge = {};
-					ThisCall<void>(0x68F040, navMesh, &edge, i, slot); //NavMesh::GetEdgeEndpoints
+					ThisCall<void>(0x68F040, mesh, &edge, triIndex, slot); //NavMesh::GetEdgeEndpoints
 					if (!edge.p0 || !edge.p1)
 						continue;
 
-					PathPoint3 mid = {
-						(edge.p0->x + edge.p1->x) * 0.5f,
-						(edge.p0->y + edge.p1->y) * 0.5f,
-						(edge.p0->z + edge.p1->z) * 0.5f,
-					};
-
-					if (DistanceSq(mid, query) > radiusSq)
+					CoverPoint point;
+					point.pos.x = (edge.p0->x + edge.p1->x) * 0.5f;
+					point.pos.y = (edge.p0->y + edge.p1->y) * 0.5f;
+					point.pos.z = (edge.p0->z + edge.p1->z) * 0.5f;
+					point.distSq = DistanceSq(point.pos, query);
+					if (point.distSq > radiusSq)
 						continue;
 
-					out[count].pos = mid;
-					out[count].flags = (bucket & 0xF) | (leftOpen ? 0x10 : 0) | (rightOpen ? 0x20 : 0) | (slot << 6);
-					++count;
+					point.flags = (bucket & 0xF) | (leftOpen ? 0x10 : 0) | (rightOpen ? 0x20 : 0) | (slot << 6);
+					InsertCover(pool, point);
 				}
 			}
 		}
 	}
 
-	void GatherCoverAround(const PathPoint3& query, float radius, CoverPoint* out, UInt32& count)
+	float AxisGap(float v, float lo, float hi)
+	{
+		if (v < lo) return lo - v;
+		if (v > hi) return v - hi;
+		return 0.0f;
+	}
+
+	void GatherCoverAround(const PathPoint3& query, float radius, CoverPool& pool)
 	{
 		PlayerCharacter* player = *g_thePlayerPtr;
 		if (!player || !player->parentCell)
@@ -188,26 +228,35 @@ namespace
 		TESObjectCELL* anchorCell = player->parentCell;
 		if (anchorCell->IsInterior())
 		{
-			GatherCellCover(anchorCell, query, radiusSq, out, count);
+			GatherCellCover(anchorCell, query, radiusSq, pool);
+			return;
 		}
-		else if (TESWorldSpace* world = anchorCell->worldSpace)
-		{
-			if (world->cellMap)
-			{
-				const SInt32 centreX = static_cast<SInt32>(floorf(query.x / 4096.0f));
-				const SInt32 centreY = static_cast<SInt32>(floorf(query.y / 4096.0f));
-				SInt32 cellRadius = static_cast<SInt32>(ceilf(radius / 4096.0f));
-				if (cellRadius > 2) cellRadius = 2;
 
-				for (SInt32 dx = -cellRadius; dx <= cellRadius && count < kMaxCoverPoints; ++dx)
-				{
-					for (SInt32 dy = -cellRadius; dy <= cellRadius && count < kMaxCoverPoints; ++dy)
-					{
-						//mask before shifting, negative cell coords make the raw shift formally UB
-						const UInt32 key = (((UInt32)(centreX + dx) & 0xFFFF) << 16) | ((UInt32)(centreY + dy) & 0xFFFF);
-						GatherCellCover(world->cellMap->Lookup(key), query, radiusSq, out, count);
-					}
-				}
+		TESWorldSpace* world = anchorCell->worldSpace;
+		if (!world || !world->cellMap)
+			return;
+
+		const SInt32 centreX = static_cast<SInt32>(floorf(query.x / 4096.0f));
+		const SInt32 centreY = static_cast<SInt32>(floorf(query.y / 4096.0f));
+		SInt32 cellRadius = static_cast<SInt32>(ceilf(radius / 4096.0f));
+		if (cellRadius > 2) cellRadius = 2;
+
+		for (SInt32 dx = -cellRadius; dx <= cellRadius; ++dx)
+		{
+			for (SInt32 dy = -cellRadius; dy <= cellRadius; ++dy)
+			{
+				const SInt32 cellX = centreX + dx;
+				const SInt32 cellY = centreY + dy;
+				const float minX = cellX * 4096.0f;
+				const float minY = cellY * 4096.0f;
+				const float gapX = AxisGap(query.x, minX, minX + 4096.0f);
+				const float gapY = AxisGap(query.y, minY, minY + 4096.0f);
+				if (gapX * gapX + gapY * gapY > radiusSq)
+					continue;
+
+				//mask before shifting, negative cell coords make the raw shift formally UB
+				const UInt32 key = (((UInt32)cellX & 0xFFFF) << 16) | ((UInt32)cellY & 0xFFFF);
+				GatherCellCover(world->cellMap->Lookup(key), query, radiusSq, pool);
 			}
 		}
 	}
@@ -239,26 +288,17 @@ namespace
 
 	constexpr UInt32 kMaxBestCover = 32;
 
-	struct ScoredCover
-	{
-		PathPoint3 pos;
-		UInt32 flags;
-		float dist;
-	};
+	constexpr float kMaxWorldCoord = 1.0e7f; //far past any worldspace extent, keeps the cell grid maths exact in float
+	constexpr float kMaxCoverRadius = 8192.0f;
 
-	void InsertScored(ScoredCover* out, UInt32& outCount, UInt32 limit, const ScoredCover& item)
+	bool ValidCoord(float v)
 	{
-		if (outCount >= limit && item.dist >= out[outCount - 1].dist)
-			return;
-		UInt32 pos = (outCount < limit) ? outCount : (outCount - 1);
-		while (pos > 0 && out[pos - 1].dist > item.dist)
-		{
-			out[pos] = out[pos - 1];
-			--pos;
-		}
-		out[pos] = item;
-		if (outCount < limit)
-			++outCount;
+		return v > -kMaxWorldCoord && v < kMaxWorldCoord; //nan and inf fail both comparisons
+	}
+
+	bool ValidRadius(float r)
+	{
+		return r > 0.0f && r <= kMaxCoverRadius; //nan and inf fail
 	}
 }
 
@@ -294,7 +334,7 @@ static ParamInfo kParams_GetBestCoverFromThreat[8] = {
 
 DEFINE_COMMAND_PLUGIN(GetPathLength, "returns the complete path length from source (default calling ref) to target, or -1 on failure", 0, 2, kParams_GetPathLength);
 DEFINE_COMMAND_PLUGIN(IsPointOnNavmesh, "returns 1 if the point resolves to a loaded navmesh triangle, else 0", 0, 4, kParams_IsPointOnNavmesh);
-DEFINE_COMMAND_PLUGIN(GetCoverPointsInRadius, "returns array of [x,y,z,coverFlags] for cover edges near a point on loaded navmeshes (unsorted, max 128)", 0, 4, kParams_GetCoverPointsInRadius);
+DEFINE_COMMAND_PLUGIN(GetCoverPointsInRadius, "returns array of [x,y,z,coverFlags] for cover edges near a point on loaded navmeshes, sorted nearest-first (max 128)", 0, 4, kParams_GetCoverPointsInRadius);
 DEFINE_COMMAND_PLUGIN(GetBestCoverFromThreat, "returns array of [x,y,z,coverFlags,distToSearch] for cover near the search point that hides the standing position from the threat, sorted nearest-first (empty when none)", 0, 8, kParams_GetBestCoverFromThreat);
 
 bool Cmd_GetPathLength_Execute(COMMAND_ARGS)
@@ -358,27 +398,27 @@ bool Cmd_GetCoverPointsInRadius_Execute(COMMAND_ARGS)
 	if (!IsMainThread())
 		return true;
 
-	if (radius <= 0.0f || radius > 8192.0f)
+	if (!ValidRadius(radius) || !ValidCoord(x) || !ValidCoord(y) || !ValidCoord(z))
 		return true;
 
 	const PathPoint3 query = { x, y, z };
 
-	CoverPoint points[kMaxCoverPoints];
-	UInt32 count = 0;
-	GatherCoverAround(query, radius, points, count);
+	CoverPool pool;
+	GatherCoverAround(query, radius, pool);
 
 	NVSEArrayVarInterface::Array* arr = g_arrInterface->CreateArray(nullptr, 0, scriptObj);
 	if (!arr)
 		return true;
-	for (UInt32 i = 0; i < count; ++i)
+	for (UInt32 i = 0; i < pool.count; ++i)
 	{
+		const CoverPoint& point = pool.items[i];
 		NVSEArrayVarInterface::Array* sub = g_arrInterface->CreateArray(nullptr, 0, scriptObj);
 		if (!sub)
 			continue;
-		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(points[i].pos.x));
-		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(points[i].pos.y));
-		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(points[i].pos.z));
-		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(static_cast<double>(points[i].flags)));
+		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(point.pos.x));
+		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(point.pos.y));
+		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(point.pos.z));
+		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(static_cast<double>(point.flags)));
 		g_arrInterface->AppendElement(arr, NVSEArrayVarInterface::Element(sub));
 	}
 	g_arrInterface->AssignCommandResult(arr, result);
@@ -401,7 +441,11 @@ bool Cmd_GetBestCoverFromThreat_Execute(COMMAND_ARGS)
 	if (!IsMainThread())
 		return true;
 
-	if (radius <= 0.0f || radius > 8192.0f)
+	if (!ValidRadius(radius))
+		return true;
+	if (!ValidCoord(threatX) || !ValidCoord(threatY) || !ValidCoord(threatZ))
+		return true;
+	if (!ValidCoord(searchX) || !ValidCoord(searchY) || !ValidCoord(searchZ))
 		return true;
 
 	if (maxResults < 1) maxResults = 1;
@@ -410,34 +454,30 @@ bool Cmd_GetBestCoverFromThreat_Execute(COMMAND_ARGS)
 	const PathPoint3 threat = { threatX, threatY, threatZ };
 	const PathPoint3 search = { searchX, searchY, searchZ };
 
-	CoverPoint points[kMaxCoverPoints];
-	UInt32 count = 0;
-	GatherCoverAround(search, radius, points, count);
-
-	ScoredCover best[kMaxBestCover];
-	UInt32 bestCount = 0;
-	for (UInt32 i = 0; i < count; ++i)
-	{
-		if (!ThreatBlockedFromPoint(threat, points[i].pos))
-			continue;
-		ScoredCover item = { points[i].pos, points[i].flags, sqrtf(DistanceSq(points[i].pos, search)) };
-		InsertScored(best, bestCount, static_cast<UInt32>(maxResults), item);
-	}
+	CoverPool pool;
+	GatherCoverAround(search, radius, pool);
 
 	NVSEArrayVarInterface::Array* arr = g_arrInterface->CreateArray(nullptr, 0, scriptObj);
 	if (!arr)
 		return true;
-	for (UInt32 i = 0; i < bestCount; ++i)
+
+	//pool is already nearest-first, so the raycasts stop once maxResults have passed
+	UInt32 emitted = 0;
+	for (UInt32 i = 0; i < pool.count && emitted < static_cast<UInt32>(maxResults); ++i)
 	{
+		const CoverPoint& point = pool.items[i];
+		if (!ThreatBlockedFromPoint(threat, point.pos))
+			continue;
 		NVSEArrayVarInterface::Array* sub = g_arrInterface->CreateArray(nullptr, 0, scriptObj);
 		if (!sub)
 			continue;
-		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(best[i].pos.x));
-		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(best[i].pos.y));
-		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(best[i].pos.z));
-		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(static_cast<double>(best[i].flags)));
-		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(static_cast<double>(best[i].dist)));
+		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(point.pos.x));
+		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(point.pos.y));
+		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(point.pos.z));
+		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(static_cast<double>(point.flags)));
+		g_arrInterface->AppendElement(sub, NVSEArrayVarInterface::Element(static_cast<double>(sqrtf(point.distSq))));
 		g_arrInterface->AppendElement(arr, NVSEArrayVarInterface::Element(sub));
+		++emitted;
 	}
 	g_arrInterface->AssignCommandResult(arr, result);
 
