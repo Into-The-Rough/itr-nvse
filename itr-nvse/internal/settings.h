@@ -15,15 +15,6 @@ namespace Settings
 	inline int bSuppressInputInConsole = 0;
 	inline int bDebugLog = 0;
 
-	inline int bMaterialProjectiles = 0;
-	inline int bProjectileRicochet = 0;
-	inline int bProjectilePenetration = 0;
-	inline int iRicochetMaxAngleDeg = 55;   //grazing angle from the surface, cinematic tuning is generous
-	inline int iRicochetMinEnergyPct = 15;  //below this remaining-flight fraction a round just stops
-	inline int iRicochetDamagePct = 60;     //damage retained after a bounce, dangerous ricochets
-	inline int iPenetrationDamagePct = 65;
-	inline int iPenetrationEnergyPct = 70;
-
 	inline int iQuickDropModifierKey = VK_SHIFT;
 	inline int iQuickDropControlID = 7; //ready weapon
 	inline int iQuick180ModifierKey = VK_SHIFT;
@@ -166,14 +157,6 @@ namespace Settings
 
 		bDebugLog = GetINIInt("Debug", "bDebugLog", 0);
 
-		bMaterialProjectiles = GetINIInt("MaterialProjectiles", "bEnable", 0);
-		bProjectileRicochet = GetINIInt("MaterialProjectiles", "bRicochet", 0);
-		bProjectilePenetration = GetINIInt("MaterialProjectiles", "bPenetration", 0);
-		iRicochetMaxAngleDeg = GetINIInt("MaterialProjectiles", "iRicochetMaxAngleDeg", 55);
-		iRicochetMinEnergyPct = GetINIInt("MaterialProjectiles", "iRicochetMinEnergyPct", 15);
-		iRicochetDamagePct = GetINIInt("MaterialProjectiles", "iRicochetDamagePct", 60);
-		iPenetrationDamagePct = GetINIInt("MaterialProjectiles", "iPenetrationDamagePct", 65);
-		iPenetrationEnergyPct = GetINIInt("MaterialProjectiles", "iPenetrationEnergyPct", 70);
 		bAutoGodMode = GetINIInt("Tweaks", "bAutoGodMode", 0);
 		bAutoQuickLoad = GetINIInt("Tweaks", "bAutoQuickLoad", 0);
 		bMessageBoxQuickClose = GetINIInt("Tweaks", "bMessageBoxQuickClose", 1);

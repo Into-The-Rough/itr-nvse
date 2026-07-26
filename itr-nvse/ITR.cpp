@@ -48,8 +48,6 @@
 #include "handlers/OnWitnessedHandler.h"
 #include "handlers/OnImpactDataSpawnHandler.h"
 #include "handlers/OnNearMissHandler.h"
-#include "handlers/OnProjectileImpactHandler.h"
-#include "internal/ProjectileLogic.h"
 #include "handlers/OnSprayDecalHandler.h"
 #include "handlers/OnWoundSprayHandler.h"
 #include "handlers/OnVATSStateHandler.h"
@@ -376,25 +374,6 @@ static void DeleteConsoleLog()
 static bool g_hooksInstalled = false;
 static NVSEInterface* s_nvseInterface = nullptr;
 
-static void ApplyProjectileSettings()
-{
-	//clamp direct ini edits so a bad value cannot produce negative or amplified damage/speed
-	auto pct = [](int v) { return (v < 0 ? 0 : (v > 100 ? 100 : v)) / 100.0f; };
-	auto angle = [](int v) { return (float)(v < 0 ? 0 : (v > 90 ? 90 : v)); };
-
-	ProjectileLogic::Config cfg = {};
-	cfg.ricochetEnabled = Settings::bProjectileRicochet != 0;
-	cfg.penetrationEnabled = Settings::bProjectilePenetration != 0;
-	cfg.maxRicochetAngleDeg = angle(Settings::iRicochetMaxAngleDeg);
-	cfg.minRicochetEnergy = pct(Settings::iRicochetMinEnergyPct); //penetration chain is bounded by the hard depth cap, not this shared floor
-	cfg.ricochetDamageFalloff = pct(Settings::iRicochetDamagePct);
-	cfg.penetrationDamageFalloff = pct(Settings::iPenetrationDamagePct);
-	//energy retention must stay below 100% or the continuation chain never decays and penetrates forever
-	cfg.penetrationEnergyFalloff = pct(Settings::iPenetrationEnergyPct > 95 ? 95 : Settings::iPenetrationEnergyPct);
-	OnProjectileImpactHandler::FillDefaultMaterials(cfg);
-	OnProjectileImpactHandler::UpdateSettings(cfg, Settings::bMaterialProjectiles != 0);
-}
-
 static void MessageHandler(NVSEMessagingInterface::Message* msg)
 {
 	switch (msg->type)
@@ -475,8 +454,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				OnPreDeathHandler::InstallListenerProbe();
 				OnPreDamageHandler::InstallListenerProbe();
 				OnNearMissHandler::InstallListenerProbe();
-				OnProjectileImpactHandler::InstallHook();
-				ApplyProjectileSettings();
 				PerkRuntimeFramework::BuildIndex();
 				g_hooksInstalled = true;
 			}
@@ -509,7 +486,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OnJumpLandHandler::ClearState();
 			DialogueTextFilter::ClearState();
 			OnNearMissHandler::ClearState();
-			OnProjectileImpactHandler::ClearState();
 			OnEffectHandler::ClearState();
 			NoWeaponSearch::ClearState();
 			PreventWeaponSwitch::ClearState();
@@ -594,10 +570,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OnPreDeathHandler::InstallListenerProbe();
 			OnPreDamageHandler::InstallListenerProbe();
 			OnNearMissHandler::InstallListenerProbe();
-			OnProjectileImpactHandler::InstallHook();
 			DialogueTextFilter::ClearState();
 			OnNearMissHandler::ClearState();
-			OnProjectileImpactHandler::ClearState();
 			OnEffectHandler::ClearState();
 			OnCombatProcedureHandler::ClearState();
 			OnSoundPlayedHandler::ClearState();
@@ -645,7 +619,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					DoorPinchFix::UpdateSettings(Settings::bDoorPinchFix != 0, Settings::iDoorPinchDistance, Settings::iDoorPinchTimeoutMs);
 					ApplyVATSSpeechFixSetting();
 					ReversePickpocketNoKarmaFix::SetEnabled(Settings::bReversePickpocketNoKarma != 0);
-					ApplyProjectileSettings();
 					CompanionNoInfamy::SetEnabled(Settings::bCompanionNoInfamy != 0);
 					CompanionNoBlock::UpdateSettings(Settings::bCompanionNoBlock != 0, Settings::iCompanionNoBlockReleaseFrames,
 					                                 Settings::iCompanionNoBlockRestoreDistance, Settings::bCompanionNoBlockInteriorOnly != 0);
@@ -706,7 +679,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			OnPreDamageHandler::Update();
 			OnEntryPointHandler::Update();
 			OnNearMissHandler::Update();
-			OnProjectileImpactHandler::Update();
 			OnEffectHandler::Update();
 			CompanionNoBlock::Update();
 			OnContactHandler::Update();
@@ -770,7 +742,6 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	logInit("OnWitnessedHandler", OnWitnessedHandler::Init((void*)nvse));
 	logInit("OnImpactDataSpawnHandler", OnImpactDataSpawnHandler::Init((void*)nvse));
 	logInit("OnNearMissHandler", OnNearMissHandler::Init((void*)nvse));
-	logInit("OnProjectileImpactHandler", OnProjectileImpactHandler::Init((void*)nvse));
 	logInit("OnSprayDecalHandler", OnSprayDecalHandler::Init((void*)nvse));
 	logInit("OnWoundSprayHandler", OnWoundSprayHandler::Init((void*)nvse));
 	logInit("OnVATSStateHandler", OnVATSStateHandler::Init((void*)nvse));
