@@ -1,7 +1,9 @@
-//inject arbitrary wav/ogg tracks into the pip-boy/world radio stream
+//inject arbitrary wav/ogg/mp3 tracks into the pip-boy/world radio stream
 //substitutes the filename arg at the four sub_AD7480 (GetSoundHandleByFilename wrapper)
 //call sites inside FalloutRadio::PipboyUpdate and FalloutRadio::UpdateStation,
-//which bypasses the engine's _mono/_stereo mangling and the form-path lookup
+//which bypasses the engine's _mono/_stereo mangling and the form-path lookup,
+//and rewrites the path buffer at the PipboyUpdate song call to PlayingMusic::SetPlayingMusic,
+//the mp3 media streamer that carries every pip-boy song
 
 #include <Windows.h>
 #include <cstdint>
@@ -28,22 +30,19 @@ static const int kPathLen = 240;
 static char s_queue[kMaxQueue][kPathLen];
 static int s_head = 0;
 static int s_count = 0;
-static char s_activePath[256]; //filled under lock, engine strcpy's it immediately
+static char s_activePath[256];
+static RadioInjectionLogic::SlotFormat s_activeSlot = RadioInjectionLogic::kSlot_Sound;
 
 static CRITICAL_SECTION s_lock;
 static volatile LONG s_lockInit = 0;
 static DWORD s_lastPopTick = 0;
 static bool s_loopMode = false;
 
-//track-change dedup, one logical advance dispatches once for the whole speaker burst
-static char s_lastDispatchedPath[256] = {};
-static DWORD s_lastDispatchTick = 0;
-
 static const char kTrackChangeEvent[] = "ITR:OnRadioTrackChange";
 
-//one logical track advance creates several sounds (pip-boy stream plus one per placed
-//world speaker), all within the same update burst. pop once, then reuse the same path
-//for the rest of the burst so one injected track feeds every speaker consistently
+//one logical track advance creates several sounds (pip-boy plus one per placed world
+//speaker), all within the same update burst. pop once, then reuse the same path for the
+//rest of the burst so one injected track feeds every speaker of that slot consistently
 static const DWORD kSameTrackWindowMs = 500;
 
 static void EnsureLockInit()
@@ -114,27 +113,57 @@ static const int kMaxPendingEvents = 8;
 static PendingTrackChange s_pendingEvents[kMaxPendingEvents];
 static int s_pendingEventCount = 0;
 
-//fire once per logical advance, not once per speaker in the burst. queue only when the
-//used path differs from the last queued one or the burst window has expired
+//one event per output that attempts to start a track, collapsing repeats of the same path in the frame.
+//UpdateStations walks every station per frame and the tuned station reaches both the speakers
+//(_mono path) and the pip-boy (original path), so those carry separate paths and fire separately
 static void QueueTrackChange(const char* usePath, bool wasInjected)
 {
 	if (!usePath)
 		return;
 
-	DWORD now = GetTickCount();
-	bool burstExpired = (now - s_lastDispatchTick) >= kSameTrackWindowMs;
-	if (!burstExpired && strcmp(usePath, s_lastDispatchedPath) == 0)
-		return;
-
-	strncpy_s(s_lastDispatchedPath, usePath, _TRUNCATE);
-	s_lastDispatchTick = now;
-
 	ScopedLock lock(&s_lock);
 	if (s_pendingEventCount >= kMaxPendingEvents)
 		return;
+
+	for (int i = 0; i < s_pendingEventCount; i++)
+		if (strcmp(s_pendingEvents[i].path, usePath) == 0)
+			return;
+
 	strncpy_s(s_pendingEvents[s_pendingEventCount].path, usePath, _TRUNCATE);
 	s_pendingEvents[s_pendingEventCount].wasInjected = wasInjected ? 1 : 0;
 	s_pendingEventCount++;
+}
+
+//hands out the engine-ready path for this slot, popping the queue only when the front
+//entry's format matches the slot so an mp3 waits for the stream rather than being
+//swallowed by a sound handle that would rewrite its extension
+static bool TakeTrackForSlot(RadioInjectionLogic::SlotFormat slot, char* out, size_t outSize)
+{
+	ScopedLock lock(&s_lock);
+
+	DWORD now = GetTickCount();
+	if (s_lastPopTick && (now - s_lastPopTick) < kSameTrackWindowMs && s_activePath[0] && s_activeSlot == slot)
+	{
+		strncpy_s(out, outSize, s_activePath, _TRUNCATE);
+		return true;
+	}
+
+	if (s_count <= 0 || !RadioInjectionLogic::PathSuitsSlot(s_queue[s_head], slot))
+		return false;
+
+	char queuedPath[kPathLen];
+	if (s_loopMode)
+		RotateFront_Unlocked(queuedPath, sizeof(queuedPath));
+	else
+		PopFront_Unlocked(queuedPath, sizeof(queuedPath));
+
+	if (!RadioInjectionLogic::BuildEnginePath(queuedPath, s_activePath, sizeof(s_activePath)))
+		return false;
+
+	s_lastPopTick = now;
+	s_activeSlot = slot;
+	strncpy_s(out, outSize, s_activePath, _TRUNCATE);
+	return true;
 }
 
 void Update()
@@ -158,7 +187,7 @@ void Update()
 
 //worker holds the shared substitution logic; per-site thunks pass their own recorded original
 //so each site chains correctly even if another plugin patched one of the four separately
-//a reentrant engine call would overwrite the shared s_activePath the outer call still holds,
+//a reentrant engine call would consume a second queue entry for the same sound,
 //guard so a nested call passes through untouched. main thread only, plain bool suffices
 static bool s_inSubstitute = false;
 
@@ -167,34 +196,14 @@ static void* GetSoundHandleWork(GetSoundHandle_t orig, void* thisPtr, void* edx,
 	if (s_inSubstitute)
 		return orig ? orig(thisPtr, edx, handleOut, filename, flags, baseForm) : nullptr;
 
+	char injected[sizeof(s_activePath)];
 	const char* usePath = filename;
-	bool wasInjected = false;
-	{
-		ScopedLock lock(&s_lock);
-		DWORD now = GetTickCount();
-		if (s_lastPopTick && (now - s_lastPopTick) < kSameTrackWindowMs && s_activePath[0])
-		{
-			usePath = s_activePath; //same track burst, reuse without popping
-			wasInjected = true;
-		}
-		else if (s_count > 0)
-		{
-			char queuedPath[kPathLen];
-			if (s_loopMode)
-				RotateFront_Unlocked(queuedPath, sizeof(queuedPath));
-			else
-				PopFront_Unlocked(queuedPath, sizeof(queuedPath));
-			if (RadioInjectionLogic::BuildEnginePath(queuedPath, s_activePath, sizeof(s_activePath)))
-			{
-				s_lastPopTick = now;
-				usePath = s_activePath;
-				wasInjected = true;
-			}
-		}
-	}
-
+	const bool wasInjected = TakeTrackForSlot(RadioInjectionLogic::kSlot_Sound, injected, sizeof(injected));
 	if (wasInjected)
+	{
+		usePath = injected;
 		Log("RadioInjection: substituting radio track '%s'", usePath);
+	}
 
 	s_inSubstitute = true;
 	QueueTrackChange(usePath, wasInjected);
@@ -211,6 +220,35 @@ static void* const kSoundThunks[4] = {
 	(void*)Hook_GetSoundHandle_0, (void*)Hook_GetSoundHandle_1,
 	(void*)Hook_GetSoundHandle_2, (void*)Hook_GetSoundHandle_3,
 };
+
+//PlayingMusic::SetPlayingMusic, __cdecl with 7 dword args
+typedef int (__cdecl* SetPlayingMusic_t)(UInt32 musicType, char* path, UInt32 fadeMS, UInt32 a4, UInt32 a5, float a6, UInt32 a7);
+static Detours::CallDetour s_streamCall;
+
+//capacity the engine formats the song path with, and copies out of into g_currentRadioSong
+static const int kStreamPathLen = 260;
+
+static int __cdecl Hook_SetPlayingMusic(UInt32 musicType, char* path, UInt32 fadeMS, UInt32 a4, UInt32 a5, float a6, UInt32 a7)
+{
+	SetPlayingMusic_t orig = (SetPlayingMusic_t)s_streamCall.GetOverwrittenAddr();
+
+	if (path)
+	{
+		char injected[sizeof(s_activePath)];
+		//the buffer is the caller's stack local, rewrite in place or the radio commands
+		//keep reporting the vanilla song
+		if (TakeTrackForSlot(RadioInjectionLogic::kSlot_Stream, injected, sizeof(injected)))
+		{
+			strncpy_s(path, kStreamPathLen, injected, _TRUNCATE);
+			Log("RadioInjection: substituting radio song '%s'", path);
+			QueueTrackChange(path, true);
+		}
+		else
+			QueueTrackChange(path, false);
+	}
+
+	return orig ? orig(musicType, path, fadeMS, a4, a5, a6, a7) : 0;
+}
 
 void Init(void* nvseInterface)
 {
@@ -238,7 +276,13 @@ void Init(void* nvseInterface)
 			Log("RadioInjection: ERROR expected E8 call at 0x%08X", kSites[i]);
 	}
 
-	Log("RadioInjection: %d/4 call sites hooked", installed);
+	//only call to SetPlayingMusic in PipboyUpdate carrying a path, the rest are stops
+	if (s_streamCall.WriteRelCall(0x83398D, (UInt32)Hook_SetPlayingMusic))
+		installed++;
+	else
+		Log("RadioInjection: ERROR expected E8 call at 0x0083398D");
+
+	Log("RadioInjection: %d/5 call sites hooked", installed);
 }
 
 static bool IsValidRadioPath(const char* path)
@@ -254,10 +298,8 @@ static bool IsValidRadioPath(const char* path)
 	if (strlen(path) >= kPathLen)
 		return false;
 
-	const char* dot = strrchr(path, '.');
-	if (!dot)
-		return false;
-	if (_stricmp(dot, ".wav") != 0 && _stricmp(dot, ".ogg") != 0)
+	if (!RadioInjectionLogic::PathSuitsSlot(path, RadioInjectionLogic::kSlot_Sound) &&
+		!RadioInjectionLogic::PathSuitsSlot(path, RadioInjectionLogic::kSlot_Stream))
 		return false;
 
 	return true;
@@ -381,13 +423,13 @@ static ParamInfo kParams_OneString[1] = {
 
 static CommandInfo kCommandInfo_PlayRadioFile = {
 	"PlayRadioFile", "", 0,
-	"Skips the current radio track and plays a wav/ogg file (relative to Data\\Sound\\) next. Subtitles are unavailable for injected files.",
+	"Skips the current radio track and plays a wav/ogg/mp3 file (relative to Data\\Sound\\) next. mp3 files play on the song slot, wav/ogg on the spoken segment slot, so an mp3 waits for the next song. Subtitles are unavailable for injected files.",
 	0, 1, kParams_OneString, Cmd_PlayRadioFile_Execute, nullptr, nullptr, 0
 };
 
 static CommandInfo kCommandInfo_QueueRadioTrack = {
 	"QueueRadioTrack", "", 0,
-	"Queues a wav/ogg file (relative to Data\\Sound\\) to play on the next natural track advance. Returns 0 if the queue is full. Subtitles are unavailable for injected files.",
+	"Queues a wav/ogg/mp3 file (relative to Data\\Sound\\) to play on the next natural track advance. mp3 files play on the song slot, wav/ogg on the spoken segment slot. Returns 0 if the queue is full. Subtitles are unavailable for injected files.",
 	0, 1, kParams_OneString, Cmd_QueueRadioTrack_Execute, nullptr, nullptr, 0
 };
 
@@ -422,7 +464,6 @@ void BeginTrackAdvance()
 	ScopedLock lock(&s_lock);
 	s_lastPopTick = 0;
 	s_activePath[0] = '\0';
-	s_lastDispatchTick = 0;
 }
 
 void ClearState()
@@ -433,9 +474,8 @@ void ClearState()
 	s_count = 0;
 	s_lastPopTick = 0;
 	s_activePath[0] = '\0';
+	s_activeSlot = RadioInjectionLogic::kSlot_Sound;
 	s_loopMode = false;
-	s_lastDispatchedPath[0] = '\0';
-	s_lastDispatchTick = 0;
 	s_pendingEventCount = 0;
 }
 

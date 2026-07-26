@@ -5,6 +5,13 @@
 
 namespace RadioInjectionLogic {
 
+//the two radio outputs take different decoders: BSAudioManager rewrites the requested
+//extension to wav/ogg, the media streamer opens mp3 only
+enum SlotFormat {
+	kSlot_Sound,
+	kSlot_Stream,
+};
+
 inline char LowerASCII(char c)
 {
 	return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c;
@@ -16,9 +23,36 @@ inline bool HasSoundRoot(const char* path)
 	if (!path)
 		return false;
 	for (size_t i = 0; i < sizeof(prefix) - 1; i++)
-		if (!path[i] || LowerASCII(path[i]) != prefix[i])
+	{
+		char c = LowerASCII(path[i]);
+		if (!c)
 			return false;
+		if (c == '/')
+			c = '\\';
+		if (c != prefix[i])
+			return false;
+	}
 	return true;
+}
+
+//ext is lowercase and includes the dot
+inline bool ExtensionIs(const char* path, const char* ext)
+{
+	const char* dot = path ? std::strrchr(path, '.') : nullptr;
+	if (!dot)
+		return false;
+	size_t i = 0;
+	for (; ext[i]; i++)
+		if (LowerASCII(dot[i]) != ext[i])
+			return false;
+	return dot[i] == '\0';
+}
+
+inline bool PathSuitsSlot(const char* path, SlotFormat slot)
+{
+	if (slot == kSlot_Stream)
+		return ExtensionIs(path, ".mp3");
+	return ExtensionIs(path, ".wav") || ExtensionIs(path, ".ogg");
 }
 
 inline bool BuildEnginePath(const char* path, char* out, size_t outSize)

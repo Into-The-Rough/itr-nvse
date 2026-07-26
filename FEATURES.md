@@ -81,8 +81,8 @@
 - GetPlayingRadioTrackFileName - returns file path of playing radio track
 - GetPlayingRadioText - returns dialogue text of playing radio voice line
 - ChangeRadioTrack - advances active radio station to next track
-- PlayRadioFile - skips the current track and plays a wav/ogg file (relative to Data\Sound\) on the active station. Subtitles are unavailable for injected files
-- QueueRadioTrack - queues a wav/ogg file to play on the next natural track advance (queue of 8, returns 0 when full)
+- PlayRadioFile - skips the current track and plays a wav/ogg/mp3 file (relative to Data\Sound\) on the active station. The engine feeds its two radio outputs from different decoders, so wav/ogg play on the sound-handle output that serves pip-boy voice segments and world speakers, and mp3 on the pip-boy song stream; an entry waits until its matching output next asks for a track, so mp3 is not guaranteed to be the immediately next segment. Subtitles are unavailable for injected files
+- QueueRadioTrack - queues a wav/ogg/mp3 file to play on the next natural track advance of its matching output (queue of 8, returns 0 when full)
 - ClearRadioQueue - clears the injected track queue, returns entries removed
 - SetRadioQueueLoop - 1 cycles the queue as a playlist instead of consuming it, 0 restores consume
 - GetRadioQueueSize - returns the injected queue count
@@ -159,7 +159,7 @@
 - ITR:OnGetUp - fires on get-up transitions (actor, phase: 0 animation begins, 1 fully upright)
 - ITR:OnTileValueChange - fires when a watched tile trait changes (menuID, traitID, oldValue, newValue, watchId). Register watches with WatchTileValue. Reaction-driven recomputes also fire
 - ITR:OnTileStrValueChange - fires when a watched string trait changes (menuID, traitID, oldStr, newStr, watchId)
-- ITR:OnRadioTrackChange - fires once per radio track advance (filePath, wasInjected)
+- ITR:OnRadioTrackChange - fires once per radio output that attempts to start a track (filePath, wasInjected), queued as the path is handed to the engine rather than on confirmed playback. A single station advance reaches the world speakers with the `_mono` path and the pip-boy with the original path, so one advance on the tuned station fires twice with different paths. Repeats of the same path within a frame are collapsed, and at most 8 distinct paths are reported per frame
 - ITR:OnPreDeath - fires when a non-essential actor is about to die, before the death commits (actor, killer). Cancellable: SetFunctionValue 0 to veto, which diverts the actor into the engine's own essential-down path (knocked down, recovers at engine-managed minimal health). Excludes player death, gib/dismember/explosion fatalities and VATS finishing moves. Vetoed kills still credit challenge counters and death perk entries, identical to vanilla essential behaviour
 - ITR:OnPreHitDamage - fires per combat hit (weapon, melee, explosion) after final damage is computed, before knockdown/dismember/death flags are read (target, attacker, weapon, damage, hitLocation). Mutable: SetFunctionValue a multiplier (0 negates, 0.5 halves, 2 doubles); multiple handlers multiply together. Scales health, limb and fatigue damage together
 - ITR:OnPreHealthDamage - catch-all fired before any final health reduction applies (target, source, delta - negative, post-mitigation). Covers falls, traps, damage-over-time ticks (once per tick), scripted DamageAV, and weapon hits again post-mitigation. Mutable: SetFunctionValue a multiplier. For weapon-hit scaling prefer ITR:OnPreHitDamage
