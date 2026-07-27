@@ -107,6 +107,8 @@
 // 0x40D9  SetAlertNS
 // 0x40DA  GetAlertNS
 // 0x40DB  SetDismemberedLimbVelocity
+// 0x40DC  GetActorCoverState
+// 0x40DD  GetActorCoverInfo
 // 0x410E  Gesture
 
 

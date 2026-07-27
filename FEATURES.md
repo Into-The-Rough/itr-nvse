@@ -109,6 +109,8 @@
 - IsPointOnNavmesh - returns 1 if x,y,z resolves to a loaded navmesh triangle (optional anchor ref supplies the cell, default player)
 - GetCoverPointsInRadius - array of [x, y, z, coverFlags] for cover edges on loaded navmeshes near a point (unsorted, max 128). coverFlags: bits 0-3 cover height bucket (16 units each), bit 4 left open, bit 5 right open, bit 6 edge slot
 - GetBestCoverFromThreat - array of [x, y, z, coverFlags, distToSearch] for cover near a search point that hides the standing position from a threat (blocked line of sight), sorted nearest-first, empty when none. Args: threatX threatY threatZ searchX searchY searchZ radius [maxResults=8, cap 32]
+- GetActorCoverState - the actor's from-cover procedure state (0 INITIALIZING, 1 WAITING_BEHIND_COVER, 2 MOVING_OUT, 3 WAITING_OUT_OF_COVER, 4 FIRING_OUT_OF_COVER, 5 MOVING_IN, 6 MOVING_IN_AND_ROTATE, 7 HOLDING_GROUND), -1 when no from-cover action is running
+- GetActorCoverInfo - string map for the navmesh triangle the actor stands on: triangle, navmesh, hasCover, edges (per cover edge: slot, heightBucket, leftOpen, rightOpen, edgeA, edgeB). Adds state, stateName, hasProcedure and a cover sub-map when the combat AI has cover reserved. 0 only when the actor is off the navmesh with no reserved cover
 
 **Input**
 - DisableKeyEx - disable key with handler

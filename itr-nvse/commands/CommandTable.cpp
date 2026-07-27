@@ -47,6 +47,7 @@
 #include "commands/GroundCommands.h"
 #include "commands/GestureCommand.h"
 #include "commands/NavmeshCommands.h"
+#include "commands/CoverCommands.h"
 #include "commands/DialogueTopicCommands.h"
 #include "features/RadioInjection.h"
 #include "handlers/OnTileValueChangeHandler.h"
@@ -246,4 +247,7 @@ void RegisterAllCommands(void* nvsePtr)
 
 	nvse->SetOpcodeBase(0x40DB);
 	HavokCommands::RegisterCommands4(nvse); //SetDismemberedLimbVelocity
+
+	nvse->SetOpcodeBase(0x40DC);
+	CoverCommands::RegisterCommands(nvse); //GetActorCoverState, GetActorCoverInfo
 }

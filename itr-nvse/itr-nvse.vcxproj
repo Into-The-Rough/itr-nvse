@@ -251,6 +251,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="handlers\OnPreDamageHandler.cpp" />
     <ClCompile Include="commands\DialogueTopicCommands.cpp" />
     <ClCompile Include="commands\NavmeshCommands.cpp" />
+    <ClCompile Include="commands\CoverCommands.cpp" />
     <ClCompile Include="features\RadioInjection.cpp" />
     <ClCompile Include="features\WakeyWakey.cpp" />
     <ClCompile Include="internal\EventDispatch.cpp" />
@@ -393,6 +394,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="handlers\OnPreDamageHandler.h" />
     <ClInclude Include="commands\DialogueTopicCommands.h" />
     <ClInclude Include="commands\NavmeshCommands.h" />
+    <ClInclude Include="commands\CoverCommands.h" />
     <ClInclude Include="commands\PathingShared.h" />
     <ClInclude Include="internal\RayCast.h" />
     <ClInclude Include="features\RadioInjection.h" />
