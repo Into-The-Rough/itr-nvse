@@ -50,30 +50,23 @@ static void EnsureLockInit()
 	InitCriticalSectionOnce(&s_lockInit, &s_lock);
 }
 
-static void PopFront_Unlocked(char* dst, size_t dstSize)
+//removes the entry at logical offset from the head, shifting the entries before it
+//one slot toward the tail so remaining order is preserved, then advances the head
+static void TakeAt_Unlocked(int offset, char* dst, size_t dstSize)
 {
-	const char* src = s_queue[s_head];
+	const char* src = s_queue[(s_head + offset) % kMaxQueue];
 	size_t n = strlen(src);
 	if (n >= dstSize) n = dstSize - 1;
 	memcpy(dst, src, n);
 	dst[n] = '\0';
+	for (int j = offset; j > 0; j--)
+	{
+		int to = (s_head + j) % kMaxQueue;
+		int from = (s_head + j - 1) % kMaxQueue;
+		strcpy_s(s_queue[to], kPathLen, s_queue[from]);
+	}
 	s_head = (s_head + 1) % kMaxQueue;
 	s_count--;
-}
-
-//loop mode: hand out the front path but rotate it to the tail instead of consuming,
-//so the playlist cycles until cleared or loop is disabled. count unchanged
-static void RotateFront_Unlocked(char* dst, size_t dstSize)
-{
-	const char* src = s_queue[s_head];
-	size_t n = strlen(src);
-	if (n >= dstSize) n = dstSize - 1;
-	memcpy(dst, src, n);
-	dst[n] = '\0';
-	int tailSlot = (s_head + s_count) % kMaxQueue;   //slot the front rotates into once head advances
-	if (tailSlot != s_head)
-		strcpy_s(s_queue[tailSlot], kPathLen, s_queue[s_head]);
-	s_head = (s_head + 1) % kMaxQueue;
 }
 
 static bool PushBack_Unlocked(const char* path)
@@ -134,8 +127,9 @@ static void QueueTrackChange(const char* usePath, bool wasInjected)
 	s_pendingEventCount++;
 }
 
-//hands out the engine-ready path for this slot, popping the queue only when the front
-//entry's format matches the slot so an mp3 waits for the stream rather than being
+//hands out the engine-ready path for this slot, taking the first queued entry whose
+//format matches the slot so mixed-format queues feed both outputs without one
+//stalling behind the other. an mp3 still waits for the stream slot rather than being
 //swallowed by a sound handle that would rewrite its extension
 static bool TakeTrackForSlot(RadioInjectionLogic::SlotFormat slot, char* out, size_t outSize)
 {
@@ -148,14 +142,23 @@ static bool TakeTrackForSlot(RadioInjectionLogic::SlotFormat slot, char* out, si
 		return true;
 	}
 
-	if (s_count <= 0 || !RadioInjectionLogic::PathSuitsSlot(s_queue[s_head], slot))
+	int match = -1;
+	for (int i = 0; i < s_count; i++)
+	{
+		if (RadioInjectionLogic::PathSuitsSlot(s_queue[(s_head + i) % kMaxQueue], slot))
+		{
+			match = i;
+			break;
+		}
+	}
+	if (match < 0)
 		return false;
 
 	char queuedPath[kPathLen];
+	TakeAt_Unlocked(match, queuedPath, sizeof(queuedPath));
+	//loop mode: taken entry rotates to the tail so the playlist cycles until cleared
 	if (s_loopMode)
-		RotateFront_Unlocked(queuedPath, sizeof(queuedPath));
-	else
-		PopFront_Unlocked(queuedPath, sizeof(queuedPath));
+		PushBack_Unlocked(queuedPath);
 
 	if (!RadioInjectionLogic::BuildEnginePath(queuedPath, s_activePath, sizeof(s_activePath)))
 		return false;
