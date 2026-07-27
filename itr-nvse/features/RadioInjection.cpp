@@ -18,9 +18,9 @@
 #include "internal/EventDispatch.h"
 #include "internal/RadioInjectionLogic.h"
 
-#define EXTRACT_ARGS paramInfo, scriptData, opcodeOffsetPtr, thisObj, containingObj, scriptObj, eventList
-typedef bool (*ExtractArgs_t)(ParamInfo*, void*, UInt32*, TESObjectREFR*, TESObjectREFR*, Script*, ScriptEventList*, ...);
-static ExtractArgs_t ExtractArgs = (ExtractArgs_t)0x5ACCB0;
+//ExtractArgsEx resolves string_var args, the raw 0x5ACCB0 extractor hands them over as literal text
+#define EXTRACT_ARGS_EX paramInfo, scriptData, opcodeOffsetPtr, scriptObj, eventList
+static bool (*ExtractArgsEx)(ParamInfo*, void*, UInt32*, Script*, ScriptEventList*, ...) = nullptr;
 
 namespace RadioInjection {
 
@@ -258,6 +258,13 @@ void Init(void* nvseInterface)
 	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
 	if (nvse && nvse->isEditor) return;
 
+	if (nvse)
+	{
+		NVSEScriptInterface* scriptInterface = (NVSEScriptInterface*)nvse->QueryInterface(kInterface_Script);
+		if (scriptInterface)
+			ExtractArgsEx = scriptInterface->ExtractArgsEx;
+	}
+
 	EnsureLockInit();
 
 	if (g_eventManagerInterface)
@@ -323,7 +330,7 @@ static bool Cmd_PlayRadioFile_Execute(COMMAND_ARGS)
 	*result = 0;
 
 	char path[kPathLen] = {};
-	if (!ExtractArgs(EXTRACT_ARGS, &path))
+	if (!ExtractArgsEx || !ExtractArgsEx(EXTRACT_ARGS_EX, &path))
 		return true;
 
 	if (!GetCurrentRadio())
@@ -354,7 +361,7 @@ static bool Cmd_QueueRadioTrack_Execute(COMMAND_ARGS)
 	*result = 0;
 
 	char path[kPathLen] = {};
-	if (!ExtractArgs(EXTRACT_ARGS, &path))
+	if (!ExtractArgsEx || !ExtractArgsEx(EXTRACT_ARGS_EX, &path))
 		return true;
 
 	if (!IsValidRadioPath(path))
@@ -394,7 +401,7 @@ static bool Cmd_SetRadioQueueLoop_Execute(COMMAND_ARGS)
 	*result = 0;
 
 	UInt32 enable = 0;
-	if (!ExtractArgs(EXTRACT_ARGS, &enable))
+	if (!ExtractArgsEx || !ExtractArgsEx(EXTRACT_ARGS_EX, &enable))
 		return true;
 
 	{
