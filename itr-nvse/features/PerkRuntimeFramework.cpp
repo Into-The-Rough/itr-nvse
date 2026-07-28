@@ -63,6 +63,7 @@ namespace
 	constexpr UInt32 kFlag_IncludeContextual = 1 << 5;
 	constexpr UInt32 kFlag_IncludeUnknown = 1 << 6;
 	constexpr UInt32 kFlag_AllEntryPoints = 1 << 7;
+	constexpr UInt32 kFlag_IncludeBlocked = 1 << 8;
 	constexpr UInt32 kConsoleDumpLimit = 32;
 
 	enum class Source : UInt8
@@ -2204,7 +2205,18 @@ namespace
 			return false;
 		if (descriptor.trait && !(flags & kFlag_IncludeTraits))
 			return false;
-		return result.eligible;
+		if (result.eligible)
+			return true;
+		if ((flags & kFlag_IncludeBlocked) == 0)
+			return false;
+		//flag 256: include only greyed level-up menu entries, not NonLevelUp/MenuFiltered/Scripted perks
+		for (const auto& blocker : result.blockers)
+		{
+			const Kind kind = blocker.first.kind;
+			if (kind == Kind::NonLevelUp || kind == Kind::MenuFiltered || kind == Kind::Scripted)
+				return false;
+		}
+		return true;
 	}
 
 	PerkDescriptor BuildPerkDescriptor(BGSPerk* perk)
@@ -2263,10 +2275,16 @@ namespace
 		{ "flags", kParamType_Integer, 1 },
 	};
 
+	static ParamInfo kParams_FlagsLevel[2] = {
+		{ "flags", kParamType_Integer, 0 },
+		{ "levelOverride", kParamType_Integer, 1 },
+	};
+
 	DEFINE_COMMAND_PLUGIN(GetPerkEligibility, "Returns structured player eligibility for a perk", 0, 3, kParams_PerkDeltaFlags);
 	DEFINE_COMMAND_PLUGIN(GetPerkBlockers, "Returns structured blockers for a perk", 0, 3, kParams_PerkDeltaFlags);
 	DEFINE_COMMAND_PLUGIN(GetEligiblePerks, "Returns currently level-up selectable perks", 0, 2, kParams_DeltaFlags);
 	DEFINE_COMMAND_PLUGIN(GetPerkConditions, "Returns parsed perk requirement and entry-point descriptors", 0, 2, kParams_PerkFlags);
+	DEFINE_COMMAND_PLUGIN(GetEligiblePerksEx, "GetEligiblePerks for runtime-compiled scripts, flags plus optional level override", 0, 2, kParams_FlagsLevel);
 	DEFINE_COMMAND_PLUGIN(GetPerksForForm, "Returns perks relevant to a weapon, armour, or item form", 0, 3, kParams_FormDeltaFlags);
 
 	bool EnsurePerkIndex()
@@ -2321,13 +2339,8 @@ namespace
 		return true;
 	}
 
-	bool Cmd_GetEligiblePerks_Execute(COMMAND_ARGS)
+	bool BuildEligiblePerksResult(const EvalContext& ctx, UInt32 flags, Script* scriptObj, double* result)
 	{
-		*result = 0;
-		Array* deltaArray = nullptr;
-		UInt32 flags = 0;
-		ExtractArgs(EXTRACT_ARGS, &deltaArray, &flags);
-
 		if (!g_arrInterface)
 			return true;
 		if (!EnsurePerkIndex())
@@ -2337,7 +2350,6 @@ namespace
 		if (!arr)
 			return true;
 
-		auto ctx = MakeEvalContext(deltaArray);
 		std::vector<EligibilityResult> consoleRows;
 		UInt32 consoleCount = 0;
 		for (const auto& descriptor : g_perks)
@@ -2374,6 +2386,30 @@ namespace
 
 		AssignArrayResult(arr, result);
 		return true;
+	}
+
+	bool Cmd_GetEligiblePerks_Execute(COMMAND_ARGS)
+	{
+		*result = 0;
+		Array* deltaArray = nullptr;
+		UInt32 flags = 0;
+		ExtractArgs(EXTRACT_ARGS, &deltaArray, &flags);
+		return BuildEligiblePerksResult(MakeEvalContext(deltaArray), flags, scriptObj, result);
+	}
+
+	bool Cmd_GetEligiblePerksEx_Execute(COMMAND_ARGS)
+	{
+		*result = 0;
+		UInt32 flags = 0;
+		UInt32 levelOverride = 0;
+		ExtractArgs(EXTRACT_ARGS, &flags, &levelOverride);
+		auto ctx = MakeEvalContext(nullptr);
+		if (levelOverride)
+		{
+			ctx.delta.hasLevel = true;
+			ctx.delta.level = levelOverride;
+		}
+		return BuildEligiblePerksResult(ctx, flags, scriptObj, result);
 	}
 
 	bool Cmd_GetPerkConditions_Execute(COMMAND_ARGS)
@@ -2445,6 +2481,7 @@ namespace PerkRuntimeFramework
 		nvse->RegisterTypedCommand(&kCommandInfo_GetPerkEligibility, kRetnType_Array);
 		nvse->RegisterTypedCommand(&kCommandInfo_GetPerkBlockers, kRetnType_Array);
 		nvse->RegisterTypedCommand(&kCommandInfo_GetEligiblePerks, kRetnType_Array);
+		nvse->RegisterTypedCommand(&kCommandInfo_GetEligiblePerksEx, kRetnType_Array);
 		nvse->RegisterTypedCommand(&kCommandInfo_GetPerkConditions, kRetnType_Array);
 		nvse->RegisterTypedCommand(&kCommandInfo_GetPerksForForm, kRetnType_Array);
 	}

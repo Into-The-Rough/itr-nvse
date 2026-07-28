@@ -112,6 +112,13 @@
 - GetActorCoverState - the actor's from-cover procedure state (0 INITIALIZING, 1 WAITING_BEHIND_COVER, 2 MOVING_OUT, 3 WAITING_OUT_OF_COVER, 4 FIRING_OUT_OF_COVER, 5 MOVING_IN, 6 MOVING_IN_AND_ROTATE, 7 HOLDING_GROUND), -1 when no from-cover action is running
 - GetActorCoverInfo - string map for the navmesh triangle the actor stands on: triangle, navmesh, hasCover, edges (per cover edge: slot, heightBucket, leftOpen, rightOpen, edgeA, edgeB). Adds state, stateName, hasProcedure and a cover sub-map when the combat AI has cover reserved. 0 only when the actor is off the navmesh with no reserved cover
 
+**Perk**
+- GetEligiblePerks - returns array of perks the player can currently select from the level-up perk menu. Flags: 1 hidden, 2 non-playable, 4 traits, 8 owned max rank, 16 non-level-up, 256 requirement-blocked. The delta array argument only compiles in geck scripts, the runtime compiler rejects array params
+- GetEligiblePerksEx - GetEligiblePerks for runtime-compiled scripts (flags, optional levelOverride). Same result format, no delta array needed
+- GetPerkEligibility - check if a perk is eligible and return detailed eligibility data
+- GetPerkBlockers - get requirements blocking a perk
+- GetPerksForForm - get perks associated with a form
+
 **Input**
 - DisableKeyEx - disable key with handler
 - EnableKeyEx - enable key with handler
