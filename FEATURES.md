@@ -134,6 +134,7 @@
 - ITR:OnKeyHeld - fires while key held past threshold (keyCode, heldSeconds)
 - ITR:OnCombatProcedure - fires on combat AI procedure change (actor, procType, isAction)
 - ITR:OnEntryPoint - fires when perk entry points execute (perk, entryPoint, actor, filterForm)
+- ITR:OnSoundPlayedByPosition - fires per sound like OnSoundPlayed but adds spatial data (filePath, flags, sourceSound, hasPos, x, y, z, volume). Fires for every sound; hasPos is 0 and volume 1.0 when the engine gave the sound no 3D position before dispatch. Position/volume are the creation-time snapshot, later movement of looping sounds is not tracked.
 - ITR:OnActorLanded - fires when actor lands (actor, fallTime)
 - ITR:OnJumpStart - fires when actor starts jumping (actor)
 - ITR:OnConsoleOpen - fires on console open

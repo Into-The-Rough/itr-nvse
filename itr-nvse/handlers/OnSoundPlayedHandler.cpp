@@ -34,6 +34,12 @@ struct QueuedSoundEvent
     char filePath[260];
     UInt32 soundFlags;
     UInt32 soundFormID;
+    UInt32 soundID;
+    float x;
+    float y;
+    float z;
+    float volume;
+    UInt8 hasPos;
 };
 
 struct TrackedVoiceSound
@@ -64,6 +70,7 @@ namespace OnSoundPlayedHandler {
 
 static constexpr const char* kSoundPlayedEvent = "ITR:OnSoundPlayed";
 static constexpr const char* kSoundCompletedEvent = "ITR:OnSoundCompleted";
+static constexpr const char* kSoundPosEvent = "ITR:OnSoundPlayedByPosition";
 static constexpr int kProbePriority = -9999;
 static constexpr UInt32 kListenerProbeIntervalFrames = 30;
 
@@ -71,10 +78,12 @@ static PluginHandle s_pluginHandle = kPluginHandle_Invalid;
 static bool s_probeHandlersInstalled = false;
 static volatile bool s_hasPlayedListeners = true;
 static volatile bool s_hasCompletedListeners = true;
+static volatile bool s_hasPosListeners = true;
 static UInt32 s_listenerProbeFrame = kListenerProbeIntervalFrames;
 
 static void SoundPlayedProbeHandler(TESObjectREFR*, void*) {}
 static void SoundCompletedProbeHandler(TESObjectREFR*, void*) {}
+static void SoundPosProbeHandler(TESObjectREFR*, void*) {}
 
 static bool InstallProbeHandler(const char* eventName, NVSEEventManagerInterface::NativeEventHandler handler,
     const char* handlerName)
@@ -117,6 +126,7 @@ static void RefreshListenerState(bool force) {
     s_listenerProbeFrame = 0;
     s_hasPlayedListeners = HasExternalHandlers(kSoundPlayedEvent, SoundPlayedProbeHandler);
     s_hasCompletedListeners = HasExternalHandlers(kSoundCompletedEvent, SoundCompletedProbeHandler);
+    s_hasPosListeners = HasExternalHandlers(kSoundPosEvent, SoundPosProbeHandler);
 }
 
 static void EnsureStateLockInitialized()
@@ -135,7 +145,7 @@ typedef BSSoundHandle* (__thiscall* GetSoundHandleByFilePath_t)(
 );
 static Detours::JumpDetour s_detour;
 
-static void QueueSoundEvent(const char* filePath, UInt32 flags, UInt32 soundFormID)
+static void QueueSoundEvent(const char* filePath, UInt32 flags, UInt32 soundFormID, UInt32 soundID)
 {
     if (OnSoundPlayedHandler::g_stateLockInit != 2) return;
 
@@ -146,10 +156,41 @@ static void QueueSoundEvent(const char* filePath, UInt32 flags, UInt32 soundForm
         evt.filePath[0] = '\0';
     evt.soundFlags = flags;
     evt.soundFormID = soundFormID;
+    evt.soundID = soundID;
+    evt.x = evt.y = evt.z = 0.0f;
+    evt.volume = 1.0f;
+    evt.hasPos = 0;
 
     ScopedLock lock(&OnSoundPlayedHandler::g_stateLock);
     if (OnSoundPlayedHandler::g_pendingCount >= kMaxQueueSize) return;
     OnSoundPlayedHandler::g_pendingEvents[OnSoundPlayedHandler::g_pendingCount++] = evt;
+}
+
+static void UpdatePendingPos(UInt32 soundID, float x, float y, float z)
+{
+    if (OnSoundPlayedHandler::g_stateLockInit != 2) return;
+    ScopedLock lock(&OnSoundPlayedHandler::g_stateLock);
+    for (UInt32 i = OnSoundPlayedHandler::g_pendingCount; i-- > 0;) {
+        QueuedSoundEvent& evt = OnSoundPlayedHandler::g_pendingEvents[i];
+        if (evt.soundID != soundID) continue;
+        evt.x = x;
+        evt.y = y;
+        evt.z = z;
+        evt.hasPos = 1;
+        break;
+    }
+}
+
+static void UpdatePendingVol(UInt32 soundID, float volume)
+{
+    if (OnSoundPlayedHandler::g_stateLockInit != 2) return;
+    ScopedLock lock(&OnSoundPlayedHandler::g_stateLock);
+    for (UInt32 i = OnSoundPlayedHandler::g_pendingCount; i-- > 0;) {
+        QueuedSoundEvent& evt = OnSoundPlayedHandler::g_pendingEvents[i];
+        if (evt.soundID != soundID) continue;
+        evt.volume = volume;
+        break;
+    }
 }
 
 static void QueueVoiceTracking(UInt32 soundID, const char* filePath, UInt32 flags, UInt32 soundFormID, const BSSoundHandle* handle)
@@ -191,14 +232,16 @@ static BSSoundHandle* __fastcall HookedGetSoundHandle(
     UInt32 aeAudioFlags, TESSound* apSound)
 {
     bool hasPlayedListeners = s_hasPlayedListeners;
+    bool hasPosListeners = s_hasPosListeners;
     bool hasCompletedListeners = s_hasCompletedListeners;
     UInt32 soundFormID = ReadRefID(apSound);
     bool hasEventManager = g_eventManagerInterface != nullptr;
 
-    if (hasEventManager && hasPlayedListeners && apName && apName[0])
-        QueueSoundEvent(apName, aeAudioFlags, soundFormID);
-
     BSSoundHandle* result = s_detour.GetTrampoline<GetSoundHandleByFilePath_t>()(mgr, arData, apName, aeAudioFlags, apSound);
+
+    //queue after the original so the entry carries the sound ID for position/volume correlation
+    if (hasEventManager && (hasPlayedListeners || hasPosListeners) && apName && apName[0])
+        QueueSoundEvent(apName, aeAudioFlags, soundFormID, result ? result->uiSoundID : 0xFFFFFFFF);
 
     if (hasEventManager && hasCompletedListeners && (aeAudioFlags & kSoundFlag_IsVoice) && apName && apName[0]) {
         if (result && result->uiSoundID != 0 && result->uiSoundID != 0xFFFFFFFF)
@@ -206,6 +249,25 @@ static BSSoundHandle* __fastcall HookedGetSoundHandle(
     }
 
     return result;
+}
+
+typedef char(__thiscall* SetPosition_t)(void* handle, float x, float y, float z);
+typedef char(__thiscall* SetVolume_t)(void* handle, float volume);
+static Detours::JumpDetour s_posDetour;
+static Detours::JumpDetour s_volDetour;
+
+static char __fastcall HookedSetPosition(UInt32* handle, void*, float x, float y, float z)
+{
+    if (s_hasPosListeners && handle && *handle != 0xFFFFFFFF)
+        UpdatePendingPos(*handle, x, y, z);
+    return s_posDetour.GetTrampoline<SetPosition_t>()(handle, x, y, z);
+}
+
+static char __fastcall HookedSetVolume(UInt32* handle, void*, float volume)
+{
+    if (s_hasPosListeners && handle && *handle != 0xFFFFFFFF)
+        UpdatePendingVol(*handle, volume);
+    return s_volDetour.GetTrampoline<SetVolume_t>()(handle, volume);
 }
 
 static bool IsSameTracked(const TrackedVoiceSound& a, const TrackedVoiceSound& b)
@@ -219,11 +281,13 @@ void InstallListenerProbes()
 {
     bool playedProbe = InstallProbeHandler(kSoundPlayedEvent, SoundPlayedProbeHandler, "ITR_OnSoundPlayedProbe");
     bool completedProbe = InstallProbeHandler(kSoundCompletedEvent, SoundCompletedProbeHandler, "ITR_OnSoundCompletedProbe");
+    bool posProbe = InstallProbeHandler(kSoundPosEvent, SoundPosProbeHandler, "ITR_OnSoundPlayedByPositionProbe");
 
-    s_probeHandlersInstalled = playedProbe && completedProbe;
+    s_probeHandlersInstalled = playedProbe && completedProbe && posProbe;
     s_listenerProbeFrame = kListenerProbeIntervalFrames;
     s_hasPlayedListeners = true;
     s_hasCompletedListeners = true;
+    s_hasPosListeners = true;
 }
 
 void Update()
@@ -259,8 +323,15 @@ void Update()
         //sounds played by file path carry no TESSound form, dispatch them with a null source
         TESForm* sourceSound = evt.soundFormID ? (TESForm*)Engine::LookupFormByID(evt.soundFormID) : nullptr;
 
-        g_eventManagerInterface->DispatchEvent(kSoundPlayedEvent, nullptr,
-            evt.filePath, (int)evt.soundFlags, (TESObjectREFR*)sourceSound);
+        if (s_hasPlayedListeners)
+            g_eventManagerInterface->DispatchEvent(kSoundPlayedEvent, nullptr,
+                evt.filePath, (int)evt.soundFlags, (TESObjectREFR*)sourceSound);
+
+        if (s_hasPosListeners)
+            g_eventManagerInterface->DispatchEvent(kSoundPosEvent, nullptr,
+                evt.filePath, (int)evt.soundFlags, (TESObjectREFR*)sourceSound,
+                (int)evt.hasPos, PackEventFloatArg(evt.x), PackEventFloatArg(evt.y),
+                PackEventFloatArg(evt.z), PackEventFloatArg(evt.volume));
     }
 
     if (!snapCount)
@@ -337,6 +408,11 @@ bool Init(void* nvseInterface)
     //prologue: push ebp (1) + mov ebp,esp (2) + push -1 (2) = 5 bytes
     if (!s_detour.WriteRelJump(0xAE5A50, HookedGetSoundHandle, 5))
         return false;
+
+    //0xAD8B60 = BSSoundHandle::SetPosition, 0xAD89E0 = BSSoundHandle::SetVolume, sole routes to the by-ID workers
+    //prologue both: push ebp (1) + mov ebp,esp (2) + push ecx (1) + mov [ebp-4],ecx (3) = 7 bytes
+    s_posDetour.WriteRelJump(0xAD8B60, HookedSetPosition, 7);
+    s_volDetour.WriteRelJump(0xAD89E0, HookedSetVolume, 7);
 
     OnSoundPlayedHandler::g_hookInstalled = true;
     return true;
