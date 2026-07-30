@@ -28,10 +28,11 @@ namespace GestureCommand
 		DWORD duration = 0;
 		float amplitude = 0.0f;
 		float cycleTime = 0.4f;
-		float baseRot[9] = {};
+		float animBase[9] = {};
+		float lastWritten[9] = {};
 		void* headBone = nullptr;
 		void* root = nullptr;
-		bool hasBaseRot = false;
+		bool hasLast = false;
 	};
 
 	static Gesture g_gestures[MAX_GESTURES] = {};
@@ -107,7 +108,7 @@ namespace GestureCommand
 
 	static void RestoreGesturePose(Gesture& g)
 	{
-		if (!g.hasBaseRot)
+		if (!g.hasLast)
 			return;
 
 		auto* form = reinterpret_cast<TESObjectREFR*>(Engine::LookupFormByID(g.refID));
@@ -118,8 +119,11 @@ namespace GestureCommand
 		if (!headBone)
 			return;
 
+		//only unwind our own write, if the animation system rewrote the bone it already owns the pose
 		float* localRot = NiAVObjectAsView(headBone)->local.rotate;
-		GestureMath::CopyMat3(localRot, g.baseRot);
+		if (memcmp(localRot, g.lastWritten, sizeof(g.lastWritten)) != 0)
+			return;
+		GestureMath::CopyMat3(localRot, g.animBase);
 		PropagateTransforms(headBone);
 	}
 
@@ -160,25 +164,26 @@ namespace GestureCommand
 			{
 				g.root = root;
 				g.headBone = GetObjectByName(root, "Bip01 Head");
-				g.hasBaseRot = false;
+				g.hasLast = false;
 			}
 
 			void* headBone = g.headBone;
 			if (!headBone) { ClearGesture(g); continue; }
 
+			//rebase whenever the animation system rewrote the bone since our last write,
+			//so the gesture rides on top of headtracking instead of a stale snapshot
 			float* localRot = NiAVObjectAsView(headBone)->local.rotate;
-			if (!g.hasBaseRot)
-			{
-				GestureMath::CopyMat3(g.baseRot, localRot);
-				g.hasBaseRot = true;
-			}
+			if (!g.hasLast || memcmp(localRot, g.lastWritten, sizeof(g.lastWritten)) != 0)
+				GestureMath::CopyMat3(g.animBase, localRot);
 
 			if (!g.start) g.start = now;
 			DWORD elapsed = now - g.start;
 			if (elapsed >= g.duration) { StopGesture(g); continue; }
 
 			float angle = GestureMath::ComputeAngleRadians(g.type, elapsed, g.duration, g.amplitude, g.cycleTime);
-			GestureMath::ComposePoseFromBase(g.baseRot, g.type, angle, localRot);
+			GestureMath::ComposePoseFromBase(g.animBase, g.type, angle, localRot);
+			GestureMath::CopyMat3(g.lastWritten, localRot);
+			g.hasLast = true;
 
 			PropagateTransforms(headBone);
 		}
