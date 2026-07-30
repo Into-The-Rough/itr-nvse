@@ -92,6 +92,7 @@ bool Cmd_AddDialogueTopicEntry_Execute(COMMAND_ARGS)
 		return true;
 	}
 
+	TileSetFloatTrait(tile, ResolveTraitName("_line_alpha"), 255);
 	TileSetFloatTrait(tile, kTrait_ListIndex, (int)(syntheticId | kSyntheticFlag));
 	OnDialogueMenuBuildHandler::RegisterSyntheticTile(tile, syntheticId);
 

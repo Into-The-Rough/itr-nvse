@@ -2,7 +2,7 @@
 #include "ITR.h"
 #include "commands/CommandTable.h"
 
-#define ITR_VERSION 20102 // 2.1.1 (major*10000 + minor*100 + patch)
+#define ITR_VERSION 20102 //2.1.2 (major*10000 + minor*100 + patch)
 
 constexpr UInt32 kRequiredNVSEVersion = MAKE_NEW_VEGAS_VERSION(6, 4, 5);
 
