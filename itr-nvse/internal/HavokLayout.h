@@ -30,6 +30,13 @@ struct HkpWorldObjectView {
 	void* object;
 	UInt8 pad0C[0x28 - 0x0C];
 	UInt8 collisionType;
+	UInt8 pad29[3];
+	UInt32 collisionFilterInfo;
+};
+
+struct HkpCollidableView {
+	UInt8 pad00[0x1C];
+	UInt32 collisionFilterInfo;
 };
 
 struct HkpSimulationIslandView {
@@ -114,6 +121,8 @@ static_assert(offsetof(BhkCollisionObjectView, niNode) == 0x08);
 static_assert(offsetof(BhkCollisionObjectView, worldObject) == 0x10);
 static_assert(offsetof(HkpWorldObjectView, object) == 0x08);
 static_assert(offsetof(HkpWorldObjectView, collisionType) == 0x28);
+static_assert(offsetof(HkpWorldObjectView, collisionFilterInfo) == 0x2C);
+static_assert(offsetof(HkpCollidableView, collisionFilterInfo) == 0x1C);
 static_assert(offsetof(HkpSimulationIslandView, stateFlags) == 0x26);
 static_assert(offsetof(HkpRigidBodyView, simulationIsland) == 0xCC);
 static_assert(offsetof(HkpRigidBodyView, motionType) == 0xE8);
@@ -165,6 +174,16 @@ inline BhkCollisionObjectView* BhkCollisionObjectAsView(void* collisionObject)
 inline HkpWorldObjectView* HkpWorldObjectAsView(void* worldObject)
 {
 	return static_cast<HkpWorldObjectView*>(worldObject);
+}
+
+inline UInt32 HkpWorldObjectGetCollisionFilterInfo(void* worldObject)
+{
+	return worldObject ? HkpWorldObjectAsView(worldObject)->collisionFilterInfo : 0;
+}
+
+inline UInt32 HkpCollidableGetCollisionFilterInfo(void* collidable)
+{
+	return collidable ? static_cast<HkpCollidableView*>(collidable)->collisionFilterInfo : 0;
 }
 
 inline HkpRigidBodyView* HkpRigidBodyAsView(void* rigidBody)

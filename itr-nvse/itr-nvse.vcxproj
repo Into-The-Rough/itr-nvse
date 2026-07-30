@@ -139,6 +139,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="handlers\OnContactHandler.cpp" />
     <ClCompile Include="handlers\OnSoundPlayedHandler.cpp" />
     <ClCompile Include="handlers\OnJumpLandHandler.cpp" />
+    <ClCompile Include="handlers\OnFootContactHandler.cpp" />
     <ClCompile Include="handlers\FallDamageHandler.cpp" />
     <ClCompile Include="handlers\DialogueCameraHandler.cpp" />
     <ClCompile Include="handlers\FakeHitHandler.cpp" />
@@ -252,9 +253,11 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="commands\DialogueTopicCommands.cpp" />
     <ClCompile Include="commands\NavmeshCommands.cpp" />
     <ClCompile Include="commands\CoverCommands.cpp" />
+    <ClCompile Include="commands\ParticleCommands.cpp" />
     <ClCompile Include="features\RadioInjection.cpp" />
     <ClCompile Include="features\WakeyWakey.cpp" />
     <ClCompile Include="internal\EventDispatch.cpp" />
+    <ClCompile Include="internal\TempEffects.cpp" />
     <ClCompile Include="internal\WitnessScan.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -274,6 +277,9 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="commands\ToggleAllPrimitives.h" />
     <ClInclude Include="internal\BSSpinLock.h" />
     <ClInclude Include="internal\EventDispatch.h" />
+    <ClInclude Include="internal\FootContactLogic.h" />
+    <ClInclude Include="internal\TempEffectLogic.h" />
+    <ClInclude Include="internal\TempEffects.h" />
     <ClInclude Include="internal\EngineFunctions.h" />
     <ClInclude Include="internal\EngineHelpers.h" />
     <ClInclude Include="internal\DIHookView.h" />
@@ -294,6 +300,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="handlers\OnContactHandler.h" />
     <ClInclude Include="handlers\OnSoundPlayedHandler.h" />
     <ClInclude Include="handlers\OnJumpLandHandler.h" />
+    <ClInclude Include="handlers\OnFootContactHandler.h" />
     <ClInclude Include="handlers\FallDamageHandler.h" />
     <ClInclude Include="handlers\DialogueCameraHandler.h" />
     <ClInclude Include="handlers\FakeHitHandler.h" />
@@ -395,6 +402,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="commands\DialogueTopicCommands.h" />
     <ClInclude Include="commands\NavmeshCommands.h" />
     <ClInclude Include="commands\CoverCommands.h" />
+    <ClInclude Include="commands\ParticleCommands.h" />
     <ClInclude Include="commands\PathingShared.h" />
     <ClInclude Include="internal\RayCast.h" />
     <ClInclude Include="features\RadioInjection.h" />

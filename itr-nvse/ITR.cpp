@@ -37,6 +37,7 @@
 #include "handlers/OnContactHandler.h"
 #include "handlers/OnSoundPlayedHandler.h"
 #include "handlers/OnJumpLandHandler.h"
+#include "handlers/OnFootContactHandler.h"
 #include "handlers/FallDamageHandler.h"
 #include "handlers/DialogueCameraHandler.h"
 #include "handlers/FakeHitHandler.h"
@@ -447,6 +448,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				WakeyWakey::Init(Settings::bWakeyWakey != 0, Settings::fWakeDistance,
 					Settings::fQuietWakeDistance, Settings::iWakeCooldownMs);
 				OnJumpLandHandler::InstallListenerProbes();
+				OnFootContactHandler::InstallListenerProbes();
 				OnSoundPlayedHandler::InstallListenerProbes();
 				OnEntryPointHandler::InstallListenerProbe();
 				OnCombatProcedureHandler::InstallListenerProbe();
@@ -484,6 +486,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			CompanionNoBlock::ClearState();
 			DoorPinchFix::ClearState();
 			OnJumpLandHandler::ClearState();
+			OnFootContactHandler::ClearState();
 			DialogueTextFilter::ClearState();
 			OnNearMissHandler::ClearState();
 			OnEffectHandler::ClearState();
@@ -563,6 +566,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			PerkRuntimeFramework::BuildIndex();
 			OnJumpLandHandler::ClearState();
 			OnJumpLandHandler::InstallListenerProbes();
+			OnFootContactHandler::ClearState();
+			OnFootContactHandler::InstallListenerProbes();
 			OnSoundPlayedHandler::InstallListenerProbes();
 			OnEntryPointHandler::InstallListenerProbe();
 			OnCombatProcedureHandler::InstallListenerProbe();
@@ -671,6 +676,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			DoubleTapHandler::Update();
 			OnSoundPlayedHandler::Update();
 			OnJumpLandHandler::Update();
+			OnFootContactHandler::Update();
 			OnCasinoBanHandler::Update();
 			OnCombatProcedureHandler::Update();
 			OnPreWeaponSwitchHandler::Update();
@@ -730,6 +736,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	logInit("OnCombatProcedureHandler", OnCombatProcedureHandler::Init((void*)nvse));
 	logInit("OnSoundPlayedHandler", OnSoundPlayedHandler::Init((void*)nvse));
 	logInit("OnJumpLandHandler", OnJumpLandHandler::Init((void*)nvse));
+	logInit("OnFootContactHandler", OnFootContactHandler::Init((void*)nvse));
 	logInit("OnContactHandler", OnContactHandler::Init((void*)nvse));
 	if (Settings::bDialogueCamera)
 		logInit("DialogueCameraHandler", DialogueCameraHandler::Init((void*)nvse));

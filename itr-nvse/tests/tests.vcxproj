@@ -48,6 +48,7 @@
     <ClCompile Include="test_safewrite.cpp" />
     <ClCompile Include="test_hooklogic.cpp" />
     <ClCompile Include="test_detours.cpp" />
+    <ClCompile Include="test_footcontactlogic.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="test.h" />
@@ -63,6 +64,8 @@
     <ClInclude Include="..\internal\ConsoleCommand.h" />
     <ClInclude Include="..\internal\SafeWrite.h" />
     <ClInclude Include="..\internal\Detours.h" />
+    <ClInclude Include="..\internal\FootContactLogic.h" />
+    <ClInclude Include="..\internal\TempEffectLogic.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

@@ -3,6 +3,7 @@
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
 #include "internal/GameSDK.h"
+#include "internal/TempEffects.h"
 
 #include "internal/NiLayout.h"
 #include <Windows.h>
@@ -112,14 +113,12 @@ static NVSEScriptInterface* g_scriptInterface = nullptr;
 static ExtractArgsEx_t extractArgs = nullptr;
 
 typedef void (__thiscall* AddGeometryDecal_t)(void* decalMgr, Decal* decal, UInt32 decalType, bool ignoreDistToPlayer);
-typedef void* (__cdecl* LoadTempEffectParticle_t)(TESObjectCELL* cell, float duration, const char* modelPath, NiPoint3 rotation, NiPoint3 position, float scale, int flags, void* attachNode);
 typedef void* (__cdecl* GetObjectByName_t)(void* rootNode, const char* name);
 typedef void (__thiscall* InitSoundForm_t)(void* audioMgr, Sound* sound, UInt32 formRefID, UInt32 flags);
 typedef void (__thiscall* Sound_SetPos_t)(Sound* sound, float x, float y, float z);
 typedef void (__thiscall* Sound_SetNiNode_t)(Sound* sound, NiNode* node);
 
 static AddGeometryDecal_t AddGeometryDecal = (AddGeometryDecal_t)0x4A10D0;
-static LoadTempEffectParticle_t LoadTempEffectParticle = (LoadTempEffectParticle_t)0x6890B0;
 static GetObjectByName_t GetObjectByName = (GetObjectByName_t)0x4AAE30;
 static InitSoundForm_t InitSoundForm = (InitSoundForm_t)0xAE5870;
 static Sound_SetPos_t Sound_SetPos = (Sound_SetPos_t)0xAD8B60;
@@ -215,7 +214,10 @@ static void PlaceBloodEffect(Actor* target, Actor* attacker, TESObjectWEAP* weap
 	NiPoint3 effectPos = GetBodyImpactPosition(target, hitLocation);
 	NiPoint3 effectRot = GetImpactDirection(attacker, effectPos);
 
-	LoadTempEffectParticle(target->parentCell, impactData->data.effectDuration, modelPath, effectRot, effectPos, 1.0f, 7, nullptr);
+	TempEffects::AddParticle(target->parentCell, impactData->data.effectDuration, modelPath,
+		{ effectRot.x, effectRot.y, effectRot.z },
+		{ effectPos.x, effectPos.y, effectPos.z },
+		1.0f, 7, nullptr);
 }
 
 static void PlaceSkinnedBloodDecal(Actor* target, Actor* attacker, TESObjectWEAP* weapon, SInt32 hitLocation) {
@@ -442,7 +444,10 @@ static void SpawnObjectImpactEffect(TESObjectREFR* obj, BGSImpactData* impactDat
 		const char* modelPath = GetImpactModelPath(impactData);
 		if (modelPath && modelPath[0]) {
 			NiPoint3 rot = { 0, 0, 1 };
-			LoadTempEffectParticle(obj->parentCell, impactData->data.effectDuration, modelPath, rot, pos, 1.0f, 7, nullptr);
+			TempEffects::AddParticle(obj->parentCell, impactData->data.effectDuration, modelPath,
+				{ rot.x, rot.y, rot.z },
+				{ pos.x, pos.y, pos.z },
+				1.0f, 7, nullptr);
 		}
 	}
 

@@ -11,6 +11,7 @@
 - GetRefsSortedByDistance - refs sorted by distance with filters, optional heading-cone and result-count cap
 - Duplicate - duplicate a form
 - GetAvailableRecipes - get available crafting recipes
+- SpawnTempParticle - spawn a temporary particle NIF at an explicit world position, aligned to a surface normal. Calling-ref command: path, duration, x, y, z, normalX, normalY, normalZ, scale, optional yawDegrees
 - ModChallenge - modify challenge progress
 - DamageActorValueAlt - extended actor value damage
 - ToggleAllPrimitives (TAP) - toggle primitive refs plus regular marker refs with fixed load-time behaviour
@@ -50,7 +51,7 @@
 - Ragdoll - force actor ragdoll with directional knock, limb weighting, spin/tumble and front/back flip
 - RagdollLimb - jolt one limb of an already-ragdolling actor with a directional impulse
 - SetDismemberedLimbVelocity - set world linear or angular velocity on an engine-created detached limb copy; uses DismemberLimb body-part IDs, or -1 for all, with an optional detached bone name
-- Gesture - procedural head gestures (nod/shake/tilt) with smoothstep blending
+- Gesture - procedural head gestures (nod/shake/tilt) with smoothstep blending, composed additively on the live animated pose so gestures layer over headtracking
 - IsRigidBodyAtRest - check whether loaded mobile Havok rigid bodies under a ref are inactive
 - SetOnContactWatch - enable physics contact tracking for a ref, or for all refs using a base form
 - GetOnContactWatch - get ref or base form contact watch state
@@ -144,6 +145,8 @@
 - ITR:OnSoundPlayedByPosition - fires per sound like OnSoundPlayed but adds spatial data (filePath, flags, sourceSound, hasPos, x, y, z, volume). Fires for every sound; hasPos is 0 and volume 1.0 when the engine gave the sound no 3D position before dispatch. Position/volume are the creation-time snapshot, later movement of looping sounds is not tracked.
 - ITR:OnActorLanded - fires when actor lands (actor, fallTime)
 - ITR:OnJumpStart - fires when actor starts jumping (actor)
+- ITR:OnActorFootstep - fires synchronously for actor footstep animation notes (actor, rawSoundID, side, footX, footY, footZ). side is 0 left, 1 right, or -1 unknown. Non-biped skeletons use the actor position when the named foot node is unavailable
+- ITR:OnActorFootContact - fires synchronously when a biped footstep resolves ground beneath the named foot (actor, rawSoundID, side, x, y, z, normalX, normalY, normalZ, material, collisionLayer). The event is actor-agnostic; consumers choose which actors to handle. Contact work is skipped when the event has no listeners
 - ITR:OnConsoleOpen - fires on console open
 - ITR:OnConsoleClose - fires on console close
 - ITR:OnConsoleCommand - fires when a typed console command or bat file line reaches Script::Run (sCommand, sFullCommand, rCalleeRef). `sCommand` is lower-case and strips ref prefixes, so `player.additem` dispatches `additem`.

@@ -109,6 +109,7 @@
 // 0x40DB  SetDismemberedLimbVelocity
 // 0x40DC  GetActorCoverState
 // 0x40DD  GetActorCoverInfo
+// 0x40DE  SpawnTempParticle
 // 0x410E  Gesture
 
 

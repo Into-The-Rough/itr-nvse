@@ -176,6 +176,31 @@ void RegisterEvents()
 	g_eventManagerInterface->RegisterEvent("ITR:OnActorLanded", 2, landedParams, F::kFlag_FlushOnLoad);
 	g_eventManagerInterface->RegisterEvent("ITR:OnJumpStart", 1, oneForm, F::kFlag_FlushOnLoad);
 
+	static P footstepParams[] = {
+		P::eParamType_AnyForm,
+		P::eParamType_Int,
+		P::eParamType_Int,
+		P::eParamType_Float,
+		P::eParamType_Float,
+		P::eParamType_Float,
+	};
+	g_eventManagerInterface->RegisterEvent("ITR:OnActorFootstep", 6, footstepParams, F::kFlag_FlushOnLoad);
+
+	static P footContactParams[] = {
+		P::eParamType_AnyForm,
+		P::eParamType_Int,
+		P::eParamType_Int,
+		P::eParamType_Float,
+		P::eParamType_Float,
+		P::eParamType_Float,
+		P::eParamType_Float,
+		P::eParamType_Float,
+		P::eParamType_Float,
+		P::eParamType_Int,
+		P::eParamType_Int,
+	};
+	g_eventManagerInterface->RegisterEvent("ITR:OnActorFootContact", 11, footContactParams, F::kFlag_FlushOnLoad);
+
 	static P twoInts[] = { P::eParamType_Int, P::eParamType_Int };
 	g_eventManagerInterface->RegisterEvent("ITR:OnKeyDisabled", 2, twoInts, F::kFlag_FlushOnLoad);
 	g_eventManagerInterface->RegisterEvent("ITR:OnKeyEnabled", 2, twoInts, F::kFlag_FlushOnLoad);
