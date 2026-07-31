@@ -243,4 +243,7 @@ void RegisterAllCommands(void* nvsePtr)
 
 	nvse->SetOpcodeBase(0x40D9);
 	AlertCommands::RegisterCommands(nvse); //SetAlertNS, GetAlertNS
+
+	nvse->SetOpcodeBase(0x40DB);
+	HavokCommands::RegisterCommands4(nvse); //SetDismemberedLimbVelocity
 }

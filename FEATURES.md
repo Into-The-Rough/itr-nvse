@@ -49,6 +49,7 @@
 - RefillAmmo - add ammo to actor inventory and fill clip
 - Ragdoll - force actor ragdoll with directional knock, limb weighting, spin/tumble and front/back flip
 - RagdollLimb - jolt one limb of an already-ragdolling actor with a directional impulse
+- SetDismemberedLimbVelocity - set world linear or angular velocity on an engine-created detached limb copy; uses DismemberLimb body-part IDs, or -1 for all, with an optional detached bone name
 - Gesture - procedural head gestures (nod/shake/tilt) with smoothstep blending
 - IsRigidBodyAtRest - check whether loaded mobile Havok rigid bodies under a ref are inactive
 - SetOnContactWatch - enable physics contact tracking for a ref, or for all refs using a base form

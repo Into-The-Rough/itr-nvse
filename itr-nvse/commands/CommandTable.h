@@ -104,6 +104,9 @@
 // 0x40C4  AddRaceEye
 // 0x40C5  RemoveRaceEye
 // 0x40C6  ClearRaceEyes
+// 0x40D9  SetAlertNS
+// 0x40DA  GetAlertNS
+// 0x40DB  SetDismemberedLimbVelocity
 // 0x410E  Gesture
 
 

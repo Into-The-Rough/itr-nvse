@@ -9,6 +9,7 @@
 #include "internal/CallTemplates.h"
 #include "internal/EngineFunctions.h"
 #include "internal/HavokLayout.h"
+#include "internal/NiLayout.h"
 #include <cmath>
 #include <cstring>
 
@@ -22,6 +23,9 @@ namespace
 	static constexpr UInt8 kMaxRagdollRetryFrames = 120;
 	static constexpr UInt32 kMaxRagdollMotionMs = 60000;
 	static constexpr int kMaxRagdollMotions = 64;
+	static constexpr int kDismemberedLimbCount = 15;
+	static const char* const* const kDismemberedLimbNames =
+		reinterpret_cast<const char* const*>(0x1196D6C);
 
 	struct Vec3 {
 		float x;
@@ -48,6 +52,8 @@ namespace
 		UInt32 action;
 		UInt32 mobileBodyCount;
 		UInt32 activeBodyCount;
+		const float* velocity;
+		UInt8 angular;
 	};
 
 	typedef void (__cdecl* BHKWorld_DoObjectRec_t)(NiAVObject* object, HavokObjectRecData* data,
@@ -81,6 +87,25 @@ namespace
 		return ref ? ref->GetNiNode() : nullptr;
 	}
 
+	NiAVObject* GetObjectByName(NiAVObject* root, const char* name)
+	{
+		if (!root || !name)
+			return nullptr;
+		return CdeclCall<NiAVObject*>(0x4AAE30, root, name);
+	}
+
+	NiAVObject* GetObjectByNameInTree(NiNode* root, const char* name)
+	{
+		if (!root || !name || !name[0])
+			return nullptr;
+
+		void* fixedName = nullptr;
+		ThisCall<void*>(0x438170, &fixedName, name);
+		NiAVObject* object = ThisCall<NiAVObject*>(0xA5E560, root, &fixedName);
+		CdeclCall<void>(0x4381D0, &fixedName);
+		return object;
+	}
+
 	void __cdecl CountRigidBodyState(void* collisionObject, HavokObjectRecData* data)
 	{
 		if (!collisionObject || !data) return;
@@ -102,6 +127,66 @@ namespace
 	}
 
 	struct NiPoint3 { float x, y, z; };
+
+	void __cdecl SetRigidBodyVelocity(void* collisionObject, HavokObjectRecData* data)
+	{
+		if (!collisionObject || !data || !data->velocity)
+			return;
+
+		void* worldObject = BhkCollisionObjectAsView(collisionObject)->worldObject;
+		if (!worldObject)
+			return;
+
+		void* hkpObject = BhkWorldObjectGetHavokObject(worldObject);
+		if (!hkpObject)
+			return;
+		if (HkpWorldObjectAsView(hkpObject)->collisionType != kHkpWorldObject_CollisionTypeRigidBody)
+			return;
+		if (!HkpRigidBodyIsMobile(hkpObject))
+			return;
+
+		if (data->angular)
+			ThisCall<void>(0x561800, hkpObject, data->velocity);
+		else
+			ThisCall<void>(0x5616D0, hkpObject, data->velocity);
+		data->mobileBodyCount++;
+	}
+
+	UInt32 ApplyVelocityToChildren(NiNode* root, const float* velocity, bool angular)
+	{
+		if (!root || !velocity)
+			return 0;
+
+		HavokObjectRecData data = {};
+		data.recurse = 1;
+		data.action = 8;
+		data.velocity = velocity;
+		data.angular = angular ? 1 : 0;
+
+		//the generated DismemberedLimb wrapper can retain an invalid collision
+		//pointer; the actual blend collision objects are on its child bones
+		const int count = ThisCall<int>(0x43B480, root);
+		for (int i = 0; i < count; i++)
+		{
+			NiAVObject* child = ThisCall<NiAVObject*>(0x43B4A0, root, i);
+			if (child)
+				BHKWorld_DoObjectRec(child, &data, SetRigidBodyVelocity);
+		}
+		return data.mobileBodyCount;
+	}
+
+	UInt32 ApplyVelocityToObject(NiAVObject* object, const float* velocity, bool angular)
+	{
+		if (!object || !velocity)
+			return 0;
+
+		HavokObjectRecData data = {};
+		data.action = 8;
+		data.velocity = velocity;
+		data.angular = angular ? 1 : 0;
+		BHKWorld_DoObjectRec(object, &data, SetRigidBodyVelocity);
+		return data.mobileBodyCount;
+	}
 
 	//62B660 reads the targeted limb index at limbData+0x10
 	//the command limb arg selects the boosted biped part
@@ -260,6 +345,82 @@ namespace
 		return true;
 	}
 
+	NiAVObject* GetFirstChild(NiNode* node)
+	{
+		const int count = ThisCall<int>(0x43B480, node);
+		for (int i = 0; i < count; i++)
+			if (NiAVObject* child = ThisCall<NiAVObject*>(0x43B4A0, node, i))
+				return child;
+		return nullptr;
+	}
+
+	Vec3 RotateToWorld(const NiAVObject* frame, const Vec3& v)
+	{
+		//row-major world rotate, world = R * v
+		const float* m = reinterpret_cast<const NiAVObjectView*>(frame)->world.rotate;
+		return {
+			m[0] * v.x + m[1] * v.y + m[2] * v.z,
+			m[3] * v.x + m[4] * v.y + m[5] * v.z,
+			m[6] * v.x + m[7] * v.y + m[8] * v.z,
+		};
+	}
+
+	NiNode* GetDismemberedLimbNode(NiNode* root, int bodyPart)
+	{
+		if (!root || bodyPart < 0 || bodyPart >= kDismemberedLimbCount)
+			return nullptr;
+		NiAVObject* object = GetObjectByNameInTree(root, kDismemberedLimbNames[bodyPart]);
+		if (!object)
+			return nullptr;
+		return ((GetAsNiNode_t)(*(void***)object)[3])(object);
+	}
+
+	UInt32 SetDismemberedLimbVelocity(TESObjectREFR* ref, int bodyPart, const Vec3& velocity, bool angular, bool local, const char* nodeName)
+	{
+		NiNode* root = GetRefRootNode(ref);
+		if (!root)
+			return 0;
+
+		UInt32 affected = 0;
+		const int first = bodyPart < 0 ? 0 : bodyPart;
+		const int last = bodyPart < 0 ? kDismemberedLimbCount : bodyPart + 1;
+		for (int i = first; i < last; i++)
+		{
+			NiNode* limbNode = GetDismemberedLimbNode(root, i);
+			if (!limbNode)
+				continue;
+
+			NiAVObject* target = nullptr;
+			if (nodeName && nodeName[0])
+			{
+				target = GetObjectByNameInTree(limbNode, nodeName);
+				if (!target || target == limbNode)
+					continue;
+			}
+
+			Vec3 applied = velocity;
+			if (local)
+			{
+				//the wrapper keeps a stale transform, the ragdolled child bones drive their own
+				NiAVObject* frame = target ? target : GetFirstChild(limbNode);
+				if (!frame)
+					frame = limbNode;
+				applied = RotateToWorld(frame, applied);
+			}
+
+			NiPoint3 sourceVelocity = { applied.x, applied.y, applied.z };
+			alignas(16) float havokVelocity[4] = { applied.x, applied.y, applied.z, 0.0f };
+			if (!angular)
+				CdeclCall<void*>(0x4A3E00, havokVelocity, &sourceVelocity);
+
+			if (target)
+				affected += ApplyVelocityToObject(target, havokVelocity, angular);
+			else
+				affected += ApplyVelocityToChildren(limbNode, havokVelocity, angular);
+		}
+		return affected;
+	}
+
 	void PushActorAway(BaseProcess* process, Actor* actor, float x, float y, float z, float force)
 	{
 		//this virtual is not at one stable slot across process vtables
@@ -328,7 +489,7 @@ namespace
 
 		NiAVObject* target = root;
 		if (nodeName && nodeName[0]) {
-			target = static_cast<NiAVObject*>(root->GetObject(nodeName));
+			target = GetObjectByName(root, nodeName);
 			if (!target) return false;
 		}
 
@@ -360,11 +521,21 @@ namespace
 		{"y", kParamType_Float, 1},
 		{"z", kParamType_Float, 1},
 	};
+
+	static ParamInfo kParams_DismemberedLimbVelocity[6] = {
+		{"bodyPart", kParamType_Integer, 0},
+		{"x", kParamType_Float, 0},
+		{"y", kParamType_Float, 0},
+		{"z", kParamType_Float, 0},
+		{"mode", kParamType_Integer, 1},
+		{"nodeName", kParamType_String, 1},
+	};
 }
 
 DEFINE_COMMAND_PLUGIN(IsRigidBodyAtRest, "returns whether a reference's loaded mobile Havok rigid bodies are inactive; optional node name checks a specific rigid body, bRecursive (default 1) includes child bodies", 1, 2, kParams_IsRigidBodyAtRest);
 DEFINE_COMMAND_PLUGIN(Ragdoll, "force actor ragdoll; args limb x y z spin duration flags (flags 1 = front/back flip)", 1, 7, kParams_Ragdoll);
 DEFINE_COMMAND_PLUGIN(RagdollLimb, "jolt one limb of an already-ragdolling actor; args limb x y z", 1, 4, kParams_RagdollLimb);
+DEFINE_COMMAND_PLUGIN(SetDismemberedLimbVelocity, "set velocity on a detached limb; args DismemberLimb bodyPart x y z mode nodeName (mode 0 linear, 1 angular, 2 local linear, 3 local angular; bodyPart -1 targets all; nodeName targets one bone)", 1, 6, kParams_DismemberedLimbVelocity);
 
 bool Cmd_IsRigidBodyAtRest_Execute(COMMAND_ARGS)
 {
@@ -464,6 +635,29 @@ bool Cmd_RagdollLimb_Execute(COMMAND_ARGS)
 	return true;
 }
 
+bool Cmd_SetDismemberedLimbVelocity_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	int bodyPart = -1;
+	Vec3 velocity = {};
+	UInt32 mode = 0;
+	char nodeName[0x200] = {};
+	if (!ExtractArgs(EXTRACT_ARGS, &bodyPart, &velocity.x, &velocity.y, &velocity.z, &mode, &nodeName))
+		return true;
+	if (!Engine::TESObjectREFR_IsActor(thisObj))
+		return true;
+	if (bodyPart < -1 || bodyPart >= kDismemberedLimbCount || mode > 3)
+		return true;
+	if (!std::isfinite(velocity.x) || !std::isfinite(velocity.y) || !std::isfinite(velocity.z))
+		return true;
+
+	const UInt32 affected = SetDismemberedLimbVelocity(thisObj, bodyPart, velocity, (mode & 1) != 0, mode >= 2, nodeName);
+	*result = affected ? 1.0 : 0.0;
+	if (IsConsoleMode())
+		Console_Print("SetDismemberedLimbVelocity >> %u mobile rigid body target(s)", affected);
+	return true;
+}
+
 namespace HavokCommands {
 
 void RegisterCommands(void* nvsePtr)
@@ -482,6 +676,13 @@ void RegisterCommands3(void* nvsePtr)
 {
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	nvse->RegisterCommand(&kCommandInfo_RagdollLimb);
+}
+
+void RegisterCommands4(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	kCommandInfo_SetDismemberedLimbVelocity.shortName = "SetDismLimbVel";
+	nvse->RegisterCommand(&kCommandInfo_SetDismemberedLimbVelocity);
 }
 
 void ClearState()

@@ -3,6 +3,7 @@
 #include <cstddef>
 
 #include "common/ITypes.h"
+#include "CallTemplates.h"
 
 constexpr UInt32 kHkpWorldObject_Collidable = 0x10;
 constexpr UInt8 kHkpWorldObject_CollisionTypeRigidBody = 1;
@@ -194,9 +195,8 @@ inline bool HkpRigidBodyIsMobile(void* rigidBody)
 	auto* view = HkpRigidBodyAsView(rigidBody);
 	if (!view)
 		return false;
-	//motion ctors write m_type at motion+0x8: 0 invalid, 1 dynamic, 2 sphere, 3 box, 4 keyframed, 5 fixed, 6 thin box, 7 character
-	UInt8 type = view->motionType;
-	return type != 0 && type != 4 && type != 5;
+	int motionType = view->motionType;
+	return CdeclCall<bool>(0xC8CCE0, &motionType);
 }
 
 inline bool HkpRigidBodyIsActive(void* rigidBody)
