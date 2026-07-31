@@ -11,7 +11,16 @@ enum GestureType : uint8_t {
 	kGesture_Nod = 1,
 	kGesture_Shake = 2,
 	kGesture_Tilt = 3,
+	kGesture_EyeRoll = 4,
+	kGesture_BrowRaise = 5,
+	kGesture_Squint = 6,
 };
+
+//facial types drive facegen morphs instead of the head bone, so amplitude is a 0..1 weight not degrees
+inline bool IsFacialGesture(uint8_t type)
+{
+	return type >= kGesture_EyeRoll;
+}
 
 inline constexpr float kPi = 3.14159265f;
 
@@ -111,6 +120,16 @@ inline float ComputeAngleRadians(uint8_t type, uint32_t elapsedMs, uint32_t dura
 		return amplitudeRad * env * std::sin(kPi * phase);
 
 	return 0.0f;
+}
+
+inline float ComputeMorphWeight(uint8_t type, uint32_t elapsedMs, uint32_t durationMs, float amplitude, float cycleTimeSec)
+{
+	float weight = amplitude * ComputeEnvelope(type, elapsedMs, durationMs, cycleTimeSec);
+	if (weight < 0.0f)
+		weight = 0.0f;
+	if (weight > 1.0f)
+		weight = 1.0f;
+	return weight;
 }
 
 inline void ComposePoseFromBase(const float* base, uint8_t type, float angleRad, float* out)

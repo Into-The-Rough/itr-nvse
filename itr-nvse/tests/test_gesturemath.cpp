@@ -163,6 +163,59 @@ TEST(GestureMath_ShakeQuarterCycleAtAmplitude)
 	return true;
 }
 
+TEST(GestureMath_FacialTypesAreClassified)
+{
+	ASSERT(!GestureMath::IsFacialGesture(GestureMath::kGesture_Nod));
+	ASSERT(!GestureMath::IsFacialGesture(GestureMath::kGesture_Tilt));
+	ASSERT(GestureMath::IsFacialGesture(GestureMath::kGesture_EyeRoll));
+	ASSERT(GestureMath::IsFacialGesture(GestureMath::kGesture_Squint));
+	return true;
+}
+
+TEST(GestureMath_EyeRollRisesHoldsAndReturns)
+{
+	ASSERT_NEAR(GestureMath::ComputeMorphWeight(GestureMath::kGesture_EyeRoll, 0, 800, 1.0f, 0.4f), 0.0f, 0.0001f);
+	ASSERT_NEAR(GestureMath::ComputeMorphWeight(GestureMath::kGesture_EyeRoll, 400, 800, 1.0f, 0.4f), 1.0f, 0.0001f);
+	ASSERT_NEAR(GestureMath::ComputeMorphWeight(GestureMath::kGesture_EyeRoll, 800, 800, 1.0f, 0.4f), 0.0f, 0.0001f);
+	return true;
+}
+
+TEST(GestureMath_EyeRollNeverExceedsFullDeflection)
+{
+	for (uint32_t ms = 0; ms <= 800; ms += 10)
+	{
+		float weight = GestureMath::ComputeMorphWeight(GestureMath::kGesture_EyeRoll, ms, 800, 1.0f, 0.4f);
+		ASSERT(weight >= 0.0f);
+		ASSERT(weight <= 1.0f);
+	}
+	return true;
+}
+
+TEST(GestureMath_MorphWeightClampsToUnit)
+{
+	float weight = GestureMath::ComputeMorphWeight(GestureMath::kGesture_BrowRaise, 500, 1000, 4.0f, 0.4f);
+	ASSERT_NEAR(weight, 1.0f, 0.0001f);
+
+	weight = GestureMath::ComputeMorphWeight(GestureMath::kGesture_Squint, 500, 1000, -2.0f, 0.4f);
+	ASSERT_NEAR(weight, 0.0f, 0.0001f);
+	return true;
+}
+
+TEST(GestureMath_MorphWeightZeroAtStartAndEnd)
+{
+	ASSERT_NEAR(GestureMath::ComputeMorphWeight(GestureMath::kGesture_BrowRaise, 0, 1000, 1.0f, 0.4f), 0.0f, 0.0001f);
+	ASSERT_NEAR(GestureMath::ComputeMorphWeight(GestureMath::kGesture_BrowRaise, 1000, 1000, 1.0f, 0.4f), 0.0f, 0.0001f);
+	return true;
+}
+
+TEST(GestureMath_FacialTypesProduceNoBoneAngle)
+{
+	ASSERT_NEAR(GestureMath::ComputeAngleRadians(GestureMath::kGesture_EyeRoll, 400, 800, 0.5f, 0.4f), 0.0f, 0.0001f);
+	ASSERT_NEAR(GestureMath::ComputeAngleRadians(GestureMath::kGesture_BrowRaise, 400, 800, 0.5f, 0.4f), 0.0f, 0.0001f);
+	ASSERT_NEAR(GestureMath::ComputeAngleRadians(GestureMath::kGesture_Squint, 400, 800, 0.5f, 0.4f), 0.0f, 0.0001f);
+	return true;
+}
+
 TEST(GestureMath_TiltZeroCycleTimeKeepsAmplitude)
 {
 	float angle = GestureMath::ComputeAngleRadians(GestureMath::kGesture_Tilt, 500, 2000, 0.25f, 0.0f);

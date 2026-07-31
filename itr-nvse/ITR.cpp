@@ -1,4 +1,5 @@
 #include "ITR.h"
+#include <share.h>
 #include "commands/CommandTable.h"
 #include "commands/DetectionSoundCommands.h"
 #include "commands/AlertCommands.h"
@@ -275,7 +276,8 @@ static void OpenDebugLog()
 		char* lastSlash = strrchr(logPath, '\\');
 		if (lastSlash) *lastSlash = '\0';
 		strcat_s(logPath, "\\itr-nvse.log");
-		fopen_s(&g_logFile, logPath, "w");
+		//fopen_s locks the file exclusively, this keeps it readable while the game runs
+		g_logFile = _fsopen(logPath, "w", _SH_DENYWR);
 	}
 	else if (!Settings::bDebugLog && g_logFile)
 	{
