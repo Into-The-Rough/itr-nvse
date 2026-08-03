@@ -18,6 +18,7 @@ extern const _ExtractArgs ExtractArgs;
 namespace GestureCommand
 {
 	static constexpr float kDegToRad = GestureMath::kPi / 180.0f;
+	static constexpr UInt32 kMenuType_Dialogue = 1009;
 	static constexpr int MAX_GESTURES = 32;
 
 	struct Gesture
@@ -303,8 +304,8 @@ namespace GestureCommand
 
 	void Update()
 	{
-		//defer until gamemode
-		if (CdeclCall<bool>(0x702360)) return;
+		//defer in menus other than dialogue
+		if (CdeclCall<bool>(0x702360) && !IsMenuVisible(kMenuType_Dialogue)) return;
 
 		DWORD now = GetTickCount();
 
