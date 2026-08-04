@@ -14,8 +14,9 @@ namespace OnPreDamageHandler {
 constexpr char kEventHit[] = "ITR:OnPreHitDamage";
 constexpr char kEventHealth[] = "ITR:OnPreHealthDamage";
 
-//CalculateHitDamage 0x9B5A30, __thiscall(ActorHitData* ecx, UInt32 noBlock stack), retn 4
-constexpr UInt32 kCallSites[5] = { 0x9B5623, 0x9B5702, 0x9B575C, 0x9B58AE, 0x9B5A10 };
+//jip identifies two calculatehitdamage callers by return address and defers calculation
+//until hit location is known, so hook the final hit-processing calls instead
+constexpr UInt32 kCallSites[5] = { 0x9B563D, 0x9B5716, 0x9B5764, 0x9B58BE, 0x9B5A18 };
 
 //actor vtables, slot 0xEB = DamageActorValue(this, avCode, float delta, source).
 //delta is negative for damage, avCode 16 = Health. each class overrides the slot with
@@ -44,7 +45,7 @@ struct ActorHitData {
 	void* weapon;        //0x30
 };
 
-typedef void (__thiscall* CalcHitDamage_t)(ActorHitData*, UInt32);
+typedef void (__thiscall* FinalizeHit_t)(ActorHitData*);
 typedef void (__thiscall* DamageActorValue_t)(void*, UInt32, float, void*);
 
 static Detours::CallDetour s_hitDetours[5];
@@ -74,27 +75,24 @@ static bool MultiplierResultCb(NVSEArrayVarInterface::Element& result, void* pro
 	return true;
 }
 
-//each call site gets its own thunk so it chains ITS site's recorded original, correct even
-//if another plugin has separately patched one of the five sites. the worker holds the shared
-//post-call logic
-static void CalcHitWork(ActorHitData* hitData, UInt32 noBlock, CalcHitDamage_t orig)
+static void DispatchHitEvent(ActorHitData* hitData)
 {
-	if (orig)
-		orig(hitData, noBlock);
-
 	if (!s_probeHit.hasListeners)
 		return;
 	if (GetCurrentThreadId() != g_mainThreadId) {
 		if (!s_offMainLoggedHit) {
-			Log("OnPreHitDamage: CalculateHitDamage off main thread, skipping dispatch");
+			Log("OnPreHitDamage: hit finalization off main thread, skipping dispatch");
 			s_offMainLoggedHit = true;
 		}
 		return;
 	}
 	if (!hitData || !hitData->target)
 		return;
-	float healthDmg = hitData->healthDmg;
-	if (healthDmg <= 0.0f)
+	float damage = hitData->healthDmg;
+	//location 14 moves health damage into limb damage for weapon-condition hits
+	if (damage <= 0.0f)
+		damage = hitData->limbDmg;
+	if (damage <= 0.0f)
 		return;
 
 	float product = 1.0f;
@@ -103,7 +101,7 @@ static void CalcHitWork(ActorHitData* hitData, UInt32 noBlock, CalcHitDamage_t o
 		reinterpret_cast<TESForm*>(hitData->target),
 		reinterpret_cast<TESForm*>(hitData->source),
 		reinterpret_cast<TESForm*>(hitData->weapon),
-		PackEventFloatArg(healthDmg), hitData->hitLocation, &product);
+		PackEventFloatArg(damage), hitData->hitLocation, &product);
 
 	if (product != 1.0f) {
 		if (product < 0.0f) product = 0.0f;
@@ -113,13 +111,21 @@ static void CalcHitWork(ActorHitData* hitData, UInt32 noBlock, CalcHitDamage_t o
 	}
 }
 
-#define HIT_THUNK(N) static void __fastcall Hook_CalcHit_##N(ActorHitData* h, void*, UInt32 nb) \
-	{ CalcHitWork(h, nb, (CalcHitDamage_t)s_hitDetours[N].GetOverwrittenAddr()); }
+static void FinalizeHitWork(ActorHitData* hitData, FinalizeHit_t orig)
+{
+	DispatchHitEvent(hitData);
+	if (orig)
+		orig(hitData);
+}
+
+//each call site gets its own thunk so it chains that site's recorded original
+#define HIT_THUNK(N) static void __fastcall Hook_FinalizeHit_##N(ActorHitData* h, void*) \
+	{ FinalizeHitWork(h, (FinalizeHit_t)s_hitDetours[N].GetOverwrittenAddr()); }
 HIT_THUNK(0) HIT_THUNK(1) HIT_THUNK(2) HIT_THUNK(3) HIT_THUNK(4)
 #undef HIT_THUNK
 static void* const kHitThunks[5] = {
-	(void*)Hook_CalcHit_0, (void*)Hook_CalcHit_1, (void*)Hook_CalcHit_2,
-	(void*)Hook_CalcHit_3, (void*)Hook_CalcHit_4,
+	(void*)Hook_FinalizeHit_0, (void*)Hook_FinalizeHit_1, (void*)Hook_FinalizeHit_2,
+	(void*)Hook_FinalizeHit_3, (void*)Hook_FinalizeHit_4,
 };
 
 static DamageActorValue_t PickDamageOrig(void* actor)
