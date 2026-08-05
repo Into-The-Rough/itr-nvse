@@ -254,4 +254,7 @@ void RegisterAllCommands(void* nvsePtr)
 
 	nvse->SetOpcodeBase(0x40DE);
 	ParticleCommands::RegisterCommands(nvse); //SpawnTempParticle
+
+	nvse->SetOpcodeBase(0x40E0);
+	PerkRuntimeFramework::RegisterCommands2(nvse);
 }

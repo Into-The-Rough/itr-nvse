@@ -2481,9 +2481,14 @@ namespace PerkRuntimeFramework
 		nvse->RegisterTypedCommand(&kCommandInfo_GetPerkEligibility, kRetnType_Array);
 		nvse->RegisterTypedCommand(&kCommandInfo_GetPerkBlockers, kRetnType_Array);
 		nvse->RegisterTypedCommand(&kCommandInfo_GetEligiblePerks, kRetnType_Array);
-		nvse->RegisterTypedCommand(&kCommandInfo_GetEligiblePerksEx, kRetnType_Array);
 		nvse->RegisterTypedCommand(&kCommandInfo_GetPerkConditions, kRetnType_Array);
 		nvse->RegisterTypedCommand(&kCommandInfo_GetPerksForForm, kRetnType_Array);
+	}
+
+	void RegisterCommands2(void* nvsePtr)
+	{
+		auto* nvse = static_cast<NVSEInterface*>(nvsePtr);
+		nvse->RegisterTypedCommand(&kCommandInfo_GetEligiblePerksEx, kRetnType_Array);
 	}
 
 	void BuildIndex()
