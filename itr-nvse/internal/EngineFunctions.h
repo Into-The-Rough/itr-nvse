@@ -17,9 +17,9 @@ namespace Engine {
 //detection - Actor::GetDetectionValue returns -100 if baseProcess null or DetectionData null
 inline auto Actor_GetDetectionValue = (SInt32(__thiscall*)(Actor*, Actor*))0x8A8230;
 
-//crime - engine builds a Crime per-alarm and adds witnesses to its kWitnesses list
+//crime - engine builds a crime per alarm and tracks actors that know about it
 struct Crime {
-	UInt32          uiWitnessCount;    //0x00
+	UInt32          uiActorKnowCount;  //0x00
 	UInt32          eCrimeType;        //0x04 - see CrimeType enum below
 	TESObjectREFR*  pCrimeTarget;      //0x08
 	Actor*          pCriminal;         //0x0C
@@ -27,8 +27,7 @@ struct Crime {
 	UInt8           pad11[3];
 	TESBoundObject* pStolenObject;     //0x14
 	UInt32          uiNumberStolen;    //0x18
-	UInt32          kWitnessesHead;    //0x1C - BSSimpleList<Actor*>.head
-	UInt32          kWitnessesCount;   //0x20
+	UInt32          kActorKnowList[2]; //0x1C - BSSimpleList<Actor*> storage
 	TESForm*        pOwnership;        //0x24
 	UInt32          uiCrimeNumber;     //0x28
 	UInt32          dword2C;           //0x2C

@@ -10,6 +10,7 @@
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/EngineFunctions.h"
+#include "internal/OnWitnessedLogic.h"
 #include "internal/ScopedLock.h"
 #include "internal/WitnessScan.h"
 #include "internal/globals.h"
@@ -83,20 +84,31 @@ static UInt32 RefIDOf(void* form)
 
 static void __fastcall Hook_AddKnow(Engine::Crime* crime, void* /*edx*/, Actor* witness)
 {
-	if (!g_isLoadingSave && crime && witness)
+	UInt32 countBefore = crime ? crime->uiActorKnowCount : 0;
+	s_addKnowDetour.GetTrampoline<AddKnow_t>()(crime, witness);
+
+	if (g_isLoadingSave || !crime || !witness)
+		return;
+
+	Actor* criminal = crime->pCriminal;
+	TESObjectREFR* target = crime->pCrimeTarget;
+	UInt32 type = crime->eCrimeType;
+	UInt32 actorID = RefIDOf(witness);
+	UInt32 witnessID = OnWitnessedLogic::ResolveWitnessID(
+		countBefore, crime->uiActorKnowCount, actorID, RefIDOf(criminal), RefIDOf(target),
+		type == Engine::kCrimeType_Pickpocket, type == Engine::kCrimeType_Murder);
+	if (!witnessID)
+		return;
+
+	Actor* eventWitness = witness;
+	if (witnessID != actorID)
 	{
-		Actor*          criminal = crime->pCriminal;
-		TESObjectREFR*  target   = crime->pCrimeTarget;
-		UInt32          type     = crime->eCrimeType;
-
-		SInt32 detVal = -100;
-		if (criminal)
-			detVal = Engine::Actor_GetDetectionValue(witness, criminal);
-
-		QueueWitnessedEvent(RefIDOf(witness), RefIDOf(criminal), type, RefIDOf(target), detVal);
+		//pickpocketalarm validates the target as an actor before creating the crime
+		eventWitness = reinterpret_cast<Actor*>(target);
 	}
 
-	s_addKnowDetour.GetTrampoline<AddKnow_t>()(crime, witness);
+	SInt32 detVal = criminal ? Engine::Actor_GetDetectionValue(eventWitness, criminal) : -100;
+	QueueWitnessedEvent(witnessID, RefIDOf(criminal), type, RefIDOf(target), detVal);
 }
 
 //Actor::TrespassAlarm (retn 0Ch) ignores `this` and hardcodes the player as the trespasser,

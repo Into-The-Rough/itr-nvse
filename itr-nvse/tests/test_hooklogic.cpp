@@ -4,6 +4,7 @@
 #include "internal/ConsoleCommand.h"
 #include "internal/FallDamageLogic.h"
 #include "internal/FormatLogic.h"
+#include "internal/OnWitnessedLogic.h"
 #include "internal/RadioInjectionLogic.h"
 #include <cstdio>
 #include <cstring>
@@ -15,6 +16,26 @@ typedef unsigned char UInt8;
 typedef signed int SInt32;
 
 #include "internal/PickpocketHookLogic.h"
+
+TEST(OnWitnessed_RequiresUniqueEngineInsertion)
+{
+	ASSERT_EQ(OnWitnessedLogic::ResolveWitnessID(2, 2, 0x100, 0x200, 0x300, false, false), 0u);
+	ASSERT_EQ(OnWitnessedLogic::ResolveWitnessID(2, 3, 0x100, 0x200, 0x300, false, false), 0x100u);
+	return true;
+}
+
+TEST(OnWitnessed_PickpocketUsesTargetAsWitness)
+{
+	ASSERT_EQ(OnWitnessedLogic::ResolveWitnessID(0, 1, 0x200, 0x200, 0x300, true, false), 0x300u);
+	return true;
+}
+
+TEST(OnWitnessed_MurderExcludesVictim)
+{
+	ASSERT_EQ(OnWitnessedLogic::ResolveWitnessID(0, 1, 0x300, 0x200, 0x300, false, true), 0u);
+	ASSERT_EQ(OnWitnessedLogic::ResolveWitnessID(1, 2, 0x400, 0x200, 0x300, false, true), 0x400u);
+	return true;
+}
 
 namespace
 {

@@ -159,7 +159,7 @@
 - ITR:OnSoundCompleted - fires when tracked voice sound completes (filePath, flags, sourceForm)
 - ITR:OnContactBegin - fires when physics contact begins on watched actor (actor, contactType)
 - ITR:OnContactEnd - fires when physics contact ends on watched actor (actor, contactType)
-- ITR:OnWitnessed - fires per witness per crime (witness, perpetrator, crimeType, victim, detectionValue). Filterable on witness/perpetrator/victim refs/formlists/factions and on crimeType equality. Trespass alarms are rate-limited to one event per witness per 3 seconds.
+- ITR:OnWitnessed - fires once per witness per crime (witness, perpetrator, crimeType, victim, detectionValue). Pickpocket reports the victim rather than the player as witness; murder excludes the victim. Filterable on witness/perpetrator/victim refs/formlists/factions and on crimeType equality. Trespass alarms are rate-limited to one event per witness per 3 seconds.
 - ITR:OnImpactDataSpawn - fires when a projectile resolves ImpactData on a non-actor hit (impactData, x, y, z, normalX, normalY, normalZ, projectile, target, weapon, material)
 - ITR:OnSprayDecal - fires per blood spray decal placement during limb sever/explode (impactData, x, y, z, normalX, normalY, normalZ)
 - ITR:OnWoundSpray - fires per wound blood spray on an actor (actor, impactData, x, y, z, dx, dy, dz, hitLocation, source, weapon)

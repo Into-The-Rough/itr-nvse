@@ -270,6 +270,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="internal\CooldownTracker.h" />
     <ClInclude Include="internal\FallDamageLogic.h" />
     <ClInclude Include="internal\FormatLogic.h" />
+    <ClInclude Include="internal\OnWitnessedLogic.h" />
     <ClInclude Include="internal\PickpocketHookLogic.h" />
     <ClInclude Include="internal\RadioInjectionLogic.h" />
     <ClInclude Include="internal\StringAlloc.h" />
