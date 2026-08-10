@@ -62,18 +62,18 @@ namespace OwnedCorpses
 		return nullptr;
 	}
 
-	//reimplementation of GetOwnerRawForm (0x567790) with dead actor ownership
+	//runs vanilla GetOwnerRawForm first, then falls back to dead actor ownership when vanilla found none
 	void* __fastcall GetOwnerRawFormHook(void* ref, void* edx)
 	{
-		if (!Engine::TESObjectREFR_IsActor(static_cast<TESObjectREFR*>(ref)))
-			return g_detour.GetTrampoline<void*(__thiscall*)(void*)>()(ref);
-
-		void* owner = ThisCall<void*>(0x567770, ref); //GetMyOwner (ExtraOwnership)
-		if (!g_enabled || owner)
+		void* owner = g_detour.GetTrampoline<void*(__thiscall*)(void*)>()(ref);
+		if (owner || !g_enabled)
 			return owner;
+
+		if (!Engine::TESObjectREFR_IsActor(static_cast<TESObjectREFR*>(ref)))
+			return nullptr;
 
 		if (!Engine::Actor_IsDead(static_cast<Actor*>(ref), false))
-			return owner;
+			return nullptr;
 
 		//dead actor: zone/cell ownership first, then faction fallback
 		void* zoneOwner = GetZoneOrCellOwner(ref);
@@ -124,9 +124,17 @@ namespace OwnedCorpses
 		g_enabled = enabled;
 	}
 
+	//GetOwnerRawForm prologue: push ebp; mov ebp,esp; sub esp,10h
+	static constexpr UInt8 kGetOwnerRawFormPrologue[6] = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x10 };
+
 	void Init(bool enabled)
 	{
-		//GetOwnerRawForm prologue: push ebp; mov ebp,esp; sub esp,10h = 6 bytes
+		if (memcmp((void*)0x567790, kGetOwnerRawFormPrologue, sizeof(kGetOwnerRawFormPrologue)) != 0)
+		{
+			Log("OwnedCorpses: prologue not vanilla, feature disabled");
+			return;
+		}
+
 		if (!g_detour.WriteRelJump(0x567790, GetOwnerRawFormHook, 6))
 		{
 			Log("OwnedCorpses: failed to hook GetOwnerRawForm");

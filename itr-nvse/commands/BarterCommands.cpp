@@ -25,7 +25,8 @@ namespace
 	constexpr UInt32 kAddr_BarterMenu_Close = 0x72D6D0;
 	constexpr UInt32 kAddr_BarterMenu_ShouldHideItem = 0x7304B0;
 	constexpr UInt32 kAddr_BarterMenu_TransferItem = 0x72F6F0;
-	constexpr UInt32 kAddr_BarterMenu_ProcessTransaction = 0x72FD10;
+	//sole call site of BarterMenu::CompleteTransaction 0x72FD10, in BarterMenu::DoClick
+	constexpr UInt32 kAddr_BarterMenu_CompleteTransactionCall = 0x72D920;
 	constexpr UInt32 kAddr_MenuItemsList_TileFromItem = 0x7A22D0;
 	constexpr UInt32 kAddr_TESObjectREFR_GetObjectReference = 0x7AF430;
 	constexpr UInt32 kAddr_MobileObject_IsTalkingThroughActivator = 0x574900;
@@ -75,7 +76,7 @@ namespace
 	Detours::JumpDetour s_closeDetour;
 	Detours::JumpDetour s_hideDetour;
 	Detours::JumpDetour s_transferDetour;
-	Detours::JumpDetour s_processDetour;
+	Detours::CallDetour s_processCall;
 
 	BarterMenuClose_t s_origClose = nullptr;
 	ShouldHideItem_t s_origShouldHideItem = nullptr;
@@ -392,8 +393,8 @@ namespace BarterCommands
 {
 	void RemoveHooks()
 	{
-		if (s_processDetour.IsInstalled())
-			s_processDetour.Remove();
+		if (s_processCall.IsInstalled())
+			s_processCall.Remove();
 		if (s_transferDetour.IsInstalled())
 			s_transferDetour.Remove();
 		if (s_hideDetour.IsInstalled())
@@ -414,7 +415,6 @@ namespace BarterCommands
 		static const UInt8 kPrologue_Close[6]     = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x08 };
 		static const UInt8 kPrologue_ShouldHide[6] = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x30 };
 		static const UInt8 kPrologue_Transfer[6]  = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x24 };
-		static const UInt8 kPrologue_Process[10]  = { 0x55, 0x8B, 0xEC, 0x6A, 0xFF, 0x68, 0x28, 0x97, 0xF0, 0x00 };
 
 		auto CheckPrologue = [](const char* name, UInt32 addr, const UInt8* expected, UInt32 size) -> bool {
 			if (memcmp((void*)addr, expected, size) != 0)
@@ -430,8 +430,6 @@ namespace BarterCommands
 		if (!CheckPrologue("BarterMenu::ShouldHideItem", kAddr_BarterMenu_ShouldHideItem, kPrologue_ShouldHide, 6))
 			return false;
 		if (!CheckPrologue("BarterMenu::TransferItem", kAddr_BarterMenu_TransferItem, kPrologue_Transfer, 6))
-			return false;
-		if (!CheckPrologue("BarterMenu::ProcessTransaction", kAddr_BarterMenu_ProcessTransaction, kPrologue_Process, 10))
 			return false;
 
 		if (s_closeDetour.WriteRelJump(kAddr_BarterMenu_Close, Hook_Close, 6))
@@ -466,14 +464,14 @@ namespace BarterCommands
 			return false;
 		}
 
-		if (s_processDetour.WriteRelJump(kAddr_BarterMenu_ProcessTransaction, Hook_ProcessTransaction, 10))
+		if (s_processCall.WriteRelCall(kAddr_BarterMenu_CompleteTransactionCall, Hook_ProcessTransaction))
 		{
-			s_origProcessTransaction = s_processDetour.GetTrampoline<ProcessTransaction_t>();
+			s_origProcessTransaction = (ProcessTransaction_t)s_processCall.GetOverwrittenAddr();
 		}
 		else
 		{
 			RemoveHooks();
-			Log("BarterCommands: failed to hook BarterMenu::ProcessTransaction");
+			Log("BarterCommands: CompleteTransaction call site at 0x%X is not an E8 call", kAddr_BarterMenu_CompleteTransactionCall);
 			return false;
 		}
 

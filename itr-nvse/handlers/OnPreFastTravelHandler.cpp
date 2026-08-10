@@ -14,15 +14,16 @@ namespace OnPreFastTravelHandler {
 
 constexpr char kEventName[] = "ITR:OnPreFastTravel";
 
-//sub_93CDF0 universal fast travel executor. __userpurge: ecx=PlayerCharacter*,
-//ebx=passthrough forwarded untouched to sub_4539A0/sub_93CCE0/sub_972D30,
-//stack arg a3=destination TESObjectREFR*. epilogue is retn 4. all destructive work
-//(time advance, position move, weather reset, loading) lives inside it, so this
-//fires post-confirm, pre-execution.
-constexpr UInt32 kAddr_FastTravelExecutor = 0x93CDF0;
+//sub_93CDF0 (0x93CDF0) universal fast travel executor, __userpurge: ecx=PlayerCharacter*,
+//ebx=passthrough forwarded untouched to sub_4539A0/sub_93CCE0/sub_972D30, stack arg a3=
+//destination TESObjectREFR*, epilogue retn 4. all destructive work (time advance, position
+//move, weather reset, loading) lives inside it, so this fires post-confirm, pre-execution.
+//CinematicFastTravelNVSE owns the executor's prologue (unpatch/call/repatch dance around it),
+//so we hook the one E8 call site instead: 0x93BF22 inside sub_93BEA0, its only xref.
+constexpr UInt32 kAddr_FastTravelCallSite = 0x93BF22;
 
-static Detours::JumpDetour s_travelDetour;
-static UInt8* s_travelTrampoline = nullptr; //for inline asm indirect jump
+static Detours::CallDetour s_travelDetour;
+static UInt32 s_origFastTravelExecutor = 0; //recorded original target, for the shim's indirect jmp
 
 static bool DispatchResultCb(NVSEArrayVarInterface::Element& result, void* shouldTravelAddr)
 {
@@ -79,31 +80,31 @@ bool __cdecl ShouldAllowFastTravel(TESObjectREFR* player, TESObjectREFR* marker)
 	return shouldTravel != 0;
 }
 
-//naked shim on the executor prologue. the target is __userpurge (ecx + ebx + one
-//stack arg, callee cleans the stack), so the full register state must survive to
-//the trampoline on allow, and we emulate the callee's retn 4 on deny. ebx carries a
-//passthrough the executor forwards untouched to its callees, so pushad/popad keeps
-//it intact. on deny the caller sub_93BEA0 still frees the queued request and runs
-//sub_5D14D0(player,1), which only sets bit0 of player+0x66D - benign.
+//naked shim on the 0x93BF22 call site. entry state: ecx=PlayerCharacter*, ebx=passthrough,
+//[esp]=retaddr, [esp+4]=a3 destination marker already pushed by the caller. ecx is
+//caller-saved under cdecl so ShouldAllowFastTravel's call can clobber it, save/restore it
+//explicitly, ebx is callee-saved so cdecl already guarantees it survives untouched. on allow,
+//tail-jump to the recorded original with registers and stack exactly as sub_93CDF0 expects,
+//its own retn 4 returns straight to the real caller. on deny, emulate that same retn 4. on
+//deny the caller sub_93BEA0 still frees the queued request and runs sub_5D14D0(player,1),
+//which only sets bit0 of player+0x66D - benign.
 __declspec(naked) void FastTravelExecutor_Shim()
 {
 	__asm
 	{
-		pushad
-		pushfd
-		mov  eax, [esp+0x28]        //a3 destination marker, orig [esp+4] past pushad+pushfd
+		push ebx                    //passthrough, save/restore for symmetry with ecx below
+		push ecx                    //PlayerCharacter*
+		mov  eax, [esp+0xC]         //a3, past the two saves and retaddr
 		push eax
-		push ecx                    //PlayerCharacter*, preserved by pushad
+		push ecx
 		call ShouldAllowFastTravel
 		add  esp, 8
+		pop  ecx
+		pop  ebx
 		test al, al
 		jz   deny
-		popfd
-		popad
-		jmp  s_travelTrampoline     //allow: replay stolen prologue then continue
+		jmp  s_origFastTravelExecutor   //allow: stack/registers match a genuine call, callee retn 4 returns to caller
 	deny:
-		popfd
-		popad
 		ret  4                      //callee stack cleanup, matches executor retn 4
 	}
 }
@@ -130,13 +131,20 @@ bool Init(void* nvseInterface)
 	};
 	g_eventManagerInterface->RegisterEvent(kEventName, 5, params, F::kFlag_FlushOnLoad);
 
-	if (!s_travelDetour.WriteRelJump(kAddr_FastTravelExecutor, (UInt32)FastTravelExecutor_Shim, 5, &s_travelTrampoline))
+	if (!s_travelDetour.WriteRelCall(kAddr_FastTravelCallSite, FastTravelExecutor_Shim))
 	{
-		Log("OnPreFastTravel: failed to hook fast travel executor at 0x%X", kAddr_FastTravelExecutor);
+		Log("OnPreFastTravel: call site at 0x%X is not an E8 call, hook disabled", kAddr_FastTravelCallSite);
+		return false;
+	}
+	s_origFastTravelExecutor = s_travelDetour.GetOverwrittenAddr();
+	if (!s_origFastTravelExecutor)
+	{
+		Log("OnPreFastTravel: recorded original missing, backing out");
+		s_travelDetour.Remove();
 		return false;
 	}
 
-	Log("OnPreFastTravel: hook installed");
+	Log("OnPreFastTravel: call-site hook installed at 0x%X", kAddr_FastTravelCallSite);
 	return true;
 }
 

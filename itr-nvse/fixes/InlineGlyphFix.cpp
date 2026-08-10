@@ -14,8 +14,11 @@
 
 namespace InlineGlyphFix
 {
-	constexpr UInt32 kAddr_Font_AddButton = 0xA14650;
-	constexpr UInt32 kAddr_Font_ComputeButtonMetrics = 0xA14170;
+	//both AddButton 0xA14650 call sites sit under TileText::MakeNode 0xA21AF0, via sub_A12880 and sub_A19060
+	constexpr UInt32 kAddr_Font_AddButtonCall1 = 0xA12DD5;
+	constexpr UInt32 kAddr_Font_AddButtonCall2 = 0xA1959C;
+	//sole call site of Font::A14170, in sub_A1AEE0
+	constexpr UInt32 kAddr_Font_ComputeButtonMetricsCall = 0xA1AFCB;
 	constexpr UInt32 kAddr_TileTextVtable_MakeNode = 0x1094880;
 	constexpr UInt32 kAddr_Tile_GetFloat = 0xA011B0;
 
@@ -38,10 +41,9 @@ namespace InlineGlyphFix
 	typedef void (__thiscall* Font_AddButton_t)(void* font, int iconIdx, void* triShape, NiPoint3* cursor);
 	typedef void* (__thiscall* TileText_MakeNode_t)(void* tile);
 
-	static Detours::JumpDetour s_metricsDetour;
-	static Detours::JumpDetour s_addButtonDetour;
-	static Font_ComputeButtonMetrics_t s_origComputeButtonMetrics = nullptr;
-	static Font_AddButton_t s_origAddButton = nullptr;
+	static Detours::CallDetour s_metricsCall;
+	static Detours::CallDetour s_addButtonCall1;
+	static Detours::CallDetour s_addButtonCall2;
 	static TileText_MakeNode_t s_origMakeNode = nullptr;
 	static bool s_installed = false;
 	static bool g_enabled = false;
@@ -112,7 +114,7 @@ namespace InlineGlyphFix
 
 	void __fastcall Hook_ComputeButtonMetrics(void* font, void*, ButtonIcon* icon, char* character)
 	{
-		s_origComputeButtonMetrics(font, icon, character);
+		((Font_ComputeButtonMetrics_t)s_metricsCall.GetOverwrittenAddr())(font, icon, character);
 
 		//hooks stay installed, behaviour gated by the runtime flag
 		void* tile = s_currentTile;
@@ -147,27 +149,38 @@ namespace InlineGlyphFix
 #endif
 	}
 
-	void __fastcall Hook_AddButton(void* font, void*, int iconIdx, void* triShape, NiPoint3* cursor)
+	static void AddButtonScaled(Font_AddButton_t orig, void* font, int iconIdx, void* triShape, NiPoint3* cursor)
 	{
 		void* tile = s_currentTile;
 		if (!g_enabled || !tile || !cursor)
 		{
-			s_origAddButton(font, iconIdx, triShape, cursor);
+			orig(font, iconIdx, triShape, cursor);
 			return;
 		}
 
 		float scale = GetTileScale(tile, font);
 		if (scale > 0.999f && scale < 1.001f)
 		{
-			s_origAddButton(font, iconIdx, triShape, cursor);
+			orig(font, iconIdx, triShape, cursor);
 			return;
 		}
 
 		NiPoint3 adjusted = *cursor;
 		float oldX = adjusted.x;
 		adjusted.x *= scale;
-		s_origAddButton(font, iconIdx, triShape, &adjusted);
+		orig(font, iconIdx, triShape, &adjusted);
 		cursor->x = oldX + (adjusted.x - (oldX * scale));
+	}
+
+	//per-site thunks so each call site chains the original recorded from its own bytes
+	void __fastcall Hook_AddButton1(void* font, void*, int iconIdx, void* triShape, NiPoint3* cursor)
+	{
+		AddButtonScaled((Font_AddButton_t)s_addButtonCall1.GetOverwrittenAddr(), font, iconIdx, triShape, cursor);
+	}
+
+	void __fastcall Hook_AddButton2(void* font, void*, int iconIdx, void* triShape, NiPoint3* cursor)
+	{
+		AddButtonScaled((Font_AddButton_t)s_addButtonCall2.GetOverwrittenAddr(), font, iconIdx, triShape, cursor);
 	}
 
 	static bool SwapVtableSlot(UInt32 slotAddr, UInt32 newFn, UInt32& outOrig)
@@ -184,35 +197,24 @@ namespace InlineGlyphFix
 
 	static bool InstallHooks()
 	{
-		//prologue dump of Font::A14170: 55 8B EC 83 EC 08 89 4D FC (9 bytes)
-		if (!s_metricsDetour.WriteRelJump(kAddr_Font_ComputeButtonMetrics, (UInt32)Hook_ComputeButtonMetrics, 9))
+		if (!s_metricsCall.WriteRelCall(kAddr_Font_ComputeButtonMetricsCall, (UInt32)Hook_ComputeButtonMetrics))
 		{
-			Log("InlineGlyphFix: failed to hook Font::A14170");
-			return false;
-		}
-		s_origComputeButtonMetrics = s_metricsDetour.GetTrampoline<Font_ComputeButtonMetrics_t>();
-		if (!s_origComputeButtonMetrics)
-		{
-			Log("InlineGlyphFix: A14170 trampoline null");
-			s_metricsDetour.Remove();
+			Log("InlineGlyphFix: metrics call site at 0x%X is not an E8 call", kAddr_Font_ComputeButtonMetricsCall);
 			return false;
 		}
 
-		//prologue dump of Font::AddButton: 55 8B EC 81 EC D4 00 00 00 56 (10 bytes)
-		if (!s_addButtonDetour.WriteRelJump(kAddr_Font_AddButton, (UInt32)Hook_AddButton, 10))
+		if (!s_addButtonCall1.WriteRelCall(kAddr_Font_AddButtonCall1, (UInt32)Hook_AddButton1))
 		{
-			Log("InlineGlyphFix: failed to hook Font::AddButton");
-			s_metricsDetour.Remove();
-			s_origComputeButtonMetrics = nullptr;
+			Log("InlineGlyphFix: AddButton call site at 0x%X is not an E8 call", kAddr_Font_AddButtonCall1);
+			s_metricsCall.Remove();
 			return false;
 		}
-		s_origAddButton = s_addButtonDetour.GetTrampoline<Font_AddButton_t>();
-		if (!s_origAddButton)
+
+		if (!s_addButtonCall2.WriteRelCall(kAddr_Font_AddButtonCall2, (UInt32)Hook_AddButton2))
 		{
-			Log("InlineGlyphFix: Font::AddButton trampoline null");
-			s_addButtonDetour.Remove();
-			s_metricsDetour.Remove();
-			s_origComputeButtonMetrics = nullptr;
+			Log("InlineGlyphFix: AddButton call site at 0x%X is not an E8 call", kAddr_Font_AddButtonCall2);
+			s_addButtonCall1.Remove();
+			s_metricsCall.Remove();
 			return false;
 		}
 
@@ -223,10 +225,9 @@ namespace InlineGlyphFix
 			if (!SwapVtableSlot(kAddr_TileTextVtable_MakeNode, (UInt32)Hook_MakeNode, origMakeNode))
 			{
 				Log("InlineGlyphFix: failed to swap TileText vtable");
-				s_addButtonDetour.Remove();
-				s_metricsDetour.Remove();
-				s_origComputeButtonMetrics = nullptr;
-				s_origAddButton = nullptr;
+				s_addButtonCall2.Remove();
+				s_addButtonCall1.Remove();
+				s_metricsCall.Remove();
 				return false;
 			}
 			s_origMakeNode = (TileText_MakeNode_t)origMakeNode;

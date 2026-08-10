@@ -1,15 +1,17 @@
-//hooks Projectile::SpawnCollisionEffects to detect when an ImpactData spawns visuals.
-//fires once per non-actor projectile impact, after the engine resolves the per-material
-//ImpactData via the weapon's ImpactDataSet.
+//detours the sole call to Projectile::SpawnCollisionEffects to detect when an ImpactData
+//spawns visuals. fires once per non-actor projectile impact, after the engine resolves the
+//per-material ImpactData via the weapon's ImpactDataSet.
 
 #include "OnImpactDataSpawnHandler.h"
 #include "internal/NVSEPluginAPI.h"
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
 #include "internal/GameSDK.h"
+#include "internal/globals.h"
 #include "internal/layout/Projectile.h"
 
-constexpr UInt32 kAddr_SpawnCollisionEffects = 0x9C20E0;
+//sole call site of Projectile::SpawnCollisionEffects 0x9C20E0, in Projectile::ProcessImpacts
+constexpr UInt32 kAddr_SpawnCollisionEffectsCall = 0x9C2058;
 constexpr UInt32 kAddr_GetImpactDataForMaterial = 0x522BA0;
 
 struct NiPoint3 { float x, y, z; };
@@ -17,7 +19,7 @@ struct NiPoint3 { float x, y, z; };
 typedef void (__thiscall* SpawnCollisionEffects_t)(void*, TESObjectREFR*, NiPoint3*, NiPoint3*, int, UInt32);
 typedef void* (__thiscall* GetImpactDataForMaterial_t)(void*, UInt32);
 
-static Detours::JumpDetour s_detour;
+static Detours::CallDetour s_spawnCall;
 
 static bool IsActorTypeID(UInt8 typeID) {
 	return typeID == kFormType_ACHR || typeID == kFormType_ACRE;
@@ -31,7 +33,7 @@ static void __fastcall HookSpawnCollisionEffects(
 	NiPoint3 capturedPos = aCoord ? *aCoord : NiPoint3{0,0,0};
 	NiPoint3 capturedNormal = a4 ? *a4 : NiPoint3{0,0,0};
 
-	s_detour.GetTrampoline<SpawnCollisionEffects_t>()(this_, a2, aCoord, a4, a5, material);
+	((SpawnCollisionEffects_t)s_spawnCall.GetOverwrittenAddr())(this_, a2, aCoord, a4, a5, material);
 
 	if (!g_eventManagerInterface) return;
 	if (!this_) return;
@@ -69,9 +71,10 @@ bool Init(void* nvseInterface) {
 	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
 	if (nvse->isEditor) return false;
 
-	//prologue: push ebp; mov ebp,esp; push -1; push offset = 1+2+2+5 = 10 bytes
-	if (!s_detour.WriteRelJump(kAddr_SpawnCollisionEffects, HookSpawnCollisionEffects, 10))
+	if (!s_spawnCall.WriteRelCall(kAddr_SpawnCollisionEffectsCall, HookSpawnCollisionEffects)) {
+		Log("OnImpactDataSpawn: call site at 0x%X is not an E8 call, disabled", kAddr_SpawnCollisionEffectsCall);
 		return false;
+	}
 
 	return true;
 }
