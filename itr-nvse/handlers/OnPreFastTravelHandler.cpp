@@ -155,8 +155,6 @@ bool Init(void* nvseInterface)
 	}
 	Log("OnPreFastTravel: %08X hooked, original=%08X vanilla=%08X", kAddr_FastTravelCallSite,
 		s_origFastTravelExecutor, kAddr_FastTravelExecutor);
-
-	Log("OnPreFastTravel: call-site hook installed at 0x%X", kAddr_FastTravelCallSite);
 	return true;
 }
 

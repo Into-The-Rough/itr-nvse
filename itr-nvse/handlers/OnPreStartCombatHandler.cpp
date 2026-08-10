@@ -37,11 +37,13 @@ bool __cdecl Hook_ExtractArgs(ParamInfo* paramInfo, void* scriptData, UInt32* op
 
 	bool extracted = extractArgs(paramInfo, scriptData, opcodeOffsetPtr, thisObj, containingObj,
 		scriptObj, eventList, targetOut);
-	if (!extracted || !thisObj || !targetOut || !*targetOut || !g_eventManagerInterface)
+	if (!extracted || !g_eventManagerInterface)
+		return extracted;
+	if (!s_probe.hasListeners || GetCurrentThreadId() != s_mainThreadId)
+		return extracted;
+	if (!thisObj || !targetOut || !*targetOut)
 		return extracted;
 	if (!TESFormIsActorRef(thisObj) || !TESFormIsActorRef(*targetOut))
-		return extracted;
-	if (GetCurrentThreadId() != s_mainThreadId || !s_probe.hasListeners)
 		return extracted;
 
 	if (s_dispatchDepth >= 16)
