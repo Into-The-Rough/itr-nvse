@@ -35,6 +35,7 @@ typedef void(__cdecl* ContainerTransferItem_t)(SInt32);
 static PlayerPickUp_t s_playerPickUp = nullptr;
 static ActorPickUp_t s_actorPickUp = nullptr;
 static ContainerTransferItem_t s_containerTransferItem = nullptr;
+static DWORD s_mainThreadId = 0;
 
 typedef TESObjectREFR* (__stdcall *InvRefCreateEntry_t)(TESObjectREFR* container, TESForm* itemForm, SInt32 countDelta, ExtraDataList* xData);
 static InvRefCreateEntry_t g_invRefCreateEntry = nullptr;
@@ -56,6 +57,14 @@ static bool DispatchPrePickUp(TESObjectREFR* picker, TESForm* baseForm, TESObjec
 {
 	if (!g_eventManagerInterface || !picker || !baseForm)
 		return true;
+
+	if (GetCurrentThreadId() != s_mainThreadId)
+	{
+		static volatile LONG loggedOffThread = 0;
+		if (InterlockedCompareExchange(&loggedOffThread, 1, 0) == 0)
+			Log("OnPrePickUp: pickup ran off main thread, declining to dispatch");
+		return true;
+	}
 
 	//a handler adding items retriggers a pickup site synchronously, cap the depth
 	//and let pickups past it proceed, breaking the cycle
@@ -158,6 +167,8 @@ bool Init(void* nvseInterface)
 		Log("OnPrePickUpHandler: g_eventManagerInterface not ready, aborting Init");
 		return false;
 	}
+
+	s_mainThreadId = GetCurrentThreadId();
 
 	using P = NVSEEventManagerInterface::ParamType;
 	using F = NVSEEventManagerInterface::EventFlags;
