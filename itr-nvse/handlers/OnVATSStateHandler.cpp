@@ -10,12 +10,15 @@
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
 #include "internal/GameSDK.h"
+#include "internal/globals.h"
 #include "internal/layout/Player.h"
 #include "internal/layout/VATS.h"
 
 constexpr UInt32 kAddr_VATS_SetMode             = 0x9C6C30;
-constexpr UInt32 kAddr_StartKillcamForActor     = 0x93E530;
 constexpr UInt32 kAddr_ForceEndKillCam          = 0x93E770;
+
+//sole call site of PlayerCharacter::StartKillcamForActor 0x93E530, in Actor::Kill
+constexpr UInt32 kAddr_StartKillcamCallSite     = 0x89F419;
 
 constexpr UInt32 kVATSMode_None     = 0;
 constexpr UInt32 kVATSMode_Playback = 4;
@@ -23,7 +26,7 @@ constexpr UInt32 kVATSMode_Playback = 4;
 static UInt32 g_currentKillCamTargetID = 0;
 
 static Detours::JumpDetour s_setModeDetour;
-static Detours::JumpDetour s_startKillcamDetour;
+static Detours::CallDetour s_startKillcamCall;
 static Detours::JumpDetour s_forceEndKillCamDetour;
 
 typedef void (__thiscall* VATS_SetMode_t)(void*, UInt32, bool);
@@ -60,7 +63,7 @@ static void __fastcall Hook_VATSSetMode(void* this_, void* edx, UInt32 aeMode, b
 static void __fastcall Hook_StartKillcamForActor(void* this_, void* edx, void* target, float time, char a4, int a5) {
 	float oldTimer = ReadKillCamTimer();
 
-	s_startKillcamDetour.GetTrampoline<StartKillcamForActor_t>()(this_, target, time, a4, a5);
+	((StartKillcamForActor_t)s_startKillcamCall.GetOverwrittenAddr())(this_, target, time, a4, a5);
 
 	float newTimer = ReadKillCamTimer();
 	if (oldTimer > 0.0f || newTimer <= 0.0f || !target || !g_eventManagerInterface) return;
@@ -98,9 +101,11 @@ bool Init(void* nvseInterface)
 	if (!s_setModeDetour.WriteRelJump(kAddr_VATS_SetMode, Hook_VATSSetMode, 10))
 		return false;
 
-	//StartKillcamForActor prologue: same shape = 10 bytes
-	if (!s_startKillcamDetour.WriteRelJump(kAddr_StartKillcamForActor, Hook_StartKillcamForActor, 10))
+	if (!s_startKillcamCall.WriteRelCall(kAddr_StartKillcamCallSite, Hook_StartKillcamForActor))
+	{
+		Log("OnVATSState: killcam-start call site at 0x%X is not an E8 call, disabled", kAddr_StartKillcamCallSite);
 		return false;
+	}
 
 	//ForceEndKillCam prologue: push ebp; mov ebp,esp; push ecx; mov [ebp-4],ecx = 1+2+1+3 = 7
 	if (!s_forceEndKillCamDetour.WriteRelJump(kAddr_ForceEndKillCam, Hook_ForceEndKillCam, 7))

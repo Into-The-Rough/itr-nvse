@@ -7,6 +7,7 @@
 #include "internal/Detours.h"
 #include "internal/SafeWrite.h"
 #include "internal/GameGlobals.h"
+#include "internal/GameLayout.h"
 #include "internal/globals.h"
 
 namespace OnPreDamageHandler {
@@ -14,9 +15,9 @@ namespace OnPreDamageHandler {
 constexpr char kEventHit[] = "ITR:OnPreHitDamage";
 constexpr char kEventHealth[] = "ITR:OnPreHealthDamage";
 
-//jip identifies two calculatehitdamage callers by return address and defers calculation
-//until hit location is known, so hook the final hit-processing calls instead
-constexpr UInt32 kCallSites[5] = { 0x9B563D, 0x9B5716, 0x9B5764, 0x9B58BE, 0x9B5A18 };
+//the complete xref set of Actor::HitMe 0x89A760, every one a direct E8 call
+constexpr UInt32 kHitCallSites[] = { 0x87C4DA, 0x89A738, 0x8B91E1, 0x9B0503, 0x9C1E96, 0x9CBDE8 };
+constexpr UInt32 kHitCallCount = sizeof(kHitCallSites) / sizeof(kHitCallSites[0]);
 
 //actor vtables, slot 0xEB = DamageActorValue(this, avCode, float delta, source).
 //delta is negative for damage, avCode 16 = Health. each class overrides the slot with
@@ -27,8 +28,6 @@ constexpr UInt32 kVtbl_PlayerCharacter = 0x108AA3C;
 constexpr UInt32 kSlot_DamageActorValue = 0xEB * 4; //0x3AC
 constexpr UInt32 kAV_Health = 16;
 
-//layout matches handlers/FakeHitHandler.cpp, verified against sub_9B5A30 decompile.
-//only the fields up to the weapon pointer are needed here.
 struct ActorHitData {
 	void* source;        //0x00 attacker
 	void* target;        //0x04 victim
@@ -45,10 +44,11 @@ struct ActorHitData {
 	void* weapon;        //0x30
 };
 
-typedef void (__thiscall* FinalizeHit_t)(ActorHitData*);
+//HitMe ends in retn 8, so the two args are callee-cleaned, eax is dead but forwarded anyway
+typedef UInt32 (__thiscall* HitMe_t)(Actor*, ActorHitData*, char);
 typedef void (__thiscall* DamageActorValue_t)(void*, UInt32, float, void*);
 
-static Detours::CallDetour s_hitDetours[5];
+static Detours::CallDetour s_hitCalls[kHitCallCount];
 
 static DamageActorValue_t s_origDamageChar = nullptr;
 static DamageActorValue_t s_origDamageCreature = nullptr;
@@ -75,18 +75,20 @@ static bool MultiplierResultCb(NVSEArrayVarInterface::Element& result, void* pro
 	return true;
 }
 
-static void DispatchHitEvent(ActorHitData* hitData)
+static void DispatchHitEvent(Actor* target, ActorHitData* hitData)
 {
 	if (!s_probeHit.hasListeners)
 		return;
 	if (GetCurrentThreadId() != g_mainThreadId) {
 		if (!s_offMainLoggedHit) {
-			Log("OnPreHitDamage: hit finalization off main thread, skipping dispatch");
+			Log("OnPreHitDamage: Actor::HitMe off main thread, waiting for main-thread replay");
 			s_offMainLoggedHit = true;
 		}
 		return;
 	}
-	if (!hitData || !hitData->target)
+	if (!target || !target->baseProcess || !hitData)
+		return;
+	if (target == (Actor*)*g_thePlayerPtr && hitData->hitLocation == 14)
 		return;
 	float damage = hitData->healthDmg;
 	//location 14 moves health damage into limb damage for weapon-condition hits
@@ -97,8 +99,8 @@ static void DispatchHitEvent(ActorHitData* hitData)
 
 	float product = 1.0f;
 	g_eventManagerInterface->DispatchEventAlt(kEventHit, MultiplierResultCb, &product,
-		reinterpret_cast<TESObjectREFR*>(hitData->target),
-		reinterpret_cast<TESForm*>(hitData->target),
+		reinterpret_cast<TESObjectREFR*>(target),
+		reinterpret_cast<TESForm*>(target),
 		reinterpret_cast<TESForm*>(hitData->source),
 		reinterpret_cast<TESForm*>(hitData->weapon),
 		PackEventFloatArg(damage), hitData->hitLocation, &product);
@@ -111,22 +113,34 @@ static void DispatchHitEvent(ActorHitData* hitData)
 	}
 }
 
-static void FinalizeHitWork(ActorHitData* hitData, FinalizeHit_t orig)
+//each site chains its own recorded original, so a plugin owning one call site alone stays intact
+template <UInt32 N>
+static UInt32 __fastcall Hook_HitMe(Actor* target, void*, ActorHitData* hitData, char attackClass)
 {
-	DispatchHitEvent(hitData);
-	if (orig)
-		orig(hitData);
+	DispatchHitEvent(target, hitData);
+	return ((HitMe_t)s_hitCalls[N].GetOverwrittenAddr())(target, hitData, attackClass);
 }
 
-//each call site gets its own thunk so it chains that site's recorded original
-#define HIT_THUNK(N) static void __fastcall Hook_FinalizeHit_##N(ActorHitData* h, void*) \
-	{ FinalizeHitWork(h, (FinalizeHit_t)s_hitDetours[N].GetOverwrittenAddr()); }
-HIT_THUNK(0) HIT_THUNK(1) HIT_THUNK(2) HIT_THUNK(3) HIT_THUNK(4)
-#undef HIT_THUNK
-static void* const kHitThunks[5] = {
-	(void*)Hook_FinalizeHit_0, (void*)Hook_FinalizeHit_1, (void*)Hook_FinalizeHit_2,
-	(void*)Hook_FinalizeHit_3, (void*)Hook_FinalizeHit_4,
-};
+static bool InstallHitCalls()
+{
+	typedef UInt32 (__fastcall* Thunk_t)(Actor*, void*, ActorHitData*, char);
+	static const Thunk_t thunks[kHitCallCount] = {
+		Hook_HitMe<0>, Hook_HitMe<1>, Hook_HitMe<2>, Hook_HitMe<3>, Hook_HitMe<4>, Hook_HitMe<5>
+	};
+
+	for (UInt32 i = 0; i < kHitCallCount; i++) {
+		if (s_hitCalls[i].WriteRelCall(kHitCallSites[i], thunks[i]) && s_hitCalls[i].GetOverwrittenAddr())
+			continue;
+		Log("OnPreHitDamage: call site %08X unusable, backing out all HitMe detours", kHitCallSites[i]);
+		for (UInt32 j = 0; j <= i; j++)
+			s_hitCalls[j].Remove();
+		return false;
+	}
+
+	for (UInt32 i = 0; i < kHitCallCount; i++)
+		Log("OnPreHitDamage: %08X hooked, original=%08X", kHitCallSites[i], s_hitCalls[i].GetOverwrittenAddr());
+	return true;
+}
 
 static DamageActorValue_t PickDamageOrig(void* actor)
 {
@@ -234,14 +248,7 @@ bool Init(void* nvseInterface)
 	};
 	g_eventManagerInterface->RegisterEvent(kEventHealth, 4, healthParams, F::kFlag_FlushOnLoad);
 
-	int hitInstalled = 0;
-	for (int i = 0; i < 5; i++) {
-		if (s_hitDetours[i].WriteRelCall(kCallSites[i], (UInt32)kHitThunks[i]))
-			hitInstalled++;
-		else
-			Log("OnPreHitDamage: call site 0x%X could not be detoured", kCallSites[i]);
-	}
-	Log("OnPreHitDamage: %d/5 call sites detoured", hitInstalled);
+	bool hitInstalled = InstallHitCalls();
 
 	bool t2 = InstallDamageSwap(kVtbl_Character, s_origDamageChar)
 		&& InstallDamageSwap(kVtbl_Creature, s_origDamageCreature)
@@ -260,7 +267,7 @@ bool Init(void* nvseInterface)
 			(UInt32)s_origDamageChar, (UInt32)s_origDamageCreature, (UInt32)s_origDamagePlayer);
 	}
 
-	return hitInstalled > 0 || t2;
+	return hitInstalled || t2;
 }
 
 }
