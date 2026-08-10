@@ -246,6 +246,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="handlers\OnPreWeaponSwitchHandler.cpp" />
     <ClCompile Include="handlers\OnKnockdownHandler.cpp" />
     <ClCompile Include="handlers\OnPreFastTravelHandler.cpp" />
+    <ClCompile Include="handlers\OnPreStartCombatHandler.cpp" />
     <ClCompile Include="handlers\OnTileValueChangeHandler.cpp" />
     <ClCompile Include="handlers\OnDialogueMenuBuildHandler.cpp" />
     <ClCompile Include="handlers\OnPreDeathHandler.cpp" />
@@ -396,6 +397,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="handlers\OnPreWeaponSwitchHandler.h" />
     <ClInclude Include="handlers\OnKnockdownHandler.h" />
     <ClInclude Include="handlers\OnPreFastTravelHandler.h" />
+    <ClInclude Include="handlers\OnPreStartCombatHandler.h" />
     <ClInclude Include="handlers\OnTileValueChangeHandler.h" />
     <ClInclude Include="handlers\OnDialogueMenuBuildHandler.h" />
     <ClInclude Include="handlers\OnPreDeathHandler.h" />

@@ -58,6 +58,7 @@
 #include "handlers/OnPreWeaponSwitchHandler.h"
 #include "handlers/OnKnockdownHandler.h"
 #include "handlers/OnPreFastTravelHandler.h"
+#include "handlers/OnPreStartCombatHandler.h"
 #include "handlers/OnTileValueChangeHandler.h"
 #include "handlers/OnDialogueMenuBuildHandler.h"
 #include "handlers/OnPreDeathHandler.h"
@@ -757,6 +758,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	logInit("OnCasinoBanHandler", OnCasinoBanHandler::Init((void*)nvse));
 	logInit("OnPrePickUpHandler", OnPrePickUpHandler::Init((void*)nvse));
 	logInit("OnPreFastTravelHandler", OnPreFastTravelHandler::Init((void*)nvse));
+	logInit("OnPreStartCombatHandler", OnPreStartCombatHandler::Init((void*)nvse));
 	logInit("OnKnockdownHandler", OnKnockdownHandler::Init((void*)nvse));
 	logInit("OnPreDeathHandler", OnPreDeathHandler::Init((void*)nvse));
 	logInit("OnPreDamageHandler", OnPreDamageHandler::Init((void*)nvse));
