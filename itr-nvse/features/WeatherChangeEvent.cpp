@@ -30,7 +30,6 @@ namespace {
 
 	Detours::CallDetour g_updateDetour;
 	Detours::CallDetour g_forceDetours[kForceWeatherCallCount];
-	UpdateWeather_t g_origUpdate = nullptr;
 	UInt32 g_dispatchDepth = 0;
 
 	void Dispatch(int phase, TESForm* next, TESForm* prev) {
@@ -44,7 +43,8 @@ namespace {
 	void __fastcall UpdateWeatherHook(Sky* sky, void*) {
 		TESForm* prevCurr = sky->currWeather;
 		TESForm* prevTrans = sky->transWeather;
-		g_origUpdate(sky);
+		auto original = reinterpret_cast<UpdateWeather_t>(g_updateDetour.GetOverwrittenAddr());
+		original(sky);
 		TESForm* next = sky->currWeather;
 		TESForm* trans = sky->transWeather;
 
@@ -74,7 +74,6 @@ namespace {
 		for (UInt32 i = kForceWeatherCallCount; i > 0; i--)
 			g_forceDetours[i - 1].Remove();
 		g_updateDetour.Remove();
-		g_origUpdate = nullptr;
 	}
 }
 
@@ -84,9 +83,8 @@ namespace WeatherChangeEvent {
 			Log("WeatherChangeEvent: update call site %08X unusable", kCallSite_UpdateWeather);
 			return false;
 		}
-		g_origUpdate = reinterpret_cast<UpdateWeather_t>(g_updateDetour.GetOverwrittenAddr());
 		Log("WeatherChangeEvent: %08X hooked, original=%08X vanilla=%08X", kCallSite_UpdateWeather,
-			(UInt32)g_origUpdate, kAddr_UpdateWeather);
+			g_updateDetour.GetOverwrittenAddr(), kAddr_UpdateWeather);
 
 		typedef void (__fastcall* ForceWeatherHook_t)(Sky*, void*, TESForm*, char);
 		static const ForceWeatherHook_t hooks[kForceWeatherCallCount] = {
