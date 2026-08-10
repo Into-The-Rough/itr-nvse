@@ -166,7 +166,8 @@
 - ITR:OnWitnessed - fires once per witness per crime (witness, perpetrator, crimeType, victim, detectionValue). Pickpocket reports the victim rather than the player as witness; murder excludes the victim. Filterable on witness/perpetrator/victim refs/formlists/factions and on crimeType equality. Trespass alarms are rate-limited to one event per witness per 3 seconds.
 - ITR:OnImpactDataSpawn - fires when a projectile resolves ImpactData on a non-actor hit (impactData, x, y, z, normalX, normalY, normalZ, projectile, target, weapon, material)
 - ITR:OnSprayDecal - fires per blood spray decal placement during limb sever/explode (impactData, x, y, z, normalX, normalY, normalZ)
-- ITR:OnWoundSpray - fires per wound blood spray on an actor (actor, impactData, x, y, z, dx, dy, dz, hitLocation, source, weapon)
+- ITR:OnWoundSpray - fires per wound blood spray on an actor (actor, impactData, x, y, z, dx, dy, dz, hitLocation, source, weapon). Covers all three vanilla Actor::CreateBlood callers; third-party direct calls are not observed
+- ITR:OnWeatherChange - fires when vanilla weather processing starts or completes a transition (phase: 0 start, 1 complete, nextWeather, previousWeather). Covers Sky::Update and both vanilla weather-command ForceWeather calls; third-party direct ForceWeather calls are not observed
 - ITR:OnNearMiss - fires when a projectile passes near an actor without hitting (actor, shooter, weapon, distance). iCooldownMs has a 50ms floor
 - ITR:OnCasinoBan - fires when the player is banned from a casino (casino)
 - ITR:OnEffectApplied - fires when a magic effect is applied (target, magicItem, effectItemIndex, caster). magicItem is the parent spell/ingestible; effectItemIndex selects the effect within it

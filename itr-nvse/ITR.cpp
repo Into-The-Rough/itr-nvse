@@ -447,7 +447,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				ItemModFlagSafety::Init();
 				ToggleAllPrimitives::InstallHooks();
 				EventDispatch::RegisterEvents();
-				WeatherChangeEvent::Init();
+				if (!WeatherChangeEvent::Init())
+					Log("WeatherChangeEvent failed to initialise");
 				WakeyWakey::Init(Settings::bWakeyWakey != 0, Settings::fWakeDistance,
 					Settings::fQuietWakeDistance, Settings::iWakeCooldownMs);
 				OnJumpLandHandler::InstallListenerProbes();
