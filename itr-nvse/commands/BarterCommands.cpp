@@ -40,7 +40,7 @@ namespace
 	using BarterMenuClose_t = void(__cdecl*)();
 	using ShouldHideItem_t = bool(__cdecl*)(ExtraContainerChanges::EntryData*);
 	using TransferItem_t = void(__cdecl*)(SInt32);
-	using ProcessTransaction_t = void* (__thiscall*)(void*);
+	using ProcessTransaction_t = void(__thiscall*)(void*);
 	using TileFromItem_t = void* (__thiscall*)(void*, ExtraContainerChanges::EntryData**);
 	using TESObjectREFR_GetObjectReference_t = TESForm* (__thiscall*)(TESObjectREFR*);
 	using IsTalkingThroughActivator_t = bool(__thiscall*)(TESObjectREFR*);
@@ -313,15 +313,15 @@ namespace
 		s_origTransferItem(count);
 	}
 
-	void* __fastcall Hook_ProcessTransaction(void* menu, void*)
+	void __fastcall Hook_ProcessTransaction(void* menu, void*)
 	{
 		if (HasBlockedQueuedSale(menu))
 		{
 			NotifyBlockedSale();
-			return menu;
+			return;
 		}
 
-		return s_origProcessTransaction(menu);
+		s_origProcessTransaction(menu);
 	}
 
 	static ParamInfo kParams_ShowBarterMenuWhitelist[2] = {

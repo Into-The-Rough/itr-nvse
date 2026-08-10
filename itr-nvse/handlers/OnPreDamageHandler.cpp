@@ -44,8 +44,7 @@ struct ActorHitData {
 	void* weapon;        //0x30
 };
 
-//HitMe ends in retn 8, so the two args are callee-cleaned, eax is dead but forwarded anyway
-typedef UInt32 (__thiscall* HitMe_t)(Actor*, ActorHitData*, char);
+typedef void (__thiscall* HitMe_t)(Actor*, ActorHitData*, char);
 typedef void (__thiscall* DamageActorValue_t)(void*, UInt32, float, void*);
 
 static Detours::CallDetour s_hitCalls[kHitCallCount];
@@ -55,8 +54,9 @@ static DamageActorValue_t s_origDamageCreature = nullptr;
 static DamageActorValue_t s_origDamagePlayer = nullptr;
 
 static DWORD g_mainThreadId = 0;
-static bool s_offMainLoggedHit = false;
+static volatile LONG s_offMainLoggedHit = 0;
 static UInt32 s_healthDeltaLogCount = 0;
+static UInt32 s_hitReentryDepth = 0;
 static UInt32 s_reentryDepth = 0; //written only on the main thread
 
 static void HitProbe(TESObjectREFR*, void*) {}
@@ -79,13 +79,6 @@ static void DispatchHitEvent(Actor* target, ActorHitData* hitData)
 {
 	if (!s_probeHit.hasListeners)
 		return;
-	if (GetCurrentThreadId() != g_mainThreadId) {
-		if (!s_offMainLoggedHit) {
-			Log("OnPreHitDamage: Actor::HitMe off main thread, waiting for main-thread replay");
-			s_offMainLoggedHit = true;
-		}
-		return;
-	}
 	if (!target || !target->baseProcess || !hitData)
 		return;
 	if (target == (Actor*)*g_thePlayerPtr && hitData->hitLocation == 14)
@@ -115,15 +108,30 @@ static void DispatchHitEvent(Actor* target, ActorHitData* hitData)
 
 //each site chains its own recorded original, so a plugin owning one call site alone stays intact
 template <UInt32 N>
-static UInt32 __fastcall Hook_HitMe(Actor* target, void*, ActorHitData* hitData, char attackClass)
+static void __fastcall Hook_HitMe(Actor* target, void*, ActorHitData* hitData, char attackClass)
 {
+	auto original = reinterpret_cast<HitMe_t>(s_hitCalls[N].GetOverwrittenAddr());
+	if (GetCurrentThreadId() != g_mainThreadId) {
+		if (s_probeHit.hasListeners && InterlockedCompareExchange(&s_offMainLoggedHit, 1, 0) == 0)
+			Log("OnPreHitDamage: Actor::HitMe off main thread, waiting for main-thread replay");
+		original(target, hitData, attackClass);
+		return;
+	}
+
+	if (!s_probeHit.hasListeners || s_hitReentryDepth) {
+		original(target, hitData, attackClass);
+		return;
+	}
+
+	s_hitReentryDepth++;
 	DispatchHitEvent(target, hitData);
-	return ((HitMe_t)s_hitCalls[N].GetOverwrittenAddr())(target, hitData, attackClass);
+	original(target, hitData, attackClass);
+	s_hitReentryDepth--;
 }
 
 static bool InstallHitCalls()
 {
-	typedef UInt32 (__fastcall* Thunk_t)(Actor*, void*, ActorHitData*, char);
+	typedef void (__fastcall* Thunk_t)(Actor*, void*, ActorHitData*, char);
 	static const Thunk_t thunks[kHitCallCount] = {
 		Hook_HitMe<0>, Hook_HitMe<1>, Hook_HitMe<2>, Hook_HitMe<3>, Hook_HitMe<4>, Hook_HitMe<5>
 	};
@@ -148,9 +156,8 @@ static DamageActorValue_t PickDamageOrig(void* actor)
 	if (vtbl == kVtbl_Character) return s_origDamageChar;
 	if (vtbl == kVtbl_Creature) return s_origDamageCreature;
 	if (vtbl == kVtbl_PlayerCharacter || actor == (void*)*g_thePlayerPtr) return s_origDamagePlayer;
-	static bool s_unknownVtblLogged = false;
-	if (!s_unknownVtblLogged) {
-		s_unknownVtblLogged = true;
+	static volatile LONG s_unknownVtblLogged = 0;
+	if (InterlockedCompareExchange(&s_unknownVtblLogged, 1, 0) == 0) {
 		Log("OnPreHealthDamage: unknown vtable %08X, using Character original", vtbl);
 	}
 	return s_origDamageChar;
@@ -160,8 +167,12 @@ static void __fastcall Hook_DamageActorValue(void* actor, void*, UInt32 avCode, 
 {
 	DamageActorValue_t orig = PickDamageOrig(actor);
 
-	if (avCode != kAV_Health || delta >= 0.0f || !s_probeHealth.hasListeners
-		|| s_reentryDepth > 0 || GetCurrentThreadId() != g_mainThreadId) {
+	if (GetCurrentThreadId() != g_mainThreadId) {
+		if (orig) orig(actor, avCode, delta, source);
+		return;
+	}
+
+	if (avCode != kAV_Health || delta >= 0.0f || !s_probeHealth.hasListeners || s_reentryDepth > 0) {
 		if (orig) orig(actor, avCode, delta, source);
 		return;
 	}

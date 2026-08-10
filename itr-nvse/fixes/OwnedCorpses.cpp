@@ -12,7 +12,8 @@ namespace OwnedCorpses
 {
 	static bool g_enabled = false;
 	static bool g_installed = false;
-	static Detours::JumpDetour g_detour;
+	static Detours::CallDetour g_crimeOwnerCall;
+	static Detours::CallDetour g_alarmOwnerCall;
 	static Detours::JumpDetour g_stealAlarmDetour;
 
 	//find best faction from dead actor's base form
@@ -40,8 +41,7 @@ namespace OwnedCorpses
 		return fallback;
 	}
 
-	//non-actor ownership fallback: encounter zone -> cell owner
-	//same chain vanilla uses for items/containers, skipping teleport/furniture/door checks
+	//dead actors return before vanilla's encounter-zone and cell-owner fallback
 	static void* GetZoneOrCellOwner(void* ref)
 	{
 		void* zone = ThisCall<void*>(0x567D20, ref); //GetEncounterZone
@@ -62,12 +62,10 @@ namespace OwnedCorpses
 		return nullptr;
 	}
 
-	//runs vanilla GetOwnerRawForm first, then falls back to dead actor ownership when vanilla found none
-	void* __fastcall GetOwnerRawFormHook(void* ref, void* edx)
+	static void* GetCorpseOwner(void* ref, void* vanillaOwner)
 	{
-		void* owner = g_detour.GetTrampoline<void*(__thiscall*)(void*)>()(ref);
-		if (owner || !g_enabled)
-			return owner;
+		if (vanillaOwner || !g_enabled)
+			return vanillaOwner;
 
 		if (!Engine::TESObjectREFR_IsActor(static_cast<TESObjectREFR*>(ref)))
 			return nullptr;
@@ -80,6 +78,20 @@ namespace OwnedCorpses
 		if (zoneOwner) return zoneOwner;
 
 		return GetBestFaction(static_cast<TESObjectREFR*>(ref));
+	}
+
+	typedef void* (__thiscall* GetOwnerRawForm_t)(void*);
+
+	static void* __fastcall GetCrimeOwnerHook(void* ref, void*)
+	{
+		auto original = reinterpret_cast<GetOwnerRawForm_t>(g_crimeOwnerCall.GetOverwrittenAddr());
+		return GetCorpseOwner(ref, original(ref));
+	}
+
+	static void* __fastcall GetAlarmOwnerHook(void* ref, void*)
+	{
+		auto original = reinterpret_cast<GetOwnerRawForm_t>(g_alarmOwnerCall.GetOverwrittenAddr());
+		return GetCorpseOwner(ref, original(ref));
 	}
 
 	static bool __fastcall IsDeadForStealAlarm(Actor* actor, void*)
@@ -124,20 +136,18 @@ namespace OwnedCorpses
 		g_enabled = enabled;
 	}
 
-	//GetOwnerRawForm prologue: push ebp; mov ebp,esp; sub esp,10h
-	static constexpr UInt8 kGetOwnerRawFormPrologue[6] = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x10 };
-
 	void Init(bool enabled)
 	{
-		if (memcmp((void*)0x567790, kGetOwnerRawFormPrologue, sizeof(kGetOwnerRawFormPrologue)) != 0)
+		if (!g_crimeOwnerCall.WriteRelCall(0x579A92, GetCrimeOwnerHook))
 		{
-			Log("OwnedCorpses: prologue not vanilla, feature disabled");
+			Log("OwnedCorpses: activation owner call could not be detoured");
 			return;
 		}
 
-		if (!g_detour.WriteRelJump(0x567790, GetOwnerRawFormHook, 6))
+		if (!g_alarmOwnerCall.WriteRelCall(0x8BFB2C, GetAlarmOwnerHook))
 		{
-			Log("OwnedCorpses: failed to hook GetOwnerRawForm");
+			Log("OwnedCorpses: alarm owner call could not be detoured");
+			g_crimeOwnerCall.Remove();
 			return;
 		}
 
@@ -146,7 +156,8 @@ namespace OwnedCorpses
 		if (!g_stealAlarmDetour.WriteRelJump(0x8BFBB3, StealAlarmWitnessHook, 11))
 		{
 			Log("OwnedCorpses: failed to hook StealAlarm");
-			g_detour.Remove();
+			g_alarmOwnerCall.Remove();
+			g_crimeOwnerCall.Remove();
 			return;
 		}
 
@@ -154,4 +165,3 @@ namespace OwnedCorpses
 		g_enabled = enabled;
 	}
 }
-
