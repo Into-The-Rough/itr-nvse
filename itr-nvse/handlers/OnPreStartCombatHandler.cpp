@@ -14,12 +14,18 @@ namespace OnPreStartCombatHandler {
 namespace {
 
 constexpr char kEventName[] = "ITR:OnPreStartCombat";
+constexpr UInt32 kAddr_ExtractArgs = 0x5ACCB0;
+constexpr UInt32 kAddr_ExtractArgsCall = 0x5C177D;
 
 using ExtractStartCombatArgs_t = bool(__cdecl*)(ParamInfo*, void*, UInt32*, TESObjectREFR*,
 	TESObjectREFR*, Script*, ScriptEventList*, TESObjectREFR**);
 
 Detours::CallDetour s_extractArgsDetour;
-thread_local UInt32 s_dispatchDepth = 0;
+DWORD s_mainThreadId = 0;
+UInt32 s_dispatchDepth = 0;
+
+void Probe(TESObjectREFR*, void*) {}
+EventDispatch::ListenerProbe s_probe = { kEventName, "ITR_OnPreStartCombatProbe", Probe };
 
 bool __cdecl Hook_ExtractArgs(ParamInfo* paramInfo, void* scriptData, UInt32* opcodeOffsetPtr,
 	TESObjectREFR* thisObj, TESObjectREFR* containingObj, Script* scriptObj,
@@ -35,6 +41,8 @@ bool __cdecl Hook_ExtractArgs(ParamInfo* paramInfo, void* scriptData, UInt32* op
 		return extracted;
 	if (!TESFormIsActorRef(thisObj) || !TESFormIsActorRef(*targetOut))
 		return extracted;
+	if (GetCurrentThreadId() != s_mainThreadId || !s_probe.hasListeners)
+		return extracted;
 
 	if (s_dispatchDepth >= 16)
 		return extracted;
@@ -45,6 +53,16 @@ bool __cdecl Hook_ExtractArgs(ParamInfo* paramInfo, void* scriptData, UInt32* op
 	return extracted;
 }
 
+}
+
+void InstallListenerProbe()
+{
+	s_probe.Install();
+}
+
+void Update()
+{
+	s_probe.Refresh(false);
 }
 
 bool Init(void* nvseInterface)
@@ -58,6 +76,7 @@ bool Init(void* nvseInterface)
 		Log("OnPreStartCombatHandler: event manager not ready");
 		return false;
 	}
+	s_mainThreadId = GetCurrentThreadId();
 
 	using P = NVSEEventManagerInterface::ParamType;
 	using F = NVSEEventManagerInterface::EventFlags;
@@ -68,11 +87,14 @@ bool Init(void* nvseInterface)
 		return false;
 	}
 
-	if (!s_extractArgsDetour.WriteRelCall(0x5C177D, Hook_ExtractArgs))
+	if (!s_extractArgsDetour.WriteRelCall(kAddr_ExtractArgsCall, Hook_ExtractArgs))
 	{
 		Log("OnPreStartCombatHandler: StartCombat ExtractArgs call could not be detoured");
 		return false;
 	}
+	UInt32 original = s_extractArgsDetour.GetOverwrittenAddr();
+	Log("OnPreStartCombat: %08X hooked, original=%08X vanilla=%08X", kAddr_ExtractArgsCall,
+		original, kAddr_ExtractArgs);
 
 	Log("OnPreStartCombatHandler: hook installed");
 	return true;

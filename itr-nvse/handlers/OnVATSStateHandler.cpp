@@ -3,6 +3,8 @@
 //  ITR:OnKillCamStart - PlayerCharacter::StartKillcamForActor (only on 0->nonzero fKillCamTimer)
 //  ITR:OnKillCamEnd   - PlayerCharacter::ForceEndKillCam
 
+#include <cstring>
+
 #include "OnVATSStateHandler.h"
 #include "internal/NVSEPluginAPI.h"
 #include "internal/Detours.h"
@@ -19,6 +21,10 @@ constexpr UInt32 kAddr_ForceEndKillCam          = 0x93E770;
 
 //sole call site of PlayerCharacter::StartKillcamForActor 0x93E530, in Actor::Kill
 constexpr UInt32 kAddr_StartKillcamCallSite     = 0x89F419;
+constexpr UInt32 kAddr_StartKillcamForActor     = 0x93E530;
+
+constexpr UInt8 kPrologue_VATS_SetMode[] = { 0x55, 0x8B, 0xEC, 0x6A, 0xFF, 0x68, 0xC4, 0xB4, 0xF1, 0x00 };
+constexpr UInt8 kPrologue_ForceEndKillCam[] = { 0x55, 0x8B, 0xEC, 0x51, 0x89, 0x4D, 0xFC };
 
 constexpr UInt32 kVATSMode_None     = 0;
 constexpr UInt32 kVATSMode_Playback = 4;
@@ -97,19 +103,36 @@ bool Init(void* nvseInterface)
 	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
 	if (nvse->isEditor) return false;
 
-	//SetMode prologue: push ebp; mov ebp,esp; push -1; push offset = 1+2+2+5 = 10
-	if (!s_setModeDetour.WriteRelJump(kAddr_VATS_SetMode, Hook_VATSSetMode, 10))
+	if (std::memcmp((void*)kAddr_VATS_SetMode, kPrologue_VATS_SetMode, sizeof(kPrologue_VATS_SetMode)) != 0)
+	{
+		Log("OnVATSState: VATS::SetMode prologue differs from expected, disabled");
+		return false;
+	}
+	if (std::memcmp((void*)kAddr_ForceEndKillCam, kPrologue_ForceEndKillCam, sizeof(kPrologue_ForceEndKillCam)) != 0)
+	{
+		Log("OnVATSState: ForceEndKillCam prologue differs from expected, disabled");
+		return false;
+	}
+
+	if (!s_setModeDetour.WriteRelJump(kAddr_VATS_SetMode, Hook_VATSSetMode, sizeof(kPrologue_VATS_SetMode)))
 		return false;
 
 	if (!s_startKillcamCall.WriteRelCall(kAddr_StartKillcamCallSite, Hook_StartKillcamForActor))
 	{
 		Log("OnVATSState: killcam-start call site at 0x%X is not an E8 call, disabled", kAddr_StartKillcamCallSite);
+		s_setModeDetour.Remove();
 		return false;
 	}
+	UInt32 startKillcamOriginal = s_startKillcamCall.GetOverwrittenAddr();
+	Log("OnVATSState: %08X hooked, original=%08X vanilla=%08X", kAddr_StartKillcamCallSite,
+		startKillcamOriginal, kAddr_StartKillcamForActor);
 
-	//ForceEndKillCam prologue: push ebp; mov ebp,esp; push ecx; mov [ebp-4],ecx = 1+2+1+3 = 7
-	if (!s_forceEndKillCamDetour.WriteRelJump(kAddr_ForceEndKillCam, Hook_ForceEndKillCam, 7))
+	if (!s_forceEndKillCamDetour.WriteRelJump(kAddr_ForceEndKillCam, Hook_ForceEndKillCam, sizeof(kPrologue_ForceEndKillCam)))
+	{
+		s_startKillcamCall.Remove();
+		s_setModeDetour.Remove();
 		return false;
+	}
 
 	return true;
 }

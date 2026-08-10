@@ -17,8 +17,10 @@ namespace InlineGlyphFix
 	//both AddButton 0xA14650 call sites sit under TileText::MakeNode 0xA21AF0, via sub_A12880 and sub_A19060
 	constexpr UInt32 kAddr_Font_AddButtonCall1 = 0xA12DD5;
 	constexpr UInt32 kAddr_Font_AddButtonCall2 = 0xA1959C;
+	constexpr UInt32 kAddr_Font_AddButton = 0xA14650;
 	//sole call site of Font::A14170, in sub_A1AEE0
 	constexpr UInt32 kAddr_Font_ComputeButtonMetricsCall = 0xA1AFCB;
+	constexpr UInt32 kAddr_Font_ComputeButtonMetrics = 0xA14170;
 	constexpr UInt32 kAddr_TileTextVtable_MakeNode = 0x1094880;
 	constexpr UInt32 kAddr_Tile_GetFloat = 0xA011B0;
 
@@ -202,6 +204,8 @@ namespace InlineGlyphFix
 			Log("InlineGlyphFix: metrics call site at 0x%X is not an E8 call", kAddr_Font_ComputeButtonMetricsCall);
 			return false;
 		}
+		Log("InlineGlyphFix: %08X hooked, original=%08X vanilla=%08X", kAddr_Font_ComputeButtonMetricsCall,
+			s_metricsCall.GetOverwrittenAddr(), kAddr_Font_ComputeButtonMetrics);
 
 		if (!s_addButtonCall1.WriteRelCall(kAddr_Font_AddButtonCall1, (UInt32)Hook_AddButton1))
 		{
@@ -209,6 +213,8 @@ namespace InlineGlyphFix
 			s_metricsCall.Remove();
 			return false;
 		}
+		Log("InlineGlyphFix: %08X hooked, original=%08X vanilla=%08X", kAddr_Font_AddButtonCall1,
+			s_addButtonCall1.GetOverwrittenAddr(), kAddr_Font_AddButton);
 
 		if (!s_addButtonCall2.WriteRelCall(kAddr_Font_AddButtonCall2, (UInt32)Hook_AddButton2))
 		{
@@ -217,6 +223,8 @@ namespace InlineGlyphFix
 			s_metricsCall.Remove();
 			return false;
 		}
+		Log("InlineGlyphFix: %08X hooked, original=%08X vanilla=%08X", kAddr_Font_AddButtonCall2,
+			s_addButtonCall2.GetOverwrittenAddr(), kAddr_Font_AddButton);
 
 		//nonzero means a foreign vtable hook still chains through us, reswapping would capture it and cycle
 		if (!s_origMakeNode)

@@ -7,6 +7,7 @@
 #include "internal/NVSEPluginAPI.h"
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"
+#include "internal/SafeWrite.h"
 #include "internal/GameLayout.h"
 #include "internal/globals.h"
 
@@ -21,6 +22,7 @@ constexpr char kEventName[] = "ITR:OnPreFastTravel";
 //CinematicFastTravelNVSE owns the executor's prologue (unpatch/call/repatch dance around it),
 //so we hook the one E8 call site instead: 0x93BF22 inside sub_93BEA0, its only xref.
 constexpr UInt32 kAddr_FastTravelCallSite = 0x93BF22;
+constexpr UInt32 kAddr_FastTravelExecutor = 0x93CDF0;
 
 static Detours::CallDetour s_travelDetour;
 static UInt32 s_origFastTravelExecutor = 0; //recorded original target, for the shim's indirect jmp
@@ -131,18 +133,28 @@ bool Init(void* nvseInterface)
 	};
 	g_eventManagerInterface->RegisterEvent(kEventName, 5, params, F::kFlag_FlushOnLoad);
 
-	if (!s_travelDetour.WriteRelCall(kAddr_FastTravelCallSite, FastTravelExecutor_Shim))
+	if (*(UInt8*)kAddr_FastTravelCallSite != 0xE8)
 	{
 		Log("OnPreFastTravel: call site at 0x%X is not an E8 call, hook disabled", kAddr_FastTravelCallSite);
 		return false;
 	}
-	s_origFastTravelExecutor = s_travelDetour.GetOverwrittenAddr();
-	if (!s_origFastTravelExecutor)
+	s_origFastTravelExecutor = SafeWrite::GetRelJumpTarget(kAddr_FastTravelCallSite);
+	if (!s_travelDetour.WriteRelCall(kAddr_FastTravelCallSite, FastTravelExecutor_Shim))
 	{
-		Log("OnPreFastTravel: recorded original missing, backing out");
-		s_travelDetour.Remove();
+		Log("OnPreFastTravel: call site at 0x%X could not be detoured", kAddr_FastTravelCallSite);
+		s_origFastTravelExecutor = 0;
 		return false;
 	}
+	UInt32 recordedOriginal = s_travelDetour.GetOverwrittenAddr();
+	if (recordedOriginal != s_origFastTravelExecutor)
+	{
+		Log("OnPreFastTravel: original target changed while installing, backing out");
+		s_travelDetour.Remove();
+		s_origFastTravelExecutor = 0;
+		return false;
+	}
+	Log("OnPreFastTravel: %08X hooked, original=%08X vanilla=%08X", kAddr_FastTravelCallSite,
+		s_origFastTravelExecutor, kAddr_FastTravelExecutor);
 
 	Log("OnPreFastTravel: call-site hook installed at 0x%X", kAddr_FastTravelCallSite);
 	return true;

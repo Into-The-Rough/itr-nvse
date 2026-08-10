@@ -5,6 +5,7 @@
 //(RecipeMenu::ItemSelectCallback and friends), not a pickup site
 
 #include <Windows.h>
+#include <cstring>
 
 #include "OnPrePickUpHandler.h"
 #include "internal/NVSEPluginAPI.h"
@@ -24,6 +25,10 @@ constexpr char kEventName[] = "ITR:OnPrePickUp";
 constexpr UInt32 kAddr_PlayerPickUp           = 0x00953FF0;
 constexpr UInt32 kAddr_ActorPickUp            = 0x00891E00;
 constexpr UInt32 kAddr_ContainerTransferItem  = 0x0075DC80;
+
+constexpr UInt8 kPrologue_PlayerPickUp[] = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x44 };
+constexpr UInt8 kPrologue_ActorPickUp[] = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x54 };
+constexpr UInt8 kPrologue_ContainerTransferItem[] = { 0x55, 0x8B, 0xEC, 0x81, 0xEC, 0x54, 0x01, 0x00, 0x00 };
 
 static Detours::JumpDetour s_playerPickUpDetour;
 static Detours::JumpDetour s_actorPickUpDetour;
@@ -145,8 +150,15 @@ static void __cdecl ContainerTransferItem_Hook(SInt32 count)
 }
 
 template <typename T>
-static bool InstallEntryDetour(const char* name, Detours::JumpDetour& detour, UInt32 addr, void* hook, UInt32 size, T& original)
+static bool InstallEntryDetour(const char* name, Detours::JumpDetour& detour, UInt32 addr, void* hook,
+	const UInt8* expected, UInt32 size, T& original)
 {
+	if (std::memcmp((void*)addr, expected, size) != 0)
+	{
+		Log("OnPrePickUp: %s prologue at 0x%X differs from expected, skipping", name, addr);
+		return false;
+	}
+
 	if (!detour.WriteRelJump(addr, hook, size))
 	{
 		Log("OnPrePickUp: %s prologue at 0x%X could not be detoured", name, addr);
@@ -186,9 +198,12 @@ bool Init(void* nvseInterface)
 			dataInterface->GetFunc(kNVSEData_InventoryReferenceCreateEntry));
 
 	int installed = 0;
-	installed += InstallEntryDetour("PlayerCharacter::PickUpObject", s_playerPickUpDetour, kAddr_PlayerPickUp, (void*)PlayerPickUp_Hook, 6, s_playerPickUp);
-	installed += InstallEntryDetour("Actor::PickUpObject", s_actorPickUpDetour, kAddr_ActorPickUp, (void*)ActorPickUp_Hook, 6, s_actorPickUp);
-	installed += InstallEntryDetour("ContainerMenu::TransferItem", s_containerTransferItemDetour, kAddr_ContainerTransferItem, (void*)ContainerTransferItem_Hook, 9, s_containerTransferItem);
+	installed += InstallEntryDetour("PlayerCharacter::PickUpObject", s_playerPickUpDetour, kAddr_PlayerPickUp,
+		(void*)PlayerPickUp_Hook, kPrologue_PlayerPickUp, sizeof(kPrologue_PlayerPickUp), s_playerPickUp);
+	installed += InstallEntryDetour("Actor::PickUpObject", s_actorPickUpDetour, kAddr_ActorPickUp,
+		(void*)ActorPickUp_Hook, kPrologue_ActorPickUp, sizeof(kPrologue_ActorPickUp), s_actorPickUp);
+	installed += InstallEntryDetour("ContainerMenu::TransferItem", s_containerTransferItemDetour, kAddr_ContainerTransferItem,
+		(void*)ContainerTransferItem_Hook, kPrologue_ContainerTransferItem, sizeof(kPrologue_ContainerTransferItem), s_containerTransferItem);
 
 	Log("OnPrePickUp: %d/3 hooks installed", installed);
 	return installed > 0;

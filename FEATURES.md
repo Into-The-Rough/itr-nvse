@@ -1,5 +1,9 @@
 # itr-nvse
 
+## Compatibility notes
+
+- 2.2.0: ITR:OnPreHitDamage moved from hit-calculation finalizers to Actor::HitMe. It now fires only for applied actor hits and reports final post-dmgMult damage. Hits caused synchronously by an event handler are applied without recursively dispatching; hits raised by vanilla OnHit processing after the callback returns dispatch normally
+
 ## Commands
 
 **String**
@@ -168,7 +172,7 @@
 - ITR:OnEffectApplied - fires when a magic effect is applied (target, magicItem, effectItemIndex, caster). magicItem is the parent spell/ingestible; effectItemIndex selects the effect within it
 - ITR:OnEffectRemoved - fires when a magic effect is removed (target, magicItem, effectItemIndex, caster)
 - ITR:OnPreFastTravel - fires before fast travel commits, after the confirm dialog (player, destinationMarker, destWorldspace - null for interiors, distance - straight-line engine units). Cancellable: SetFunctionValue 0 to veto. Catches map menu, script and TTW train travel. Travel-hours cost is deliberately not replicated, derive cost from distance
-- ITR:OnPreStartCombat - fires synchronously when the vanilla StartCombat script command parses successfully, before combat eligibility is evaluated (target). The event's calling reference is the actor on which StartCombat was called. It reports the command attempt even if combat does not begin
+- ITR:OnPreStartCombat - fires synchronously when the vanilla StartCombat script command extracts its arguments successfully at runtime, before combat eligibility is evaluated (target). The event's calling reference is the actor on which StartCombat was called. It reports the command attempt even if combat does not begin
 - ITR:OnPreWeaponSwitch - fires when combat AI decides to switch weapons (actor, proposedWeapon - 0 means unequip, currentWeapon - equipped at decision time). Cancellable: SetFunctionValue 0 to veto. The decision is deferred one AI tick while handlers run
 - ITR:OnKnockdown - fires when an actor is knocked down (actor, cause: 1 force/impulse, 2 paralysis, 3 physics)
 - ITR:OnGetUp - fires on get-up transitions (actor, phase: 0 animation begins, 1 fully upright)

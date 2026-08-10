@@ -12,6 +12,7 @@
 
 //sole call site of Projectile::SpawnCollisionEffects 0x9C20E0, in Projectile::ProcessImpacts
 constexpr UInt32 kAddr_SpawnCollisionEffectsCall = 0x9C2058;
+constexpr UInt32 kAddr_SpawnCollisionEffects = 0x9C20E0;
 constexpr UInt32 kAddr_GetImpactDataForMaterial = 0x522BA0;
 
 struct NiPoint3 { float x, y, z; };
@@ -75,6 +76,9 @@ bool Init(void* nvseInterface) {
 		Log("OnImpactDataSpawn: call site at 0x%X is not an E8 call, disabled", kAddr_SpawnCollisionEffectsCall);
 		return false;
 	}
+	UInt32 original = s_spawnCall.GetOverwrittenAddr();
+	Log("OnImpactDataSpawn: %08X hooked, original=%08X vanilla=%08X", kAddr_SpawnCollisionEffectsCall,
+		original, kAddr_SpawnCollisionEffects);
 
 	return true;
 }

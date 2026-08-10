@@ -27,6 +27,7 @@ namespace
 	constexpr UInt32 kAddr_BarterMenu_TransferItem = 0x72F6F0;
 	//sole call site of BarterMenu::CompleteTransaction 0x72FD10, in BarterMenu::DoClick
 	constexpr UInt32 kAddr_BarterMenu_CompleteTransactionCall = 0x72D920;
+	constexpr UInt32 kAddr_BarterMenu_CompleteTransaction = 0x72FD10;
 	constexpr UInt32 kAddr_MenuItemsList_TileFromItem = 0x7A22D0;
 	constexpr UInt32 kAddr_TESObjectREFR_GetObjectReference = 0x7AF430;
 	constexpr UInt32 kAddr_MobileObject_IsTalkingThroughActivator = 0x574900;
@@ -467,6 +468,8 @@ namespace BarterCommands
 		if (s_processCall.WriteRelCall(kAddr_BarterMenu_CompleteTransactionCall, Hook_ProcessTransaction))
 		{
 			s_origProcessTransaction = (ProcessTransaction_t)s_processCall.GetOverwrittenAddr();
+			Log("BarterCommands: %08X hooked, original=%08X vanilla=%08X", kAddr_BarterMenu_CompleteTransactionCall,
+				(UInt32)s_origProcessTransaction, kAddr_BarterMenu_CompleteTransaction);
 		}
 		else
 		{

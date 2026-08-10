@@ -16,6 +16,7 @@ constexpr char kEventHit[] = "ITR:OnPreHitDamage";
 constexpr char kEventHealth[] = "ITR:OnPreHealthDamage";
 
 //the complete xref set of Actor::HitMe 0x89A760, every one a direct E8 call
+constexpr UInt32 kAddr_Actor_HitMe = 0x89A760;
 constexpr UInt32 kHitCallSites[] = { 0x87C4DA, 0x89A738, 0x8B91E1, 0x9B0503, 0x9C1E96, 0x9CBDE8 };
 constexpr UInt32 kHitCallCount = sizeof(kHitCallSites) / sizeof(kHitCallSites[0]);
 
@@ -79,8 +80,10 @@ static void DispatchHitEvent(Actor* target, ActorHitData* hitData)
 {
 	if (!s_probeHit.hasListeners)
 		return;
+	//mirrors the engine's no-process return at 0x89A7A7
 	if (!target || !target->baseProcess || !hitData)
 		return;
+	//mirrors 0x89A807: player vtbl slot 0x360 plus hit location 0xE
 	if (target == (Actor*)*g_thePlayerPtr && hitData->hitLocation == 14)
 		return;
 	float damage = hitData->healthDmg;
@@ -125,8 +128,8 @@ static void __fastcall Hook_HitMe(Actor* target, void*, ActorHitData* hitData, c
 
 	s_hitReentryDepth++;
 	DispatchHitEvent(target, hitData);
-	original(target, hitData, attackClass);
 	s_hitReentryDepth--;
+	original(target, hitData, attackClass);
 }
 
 static bool InstallHitCalls()
@@ -145,8 +148,10 @@ static bool InstallHitCalls()
 		return false;
 	}
 
-	for (UInt32 i = 0; i < kHitCallCount; i++)
-		Log("OnPreHitDamage: %08X hooked, original=%08X", kHitCallSites[i], s_hitCalls[i].GetOverwrittenAddr());
+	for (UInt32 i = 0; i < kHitCallCount; i++) {
+		UInt32 original = s_hitCalls[i].GetOverwrittenAddr();
+		Log("OnPreHitDamage: %08X hooked, original=%08X vanilla=%08X", kHitCallSites[i], original, kAddr_Actor_HitMe);
+	}
 	return true;
 }
 

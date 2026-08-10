@@ -10,6 +10,8 @@
 
 namespace OwnedCorpses
 {
+	constexpr UInt32 kAddr_GetOwnerRawForm = 0x567790;
+
 	static bool g_enabled = false;
 	static bool g_installed = false;
 	static Detours::CallDetour g_crimeOwnerCall;
@@ -138,18 +140,24 @@ namespace OwnedCorpses
 
 	void Init(bool enabled)
 	{
+		//the earlier owner calls are base-form-gated and cannot receive actor corpses
 		if (!g_crimeOwnerCall.WriteRelCall(0x579A92, GetCrimeOwnerHook))
 		{
 			Log("OwnedCorpses: activation owner call could not be detoured");
 			return;
 		}
+		UInt32 crimeOriginal = g_crimeOwnerCall.GetOverwrittenAddr();
+		Log("OwnedCorpses: %08X hooked, original=%08X vanilla=%08X", 0x579A92, crimeOriginal, kAddr_GetOwnerRawForm);
 
+		//steal alarm resolves the actor-container owner here before witness selection
 		if (!g_alarmOwnerCall.WriteRelCall(0x8BFB2C, GetAlarmOwnerHook))
 		{
 			Log("OwnedCorpses: alarm owner call could not be detoured");
 			g_crimeOwnerCall.Remove();
 			return;
 		}
+		UInt32 alarmOriginal = g_alarmOwnerCall.GetOverwrittenAddr();
+		Log("OwnedCorpses: %08X hooked, original=%08X vanilla=%08X", 0x8BFB2C, alarmOriginal, kAddr_GetOwnerRawForm);
 
 		//StealAlarm witness selection: 11 bytes at 0x8BFBB3
 		//original: mov edx,[ebp-1C]; mov [ebp-10],edx; jmp 8BFC52

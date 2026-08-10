@@ -11,7 +11,9 @@
 
 //sole call site of BGSDecalEmitter::Update 0x4A2D50, ecx holds the emitter for each list entry
 constexpr UInt32 kAddr_EmitterUpdateCallSite = 0x4A0430;
+constexpr UInt32 kAddr_EmitterUpdate = 0x4A2D50;
 constexpr UInt32 kAddr_AddDecalCallSite = 0x4A36FD;
+constexpr UInt32 kAddr_AddDecal = 0x4A3FE0;
 
 struct BGSDecalEmitter {
 	UInt32 uiDecalsToEmit;   // +0x00
@@ -67,12 +69,18 @@ bool Init(void* nvseInterface) {
 		Log("OnSprayDecal: emitter update call site at 0x%X is not an E8 call, disabled", kAddr_EmitterUpdateCallSite);
 		return false;
 	}
+	UInt32 emitterOriginal = s_emitterUpdateDetour.GetOverwrittenAddr();
+	Log("OnSprayDecal: %08X hooked, original=%08X vanilla=%08X", kAddr_EmitterUpdateCallSite,
+		emitterOriginal, kAddr_EmitterUpdate);
 
 	if (!s_addDecalDetour.WriteRelCall(kAddr_AddDecalCallSite, HookSprayAddDecal)) {
 		Log("OnSprayDecal: AddDecal call site at 0x%X is not an E8 call, disabled", kAddr_AddDecalCallSite);
 		s_emitterUpdateDetour.Remove();
 		return false;
 	}
+	UInt32 addDecalOriginal = s_addDecalDetour.GetOverwrittenAddr();
+	Log("OnSprayDecal: %08X hooked, original=%08X vanilla=%08X", kAddr_AddDecalCallSite,
+		addDecalOriginal, kAddr_AddDecal);
 
 	return true;
 }
