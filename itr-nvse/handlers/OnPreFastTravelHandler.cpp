@@ -2,12 +2,12 @@
 //once any handler vetoes, later handlers can't un-veto.
 
 #include <cmath>
+#include <cstring>
 
 #include "OnPreFastTravelHandler.h"
 #include "internal/NVSEPluginAPI.h"
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"
-#include "internal/SafeWrite.h"
 #include "internal/GameLayout.h"
 #include "internal/globals.h"
 
@@ -19,13 +19,15 @@ constexpr char kEventName[] = "ITR:OnPreFastTravel";
 //ebx=passthrough forwarded untouched to sub_4539A0/sub_93CCE0/sub_972D30, stack arg a3=
 //destination TESObjectREFR*, epilogue retn 4. all destructive work (time advance, position
 //move, weather reset, loading) lives inside it, so this fires post-confirm, pre-execution.
-//CinematicFastTravelNVSE owns the executor's prologue (unpatch/call/repatch dance around it),
-//so we hook the one E8 call site instead: 0x93BF22 inside sub_93BEA0, its only xref.
-constexpr UInt32 kAddr_FastTravelCallSite = 0x93BF22;
+//its only call site 0x93BF22 belongs to JIP LN, which replaces the E8 rather than chaining
+//it and installs on a refcount mid-session, so anything we put there is silently stolen.
+//hook the prologue and chain whatever already owns it - JIP's own hook ends in a hardcoded
+//jmp 0x93CDF0, so JIP-driven travel still reaches us
 constexpr UInt32 kAddr_FastTravelExecutor = 0x93CDF0;
+constexpr UInt8 kPrologue_FastTravelExecutor[] = { 0x55, 0x8B, 0xEC, 0x6A, 0xFF }; //push ebp, mov ebp esp, push -1
 
-static Detours::CallDetour s_travelDetour;
-static UInt32 s_origFastTravelExecutor = 0; //recorded original target, for the shim's indirect jmp
+static Detours::JumpDetour s_travelDetour;
+static UInt8* s_travelTrampoline = nullptr; //filled before the patch goes live, for the shim's indirect jmp
 
 static bool DispatchResultCb(NVSEArrayVarInterface::Element& result, void* shouldTravelAddr)
 {
@@ -82,12 +84,13 @@ bool __cdecl ShouldAllowFastTravel(TESObjectREFR* player, TESObjectREFR* marker)
 	return shouldTravel != 0;
 }
 
-//naked shim on the 0x93BF22 call site. entry state: ecx=PlayerCharacter*, ebx=passthrough,
-//[esp]=retaddr, [esp+4]=a3 destination marker already pushed by the caller. ecx is
-//caller-saved under cdecl so ShouldAllowFastTravel's call can clobber it, save/restore it
-//explicitly, ebx is callee-saved so cdecl already guarantees it survives untouched. on allow,
-//tail-jump to the recorded original with registers and stack exactly as sub_93CDF0 expects,
-//its own retn 4 returns straight to the real caller. on deny, emulate that same retn 4. on
+//naked shim on the executor prologue. the jmp lands on the first byte, so entry state is the
+//same as a call entry: ecx=PlayerCharacter*, ebx=passthrough, [esp]=retaddr, [esp+4]=a3
+//destination marker already pushed by the caller. ecx is caller-saved under cdecl so
+//ShouldAllowFastTravel's call can clobber it, save/restore it explicitly, ebx is callee-saved
+//so cdecl already guarantees it survives untouched. on allow, tail-jump to the trampoline,
+//which replays the stolen prologue and continues inside sub_93CDF0 with the stack untouched,
+//so its own retn 4 returns straight to the real caller. on deny, emulate that same retn 4. on
 //deny the caller sub_93BEA0 still frees the queued request and runs sub_5D14D0(player,1),
 //which only sets bit0 of player+0x66D - benign.
 __declspec(naked) void FastTravelExecutor_Shim()
@@ -105,7 +108,7 @@ __declspec(naked) void FastTravelExecutor_Shim()
 		pop  ebx
 		test al, al
 		jz   deny
-		jmp  s_origFastTravelExecutor   //allow: stack/registers match a genuine call, callee retn 4 returns to caller
+		jmp  s_travelTrampoline     //allow: replay stolen prologue then continue, callee retn 4 returns to caller
 	deny:
 		ret  4                      //callee stack cleanup, matches executor retn 4
 	}
@@ -133,28 +136,25 @@ bool Init(void* nvseInterface)
 	};
 	g_eventManagerInterface->RegisterEvent(kEventName, 5, params, F::kFlag_FlushOnLoad);
 
-	if (*(UInt8*)kAddr_FastTravelCallSite != 0xE8)
+	//an existing E9 means another plugin already owns the prologue, chain it instead of
+	//validating vanilla bytes that are no longer there
+	const bool chaining = *(UInt8*)kAddr_FastTravelExecutor == 0xE9;
+	if (!chaining && std::memcmp((void*)kAddr_FastTravelExecutor, kPrologue_FastTravelExecutor,
+		sizeof(kPrologue_FastTravelExecutor)) != 0)
 	{
-		Log("OnPreFastTravel: call site at 0x%X is not an E8 call, hook disabled", kAddr_FastTravelCallSite);
+		Log("OnPreFastTravel: executor prologue at 0x%X differs from expected, hook disabled", kAddr_FastTravelExecutor);
 		return false;
 	}
-	s_origFastTravelExecutor = SafeWrite::GetRelJumpTarget(kAddr_FastTravelCallSite);
-	if (!s_travelDetour.WriteRelCall(kAddr_FastTravelCallSite, FastTravelExecutor_Shim))
+
+	if (!s_travelDetour.WriteRelJumpChainable(kAddr_FastTravelExecutor, FastTravelExecutor_Shim,
+		sizeof(kPrologue_FastTravelExecutor), &s_travelTrampoline) || !s_travelTrampoline)
 	{
-		Log("OnPreFastTravel: call site at 0x%X could not be detoured", kAddr_FastTravelCallSite);
-		s_origFastTravelExecutor = 0;
+		Log("OnPreFastTravel: executor prologue at 0x%X could not be detoured", kAddr_FastTravelExecutor);
 		return false;
 	}
-	UInt32 recordedOriginal = s_travelDetour.GetOverwrittenAddr();
-	if (recordedOriginal != s_origFastTravelExecutor)
-	{
-		Log("OnPreFastTravel: original target changed while installing, backing out");
-		s_travelDetour.Remove();
-		s_origFastTravelExecutor = 0;
-		return false;
-	}
-	Log("OnPreFastTravel: %08X hooked, original=%08X vanilla=%08X", kAddr_FastTravelCallSite,
-		s_origFastTravelExecutor, kAddr_FastTravelExecutor);
+
+	Log("OnPreFastTravel: %08X hooked, trampoline=%08X, chained=%d", kAddr_FastTravelExecutor,
+		(UInt32)s_travelTrampoline, chaining ? 1 : 0);
 	return true;
 }
 
