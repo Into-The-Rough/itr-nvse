@@ -28,6 +28,9 @@ static const int kMaxQueue = 8;
 static const int kPathLen = 240;
 
 static char s_queue[kMaxQueue][kPathLen];
+//wav/ogg suits both the world speakers and the pip-boy's spoken segment, this keeps an
+//entry meant for speakers from being handed to the segment request and eating DJ chatter
+static bool s_speakersOnly[kMaxQueue] = {};
 static int s_head = 0;
 static int s_count = 0;
 static char s_activePath[256];
@@ -52,38 +55,43 @@ static void EnsureLockInit()
 
 //removes the entry at logical offset from the head, shifting the entries before it
 //one slot toward the tail so remaining order is preserved, then advances the head
-static void TakeAt_Unlocked(int offset, char* dst, size_t dstSize)
+static void TakeAt_Unlocked(int offset, char* dst, size_t dstSize, bool* dstSpeakersOnly = nullptr)
 {
 	const char* src = s_queue[(s_head + offset) % kMaxQueue];
 	size_t n = strlen(src);
 	if (n >= dstSize) n = dstSize - 1;
 	memcpy(dst, src, n);
 	dst[n] = '\0';
+	if (dstSpeakersOnly)
+		*dstSpeakersOnly = s_speakersOnly[(s_head + offset) % kMaxQueue];
 	for (int j = offset; j > 0; j--)
 	{
 		int to = (s_head + j) % kMaxQueue;
 		int from = (s_head + j - 1) % kMaxQueue;
 		strcpy_s(s_queue[to], kPathLen, s_queue[from]);
+		s_speakersOnly[to] = s_speakersOnly[from];
 	}
 	s_head = (s_head + 1) % kMaxQueue;
 	s_count--;
 }
 
-static bool PushBack_Unlocked(const char* path)
+static bool PushBack_Unlocked(const char* path, bool speakersOnly = false)
 {
 	if (s_count >= kMaxQueue)
 		return false;
 	int slot = (s_head + s_count) % kMaxQueue;
 	strncpy_s(s_queue[slot], kPathLen, path, _TRUNCATE);
+	s_speakersOnly[slot] = speakersOnly;
 	s_count++;
 	return true;
 }
 
 //play-now takes priority, evicts the tail when the ring is full
-static void PushFront_Unlocked(const char* path)
+static void PushFront_Unlocked(const char* path, bool speakersOnly = false)
 {
 	s_head = (s_head + kMaxQueue - 1) % kMaxQueue;
 	strncpy_s(s_queue[s_head], kPathLen, path, _TRUNCATE);
+	s_speakersOnly[s_head] = speakersOnly;
 	if (s_count < kMaxQueue)
 		s_count++;
 }
@@ -131,7 +139,7 @@ static void QueueTrackChange(const char* usePath, bool wasInjected)
 //format matches the slot so mixed-format queues feed both outputs without one
 //stalling behind the other. an mp3 still waits for the stream slot rather than being
 //swallowed by a sound handle that would rewrite its extension
-static bool TakeTrackForSlot(RadioInjectionLogic::SlotFormat slot, char* out, size_t outSize)
+static bool TakeTrackForSlot(RadioInjectionLogic::SlotFormat slot, char* out, size_t outSize, bool isSpeaker = true)
 {
 	ScopedLock lock(&s_lock);
 
@@ -145,20 +153,23 @@ static bool TakeTrackForSlot(RadioInjectionLogic::SlotFormat slot, char* out, si
 	int match = -1;
 	for (int i = 0; i < s_count; i++)
 	{
-		if (RadioInjectionLogic::PathSuitsSlot(s_queue[(s_head + i) % kMaxQueue], slot))
-		{
-			match = i;
-			break;
-		}
+		int idx = (s_head + i) % kMaxQueue;
+		if (!RadioInjectionLogic::PathSuitsSlot(s_queue[idx], slot))
+			continue;
+		if (s_speakersOnly[idx] && !isSpeaker)
+			continue;
+		match = i;
+		break;
 	}
 	if (match < 0)
 		return false;
 
 	char queuedPath[kPathLen];
-	TakeAt_Unlocked(match, queuedPath, sizeof(queuedPath));
+	bool queuedSpeakersOnly = false;
+	TakeAt_Unlocked(match, queuedPath, sizeof(queuedPath), &queuedSpeakersOnly);
 	//loop mode: taken entry rotates to the tail so the playlist cycles until cleared
 	if (s_loopMode)
-		PushBack_Unlocked(queuedPath);
+		PushBack_Unlocked(queuedPath, queuedSpeakersOnly);
 
 	if (!RadioInjectionLogic::BuildEnginePath(queuedPath, s_activePath, sizeof(s_activePath)))
 		return false;
@@ -194,14 +205,17 @@ void Update()
 //guard so a nested call passes through untouched. main thread only, plain bool suffices
 static bool s_inSubstitute = false;
 
-static void* GetSoundHandleWork(GetSoundHandle_t orig, void* thisPtr, void* edx, void* handleOut, const char* filename, UInt32 flags, void* baseForm)
+static void* GetSoundHandleWork(GetSoundHandle_t orig, void* thisPtr, void* edx, void* handleOut, const char* filename, UInt32 flags, void* baseForm, bool isSpeaker, int site)
 {
 	if (s_inSubstitute)
 		return orig ? orig(thisPtr, edx, handleOut, filename, flags, baseForm) : nullptr;
 
 	char injected[sizeof(s_activePath)];
 	const char* usePath = filename;
-	const bool wasInjected = TakeTrackForSlot(RadioInjectionLogic::kSlot_Sound, injected, sizeof(injected));
+	const bool isVoice = RadioInjectionLogic::IsVoicePath(filename);
+	const bool wasInjected = !isVoice
+		&& TakeTrackForSlot(RadioInjectionLogic::kSlot_Sound, injected, sizeof(injected), isSpeaker);
+	Log("RadioInjection: SOUND site=%d speaker=%d voice=%d queue=%d req='%s'", site, isSpeaker ? 1 : 0, isVoice ? 1 : 0, s_count, filename ? filename : "");
 	if (wasInjected)
 	{
 		usePath = injected;
@@ -215,9 +229,11 @@ static void* GetSoundHandleWork(GetSoundHandle_t orig, void* thisPtr, void* edx,
 	return ret;
 }
 
-#define SOUND_THUNK(N) static void* __fastcall Hook_GetSoundHandle_##N(void* t, void* e, void* h, const char* f, UInt32 fl, void* b) \
-	{ return GetSoundHandleWork((GetSoundHandle_t)s_calls[N].GetOverwrittenAddr(), t, e, h, f, fl, b); }
-SOUND_THUNK(0) SOUND_THUNK(1) SOUND_THUNK(2) SOUND_THUNK(3)
+//kSites 0-1 are the spoken segment calls inside PipboyUpdate, 2-3 the speaker calls
+//inside UpdateStation, so the site the request came through identifies the output
+#define SOUND_THUNK(N, SPEAKER) static void* __fastcall Hook_GetSoundHandle_##N(void* t, void* e, void* h, const char* f, UInt32 fl, void* b) \
+	{ return GetSoundHandleWork((GetSoundHandle_t)s_calls[N].GetOverwrittenAddr(), t, e, h, f, fl, b, SPEAKER, N); }
+SOUND_THUNK(0, false) SOUND_THUNK(1, false) SOUND_THUNK(2, true) SOUND_THUNK(3, true)
 #undef SOUND_THUNK
 static void* const kSoundThunks[4] = {
 	(void*)Hook_GetSoundHandle_0, (void*)Hook_GetSoundHandle_1,
@@ -240,14 +256,24 @@ static int __cdecl Hook_SetPlayingMusic(UInt32 musicType, char* path, UInt32 fad
 		char injected[sizeof(s_activePath)];
 		//the buffer is the caller's stack local, rewrite in place or the radio commands
 		//keep reporting the vanilla song
-		if (TakeTrackForSlot(RadioInjectionLogic::kSlot_Stream, injected, sizeof(injected)))
+		Log("RadioInjection: SONG queue=%d req='%s'", s_count, path);
+		//the engine asks both outputs for every entry, but the streamer only opens mp3,
+		//so a request for anything else is silent and the audio comes from the paired
+		//sound handle. injecting into that dead request adds a second audible track
+		//a request the streamer cannot open is silent and the audio comes from the paired
+		//sound handle, which reports itself, so this one is neither injected nor announced
+		const bool canStream = RadioInjectionLogic::PathSuitsSlot(path, RadioInjectionLogic::kSlot_Stream);
+		if (canStream)
 		{
-			strncpy_s(path, kStreamPathLen, injected, _TRUNCATE);
-			Log("RadioInjection: substituting radio song '%s'", path);
-			QueueTrackChange(path, true);
+			if (TakeTrackForSlot(RadioInjectionLogic::kSlot_Stream, injected, sizeof(injected)))
+			{
+				strncpy_s(path, kStreamPathLen, injected, _TRUNCATE);
+				Log("RadioInjection: substituting radio song '%s'", path);
+				QueueTrackChange(path, true);
+			}
+			else
+				QueueTrackChange(path, false);
 		}
-		else
-			QueueTrackChange(path, false);
 	}
 
 	return orig ? orig(musicType, path, fadeMS, a4, a5, a6, a7) : 0;
@@ -361,7 +387,8 @@ static bool Cmd_QueueRadioTrack_Execute(COMMAND_ARGS)
 	*result = 0;
 
 	char path[kPathLen] = {};
-	if (!ExtractArgsEx || !ExtractArgsEx(EXTRACT_ARGS_EX, &path))
+	UInt32 speakersOnly = 0;
+	if (!ExtractArgsEx || !ExtractArgsEx(EXTRACT_ARGS_EX, &path, &speakersOnly))
 		return true;
 
 	if (!IsValidRadioPath(path))
@@ -373,7 +400,7 @@ static bool Cmd_QueueRadioTrack_Execute(COMMAND_ARGS)
 	bool queued;
 	{
 		ScopedLock lock(&s_lock);
-		queued = PushBack_Unlocked(path);
+		queued = PushBack_Unlocked(path, speakersOnly != 0);
 	}
 
 	if (!queued)
@@ -412,12 +439,28 @@ static bool Cmd_SetRadioQueueLoop_Execute(COMMAND_ARGS)
 	return true;
 }
 
+//an entry only leaves through the slot its extension suits, so a caller topping up both
+//outputs needs to ask about each one separately, a total would hide a stranded entry
 static bool Cmd_GetRadioQueueSize_Execute(COMMAND_ARGS)
 {
-	int count;
+	UInt32 slot = 0;
+	if (ExtractArgsEx && !ExtractArgsEx(EXTRACT_ARGS_EX, &slot))
+		slot = 0;
+
+	int count = 0;
 	{
 		ScopedLock lock(&s_lock);
-		count = s_count;
+		if (slot != 1 && slot != 2)
+			count = s_count;
+		else
+		{
+			RadioInjectionLogic::SlotFormat want = (slot == 1)
+				? RadioInjectionLogic::kSlot_Stream
+				: RadioInjectionLogic::kSlot_Sound;
+			for (int i = 0; i < s_count; i++)
+				if (RadioInjectionLogic::PathSuitsSlot(s_queue[(s_head + i) % kMaxQueue], want))
+					count++;
+		}
 	}
 	*result = count;
 	return true;
@@ -427,8 +470,17 @@ static ParamInfo kParams_OneInt[1] = {
 	{"enable", kParamType_Integer, 0}
 };
 
+static ParamInfo kParams_OneOptionalInt[1] = {
+	{"slot", kParamType_Integer, 1}
+};
+
 static ParamInfo kParams_OneString[1] = {
 	{"path", kParamType_String, 0}
+};
+
+static ParamInfo kParams_OneString_OneOptionalInt[2] = {
+	{"path", kParamType_String, 0},
+	{"bSpeakersOnly", kParamType_Integer, 1}
 };
 
 static CommandInfo kCommandInfo_PlayRadioFile = {
@@ -439,8 +491,8 @@ static CommandInfo kCommandInfo_PlayRadioFile = {
 
 static CommandInfo kCommandInfo_QueueRadioTrack = {
 	"QueueRadioTrack", "", 0,
-	"Queues a wav/ogg/mp3 file (relative to Data\\Sound\\) to play on the next natural track advance. mp3 files play on the song slot, wav/ogg on the spoken segment slot. Returns 0 if the queue is full. Subtitles are unavailable for injected files.",
-	0, 1, kParams_OneString, Cmd_QueueRadioTrack_Execute, nullptr, nullptr, 0
+	"Queues a wav/ogg/mp3 file (relative to Data\\Sound\\) to play on the next natural track advance. mp3 files play on the song slot, wav/ogg on the spoken segment slot. Pass 1 for bSpeakersOnly to keep a wav/ogg off the pip-boy's spoken segment so it only plays through world radios. Returns 0 if the queue is full. Subtitles are unavailable for injected files.",
+	0, 2, kParams_OneString_OneOptionalInt, Cmd_QueueRadioTrack_Execute, nullptr, nullptr, 0
 };
 
 static CommandInfo kCommandInfo_ClearRadioQueue = {
@@ -454,8 +506,9 @@ static CommandInfo kCommandInfo_SetRadioQueueLoop = {
 };
 
 static CommandInfo kCommandInfo_GetRadioQueueSize = {
-	"GetRadioQueueSize", "", 0, "Returns the number of tracks currently in the injected radio queue.",
-	0, 0, nullptr, Cmd_GetRadioQueueSize_Execute, nullptr, nullptr, 0
+	"GetRadioQueueSize", "", 0,
+	"Returns the number of tracks currently in the injected radio queue. Pass 1 to count only entries for the song slot (mp3) or 2 for the spoken segment slot (wav/ogg); omit or pass 0 for the total.",
+	0, 1, kParams_OneOptionalInt, Cmd_GetRadioQueueSize_Execute, nullptr, nullptr, 0
 };
 
 void RegisterCommands(void* nvse)

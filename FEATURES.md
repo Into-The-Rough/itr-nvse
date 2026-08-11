@@ -88,10 +88,10 @@
 - GetPlayingRadioText - returns dialogue text of playing radio voice line
 - ChangeRadioTrack - advances active radio station to next track
 - PlayRadioFile - skips the current track and plays a wav/ogg/mp3 file (relative to Data\Sound\) on the active station. The engine feeds its two radio outputs from different decoders, so wav/ogg play on the sound-handle output that serves pip-boy voice segments and world speakers, and mp3 on the pip-boy song stream; each output takes the next queued entry of its matching format, so mixed-format queues feed both outputs without blocking each other and mp3 is not guaranteed to be the immediately next segment. Subtitles are unavailable for injected files
-- QueueRadioTrack - queues a wav/ogg/mp3 file to play on the next natural track advance of its matching output (queue of 8, returns 0 when full)
+- QueueRadioTrack - queues a wav/ogg/mp3 file to play on the next natural track advance of its matching output (path, optional bSpeakersOnly; queue of 8, returns 0 when full)
 - ClearRadioQueue - clears the injected track queue, returns entries removed
 - SetRadioQueueLoop - 1 cycles the queue as a playlist instead of consuming it, 0 restores consume
-- GetRadioQueueSize - returns the injected queue count
+- GetRadioQueueSize - returns the injected queue count (optional slot: 1 mp3, 2 wav/ogg)
 
 **Dialogue**
 - GetDialogueInfoFlags - get combined flags for a TESTopicInfo

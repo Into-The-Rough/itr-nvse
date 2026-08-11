@@ -48,6 +48,32 @@ inline bool ExtensionIs(const char* path, const char* ext)
 	return dot[i] == '\0';
 }
 
+//dj chatter and news share the sound slot with music, replacing them loses dialogue
+//rather than a song, and voice lines are the one request always identifiable by path
+inline bool IsVoicePath(const char* path)
+{
+	if (!path)
+		return false;
+	static const char needle[] = "\\voice\\";
+	for (size_t i = 0; path[i]; i++)
+	{
+		size_t j = 0;
+		for (; needle[j]; j++)
+		{
+			char c = path[i + j];
+			if (!c)
+				return false;
+			if (c == '/')
+				c = '\\';
+			if (LowerASCII(c) != needle[j])
+				break;
+		}
+		if (!needle[j])
+			return true;
+	}
+	return false;
+}
+
 inline bool PathSuitsSlot(const char* path, SlotFormat slot)
 {
 	if (slot == kSlot_Stream)
