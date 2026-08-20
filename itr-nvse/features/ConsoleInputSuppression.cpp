@@ -40,12 +40,21 @@ namespace ConsoleInputSuppression
 		return key == 0x01 || key == 0x29 || key == 0xB7;
 	}
 
+	//console hotkey mods read modifiers straight off DIHookControl rawState (Console
+	//Clipboard's ctrl+V, alt+tab), the other half of a modded combo is still zeroed
+	static bool IsModifierKey(UInt32 key)
+	{
+		return key == 0x1D || key == 0x9D   //ctrl
+			|| key == 0x2A || key == 0x36   //shift
+			|| key == 0x38 || key == 0xB8;  //alt
+	}
+
 	static void SuppressStates(void* inputGlobals)
 	{
 		auto* view = reinterpret_cast<OSInputGlobalsView*>(inputGlobals);
 		for (UInt32 i = 0; i < 256; ++i)
 		{
-			if (IsPreservedKey(i))
+			if (IsPreservedKey(i) || IsModifierKey(i))
 				continue;
 			view->currKeyStates[i] = 0;
 			view->lastKeyStates[i] = 0;
