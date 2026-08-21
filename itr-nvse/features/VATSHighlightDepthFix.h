@@ -2,4 +2,5 @@
 
 namespace VATSHighlightDepthFix {
 	void Init();
+	void ClearState();
 }

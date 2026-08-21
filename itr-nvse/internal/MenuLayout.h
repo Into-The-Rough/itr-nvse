@@ -145,8 +145,9 @@ struct InterfaceManagerView {
 };
 
 struct VATSHighlightDataView {
-	UInt32 refs;
-	UInt8 pad04[0x0C - 0x04];
+	UInt32 mode; //0 renders the highlight target, non-zero renders the additional-ref list
+	TESObjectREFR* target;
+	void* targetNode;
 	SInt32 refCount;
 };
 
@@ -233,7 +234,8 @@ static_assert(offsetof(MapMenuView, noteList) == 0x160);
 static_assert(offsetof(InterfaceManagerView, msgBoxButton) == 0xE4);
 static_assert(offsetof(InterfaceManagerView, crosshairRef) == 0xFC);
 static_assert(offsetof(InterfaceManagerView, vatsHighlightData) == 0x1DC);
-static_assert(offsetof(VATSHighlightDataView, refs) == 0x00);
+static_assert(offsetof(VATSHighlightDataView, mode) == 0x00);
+static_assert(offsetof(VATSHighlightDataView, target) == 0x04);
 static_assert(offsetof(VATSHighlightDataView, refCount) == 0x0C);
 static_assert(offsetof(DialogMenuView, currentInfo) == 0x48);
 static_assert(offsetof(DialogMenuView, topicManager) == 0x70);
@@ -432,7 +434,7 @@ inline UInt32 VATSHighlightDataGetRefCount(void* vatsData)
 inline bool VATSHighlightDataHasRefs(void* vatsData)
 {
 	auto* data = reinterpret_cast<VATSHighlightDataView*>(vatsData);
-	return data && data->refs != 0 && data->refCount > 0;
+	return data && data->mode != 0 && data->refCount > 0;
 }
 
 inline void* DialogMenuGetTopicManager(void* dialogMenu)

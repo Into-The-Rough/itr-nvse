@@ -1,3 +1,6 @@
+//vanilla renders script-driven highlights before the world, so they come out x-ray
+//defer to the scene pass after the depth resolve and borrow the scene depth-stencil
+
 #include "VATSHighlightDepthFix.h"
 #include "internal/SafeWrite.h"
 #include "internal/CallTemplates.h"
@@ -13,13 +16,13 @@
 namespace VATSHighlightDepthFix
 {
 	static bool g_deferredHighlight = false;
+	static bool g_scriptHighlightsOwned = false;
 	static bool g_forceSceneDepthTest = false;
 	static bool g_loggedDepthPath = false;
-	static bool g_loggedLiveDepthPath = false;
 	static bool g_loggedDepthFallback = false;
-	static bool g_loggedVATSCommandSuppressed = false;
 
-	using TESMain_HandleVATSOcclusionQueries_t = void(__thiscall*)(void*, bool);
+	//0x874AC0's arg is 0x8749B0's "query pass already ran", not a VATS state, and it goes unread
+	using TESMain_HandleVATSOcclusionQueries_t = void(__thiscall*)(void*, UInt32);
 	using InterfaceManager_GetVATSHighlightData_t = void*(__cdecl*)();
 	using VATSHighlightData_SetTarget_t = void(__thiscall*)(void*, void*, UInt32, bool);
 	using VATSHighlightData_ResetRefs_t = void(__thiscall*)(void*);
@@ -68,9 +71,11 @@ namespace VATSHighlightDepthFix
 		return VATSGetCurrentTarget();
 	}
 
+	//not the current target: VATSMenu::Close never clears 0x11F21CC, so it stays set after VATS
+	//ends and would keep the engine looking busy for the rest of the session
 	bool IsVanillaVATSOwnerActive()
 	{
-		return GetVATSMode() != 0 || GetVATSMenu() || GetCurrentVATSTarget();
+		return GetVATSMode() != 0 || GetVATSMenu();
 	}
 
 	void* GetVATSHighlightData()
@@ -83,9 +88,23 @@ namespace VATSHighlightDepthFix
 		return VATSGetRenderedTexture();
 	}
 
+	//mode 0 draws the target, which ShowOff parks on the player outside VATS
 	bool HasAdditionalRefs(void* vatsData)
 	{
 		return VATSHighlightDataHasRefs(vatsData);
+	}
+
+	bool IsRendererIdle()
+	{
+		return CdeclCall<bool>(0x4E9510);
+	}
+
+	//script-owned only, so vanilla keeps every VATS frame including the shot sequence
+	bool ShouldDeferHighlight()
+	{
+		if (!g_scriptHighlightsOwned) return false;
+		if (IsVanillaVATSOwnerActive()) return false;
+		return HasAdditionalRefs(GetVATSHighlightData());
 	}
 
 	void AddRefNiObject(void* object)
@@ -142,6 +161,14 @@ namespace VATSHighlightDepthFix
 		CdeclCall(0xB97E80, 3, 0);
 	}
 
+	void __cdecl Hook_SetZEnable(UInt32 zEnable, UInt32 stateDelta)
+	{
+		if (g_forceSceneDepthTest && zEnable == 0)
+			zEnable = 1;
+
+		CdeclCall(0xB97DE0, zEnable, stateDelta);
+	}
+
 	void BeginTextureWithTransparentClear(void* renderer, void* renderTargetGroup)
 	{
 		NiColorA oldBackground;
@@ -151,14 +178,6 @@ namespace VATSHighlightDepthFix
 		ThisCall<void>(0xE758F0, renderer, &transparentBlack);
 		CdeclCall(0xB6B7D0, renderTargetGroup, 1);
 		ThisCall<void>(0xE758F0, renderer, &oldBackground);
-	}
-
-	void __cdecl Hook_SetZEnable(UInt32 zEnable, UInt32 stateDelta)
-	{
-		if (g_forceSceneDepthTest && zEnable == 0)
-			zEnable = 1;
-
-		CdeclCall(0xB97DE0, zEnable, stateDelta);
 	}
 
 	void WriteRelCallOrLog(Detours::CallDetour& detour, UInt32 hookSite, UInt32 hook, UInt32 expectedTarget, const char* name)
@@ -202,6 +221,8 @@ namespace VATSHighlightDepthFix
 			Log("VATSHighlightDepthFix: %s hook site at %08X is already patched", name, hookSite);
 	}
 
+	//clears the target too, not just the refs: mode 0 with an occupied target slot is what
+	//vanilla renders through the limb-isolation path
 	void ResetHighlightDataForVATS(void* vatsData)
 	{
 		if (!vatsData) return;
@@ -221,11 +242,24 @@ namespace VATSHighlightDepthFix
 		DrawTargetToTexture(vatsData, vatsTexture, 0, false, 0, 1, true);
 	}
 
-	bool RenderHighlightWithSceneDepth(void* vatsData, void* sceneTexture, void* vatsTexture)
+	//mid-scene, so bind the target and pop only what we pushed, a vanilla-style drain would
+	//drop the scene's own target. 0x800F30 pushes its own only while the renderer is idle
+	bool RenderHighlightWithCurrentDepth(void* vatsData)
 	{
-		void* vatsGroup = GetRenderTargetGroup(vatsTexture);
-		void* sceneGroup = GetRenderTargetGroup(sceneTexture);
+		if (IsRendererIdle())
+			return false;
+
+		void* vatsTexture = GetCurrentVATSTexture();
+		if (!vatsTexture)
+			return false;
+
+		void* renderer = CdeclCall<void*>(0x43C4B0);
+		if (!renderer)
+			return false;
+
+		void* sceneGroup = ThisCall<void*>(0xE75810, renderer);
 		void* sceneDepth = GetDepthStencil(sceneGroup);
+		void* vatsGroup = GetRenderTargetGroup(vatsTexture);
 		if (!IsDepthCompatible(vatsGroup, sceneDepth))
 		{
 			if (!g_loggedDepthFallback)
@@ -239,44 +273,6 @@ namespace VATSHighlightDepthFix
 		void* originalDepth = GetDepthStencil(vatsGroup);
 		AddRefNiObject(originalDepth);
 
-		CdeclCall(0xB6B790);
-
-		ThisCall<bool>(0xEE8690, vatsGroup, sceneDepth);
-		g_forceSceneDepthTest = true;
-		ForceDepthTestState();
-		DrawTargetToTexture(vatsData, vatsTexture, 0, false, 0, 1, true);
-		g_forceSceneDepthTest = false;
-		CdeclCall(0xB97DE0, 0, 0);
-		ThisCall<bool>(0xEE8690, vatsGroup, originalDepth);
-
-		ReleaseNiObject(originalDepth);
-		if (!g_loggedDepthPath)
-		{
-			g_loggedDepthPath = true;
-			Log("VATSHighlightDepthFix: rendered VATS highlight against scene depth");
-		}
-		return true;
-	}
-
-	bool RenderHighlightWithCurrentDepth(void* vatsData)
-	{
-		void* vatsTexture = GetCurrentVATSTexture();
-		if (!vatsTexture)
-			return false;
-
-		void* renderer = CdeclCall<void*>(0x43C4B0);
-		if (!renderer)
-			return false;
-
-		void* sceneGroup = ThisCall<void*>(0xE75810, renderer);
-		void* sceneDepth = GetDepthStencil(sceneGroup);
-		void* vatsGroup = GetRenderTargetGroup(vatsTexture);
-		if (!IsDepthCompatible(vatsGroup, sceneDepth))
-			return false;
-
-		void* originalDepth = GetDepthStencil(vatsGroup);
-		AddRefNiObject(originalDepth);
-
 		ThisCall<bool>(0xEE8690, vatsGroup, sceneDepth);
 		BeginTextureWithTransparentClear(renderer, vatsGroup);
 
@@ -284,84 +280,64 @@ namespace VATSHighlightDepthFix
 		ForceDepthTestState();
 		DrawTargetToTexture(vatsData, vatsTexture, 0, false, 0, 0, false);
 		g_forceSceneDepthTest = false;
+		//hand back both forced states, the site wanted ZEnable 0 and ZWrite off breaks later geometry
+		CdeclCall(0xB97DE0, 0, 0);
+		CdeclCall(0xB97E30, 1, 0);
 
 		CdeclCall(0xB6B840);
 		ThisCall<bool>(0xEE8690, vatsGroup, originalDepth);
 		ReleaseNiObject(originalDepth);
 
-		if (!g_loggedLiveDepthPath)
+		if (!g_loggedDepthPath)
 		{
-			g_loggedLiveDepthPath = true;
-			Log("VATSHighlightDepthFix: rendered VATS highlight against live world depth");
+			g_loggedDepthPath = true;
+			Log("VATSHighlightDepthFix: rendered VATS highlight against live scene depth");
 		}
 		return true;
 	}
 
-	void __fastcall Hook_TESMain_HandleVATSOcclusionQueries(void* tesMain, void* edx, bool isInVATS)
+	//ShowOff parks the player in the target slot after the command returns, and its own
+	//IsInVATS test misses the menu, so it clobbers the menu's target and mode 0 then draws the
+	//player. put the menu's own target back, and if there isn't one, skip the render instead of
+	//emptying the slot - the menu re-asserts its target on the next idle tick either way
+	bool RepairParkedPlayerTarget()
 	{
-		if (IsVanillaVATSOwnerActive())
+		auto* data = static_cast<VATSHighlightDataView*>(GetVATSHighlightData());
+		if (!data || data->mode != 0 || !data->targetNode) return true;
+		if (data->target != reinterpret_cast<TESObjectREFR*>(*g_thePlayerPtr)) return true;
+
+		TESObjectREFR* menuTarget = reinterpret_cast<TESObjectREFR*>(GetCurrentVATSTarget());
+		static bool logged = false;
+		if (!logged)
 		{
-			g_deferredHighlight = false;
-			TESMain_HandleVATSOcclusionQueries(tesMain, isInVATS);
-			return;
+			logged = true;
+			Log("VATSHighlightDepthFix: player parked over the VATS target, menu target %s",
+				menuTarget ? "restored" : "unavailable, skipping the render");
 		}
 
-		void* vatsData = GetVATSHighlightData();
-		if (!isInVATS && HasAdditionalRefs(vatsData))
+		if (!menuTarget)
+			return false;
+
+		//+0x23C is the aimed part index, hand it back so the same limb stays selected
+		const UInt32 part = *reinterpret_cast<UInt32*>(reinterpret_cast<UInt8*>(data) + 0x23C);
+		VATSHighlightData_SetTarget(data, menuTarget, part, false);
+		return true;
+	}
+
+	void __fastcall Hook_TESMain_HandleVATSOcclusionQueries(void* tesMain, void* edx, UInt32 queryPassRan)
+	{
+		if (IsVanillaVATSOwnerActive() && !RepairParkedPlayerTarget())
+			return;
+
+		//a deferral still standing means the scene pass never took it, so give the frame back
+		if (!g_deferredHighlight && ShouldDeferHighlight())
 		{
 			g_deferredHighlight = true;
 			return;
 		}
 
-		if (!isInVATS)
-			g_deferredHighlight = false;
-
-		TESMain_HandleVATSOcclusionQueries(tesMain, isInVATS);
-	}
-
-	bool __cdecl Hook_HighlightAdditionalReference(void* paramInfo, void* scriptData, void* thisObj, void* containingObj, void* scriptObj, void* eventList, double* result, UInt32* opcodeOffsetPtr)
-	{
-		if (IsVanillaVATSOwnerActive())
-		{
-			if (!g_loggedVATSCommandSuppressed)
-			{
-				g_loggedVATSCommandSuppressed = true;
-				Log("VATSHighlightDepthFix: suppressing script-driven VATS highlights while VATS is active mode=%u menu=%08X target=%08X",
-					GetVATSMode(),
-					reinterpret_cast<UInt32>(GetVATSMenu()),
-					reinterpret_cast<UInt32>(GetCurrentVATSTarget()));
-			}
-			return true;
-		}
-
-		return s_highlightAdditionalReference(paramInfo, scriptData, thisObj, containingObj, scriptObj, eventList, result, opcodeOffsetPtr);
-	}
-
-	bool __cdecl Hook_DeactivateAllHighlights(void* paramInfo, void* scriptData, void* thisObj, void* containingObj, void* scriptObj, void* eventList, double* result, UInt32* opcodeOffsetPtr)
-	{
-		if (IsVanillaVATSOwnerActive())
-			return true;
-
-		return s_deactivateAllHighlights(paramInfo, scriptData, thisObj, containingObj, scriptObj, eventList, result, opcodeOffsetPtr);
-	}
-
-	void __fastcall Hook_VATSMenu_SetAdditionalRefMode(void* vatsData, void* edx, UInt32* mode)
-	{
-		//VATS target selection also uses additional refs, so clear script-owned refs before vanilla repopulates them
-		ResetHighlightDataForVATS(vatsData);
-		VATSHighlightData_SetMode(vatsData, mode);
-	}
-
-	void __fastcall Hook_SetupImageSpace(void* vatsData, void* edx, void* sceneTexture, void* vatsTexture, UInt32 scanTexture, bool abIsRenderedMenu)
-	{
-		if (g_deferredHighlight)
-		{
-			g_deferredHighlight = false;
-			if (!RenderHighlightWithSceneDepth(vatsData, sceneTexture, vatsTexture))
-				RenderHighlightVanilla(vatsData, vatsTexture);
-		}
-
-		SetupImageSpace(vatsData, sceneTexture, vatsTexture, scanTexture, abIsRenderedMenu);
+		g_deferredHighlight = false;
+		TESMain_HandleVATSOcclusionQueries(tesMain, queryPassRan);
 	}
 
 	void __cdecl Hook_RenderScenePostResolveDepth(void* camera, void* accumulator, UInt32 unknown)
@@ -369,11 +345,70 @@ namespace VATSHighlightDepthFix
 		if (g_deferredHighlight)
 		{
 			void* vatsData = GetVATSHighlightData();
-			if (RenderHighlightWithCurrentDepth(vatsData))
+			if (HasAdditionalRefs(vatsData) && RenderHighlightWithCurrentDepth(vatsData))
 				g_deferredHighlight = false;
 		}
 
 		CdeclCall(0xB6B930, camera, accumulator, unknown);
+	}
+
+	//during VATS the engine owns the list outright, script refs would take the slots the menu
+	//needs for its body part highlights. EvictParkedPlayerTarget cleans up after the callers
+	//that write the target slot regardless of the command's answer
+	bool __cdecl Hook_HighlightAdditionalReference(void* paramInfo, void* scriptData, void* thisObj, void* containingObj, void* scriptObj, void* eventList, double* result, UInt32* opcodeOffsetPtr)
+	{
+		if (IsVanillaVATSOwnerActive())
+			return true;
+
+		g_scriptHighlightsOwned = true;
+		return s_highlightAdditionalReference(paramInfo, scriptData, thisObj, containingObj, scriptObj, eventList, result, opcodeOffsetPtr);
+	}
+
+	//the same rule as the add: while VATS is up the engine owns the data. letting this through
+	//clears the menu's own target and its body part highlight with it
+	bool __cdecl Hook_DeactivateAllHighlights(void* paramInfo, void* scriptData, void* thisObj, void* containingObj, void* scriptObj, void* eventList, double* result, UInt32* opcodeOffsetPtr)
+	{
+		if (IsVanillaVATSOwnerActive())
+			return true;
+
+		g_scriptHighlightsOwned = false;
+		return s_deactivateAllHighlights(paramInfo, scriptData, thisObj, containingObj, scriptObj, eventList, result, opcodeOffsetPtr);
+	}
+
+	void __fastcall Hook_VATSMenu_SetAdditionalRefMode(void* vatsData, void* edx, UInt32* mode)
+	{
+		//VATS target selection also uses additional refs, so clear script-owned refs before vanilla
+		//repopulates them. only when we own some: SetTarget also zeroes the aimed part index at
+		//+0x572, which picks the branch for the engine's own hide/force-show pair
+		//script refs saturate the 31 slot list, so free it or vanilla has nowhere to put the
+		//body part highlights it adds next
+		if (g_scriptHighlightsOwned)
+		{
+			ResetHighlightDataForVATS(vatsData);
+			g_scriptHighlightsOwned = false;
+		}
+		g_deferredHighlight = false;
+		VATSHighlightData_SetMode(vatsData, mode);
+	}
+
+	void __fastcall Hook_SetupImageSpace(void* vatsData, void* edx, void* sceneTexture, void* vatsTexture, UInt32 scanTexture, bool abIsRenderedMenu)
+	{
+		//target and viewport here are not the scene's, so fall back to vanilla placement
+		if (g_deferredHighlight)
+		{
+			g_deferredHighlight = false;
+			if (HasAdditionalRefs(vatsData))
+				RenderHighlightVanilla(vatsData, vatsTexture);
+		}
+
+		SetupImageSpace(vatsData, sceneTexture, vatsTexture, scanTexture, abIsRenderedMenu);
+	}
+
+	void ClearState()
+	{
+		g_deferredHighlight = false;
+		g_scriptHighlightsOwned = false;
+		g_forceSceneDepthTest = false;
 	}
 
 	void Init()
@@ -382,7 +417,7 @@ namespace VATSHighlightDepthFix
 		WriteRelCallOrLog(s_renderScenePostResolveDepthCall, 0x8741DB, reinterpret_cast<UInt32>(Hook_RenderScenePostResolveDepth), 0xB6B930, "BSShaderUtil::RenderScenePostResolveDepth");
 		WriteRelCallOrLog(s_setupImageSpaceCall, 0x8760A9, reinterpret_cast<UInt32>(Hook_SetupImageSpace), 0x801A60, "VATSHighlightData::SetupImageSpace");
 		WriteRelCallOrLog(s_setZEnableCall, 0xBC9C92, reinterpret_cast<UInt32>(Hook_SetZEnable), 0xB97DE0, "BSRenderState::SetZEnable");
-		WriteRelCallOrLog(s_setAdditionalRefModeCall, 0x7F3E5D, reinterpret_cast<UInt32>(Hook_VATSMenu_SetAdditionalRefMode), 0x44AC20, "VATSMenu target-list highlight reset");
+		WriteRelCallOrLog(s_setAdditionalRefModeCall, 0x7F3E5D, reinterpret_cast<UInt32>(Hook_VATSMenu_SetAdditionalRefMode), 0x44AC20, "VATSMenu additional-ref mode set");
 		WriteScriptCommandJumpOrLog(s_highlightAdditionalReferenceDetour, 0x5BB610, reinterpret_cast<UInt32>(Hook_HighlightAdditionalReference), s_highlightAdditionalReference, "Script::HighlightAdditionalReference");
 		WriteScriptCommandJumpOrLog(s_deactivateAllHighlightsDetour, 0x5BB6C0, reinterpret_cast<UInt32>(Hook_DeactivateAllHighlights), s_deactivateAllHighlights, "Cmd_DeactivateAllHighlights");
 	}

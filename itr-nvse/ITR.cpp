@@ -523,6 +523,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			QuickReadNote::ClearState();
 			LocationVisitPopup::ClearState();
 			VATSExtender::ClearState();
+			VATSHighlightDepthFix::ClearState();
 			break;
 
 		case NVSEMessagingInterface::kMessage_NewGame:
@@ -591,6 +592,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			QuickReadNote::ClearState();
 			LocationVisitPopup::ClearState();
 			VATSExtender::ClearState();
+			VATSHighlightDepthFix::ClearState();
 			if (Settings::bAutoGodMode && !g_godModeExecuted)
 			{
 				SetGodModeEnabled(true);
