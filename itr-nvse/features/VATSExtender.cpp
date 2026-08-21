@@ -57,7 +57,16 @@ namespace VATSExtender
 	void AddOverflowRef(TESObjectREFR* refr)
 	{
 		if (!refr) return;
-		if (g_overflowCount >= kMaxOverflow) return;
+		if (g_overflowCount >= kMaxOverflow)
+		{
+			static bool loggedFull = false;
+			if (!loggedFull)
+			{
+				loggedFull = true;
+				Log("VATSExtender: overflow list full at %u, dropping further refs", kMaxOverflow);
+			}
+			return;
+		}
 		if (IsTracked(refr->refID)) return;
 		if (!refr->GetNiNode()) return;
 
@@ -153,7 +162,10 @@ namespace VATSExtender
 	{
 		if (*(UInt8*)0x800DA4 == 0x68)
 			SafeWrite::WriteRelJump(0x800DA4, (UInt32)Hook_OnLimitReached);
+		else
+			Log("VATSExtender: limit-reject site at 800DA4 is 0x%02X, not a push; skipping", *(UInt8*)0x800DA4);
 
-		s_renderSceneCall.WriteRelCall(0x801993, Hook_RenderScene);
+		if (!s_renderSceneCall.WriteRelCall(0x801993, Hook_RenderScene))
+			Log("VATSExtender: render site at 801993 could not be detoured");
 	}
 }
