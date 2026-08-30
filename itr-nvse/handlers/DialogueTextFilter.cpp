@@ -60,6 +60,13 @@ namespace DialogueTextFilter {
 	bool g_suppressed = false;
 }
 
+struct SpokenLine {
+	UInt32	speakerRefID;
+	DWORD	expiryTick;
+	char	text[512];
+};
+static SpokenLine g_spokenLines[16] = {};
+
 static CRITICAL_SECTION g_dtfStateLock;
 static volatile LONG g_dtfStateLockInit = 0;
 
@@ -432,6 +439,47 @@ static __declspec(naked) void SpeakSoundDurationHook() {
 	}
 }
 
+static void LatchSpokenLine(UInt32 speakerRefID, const char* text, float durationSeconds)
+{
+	if (!speakerRefID || !text || !*text)
+		return;
+	if (!(durationSeconds > 0.0f))
+		durationSeconds = 2.0f;
+
+	DWORD now = GetTickCount();
+	SpokenLine* slot = nullptr;
+	for (auto& line : g_spokenLines) {
+		if (line.speakerRefID == speakerRefID) { slot = &line; break; }
+		if (!slot && (!line.speakerRefID || (LONG)(now - line.expiryTick) > 0)) slot = &line;
+	}
+	if (!slot)
+		slot = &g_spokenLines[speakerRefID % 16];
+
+	ScopedLock lock(&g_dtfStateLock);
+	slot->speakerRefID = speakerRefID;
+	slot->expiryTick = now + (DWORD)(durationSeconds * 1000.0f);
+	strncpy_s(slot->text, sizeof(slot->text), text, _TRUNCATE);
+}
+
+namespace DialogueTextFilter {
+const char* GetSpokenLine(UInt32 speakerRefID)
+{
+	if (!speakerRefID)
+		return nullptr;
+	EnsureStateLockInitialized();
+	ScopedLock lock(&g_dtfStateLock);
+	DWORD now = GetTickCount();
+	for (auto& line : g_spokenLines) {
+		if (line.speakerRefID != speakerRefID)
+			continue;
+		if ((LONG)(now - line.expiryTick) > 0)
+			return nullptr;
+		return line.text[0] ? line.text : nullptr;
+	}
+	return nullptr;
+}
+}
+
 namespace DialogueTextFilter {
 void ClearState()
 {
@@ -442,6 +490,7 @@ void ClearState()
 	g_recentSpeaks.clear();
 	g_recentFallbacks.clear();
 	g_spokenGreets.clear();
+	memset(g_spokenLines, 0, sizeof(g_spokenLines));
 	g_mainThreadId = 0;
 }
 
@@ -512,6 +561,7 @@ void Update()
 			BuildVoicePath(voicePath, sizeof(voicePath), topicInfo, topic, speaker, evt.responseNum);
 
 		if (!hasVoice) {
+			LatchSpokenLine(evt.speakerRefID, evt.text, evt.duration);
 			g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
 				reinterpret_cast<TESObjectREFR*>(speaker),
 				speaker, topic, topicInfo, evt.text, "", PackEventFloatArg(evt.duration));
@@ -552,6 +602,8 @@ void Update()
 			if (alreadyFallback) {
 				continue;
 			}
+			LatchSpokenLine(evt.speakerRefID, evt.text,
+				durationSeconds > 0.0f ? durationSeconds : evt.duration);
 			g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
 				reinterpret_cast<TESObjectREFR*>(speaker),
 				speaker, topic, topicInfo, evt.text,
@@ -607,6 +659,7 @@ void Update()
 
 		TESTopic* topic = GetTopicInfoParentTopic(info);
 
+		LatchSpokenLine(cit->speakerRefID, textBuf, cit->durationSeconds);
 		g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
 			reinterpret_cast<TESObjectREFR*>(speaker),
 			speaker, topic, info, textBuf, cit->voicePath, PackEventFloatArg(cit->durationSeconds));

@@ -216,6 +216,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="commands\ToggleAllPrimitives.cpp" />
     <ClCompile Include="commands\DialogueCommands.cpp" />
     <ClCompile Include="commands\ForceSayCommand.cpp" />
+    <ClCompile Include="commands\CurrentDialogueCommands.cpp" />
     <ClCompile Include="commands\IsSayingCommand.cpp" />
     <ClCompile Include="commands\WeaponEmissiveCommands.cpp" />
     <ClCompile Include="commands\ItemModFlagCommands.cpp" />
@@ -367,6 +368,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="commands\ChallengeCommands.h" />
     <ClInclude Include="commands\DialogueCommands.h" />
     <ClInclude Include="commands\ForceSayCommand.h" />
+    <ClInclude Include="commands\CurrentDialogueCommands.h" />
     <ClInclude Include="commands\IsSayingCommand.h" />
     <ClInclude Include="commands\WeaponEmissiveCommands.h" />
     <ClInclude Include="commands\ItemModFlagCommands.h" />

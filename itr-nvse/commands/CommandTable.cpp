@@ -18,6 +18,7 @@
 #include "commands/DialogueCommands.h"
 #include "commands/ForceSayCommand.h"
 #include "commands/IsSayingCommand.h"
+#include "commands/CurrentDialogueCommands.h"
 #include "commands/WeaponEmissiveCommands.h"
 #include "commands/ItemModFlagCommands.h"
 #include "commands/UICommands.h"
@@ -257,4 +258,7 @@ void RegisterAllCommands(void* nvsePtr)
 
 	nvse->SetOpcodeBase(0x40E0);
 	PerkRuntimeFramework::RegisterCommands2(nvse);
+
+	nvse->SetOpcodeBase(0x40E2);
+	CurrentDialogueCommands::RegisterCommands(nvse); //GetCurrentDialogue
 }

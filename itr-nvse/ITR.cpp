@@ -123,6 +123,7 @@
 #include "commands/ImperativeCommands.h"
 #include "commands/StringCommands.h"
 #include "commands/RadioCommands.h"
+#include "commands/CurrentDialogueCommands.h"
 #include "commands/ForceCombatTargetCommands.h"
 #include "commands/CrouchCommands.h"
 #include "commands/ChallengeCommands.h"
@@ -820,6 +821,7 @@ namespace ITR
 		ForceCombatTargetCommands::Init();
 		StringCommands::Init((void*)nvse);
 		RadioCommands::Init((void*)nvse);
+		CurrentDialogueCommands::Init((void*)nvse);
 		RegisterHandlers(nvse);
 
 		return true;

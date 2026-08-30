@@ -94,6 +94,7 @@
 - GetRadioQueueSize - returns the injected queue count (optional slot: 1 mp3, 2 wav/ogg)
 
 **Dialogue**
+- GetCurrentDialogue - returns the dialogue line an actor is speaking right now, empty string when silent. Covers greetings, Say, SayTo and combat barks
 - GetDialogueInfoFlags - get combined flags for a TESTopicInfo
 - SetDialogueInfoFlags - set combined flags for a TESTopicInfo (runtime)
 - GetDisplayedDialogueInfos - get array of topic infos shown in dialogue menu
