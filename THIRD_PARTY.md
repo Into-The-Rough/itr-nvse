@@ -18,8 +18,9 @@ origins are documented here for clarity.
   from ShowOff-NVSE by Demorome, generalized to any actor. ShowOff-NVSE permits
   code reuse with credit. https://github.com/Demorome/ShowOff-NVSE
 
-## External SDKs / Headers
+## Bundled NVSE SDK
 
-- This project is built against the xNVSE / NVSE plugin SDK and related modding
-  headers available in the local development environment. Those upstream
-  projects are not redistributed here as part of `itr-nvse`.
+`NVSE/nvse` and `common` are the modified NVSE 5.1.4 SDK snapshot itr-nvse
+builds against, by Ian Patterson, Stephen Abel and Paul Connelly. Bundled so
+the project builds from a clean checkout. A stock NVSE or xNVSE SDK will not
+work in its place. `common/common_license.txt` is its own licence, retained.
