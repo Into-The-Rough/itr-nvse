@@ -48,7 +48,8 @@ ReloadPluginConfig itr-nvse
 ## Building
 
 Open [itr-nvse.sln](itr-nvse.sln) in Visual Studio 2022 and build `Win32`
-`Release` or `Debug`.
+`Release` or `Debug`. No external SDK checkout is needed, the NVSE plugin
+headers are bundled in `NVSE/nvse` and `common`.
 
 The project file contains local post-build copy steps. If you are building in a
 different environment, update or remove those paths first.
