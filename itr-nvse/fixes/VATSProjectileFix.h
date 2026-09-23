@@ -1,5 +1,6 @@
 #pragma once
 
 namespace VATSProjectileFix {
-	void Init();
+	void Init(bool enabled);
+	void Update();
 }

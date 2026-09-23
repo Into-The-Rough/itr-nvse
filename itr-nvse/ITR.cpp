@@ -398,8 +398,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				ReversePickpocketNoKarmaFix::Init(Settings::bReversePickpocketNoKarma != 0);
 				if (Settings::bSaveFileSize)
 					SaveFileSizeHandler::Init((void*)s_nvseInterface);
-				if (Settings::bVATSProjectileFix)
-					VATSProjectileFix::Init();
+				//diagnostic build observes both settings; disabled keeps the fix's writes off
+				VATSProjectileFix::Init(Settings::bVATSProjectileFix != 0);
 				if (Settings::bVATSLimbFix)
 					VATSLimbFix::Init();
 				OwnedBeds::Init(Settings::bOwnedBeds != 0);
@@ -673,6 +673,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 
 		case kMessage_MainGameLoop:
+			VATSProjectileFix::Update();
 			AshPileNames::Update();
 			if (Settings::bStuckCombatStateFix)
 				StuckCombatStateFix::Update();
