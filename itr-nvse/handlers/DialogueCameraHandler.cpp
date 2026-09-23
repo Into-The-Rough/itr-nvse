@@ -141,7 +141,7 @@ namespace CameraHooks {
 namespace DialogueCameraHandler {
 
 //0x950110 = PlayerCharacter::SetFirstPerson(bool abFirst)
-typedef void (__thiscall *SetFirstPerson_t)(void* player, bool bFirst);
+typedef bool (__thiscall *SetFirstPerson_t)(void* player, bool bFirst);
 static SetFirstPerson_t SetFirstPerson = (SetFirstPerson_t)0x950110;
 
 constexpr float PI = 3.14159265358979323846f;
@@ -273,6 +273,7 @@ static CameraAngle g_fixedAngle = kAngle_Vanilla;
 static bool g_angleDisabled[kAngle_Count]; //blocks cycle/random selection only, fixed/manual picks ignore it
 static bool g_cameraActive = false;
 static bool g_wasFirstPerson = false;
+static bool g_deferredFirstPersonRestore = false;
 static int g_dialogueLineCount = 0;
 static UInt32 g_lastTopicInfoID = 0;
 
@@ -324,6 +325,7 @@ static Detours::CallDetour s_show1stPersonFocusCall;
 static Detours::CallDetour s_show1stPersonDialogCall;
 static Detours::CallDetour s_pickAnimationsCall;
 static Detours::CallDetour s_setFirstPersonCall;
+static Detours::CallDetour s_restoreFirstPersonCall;
 typedef void(__thiscall* Show1stPerson_t)(void*, bool);
 typedef void(__thiscall* PickAnimations_t)(void*, float, float);
 static PickAnimations_t const Actor_PickAnimations = (PickAnimations_t)0x895110;
@@ -452,13 +454,26 @@ static void __fastcall Hook_SkipPickAnimations(void* actor, void*, float a1, flo
 //site 8: SetFirstPerson(true) in heading block (0x953AC7)
 //the heading block forces 1st person every frame, which prevents the
 //3rd person model from being updated with the new rotation.
-static void __fastcall Hook_SkipSetFirstPerson(void* player, void*, bool bFirst) {
+static bool __fastcall Hook_SkipSetFirstPerson(void* player, void*, bool bFirst) {
 	if (!Settings::bDialogueCamera)
 	{
 		auto original = reinterpret_cast<SetFirstPerson_t>(s_setFirstPersonCall.GetOverwrittenAddr());
 		if (original)
-			original(player, bFirst);
+			return original(player, bFirst);
 	}
+	return false;
+}
+
+static bool __fastcall Hook_RestoreFirstPerson(void* player, void*, bool bFirst) {
+	if (g_cameraActive && bFirst && player == *g_thePlayerPtr) {
+		//let forced-third-person cleanup finish without hiding the dialogue body
+		if (!g_deferredFirstPersonRestore)
+			Log("DialogueCameraHandler: deferred forced first-person restore during dialogue (original first=%d)", g_wasFirstPerson);
+		g_deferredFirstPersonRestore = true;
+		return false;
+	}
+	auto original = reinterpret_cast<SetFirstPerson_t>(s_restoreFirstPersonCall.GetOverwrittenAddr());
+	return original(player, bFirst);
 }
 
 template <typename T>
@@ -504,6 +519,10 @@ static bool InstallDialoguePatches() {
 			return false;
 		}
 	}
+
+	//install before the dialogue patches so failure cannot leave the camera unprotected
+	if (!InstallCallSite(s_restoreFirstPersonCall, 0x95044D, Hook_RestoreFirstPerson, "forced-third-person restore"))
+		return false;
 
 	bool ok = true;
 	ok &= InstallCallSite(s_show1stPersonFocusCall, 0x953124, Hook_Show1stPerson_Focus, "site 1 (FocusOnActor::Show1stPerson)");
@@ -932,8 +951,14 @@ static void OnDialogueStart() {
 	PlayerCharacter* player = *g_thePlayerPtr;
 	if (!player) return;
 
-	g_wasFirstPerson = !player->bThirdPerson;
-	if (g_wasFirstPerson) {
+	auto* pov = reinterpret_cast<PlayerAimFOVView*>(player);
+	//sitting can temporarily request third person while retaining first-person intent
+	g_wasFirstPerson = !pov->bThirdPerson || (pov->forceThirdPerson && pov->returnToFirstPerson);
+	g_deferredFirstPersonRestore = false;
+	g_cameraActive = true;
+	Log("DialogueCameraHandler: dialogue POV start (third=%d, forced=%d, pending first=%d, original first=%d)",
+		pov->bThirdPerson, pov->forceThirdPerson, pov->returnToFirstPerson, g_wasFirstPerson);
+	if (!pov->bThirdPerson) {
 		SetFirstPerson(player, false);
 	}
 	ClearPlayerDialogueMovement(player);
@@ -946,25 +971,34 @@ static void OnDialogueStart() {
 	g_baseCamX = g_baseCamY = g_baseCamZ = 0;
 	g_baseLookX = g_baseLookY = g_baseLookZ = 0;
 	g_hasPrevShot = false;
-	g_cameraActive = true;
 
 	g_currentAngle = SelectDialogueAngle(true);
 	ApplySelectedAngle(g_currentAngle, true);
 }
 
 static void OnDialogueEnd() {
-	if (g_cameraActive) {
-		CameraHooks::Disable();
-		if (g_wasFirstPerson) {
-			PlayerCharacter* player = *g_thePlayerPtr;
-			if (player) {
-				SetFirstPerson(player, true);
-			}
-		}
-		g_cameraActive = false;
-	}
+	const bool wasActive = g_cameraActive;
+	const bool restoreFirstPerson = g_wasFirstPerson;
+	g_cameraActive = false;
+	g_wasFirstPerson = false;
+	g_deferredFirstPersonRestore = false;
 	g_dialogueTarget = nullptr;
 	g_dialogueTargetID = 0;
+	if (!wasActive) return;
+
+	CameraHooks::Disable();
+	PlayerCharacter* player = *g_thePlayerPtr;
+	if (!player) return;
+
+	auto* pov = reinterpret_cast<PlayerAimFOVView*>(player);
+	Log("DialogueCameraHandler: dialogue POV end (original first=%d, forced=%d)", restoreFirstPerson, pov->forceThirdPerson);
+	if (pov->forceThirdPerson) {
+		//the engine must finish the animation before Show1stPerson can restore the model
+		pov->returnToFirstPerson = restoreFirstPerson;
+	}
+	else if (restoreFirstPerson) {
+		SetFirstPerson(player, true);
+	}
 }
 
 void Update() {
@@ -1058,6 +1092,7 @@ void ClearState() {
 	g_inDialogue = false;
 	g_cameraActive = false;
 	g_wasFirstPerson = false;
+	g_deferredFirstPersonRestore = false;
 	g_dialogueTarget = nullptr;
 	g_dialogueTargetID = 0;
 	g_lastTopicInfoID = 0;
