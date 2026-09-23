@@ -1,10 +1,11 @@
-//ForceSay - makes an actor say a topic line ignoring all conditions
-//bypasses quest running, quest/info conditions, sayonce, voicetype, isdead
+//ForceSay - makes an actor say a topic line, dead or alive
+//picks the line like Say does, forces the first line when nothing matches, borrows another voice type when the speaker's is missing
 
 #include "ForceSayCommand.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/CommandTable.h"
 #include "nvse/GameAPI.h"
+#include "nvse/GameData.h"
 #include "nvse/GameForms.h"
 #include "nvse/GameObjects.h"
 #include "nvse/ParamInfos.h"
@@ -53,13 +54,25 @@ static bool ExistsInBSA(const char* path)
 	return entry != nullptr;
 }
 
-//voice path: Data\Sound\Voice\<plugin>\<VOICETYPE>\<filename>
-//scan sibling voice type directories for one that has the actual file
-static bool FixVoicePath(const char* voicePath, char* outFixed, UInt32 outSize)
+static bool VoiceFileExists(const char* path)
 {
-	//BSA is authoritative - if the file exists in BSA at the current path, keep it
-	if (ExistsInBSA(voicePath))
-		return false;
+	DWORD attr = GetFileAttributesA(path);
+	if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY))
+		return true;
+	return ExistsInBSA(path);
+}
+
+//voice path: Data\Sound\Voice\<plugin>\<voice type edid>\<filename> (0x616FA0)
+//when the speaker's voice type never recorded the line, borrow any voice type that did
+static bool ResolveVoicePath(const char* voicePath, char* out, UInt32 outSize)
+{
+	snprintf(out, outSize, "%s", voicePath);
+	//the loader opens .ogg whatever the extension (0xAF1E00)
+	char* ext = strrchr(out, '.');
+	if (ext && strlen(ext) == 4)
+		memcpy(ext + 1, "ogg", 3);
+	if (VoiceFileExists(out))
+		return true;
 
 	int slashCount = 0;
 	const char* seg4start = nullptr;
@@ -76,44 +89,26 @@ static bool FixVoicePath(const char* voicePath, char* outFixed, UInt32 outSize)
 	if (!seg4start || !seg5)
 		return false;
 
-	char currentVT[128];
-	int vtLen = (int)(seg5 - seg4start);
-	if (vtLen >= 128) vtLen = 127;
-	memcpy(currentVT, seg4start, vtLen);
-	currentVT[vtLen] = 0;
-
-	char searchDir[512];
+	char filename[260];
+	snprintf(filename, sizeof(filename), "%s", out + (seg5 - voicePath)); //includes leading backslash
 	int prefixLen = (int)(seg4start - voicePath);
-	snprintf(searchDir, 512, "%.*s*", prefixLen, voicePath);
 
-	const char* filename = seg5; //includes leading backslash
-
-	WIN32_FIND_DATAA fd;
-	HANDLE hFind = FindFirstFileA(searchDir, &fd);
-	if (hFind == INVALID_HANDLE_VALUE)
+	auto* dataHandler = static_cast<DataHandler*>(*g_dataHandlerPtr);
+	if (!dataHandler)
 		return false;
-
-	bool found = false;
-	do
+	for (auto iter = dataHandler->voiceTypeList.Begin(); !iter.End(); ++iter)
 	{
-		if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+		const char* edid = Engine::TESForm_GetEditorID(iter.Get());
+		if (!edid || !*edid)
 			continue;
-		if (fd.cFileName[0] == '.')
-			continue;
-		if (_stricmp(fd.cFileName, currentVT) == 0)
-			continue;
-
-		snprintf(outFixed, outSize, "%.*s%s%s", prefixLen, voicePath, fd.cFileName, filename);
-
-		if (ExistsInBSA(outFixed))
+		snprintf(out, outSize, "%.*s%s%s", prefixLen, voicePath, edid, filename);
+		if (VoiceFileExists(out))
 		{
-			found = true;
-			break;
+			Log("ForceSay: borrowed voice %s for %s", edid, voicePath);
+			return true;
 		}
-	} while (FindNextFileA(hFind, &fd));
-
-	FindClose(hFind);
-	return found;
+	}
+	return false;
 }
 
 static ParamInfo kParams_ForceSay[] = {
@@ -121,7 +116,7 @@ static ParamInfo kParams_ForceSay[] = {
 	{"target", kParamType_Actor, 1},
 };
 
-DEFINE_COMMAND_PLUGIN(ForceSay, "Force an actor to say a topic line, ignoring all conditions", 1, 2, kParams_ForceSay)
+DEFINE_COMMAND_PLUGIN(ForceSay, "Force an actor to say a topic line, dead or alive", 1, 2, kParams_ForceSay)
 
 namespace ForceSayCommand
 {
@@ -157,33 +152,32 @@ bool ForceSay(Actor* speaker, TESTopic* topic, Actor* target)
 	if (!speaker->GetNiNode())
 		return false;
 
-	//walk topic->infos to get first topicinfo + quest directly (bypass all conditions)
-	TESTopic::Info* firstInfo = GetFirstTopicInfo(topic);
-	if (!firstInfo)
-		return false;
+	//the line pick Say uses via 0x8A1BD0 (quest running, conditions, say once, random), it has no death check
+	auto* item = ThisCall<DialogueItem*>(0x61B320, topic, speaker, target, 0, 0, 0);
+	if (!item)
+	{
+		//nothing matched, force the first line ignoring conditions
+		TESTopic::Info* firstInfo = GetFirstTopicInfo(topic);
+		if (!firstInfo || firstInfo->infoArray.numObjs == 0)
+			return false;
 
-	if (firstInfo->infoArray.numObjs == 0)
-		return false;
+		TESTopicInfo* firstTopicInfo = firstInfo->infoArray.data[0];
+		TESQuest* quest = firstInfo->quest;
+		if (!firstTopicInfo || !quest)
+			return false;
 
-	TESTopicInfo* topicInfo = firstInfo->infoArray.data[0];
-	TESQuest* quest = firstInfo->quest;
-	if (!topicInfo || !quest)
-		return false;
+		void* mem = Engine::GameHeapAlloc(sizeof(DialogueItem));
+		if (!mem)
+			return false;
+		item = ThisCall<DialogueItem*>(0x83C520, mem, quest, topic, firstTopicInfo, speaker); //DialogueItem_0
+	}
+	TESTopicInfo* topicInfo = item->currentTopicInfo;
 
 	//max lip distance so lip sync works at any range
 	UInt32* lipDist = GetVoiceLipDistanceLimit();
 	UInt32 oldLipDist = *lipDist;
 	*lipDist = 0x7FFFFFFF;
 
-	//create DialogueItem manually - this loads response list with voice paths
-	void* mem = Engine::GameHeapAlloc(sizeof(DialogueItem));
-	if (!mem)
-	{
-		*lipDist = oldLipDist;
-		return false;
-	}
-
-	auto* item = ThisCall<DialogueItem*>(0x83C520, mem, quest, topic, topicInfo, speaker); //DialogueItem_0
 	ThisCall<bool>(0x83C7B0, item); //FirstResponse
 	DialogueResponse* response = ThisCall<DialogueResponse*>(0x83C820, item); //GetCurrentItem
 
@@ -210,11 +204,10 @@ bool ForceSay(Actor* speaker, TESTopic* topic, Actor* target)
 		return false;
 	}
 
-	//fix voice type mismatch - scan sibling folders via BSA lookup
-	char fixedPath[512];
-	char* finalPath = voicePath;
-	if (FixVoicePath(voicePath, fixedPath, sizeof(fixedPath)))
-		finalPath = fixedPath;
+	//unvoiced lines keep the original path, like Say they play as a silent subtitle and run their result script
+	char finalPath[512];
+	if (!ResolveVoicePath(voicePath, finalPath, sizeof(finalPath)))
+		snprintf(finalPath, sizeof(finalPath), "%s", voicePath);
 
 	BSSoundHandle soundHandle;
 	double delay = ThisCall<double>(0x8A20D0, speaker,
@@ -224,7 +217,7 @@ bool ForceSay(Actor* speaker, TESTopic* topic, Actor* target)
 		true, false, false, true, true); //abQueue=false for sync lip load
 
 	//0xAD8E60 skips registration for an invalid handle and can run the callback inline,
-	//so a missing voice file must bail before any sayto bookkeeping
+	//so a refused line (no 3d, severed head or brain) must bail before any sayto bookkeeping
 	if (soundHandle.uiSoundID == 0xFFFFFFFF)
 	{
 		ThisCall(0x83C670, item);
