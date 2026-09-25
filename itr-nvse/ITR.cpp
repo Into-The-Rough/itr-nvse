@@ -103,6 +103,7 @@
 #include "commands/StartNewGameCommand.h"
 #include "features/LocationVisitPopup.h"
 #include "features/QuickReadNote.h"
+#include "internal/FormTableDiagnostic.h"
 #include "features/VATSExtender.h"
 #include "features/VATSHighlightDepthFix.h"
 #include "features/WeatherChangeEvent.h"
@@ -386,6 +387,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 		case NVSEMessagingInterface::kMessage_PostLoad:
 			if (!g_hooksInstalled)
 			{
+				FormTableDiagnostic::Init();
 				AlertCommands::Init(); //mask SetAlertNS out of the save bake
 				if (Settings::bQuickDrop || Settings::bQuick180)
 					PlayerUpdateHook::Init(Settings::bQuickDrop, Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
@@ -482,6 +484,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 
 		case NVSEMessagingInterface::kMessage_PreLoadGame:
+			FormTableDiagnostic::Walk("pre-load");
 			g_isLoadingSave = true;
 			StartNewGameCommand::Abort();
 			HavokCommands::ClearState();
@@ -534,6 +537,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				CenterOnCellAltCommand::OnNewGame();
 			else
 				CenterOnCellAltCommand::ClearPending();
+			if (msg->type == NVSEMessagingInterface::kMessage_PostLoadGame)
+				FormTableDiagnostic::Walk("post-load");
 			if (msg->type == NVSEMessagingInterface::kMessage_PostLoadGame && Settings::bMusicResetOnLoad)
 			{
 				ResetMusicStateForLoad();
