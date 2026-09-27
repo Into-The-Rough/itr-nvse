@@ -123,22 +123,21 @@ static void ScanFlight(void* proj, TESObjectREFR* shooter, TESObjectWEAP* weapon
 	UInt32 count = *(UInt32*)((UInt8*)g_processManager + kOff_NearestCount);
 	if (count > kMaxNearestActors) count = kMaxNearestActors;
 
-	for (UInt32 i = 0; i < count; ++i) {
-		Actor* actor = static_cast<Actor*>(nearest[i]);
-		if (!actor || actor == shooter) continue;
+	auto test = [&](Actor* actor) {
+		if (!actor || actor == shooter) return;
 		const UInt32 ls = actor->lifeState;
-		if (ls != kLifeState_Alive && ls != kLifeState_Restrained) continue; //corpses and downed actors do not near-miss
+		if (ls != kLifeState_Alive && ls != kLifeState_Restrained) return; //corpses and downed actors do not near-miss
 
 		const float* p = (const float*)((UInt8*)actor + kRefr_Position);
 		//where along this frame's sweep the actor's column lies - outside [0,1] is another frame
 		const float midz = p[2] + kActorBodyHeight * 0.5f;
 		const float u = ((p[0]-a.x)*abx + (p[1]-a.y)*aby + (midz-a.z)*abz) / seg2;
-		if (u < 0.0f || u > 1.0f) continue;
+		if (u < 0.0f || u > 1.0f) return;
 
 		Vec3 feet = { p[0], p[1], p[2] };
 		Vec3 head = { p[0], p[1], p[2] + kActorBodyHeight };
 		const float d2 = SegSegDistSq(a, b, feet, head);
-		if (d2 > r2 || ProjectileHitActor(proj, actor) || !PassesCooldown(shooter, actor, now)) continue;
+		if (d2 > r2 || ProjectileHitActor(proj, actor) || !PassesCooldown(shooter, actor, now)) return;
 
 		s_pending.push_back({
 			actor->refID,
@@ -146,7 +145,12 @@ static void ScanFlight(void* proj, TESObjectREFR* shooter, TESObjectWEAP* weapon
 			weapon ? weapon->refID : 0,
 			sqrtf(d2)
 		});
-	}
+	};
+
+	for (UInt32 i = 0; i < count; ++i)
+		test(static_cast<Actor*>(nearest[i]));
+	//the nearest list is ranked by distance to the player, so the player is never in it
+	test(*g_thePlayerPtr);
 }
 
 static int __fastcall HookProjectileUpdate(void* proj, void*, int a2) {
