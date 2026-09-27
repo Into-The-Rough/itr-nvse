@@ -14,6 +14,8 @@ namespace Settings
 	inline int bAimZoomFirstPersonOnly = 0;
 	inline int bSuppressInputInConsole = 0;
 	inline int bDebugLog = 0;
+	inline int bFormTableDiagnostic = 0;
+	inline int bVATSDiagnostic = 0;
 
 	inline int iQuickDropModifierKey = VK_SHIFT;
 	inline int iQuickDropControlID = 7; //ready weapon
@@ -156,6 +158,8 @@ namespace Settings
 		strcat_s(iniPath, "\\Data\\config\\itr-nvse.ini");
 
 		bDebugLog = GetINIInt("Debug", "bDebugLog", 0);
+		bFormTableDiagnostic = GetINIInt("Debug", "bFormTableDiagnostic", 0);
+		bVATSDiagnostic = GetINIInt("Debug", "bVATSDiagnostic", 0);
 
 		bAutoGodMode = GetINIInt("Tweaks", "bAutoGodMode", 0);
 		bAutoQuickLoad = GetINIInt("Tweaks", "bAutoQuickLoad", 0);

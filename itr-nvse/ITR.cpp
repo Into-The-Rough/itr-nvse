@@ -387,7 +387,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 		case NVSEMessagingInterface::kMessage_PostLoad:
 			if (!g_hooksInstalled)
 			{
-				FormTableDiagnostic::Init();
+				if (Settings::bFormTableDiagnostic)
+					FormTableDiagnostic::Init();
 				AlertCommands::Init(); //mask SetAlertNS out of the save bake
 				if (Settings::bQuickDrop || Settings::bQuick180)
 					PlayerUpdateHook::Init(Settings::bQuickDrop, Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
@@ -400,8 +401,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				ReversePickpocketNoKarmaFix::Init(Settings::bReversePickpocketNoKarma != 0);
 				if (Settings::bSaveFileSize)
 					SaveFileSizeHandler::Init((void*)s_nvseInterface);
-				//diagnostic build observes both settings; disabled keeps the fix's writes off
-				VATSProjectileFix::Init(Settings::bVATSProjectileFix != 0);
+				if (Settings::bVATSProjectileFix || Settings::bVATSDiagnostic)
+					VATSProjectileFix::Init(Settings::bVATSProjectileFix != 0, Settings::bVATSDiagnostic != 0);
 				if (Settings::bVATSLimbFix)
 					VATSLimbFix::Init();
 				OwnedBeds::Init(Settings::bOwnedBeds != 0);

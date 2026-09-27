@@ -189,16 +189,17 @@ namespace VATSProjectileFix
 		return result;
 	}
 
-	void Init(bool enabled)
+	void Init(bool enabled, bool diagnostic)
 	{
 		s_enabled = enabled;
-		char path[MAX_PATH] = {};
-		GetModuleFileNameA(nullptr, path, sizeof(path));
-		char* slash = std::strrchr(path, '\\');
-		if (slash) {
-			slash[1] = '\0';
-			strcat_s(path, "itr-nvse-vats.log");
-			s_diagnosticLog = _fsopen(path, "a", _SH_DENYWR);
+		char path[MAX_PATH] = "off";
+		if (diagnostic) {
+			GetModuleFileNameA(nullptr, path, sizeof(path));
+			if (char* slash = std::strrchr(path, '\\')) {
+				slash[1] = '\0';
+				strcat_s(path, "itr-nvse-vats.log");
+				s_diagnosticLog = _fsopen(path, "a", _SH_DENYWR);
+			}
 		}
 		if (s_diagnosticLog) {
 			std::fprintf(s_diagnosticLog, "\nVATS diagnostic 1: enabled=%u; restart required between settings\n", s_enabled);
@@ -209,6 +210,6 @@ namespace VATSProjectileFix
 			std::fprintf(s_diagnosticLog, "installed=%u capturedOriginal=%08X\n", installed, s_vatsMenuUpdateCall.GetOverwrittenAddr());
 			std::fflush(s_diagnosticLog);
 		}
-		Log("VATSProjectileFix diagnostic: enabled=%u installed=%u log=%s", enabled, installed, s_diagnosticLog ? path : "unavailable");
+		Log("VATSProjectileFix: enabled=%u installed=%u diagnostic log=%s", enabled, installed, s_diagnosticLog || !diagnostic ? path : "unavailable");
 	}
 }
