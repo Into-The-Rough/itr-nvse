@@ -259,7 +259,6 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="features\RadioInjection.cpp" />
     <ClCompile Include="features\WakeyWakey.cpp" />
     <ClCompile Include="internal\EventDispatch.cpp" />
-    <ClCompile Include="internal\FormTableDiagnostic.cpp" />
     <ClCompile Include="internal\TempEffects.cpp" />
     <ClCompile Include="internal\WitnessScan.cpp" />
   </ItemGroup>
@@ -283,7 +282,6 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="internal\EventDispatch.h" />
     <ClInclude Include="internal\FootContactLogic.h" />
     <ClInclude Include="internal\TempEffectLogic.h" />
-    <ClInclude Include="internal\FormTableDiagnostic.h" />
     <ClInclude Include="internal\TempEffects.h" />
     <ClInclude Include="internal\EngineFunctions.h" />
     <ClInclude Include="internal\EngineHelpers.h" />
