@@ -121,7 +121,7 @@ namespace VATSProjectileFix
 
 	void Update()
 	{
-		//only copied values survive the hook; file i/o waits until vats has closed
+		//only copied values survive the hook, file i/o waits until vats has closed
 		if (!s_diagnosticLog || !s_recordCount || s_hookDepth || VATSGetMode() != kVATSMode_None)
 			return;
 		std::fprintf(s_diagnosticLog, "VATS closed: enabled=%u updates=%u records=%u dropped=%u ownsHook=%u\n",
