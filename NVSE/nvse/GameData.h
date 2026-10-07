@@ -181,7 +181,7 @@ struct ModInfo		// referred to by game as TESFile
 	UInt32								unk404;				// 404
 	UInt32								unk408;				// 408
 	UInt8								modIndex;			// 40C init to 0xFF
-	UInt8								pad40D[3];
+	UInt16								secondIndex;
 	String								author;				// 410
 	String								description;		// 418
 	void								* dataBuf;			// 420 
@@ -192,6 +192,9 @@ struct ModInfo		// referred to by game as TESFile
 	// In Editor: 430 = ONAM array and 434 ONAM array count. Allocated at 0438
 	
 	bool IsLoaded() const { return true; }
+
+	bool IsSmall() const { return flags & 0x100; }
+	bool IsMedium() const { return flags & 0x400; }
 
 #if !EDITOR
 	/*** used by TESForm::LoadForm() among others ***/

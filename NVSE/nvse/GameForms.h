@@ -5,6 +5,7 @@
 #include "Utilities.h"
 #include "GameTypes.h"
 #include "GameBSExtraData.h"
+#include <internal/CallTemplates.h>
 
 enum FormType 
 {
@@ -337,6 +338,10 @@ public:
 	TESForm* CloneForm(bool bPersist = true) const;
 	bool     IsInventoryObject() const;
 	bool	 IsReference()	{return typeID >= kFormType_Reference && typeID <= kFormType_ACRE;}
+
+	ModInfo* GetFile(SInt32 index) const {
+		return ThisCall<ModInfo*>(0x484E60, this, index);
+	}
 
 	MEMBER_FN_PREFIX(TESForm);
 #if RUNTIME_VERSION == RUNTIME_VERSION_1_4_0_525
