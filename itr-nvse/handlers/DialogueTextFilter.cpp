@@ -613,11 +613,13 @@ void Update()
 		}
 		
 		UInt32 fullFormID;
-		if (mod->IsSmall()) {
-			fullFormID = ((UInt32)mod->modIndex << 24) | ((UInt32)mod->secondIndex << 12) |  (cit->baseFormID & 0xFFF);
-		}
-		else if (mod->IsMedium()) {
-			fullFormID = ((UInt32)mod->modIndex << 24) | ((UInt32)mod->secondIndex << 16) |  (cit->baseFormID & 0xFFFF);
+		if (static_cast<DataHandler*>(*g_dataHandlerPtr)->SupportsNewFileTypes() && mod->IsSpecial()) {
+			if (mod->IsSmall()) {
+				fullFormID = ((UInt32)mod->modIndex << 24) | ((UInt32)mod->secondIndex << 12) | (cit->baseFormID & 0xFFF);
+			}
+			else if (mod->IsMedium()) {
+				fullFormID = ((UInt32)mod->modIndex << 24) | ((UInt32)mod->secondIndex << 16) | (cit->baseFormID & 0xFFFF);
+			}
 		}
 		else {
 			fullFormID = ((UInt32)mod->modIndex << 24) | cit->baseFormID;

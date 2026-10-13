@@ -195,6 +195,7 @@ struct ModInfo		// referred to by game as TESFile
 
 	bool IsSmall() const { return flags & 0x100; }
 	bool IsMedium() const { return flags & 0x400; }
+	bool IsSpecial() const { return flags & 0x700; }
 
 #if !EDITOR
 	/*** used by TESForm::LoadForm() among others ***/
@@ -229,7 +230,7 @@ public:
 	DataHandler();
 	~DataHandler();
 
-	UInt32							unk00;					// 000
+	UInt8							flags;					// 000
 	BoundObjectListHead				* boundObjectList;		// 004
 	tList<TESPackage>				packageList;			// 008
 	tList<TESWorldSpace>			worldSpaceList;			// 010
@@ -317,6 +318,9 @@ public:
 	UInt32							unk638;					// 638
 
 	static DataHandler* Get();
+	
+	bool SupportsNewFileTypes() const { return flags & 0x80; }
+
 	const ModInfo ** GetActiveModList();		// returns array of modEntry* corresponding to loaded mods sorted by mod index
 	const ModInfo* LookupModByName(const char* modName);
 	UInt8 GetModIndex(const char* modName);
