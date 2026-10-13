@@ -324,6 +324,8 @@ public:
 	// Looks like there is another DWord here, used as a byte: LastLoaded or Active or Selected ? 
 
 	TESForm *		TryGetREFRParent(void);
+	UInt32			GetFormIDWithoutIndex() const { return ThisCall<UInt32>(0x485BC0, this); }
+
 	UInt8			GetModIndex() const;
 	TESFullName*	GetFullName();
 	const char*		GetTheName();

@@ -141,19 +141,10 @@ static bool BuildVoicePath(char* outPath, size_t outSize,
 	if (!outPath || !topicInfo || !speaker) return false;
 	outPath[0] = '\0';
 
-	UInt32 formID = topicInfo->refID;
-
 	ModInfo* mod = topicInfo->GetFile(0);
 	if (!mod) return false;
 
-	UInt32 baseFormID = 0;
-	if (mod->IsSmall())
-		baseFormID = (formID & 0x00000FFF);
-	else if (mod->IsMedium())
-		baseFormID = (formID & 0x0000FFFF);
-	else
-		baseFormID = (formID & 0x00FFFFFF);
-
+	const UInt32 baseFormID = topicInfo->GetFormIDWithoutIndex();
 	const char* modName = mod->name;
 
 	BGSVoiceType* voiceType = GetActorVoiceType(speaker);
@@ -260,13 +251,7 @@ static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt3
 
 	if (activeInfoRefID && activeInfoRefID != topicInfoRefID) {
 		//A spoken queued greet means pQueuedGreetTopic is stale, not conflicting.
-		UInt32 activeBaseFormID = 0;
-		if (mod->IsSmall())
-			activeBaseFormID = (activeInfoRefID & 0x00000FFF);
-		else if (mod->IsMedium())
-			activeBaseFormID = (activeInfoRefID & 0x0000FFFF);
-		else
-			activeBaseFormID = (activeInfoRefID & 0x00FFFFFF);
+		UInt32 activeBaseFormID = dialogueItem->currentTopicInfo->GetFormIDWithoutIndex();
 		EnsureStateLockInitialized();
 		ScopedLock lock(&g_dtfStateLock);
 		auto it = DialogueTextFilter::g_spokenGreets.find(speakerRefID);
@@ -300,16 +285,6 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 
 	if (IsActorRef(speaker) && IsGreetingFalsePositive(speaker, topicInfoRefID, speakerRefID))
 		return;
-
-	const ModInfo* topicMod = topicInfo->GetFile(0);
-	if (topicMod) {
-		if (topicMod->IsSmall())
-			topicInfoRefID &= ~0x00000FFF;
-		else if (topicMod->IsMedium())
-			topicInfoRefID &= ~0x0000FFFF;
-		else
-			topicInfoRefID &= ~0x00FFFFFF;
-	}
 
 	TESTopicInfoResponse** ppResponse = ThisCall<TESTopicInfoResponse**>(
 		kAddr_GetResponses, topicInfo, nullptr);
@@ -579,7 +554,7 @@ void Update()
 			continue;
 		}
 
-		UInt32 baseFormID = evt.topicInfoRefID & 0x00FFFFFF;
+		const UInt32 baseFormID = topicInfo->GetFormIDWithoutIndex();
 		bool confirmed = false;
 		float durationSeconds = 0.0f;
 		char confirmedVoicePath[260] = {0};
