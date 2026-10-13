@@ -243,6 +243,7 @@
 - NavMeshInfoCrashFix - fix crash in NavMesh info processing
 - InitHavokCrashFix - fix crash during Havok physics initialization
 - ActorRagdollLifetimeFix - clear ragdoll pointers during actor destruction before later cleanup can reuse freed physics data (enabled by default)
+- HavokBroadPhaseNullFix - avoid a null entity read during collision processing while preserving the physics unlock (enabled by default)
 - DetectionFollowerCrashFix - fix null dereference in BuildFollowerListRecursive during cell transitions
 - GetLineOfSightCrashFix - fix crash from a null node in the line-of-sight check
 - LockpickOwnerKarmaFix - no karma loss picking a lock you already own

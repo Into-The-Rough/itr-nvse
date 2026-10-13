@@ -87,6 +87,7 @@
 #include "fixes/NavMeshInfoCrashFix.h"
 #include "fixes/InitHavokCrashFix.h"
 #include "fixes/ActorRagdollLifetimeFix.h"
+#include "fixes/HavokBroadPhaseNullFix.h"
 #include "fixes/OwnedCorpses.h"
 #include "fixes/DetectionFollowerCrashFix.h"
 #include "fixes/GetLineOfSightCrashFix.h"
@@ -438,6 +439,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					InitHavokCrashFix::Init();
 				if (Settings::bActorRagdollLifetimeFix)
 					ActorRagdollLifetimeFix::Init();
+				if (Settings::bHavokBroadPhaseNullFix)
+					HavokBroadPhaseNullFix::Init();
 				if (Settings::bDetectionFollowerCrashFix)
 					DetectionFollowerCrashFix::Init();
 				if (Settings::bGetLineOfSightCrashFix)

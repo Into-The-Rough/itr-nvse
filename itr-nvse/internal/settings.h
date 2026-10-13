@@ -81,6 +81,7 @@ namespace Settings
 	inline int bNavMeshInfoCrashFix = 1;
 	inline int bInitHavokCrashFix = 1;
 	inline int bActorRagdollLifetimeFix = 1;
+	inline int bHavokBroadPhaseNullFix = 1;
 	inline int bMusicResetOnLoad = 1;
 	inline int bOwnedCorpses = 0;
 	inline int bDetectionFollowerCrashFix = 1;
@@ -233,6 +234,7 @@ namespace Settings
 		bNavMeshInfoCrashFix = GetINIInt("Tweaks", "bNavMeshInfoCrashFix", 1);
 		bInitHavokCrashFix = GetINIInt("Tweaks", "bInitHavokCrashFix", 1);
 		bActorRagdollLifetimeFix = GetINIInt("Tweaks", "bActorRagdollLifetimeFix", 1);
+		bHavokBroadPhaseNullFix = GetINIInt("Tweaks", "bHavokBroadPhaseNullFix", 1);
 
 		bMusicResetOnLoad = GetINIInt("Tweaks", "bMusicResetOnLoad", 1);
 		bOwnedCorpses = GetINIInt("Tweaks", "bOwnedCorpses", 0);
