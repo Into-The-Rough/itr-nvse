@@ -246,9 +246,7 @@ static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt3
 		return false;
 	}
 
-	UInt32 activeInfoRefID = ReadRefID(dialogueItem->currentTopicInfo);
-	const ModInfo* mod = dialogueItem->currentTopicInfo->GetFile(0);
-
+	const UInt32 activeInfoRefID = ReadRefID(dialogueItem->currentTopicInfo);
 	if (activeInfoRefID && activeInfoRefID != topicInfoRefID) {
 		//A spoken queued greet means pQueuedGreetTopic is stale, not conflicting.
 		UInt32 activeBaseFormID = dialogueItem->currentTopicInfo->GetFormIDWithoutIndex();
