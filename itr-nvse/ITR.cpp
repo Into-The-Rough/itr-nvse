@@ -65,6 +65,7 @@
 #include "handlers/OnPreDamageHandler.h"
 
 #include "fixes/SlowMotionPhysicsFix.h"
+#include "fixes/SmallDebrisCap.h"
 #include "fixes/VATSProjectileFix.h"
 #include "fixes/VATSLimbFix.h"
 #include "fixes/KillActorXPFix.h"
@@ -474,6 +475,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 
 		case NVSEMessagingInterface::kMessage_PostPostLoad:
+			SmallDebrisCap::InitHooks();
 			ItemModFlagSafety::InitJIPModFlagGate(); //after JIP's PostLoad installs GetEntryDataModFlagsHook
 			FallDamageHandler::InstallHook(); //after Stewie's bPowerArmorScalesFallDamage claims 0x8A63EC
 			DialogueCameraHandler::InstallCameraHooks(); //always install - hooks check bDialogueCamera at runtime
@@ -487,8 +489,13 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				ELMO::Init(Settings::bSuppressObjectives != 0, Settings::bSuppressReputation != 0);
 			break;
 
+		case NVSEMessagingInterface::kMessage_ExitToMainMenu:
+			SmallDebrisCap::ClearState(true);
+			break;
+
 		case NVSEMessagingInterface::kMessage_PreLoadGame:
 			g_isLoadingSave = true;
+			SmallDebrisCap::ClearState(true);
 			StartNewGameCommand::Abort();
 			HavokCommands::ClearState();
 			DetectionSoundCommands::ClearState();
@@ -536,6 +543,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 		case NVSEMessagingInterface::kMessage_NewGame:
 		case NVSEMessagingInterface::kMessage_PostLoadGame:
 			g_isLoadingSave = false;
+			SmallDebrisCap::ClearState(false);
 			if (msg->type == NVSEMessagingInterface::kMessage_NewGame)
 				CenterOnCellAltCommand::OnNewGame();
 			else
@@ -618,6 +626,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					bool oldSuppressReputation = Settings::bSuppressReputation != 0;
 					Settings::Load();
 					OpenDebugLog();
+					SmallDebrisCap::UpdateSettings();
 					DialogueCameraHandler::SetEnabled(Settings::bDialogueCamera != 0);
 
 					LocationVisitPopup::UpdateSettings(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
@@ -680,6 +689,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 		case kMessage_MainGameLoop:
 			VATSProjectileFix::Update();
+			SmallDebrisCap::Update();
 			AshPileNames::Update();
 			if (Settings::bStuckCombatStateFix)
 				StuckCombatStateFix::Update();

@@ -644,6 +644,7 @@
 			"columns": 1,
 			"enable": 1,
 			"options": {
+
 				"1": {
 					"title": "General Fixes",
 					"enable": 1,
@@ -1012,6 +1013,18 @@
 						{
 							"configINI": "Tweaks:bLoopingSoundLoadFix",
 							"default": 0
+						}
+					]
+				},
+				"32": {
+					"title": "Small Debris Cap",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Fade and remove older small debris above the game debris limit. Applies immediately.",
+					"vars": [
+						{
+							"configINI": "Tweaks:bSmallDebrisCap",
+							"default": 1
 						}
 					]
 				}

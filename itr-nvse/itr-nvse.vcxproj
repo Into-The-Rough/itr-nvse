@@ -149,6 +149,8 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="handlers\OnMenuSideChangeHandler.cpp" />
     <ClCompile Include="handlers\OnMenuListRefreshHandler.cpp" />
     <ClCompile Include="fixes\SlowMotionPhysicsFix.cpp" />
+    <ClCompile Include="fixes\SmallDebrisCap.cpp" />
+    <ClCompile Include="fixes\SmallDebrisCapEngine.cpp" />
     <ClCompile Include="fixes\VATSProjectileFix.cpp" />
     <ClCompile Include="fixes\VATSLimbFix.cpp" />
     <ClCompile Include="fixes\KillActorXPFix.cpp" />
@@ -315,6 +317,8 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="handlers\OnMenuSideChangeHandler.h" />
     <ClInclude Include="handlers\OnMenuListRefreshHandler.h" />
     <ClInclude Include="fixes\SlowMotionPhysicsFix.h" />
+    <ClInclude Include="fixes\SmallDebrisCap.h" />
+    <ClInclude Include="fixes\SmallDebrisCapEngine.h" />
     <ClInclude Include="fixes\VATSProjectileFix.h" />
     <ClInclude Include="fixes\VATSLimbFix.h" />
     <ClInclude Include="fixes\KillActorXPFix.h" />

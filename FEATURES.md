@@ -220,6 +220,7 @@
 
 ## Fixes
 
+- SmallDebrisCap - default-on cap for small Havok debris using `iDebrisMaxCount` and `fDebrisFadeTime`. Toggle `[Tweaks] bSmallDebrisCap` in the INI or MCM; changes apply through config reload. `[SmallDebrisCap] fCullDelay` defaults to 3 seconds (0–3600), and `iMaxTrackedChunks` defaults to 8192 (256–65536). Persistent refs and refs with enable parents are kept.
 - SlowMotionPhysicsFix - clamp physics timestep to prevent ragdoll energy gain during extreme slowmo
 - ExplodingPantsFix - prevent explosions from worn projectile items
 - VATSProjectileFix - fix projectile hit chance in VATS by correcting visibility

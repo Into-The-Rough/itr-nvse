@@ -22,6 +22,7 @@ namespace Settings
 	inline int iQuick180ControlID = 5; //run
 
 	inline int bSlowMotionPhysicsFix = 1;
+	inline int bSmallDebrisCap = 1;
 	inline int bExplodingPantsFix = 0;
 	inline int bKillActorXPFix = 1;
 	inline int bReversePickpocketNoKarma = 0;
@@ -178,6 +179,7 @@ namespace Settings
 		iQuick180ControlID = GetINIInt("Quick180", "iControlID", 5);
 
 		bSlowMotionPhysicsFix = GetINIInt("Tweaks", "bSlowMotionPhysicsFix", 1);
+		bSmallDebrisCap = GetINIInt("Tweaks", "bSmallDebrisCap", 1);
 		bExplodingPantsFix = GetINIInt("Tweaks", "bExplodingPantsFix", 0);
 		bKillActorXPFix = GetINIInt("Tweaks", "bKillActorXPFix", 1);
 		bReversePickpocketNoKarma = GetINIInt("Tweaks", "bReversePickpocketNoKarma", 0);

@@ -28,7 +28,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)..;$(ProjectDir)..\..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -49,6 +49,7 @@
     <ClCompile Include="test_hooklogic.cpp" />
     <ClCompile Include="test_detours.cpp" />
     <ClCompile Include="test_footcontactlogic.cpp" />
+    <ClCompile Include="test_smalldebris.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="test.h" />
