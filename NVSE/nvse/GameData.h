@@ -171,8 +171,7 @@ struct ModInfo		// referred to by game as TESFile
 	UInt8								pad29B;
 	WIN32_FIND_DATA						fileData;			// 29C
 	FileHeader							header;				// 3DC
-	UInt8								flags;				// 3E8	Bit 0 is ESM . Runtime: Bit 2 is Valid, Bit 3 is Unselected Editor: 2 is selected, 3 is active, 4 may be invalid, 6 is endian, 14 controls VCI.
-	UInt8								pad3E9[3];
+	UInt32								flags;				// 3E8	Bit 0 is ESM . Runtime: Bit 2 is Valid, Bit 3 is Unselected Editor: 2 is selected, 3 is active, 4 may be invalid, 6 is endian, 14 controls VCI.;
 	tList<char*>						refModNames;		// 3EC
 	tList<MasterSize*>					refModData;			// 3F4 most likely full of 0
 	UInt32								numRefMods;			// 3FC related to modindex; see 4472D0
