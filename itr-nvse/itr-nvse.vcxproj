@@ -175,6 +175,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="fixes\InitHavokCrashFix.cpp" />
     <ClCompile Include="fixes\ActorRagdollLifetimeFix.cpp" />
     <ClCompile Include="fixes\HavokBroadPhaseNullFix.cpp" />
+    <ClCompile Include="fixes\RagdollPhantomWorldFix.cpp" />
     <ClCompile Include="fixes\DetectionFollowerCrashFix.cpp" />
     <ClCompile Include="fixes\GetLineOfSightCrashFix.cpp" />
     <ClCompile Include="fixes\LockpickOwnerKarmaFix.cpp" />
@@ -343,6 +344,8 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="fixes\InitHavokCrashFix.h" />
     <ClInclude Include="fixes\ActorRagdollLifetimeFix.h" />
     <ClInclude Include="fixes\HavokBroadPhaseNullFix.h" />
+    <ClInclude Include="fixes\RagdollPhantomWorldFix.h" />
+    <ClInclude Include="internal\layout\Havok.h" />
     <ClInclude Include="fixes\DetectionFollowerCrashFix.h" />
     <ClInclude Include="fixes\GetLineOfSightCrashFix.h" />
     <ClInclude Include="fixes\LockpickOwnerKarmaFix.h" />

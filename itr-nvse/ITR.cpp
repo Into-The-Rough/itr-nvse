@@ -89,6 +89,7 @@
 #include "fixes/InitHavokCrashFix.h"
 #include "fixes/ActorRagdollLifetimeFix.h"
 #include "fixes/HavokBroadPhaseNullFix.h"
+#include "fixes/RagdollPhantomWorldFix.h"
 #include "fixes/OwnedCorpses.h"
 #include "fixes/DetectionFollowerCrashFix.h"
 #include "fixes/GetLineOfSightCrashFix.h"
@@ -442,6 +443,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					ActorRagdollLifetimeFix::Init();
 				if (Settings::bHavokBroadPhaseNullFix)
 					HavokBroadPhaseNullFix::Init();
+				if (Settings::bRagdollPhantomWorldFix)
+					RagdollPhantomWorldFix::Init();
 				if (Settings::bDetectionFollowerCrashFix)
 					DetectionFollowerCrashFix::Init();
 				if (Settings::bGetLineOfSightCrashFix)
@@ -688,6 +691,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 
 		case kMessage_MainGameLoop:
+			RagdollPhantomWorldFix::Update();
 			VATSProjectileFix::Update();
 			SmallDebrisCap::Update();
 			AshPileNames::Update();
