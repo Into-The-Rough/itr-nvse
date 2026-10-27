@@ -421,4 +421,9 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <Target Name="StageMod" BeforeTargets="PostBuildEvent" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <MakeDir Directories="$(ProjectDir)..\mod\NVSE\Plugins" />
+    <Copy SourceFiles="$(TargetPath);$(TargetDir)$(TargetName).pdb" DestinationFolder="$(ProjectDir)..\mod\NVSE\Plugins" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(ProjectDir)..\LICENSE" DestinationFolder="$(ProjectDir)..\mod" SkipUnchangedFiles="true" />
+  </Target>
 </Project>
