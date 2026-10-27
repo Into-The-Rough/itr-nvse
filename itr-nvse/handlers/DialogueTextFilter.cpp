@@ -101,23 +101,9 @@ static bool ParseModNameFromVoicePath(const char* path, char* outName, size_t ou
 	return len > 0;
 }
 
-static const char* GetModName(UInt8 modIndex) {
-	auto* dh = reinterpret_cast<DataHandler*>(*g_dataHandlerPtr);
-	if (!dh || modIndex >= 0xFF) return nullptr;
-	ModInfo* modInfo = dh->modList.loadedMods[modIndex];
-	if (!modInfo) return nullptr;
-	return modInfo->name;
-}
 
-static UInt8 FindModIndex(const char* modName) {
-	if (!modName || !*modName) return 0xFF;
-	for (UInt16 i = 0; i < 0xFF; i++) {
-		const char* name = GetModName((UInt8)i);
-		if (!name) continue;
-		if (_stricmp(name, modName) == 0)
-			return (UInt8)i;
-	}
-	return 0xFF;
+static ModInfo* FindMod(const char* modName) {
+	return ThisCall<ModInfo*>(0x462F40, *g_dataHandlerPtr, modName);
 }
 
 static BGSVoiceType* GetActorVoiceType(Actor* actor) {
@@ -155,12 +141,11 @@ static bool BuildVoicePath(char* outPath, size_t outSize,
 	if (!outPath || !topicInfo || !speaker) return false;
 	outPath[0] = '\0';
 
-	UInt32 formID = topicInfo->refID;
-	UInt8 modIndex = (UInt8)(formID >> 24);
-	UInt32 baseFormID = formID & 0x00FFFFFF;
+	ModInfo* mod = topicInfo->GetFile(0);
+	if (!mod) return false;
 
-	const char* modName = GetModName(modIndex);
-	if (!modName || !*modName) return false;
+	const UInt32 baseFormID = topicInfo->GetFormIDWithoutIndex();
+	const char* modName = mod->name;
 
 	BGSVoiceType* voiceType = GetActorVoiceType(speaker);
 	const char* voiceTypeID = voiceType ? GetVoiceTypeEditorID(voiceType) : nullptr;
@@ -261,11 +246,10 @@ static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt3
 		return false;
 	}
 
-	UInt32 activeInfoRefID = ReadRefID(dialogueItem->currentTopicInfo);
-
+	const UInt32 activeInfoRefID = ReadRefID(dialogueItem->currentTopicInfo);
 	if (activeInfoRefID && activeInfoRefID != topicInfoRefID) {
 		//A spoken queued greet means pQueuedGreetTopic is stale, not conflicting.
-		UInt32 activeBaseFormID = activeInfoRefID & 0x00FFFFFF;
+		UInt32 activeBaseFormID = dialogueItem->currentTopicInfo->GetFormIDWithoutIndex();
 		EnsureStateLockInitialized();
 		ScopedLock lock(&g_dtfStateLock);
 		auto it = DialogueTextFilter::g_spokenGreets.find(speakerRefID);
@@ -568,7 +552,7 @@ void Update()
 			continue;
 		}
 
-		UInt32 baseFormID = evt.topicInfoRefID & 0x00FFFFFF;
+		const UInt32 baseFormID = topicInfo->GetFormIDWithoutIndex();
 		bool confirmed = false;
 		float durationSeconds = 0.0f;
 		char confirmedVoicePath[260] = {0};
@@ -620,13 +604,25 @@ void Update()
 	for (auto cit = confirmedSpeaks.begin(); cit != confirmedSpeaks.end(); ) {
 		if (nowTick - cit->timestamp < 500) { ++cit; continue; }
 
-		UInt8 modIndex = FindModIndex(cit->modName);
-		if (modIndex == 0xFF) {
+		const ModInfo* mod = FindMod(cit->modName);
+		if (!mod) {
 			cit = confirmedSpeaks.erase(cit);
 			continue;
 		}
-
-		UInt32 fullFormID = ((UInt32)modIndex << 24) | cit->baseFormID;
+		
+		UInt32 fullFormID;
+		if (static_cast<DataHandler*>(*g_dataHandlerPtr)->SupportsNewFileTypes() && mod->IsSpecial()) {
+			if (mod->IsSmall()) {
+				fullFormID = ((UInt32)mod->modIndex << 24) | ((UInt32)mod->secondIndex << 12) | (cit->baseFormID & 0xFFF);
+			}
+			else if (mod->IsMedium()) {
+				fullFormID = ((UInt32)mod->modIndex << 24) | ((UInt32)mod->secondIndex << 16) | (cit->baseFormID & 0xFFFF);
+			}
+		}
+		else {
+			fullFormID = ((UInt32)mod->modIndex << 24) | cit->baseFormID;
+		}
+		
 		TESTopicInfo* info = reinterpret_cast<TESTopicInfo*>(Engine::LookupFormByID(fullFormID));
 		Actor* speaker = reinterpret_cast<Actor*>(Engine::LookupFormByID(cit->speakerRefID));
 		if (!info || !speaker || !IsWorldRef(speaker)) {
