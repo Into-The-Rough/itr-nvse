@@ -31,6 +31,7 @@
 #include "commands/ExteriorDoorCommands.h"
 #include "commands/ContainerCommands.h"
 #include "commands/HavokCommands.h"
+#include "commands/LimbCommands.h"
 #include "commands/WorldspaceOffsetCommands.h"
 #include "commands/DetectionSoundCommands.h"
 #include "commands/AlertCommands.h"
@@ -261,4 +262,10 @@ void RegisterAllCommands(void* nvsePtr)
 
 	nvse->SetOpcodeBase(0x40E2);
 	CurrentDialogueCommands::RegisterCommands(nvse); //GetCurrentDialogue
+
+	nvse->SetOpcodeBase(0x40E6);
+	LimbCommands::RegisterCommands(nvse); //GetLimbGoneType
+
+	nvse->SetOpcodeBase(0x40E7);
+	HavokCommands::RegisterCommands5(nvse); //GetRigidBodyCenterOfMass, SetRigidBodyCenterOfMass
 }

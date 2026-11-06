@@ -229,6 +229,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="commands\ActorValueCommands.cpp" />
     <ClCompile Include="commands\GroundCommands.cpp" />
     <ClCompile Include="commands\HavokCommands.cpp" />
+    <ClCompile Include="commands\LimbCommands.cpp" />
     <ClCompile Include="commands\PathingCommands.cpp" />
     <ClCompile Include="commands\HairColorCommands.cpp" />
     <ClCompile Include="commands\CasinoBanCommands.cpp" />
@@ -387,6 +388,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="commands\ActorValueCommands.h" />
     <ClInclude Include="commands\GroundCommands.h" />
     <ClInclude Include="commands\HavokCommands.h" />
+    <ClInclude Include="commands\LimbCommands.h" />
     <ClInclude Include="commands\PathingCommands.h" />
     <ClInclude Include="commands\HairColorCommands.h" />
     <ClInclude Include="commands\CasinoBanCommands.h" />

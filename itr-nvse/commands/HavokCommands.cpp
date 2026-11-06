@@ -14,6 +14,7 @@
 #include <cstring>
 
 extern const _ExtractArgs ExtractArgs;
+extern NVSEArrayVarInterface* g_arrInterface;
 
 namespace
 {
@@ -421,6 +422,186 @@ namespace
 		return affected;
 	}
 
+	//engine havok to world factor, 69.99 / 10, set by the static initialiser at 0xF3D3B0
+	static const float* const kHavokToWorld = reinterpret_cast<const float*>(0x11C5880);
+	static constexpr int kAttachedBody = -1;
+
+	bool IsDismemberedLimbWrapper(NiAVObject* object)
+	{
+		const char* name = reinterpret_cast<const NiAVObjectView*>(object)->name;
+		if (!name)
+			return false;
+		for (int i = 0; i < kDismemberedLimbCount; i++)
+			if (!_stricmp(name, kDismemberedLimbNames[i]))
+				return true;
+		return false;
+	}
+
+	//-1 is the ref's 3D minus the detached limb wrappers (stale collision pointers), 0-14 is the children of that wrapper
+	template<typename Fn>
+	bool VisitBody(TESObjectREFR* ref, int bodyPart, Fn&& fn)
+	{
+		NiNode* root = GetRefRootNode(ref);
+		if (!root)
+			return false;
+
+		NiNode* parent = root;
+		if (bodyPart == kAttachedBody) {
+			if (fn(static_cast<NiAVObject*>(root), false))
+				return true;
+		} else {
+			parent = GetDismemberedLimbNode(root, bodyPart);
+			if (!parent)
+				return false;
+		}
+
+		const int count = ThisCall<int>(0x43B480, parent);
+		for (int i = 0; i < count; i++) {
+			NiAVObject* child = ThisCall<NiAVObject*>(0x43B4A0, parent, i);
+			if (!child || (parent == root && IsDismemberedLimbWrapper(child)))
+				continue;
+			if (fn(child, true))
+				return true;
+		}
+		return true;
+	}
+
+	NiAVObject* FindBodyObject(TESObjectREFR* ref, int bodyPart, const char* nodeName)
+	{
+		NiAVObject* found = nullptr;
+		VisitBody(ref, bodyPart, [&](NiAVObject* object, bool recurse) {
+			if (recurse)
+				found = GetObjectByName(object, nodeName);
+			else {
+				const char* name = reinterpret_cast<const NiAVObjectView*>(object)->name;
+				if (name && !_stricmp(name, nodeName))
+					found = object;
+			}
+			return found != nullptr;
+		});
+		return found;
+	}
+
+	//returns the bhkRigidBody when the collision object's havok body is a rigid body
+	void* GetRigidBody(void* collisionObject, void** outHavokBody)
+	{
+		if (!collisionObject)
+			return nullptr;
+		void* worldObject = BhkCollisionObjectAsView(collisionObject)->worldObject;
+		void* hkpObject = BhkWorldObjectGetHavokObject(worldObject);
+		if (!hkpObject || HkpWorldObjectAsView(hkpObject)->collisionType != kHkpWorldObject_CollisionTypeRigidBody)
+			return nullptr;
+		*outHavokBody = hkpObject;
+		return worldObject;
+	}
+
+	struct CenterOfMassRecData {
+		HavokObjectRecData rec;
+		double sum[3];
+		double mass;
+		UInt32 bodies;
+		const float* localCenter;
+	};
+
+	void __cdecl AccumulateCenterOfMass(void* collisionObject, HavokObjectRecData* data)
+	{
+		auto* com = reinterpret_cast<CenterOfMassRecData*>(data);
+		void* hkpObject = nullptr;
+		void* rigidBody = GetRigidBody(collisionObject, &hkpObject);
+		if (!rigidBody || !HkpWorldObjectAsView(hkpObject)->world)
+			return;
+
+		//keyframed and fixed bodies have no finite mass
+		const float massInv = HkpRigidBodyAsView(hkpObject)->massInv;
+		if (!(massInv > 0.0f))
+			return;
+
+		alignas(16) float center[4] = {};
+		ThisCall<void*>(0xC8D240, rigidBody, center); //bhkRigidBody::GetCenterOfMassInWorld
+		const double mass = 1.0 / massInv;
+		com->sum[0] += center[0] * mass;
+		com->sum[1] += center[1] * mass;
+		com->sum[2] += center[2] * mass;
+		com->mass += mass;
+		com->bodies++;
+	}
+
+	void __cdecl ReadCenterOfMass(void* collisionObject, HavokObjectRecData* data)
+	{
+		auto* com = reinterpret_cast<CenterOfMassRecData*>(data);
+		void* hkpObject = nullptr;
+		void* rigidBody = GetRigidBody(collisionObject, &hkpObject);
+		if (!rigidBody || !HkpWorldObjectAsView(hkpObject)->world)
+			return;
+
+		//the base getter, bhkRigidBodyT's override subtracts its translation offset
+		alignas(16) float center[4] = {};
+		ThisCall<void*>(0xC8D240, rigidBody, center); //bhkRigidBody::GetCenterOfMassInWorld
+		com->sum[0] = center[0];
+		com->sum[1] = center[1];
+		com->sum[2] = center[2];
+		com->mass = 1.0;
+		com->bodies = 1;
+	}
+
+	void __cdecl WriteCenterOfMass(void* collisionObject, HavokObjectRecData* data)
+	{
+		auto* com = reinterpret_cast<CenterOfMassRecData*>(data);
+		void* hkpObject = nullptr;
+		if (!GetRigidBody(collisionObject, &hkpObject))
+			return;
+
+		alignas(16) float center[4] = {com->localCenter[0], com->localCenter[1], com->localCenter[2], 0.0f};
+		//every motion vtable has hkpMotion::setCenterOfMassInLocal at +0x2C
+		ThisCall<void>(0xC86380, &HkpRigidBodyAsView(hkpObject)->motionVtbl, center);
+		com->bodies = 1;
+	}
+
+	//nodeName empty is the mass weighted center of every dynamic body in the scope
+	bool GetCenterOfMass(TESObjectREFR* ref, int bodyPart, const char* nodeName, float* outWorld)
+	{
+		CenterOfMassRecData com = {};
+		com.rec.action = 8;
+
+		if (nodeName && nodeName[0]) {
+			NiAVObject* object = FindBodyObject(ref, bodyPart, nodeName);
+			if (!object)
+				return false;
+			BHKWorld_DoObjectRec(object, &com.rec, ReadCenterOfMass);
+		} else {
+			com.rec.recurse = 1;
+			VisitBody(ref, bodyPart, [&](NiAVObject* object, bool recurse) {
+				com.rec.recurse = recurse ? 1 : 0;
+				BHKWorld_DoObjectRec(object, &com.rec, AccumulateCenterOfMass);
+				return false;
+			});
+		}
+
+		if (!com.bodies || !(com.mass > 0.0))
+			return false;
+
+		const double scale = *kHavokToWorld;
+		for (int i = 0; i < 3; i++) {
+			outWorld[i] = (float)(com.sum[i] / com.mass * scale);
+			if (!std::isfinite(outWorld[i]))
+				return false;
+		}
+		return true;
+	}
+
+	bool SetCenterOfMass(TESObjectREFR* ref, int bodyPart, const char* nodeName, const float* localCenter)
+	{
+		NiAVObject* object = FindBodyObject(ref, bodyPart, nodeName);
+		if (!object)
+			return false;
+
+		CenterOfMassRecData com = {};
+		com.rec.action = 8;
+		com.localCenter = localCenter;
+		BHKWorld_DoObjectRec(object, &com.rec, WriteCenterOfMass);
+		return com.bodies != 0;
+	}
+
 	void PushActorAway(BaseProcess* process, Actor* actor, float x, float y, float z, float force)
 	{
 		//this virtual is not at one stable slot across process vtables
@@ -530,12 +711,27 @@ namespace
 		{"mode", kParamType_Integer, 1},
 		{"nodeName", kParamType_String, 1},
 	};
+
+	static ParamInfo kParams_GetRigidBodyCenterOfMass[2] = {
+		{"bodyPart", kParamType_Integer, 0},
+		{"nodeName", kParamType_String, 1},
+	};
+
+	static ParamInfo kParams_SetRigidBodyCenterOfMass[5] = {
+		{"bodyPart", kParamType_Integer, 0},
+		{"nodeName", kParamType_String, 0},
+		{"x", kParamType_Float, 0},
+		{"y", kParamType_Float, 0},
+		{"z", kParamType_Float, 0},
+	};
 }
 
 DEFINE_COMMAND_PLUGIN(IsRigidBodyAtRest, "returns whether a reference's loaded mobile Havok rigid bodies are inactive; optional node name checks a specific rigid body, bRecursive (default 1) includes child bodies", 1, 2, kParams_IsRigidBodyAtRest);
 DEFINE_COMMAND_PLUGIN(Ragdoll, "force actor ragdoll; args limb x y z spin duration flags (flags 1 = front/back flip)", 1, 7, kParams_Ragdoll);
 DEFINE_COMMAND_PLUGIN(RagdollLimb, "jolt one limb of an already-ragdolling actor; args limb x y z", 1, 4, kParams_RagdollLimb);
 DEFINE_COMMAND_PLUGIN(SetDismemberedLimbVelocity, "set velocity on a detached limb; args DismemberLimb bodyPart x y z mode nodeName (mode 0 linear, 1 angular, 2 local linear, 3 local angular; bodyPart -1 targets all; nodeName targets one bone)", 1, 6, kParams_DismemberedLimbVelocity);
+DEFINE_COMMAND_PLUGIN(GetRigidBodyCenterOfMass, "returns a rigid body's world center of mass as an array x y z in game units; args bodyPart nodeName (bodyPart -1 is the attached body, 0-14 that detached limb; no nodeName gives the mass weighted center of every dynamic body)", 1, 2, kParams_GetRigidBodyCenterOfMass);
+DEFINE_COMMAND_PLUGIN(SetRigidBodyCenterOfMass, "sets a rigid body's local center of mass in havok units, like the bhkRigidBody Center field; args bodyPart nodeName x y z (bodyPart -1 is the attached body, 0-14 that detached limb)", 1, 5, kParams_SetRigidBodyCenterOfMass);
 
 bool Cmd_IsRigidBodyAtRest_Execute(COMMAND_ARGS)
 {
@@ -658,6 +854,50 @@ bool Cmd_SetDismemberedLimbVelocity_Execute(COMMAND_ARGS)
 	return true;
 }
 
+bool Cmd_GetRigidBodyCenterOfMass_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	int bodyPart = kAttachedBody;
+	char nodeName[0x200] = {};
+	if (!ExtractArgs(EXTRACT_ARGS, &bodyPart, &nodeName))
+		return true;
+	if (!g_arrInterface || !thisObj || bodyPart < kAttachedBody || bodyPart >= kDismemberedLimbCount)
+		return true;
+
+	float center[3] = {};
+	if (!GetCenterOfMass(thisObj, bodyPart, nodeName, center)) {
+		if (IsConsoleMode())
+			Console_Print("GetRigidBodyCenterOfMass >> no rigid body");
+		return true;
+	}
+
+	const NVSEArrayVarInterface::Element data[3] = {(double)center[0], (double)center[1], (double)center[2]};
+	if (NVSEArrayVarInterface::Array* arr = g_arrInterface->CreateArray(data, 3, scriptObj))
+		g_arrInterface->AssignCommandResult(arr, result);
+	if (IsConsoleMode())
+		Console_Print("GetRigidBodyCenterOfMass >> %.3f %.3f %.3f", center[0], center[1], center[2]);
+	return true;
+}
+
+bool Cmd_SetRigidBodyCenterOfMass_Execute(COMMAND_ARGS)
+{
+	*result = 0;
+	int bodyPart = kAttachedBody;
+	char nodeName[0x200] = {};
+	float center[3] = {};
+	if (!ExtractArgs(EXTRACT_ARGS, &bodyPart, &nodeName, &center[0], &center[1], &center[2]))
+		return true;
+	if (!thisObj || !nodeName[0] || bodyPart < kAttachedBody || bodyPart >= kDismemberedLimbCount)
+		return true;
+	if (!std::isfinite(center[0]) || !std::isfinite(center[1]) || !std::isfinite(center[2]))
+		return true;
+
+	*result = SetCenterOfMass(thisObj, bodyPart, nodeName, center) ? 1.0 : 0.0;
+	if (IsConsoleMode())
+		Console_Print("SetRigidBodyCenterOfMass >> %s", *result != 0.0 ? "set" : "no rigid body");
+	return true;
+}
+
 namespace HavokCommands {
 
 void RegisterCommands(void* nvsePtr)
@@ -683,6 +923,15 @@ void RegisterCommands4(void* nvsePtr)
 	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 	kCommandInfo_SetDismemberedLimbVelocity.shortName = "SetDismLimbVel";
 	nvse->RegisterCommand(&kCommandInfo_SetDismemberedLimbVelocity);
+}
+
+void RegisterCommands5(void* nvsePtr)
+{
+	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+	kCommandInfo_GetRigidBodyCenterOfMass.shortName = "GetRigidBodyCoM";
+	kCommandInfo_SetRigidBodyCenterOfMass.shortName = "SetRigidBodyCoM";
+	nvse->RegisterTypedCommand(&kCommandInfo_GetRigidBodyCenterOfMass, kRetnType_Array);
+	nvse->RegisterCommand(&kCommandInfo_SetRigidBodyCenterOfMass);
 }
 
 void ClearState()

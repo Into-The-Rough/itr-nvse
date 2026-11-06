@@ -24,6 +24,18 @@ struct ExtraAshPileRefView {
 	TESObjectREFR* sourceRef;
 };
 
+//one entry per lost limb, written by 0x430410
+struct DismemberedLimbView {
+	UInt8 bodyPart;
+	UInt8 exploded;
+	UInt8 objectsMatched;
+	UInt8 removed;
+	void* objectsVtbl;
+	void** objects;
+	UInt32 numObjects;
+	UInt32 objectsCapacity;
+};
+
 struct ExtraDismemberedLimbsView : BSExtraData {
 	UInt16 dismemberedMask;
 	UInt8 pad0E[2];
@@ -32,9 +44,18 @@ struct ExtraDismemberedLimbsView : BSExtraData {
 	SInt32 unk18;
 	bool wasEaten;
 	UInt8 pad1D[3];
+	void* limbsVtbl;
+	DismemberedLimbView** limbs;
+	UInt32 numLimbs;
+	UInt32 limbsCapacity;
 };
 
-static_assert(sizeof(ExtraDismemberedLimbsView) == 0x20);
+static_assert(sizeof(DismemberedLimbView) == 0x14);
+static_assert(offsetof(DismemberedLimbView, exploded) == 0x01);
+static_assert(offsetof(DismemberedLimbView, objects) == 0x08);
+static_assert(sizeof(ExtraDismemberedLimbsView) == 0x30);
+static_assert(offsetof(ExtraDismemberedLimbsView, limbs) == 0x24);
+static_assert(offsetof(ExtraDismemberedLimbsView, numLimbs) == 0x28);
 static_assert(offsetof(ExtraDismemberedLimbsView, dismemberedMask) == 0x0C);
 static_assert(offsetof(ExtraDismemberedLimbsView, weapon) == 0x14);
 static_assert(offsetof(ExtraDismemberedLimbsView, wasEaten) == 0x1C);
