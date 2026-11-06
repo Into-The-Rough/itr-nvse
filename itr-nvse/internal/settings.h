@@ -1,5 +1,6 @@
 #pragma once
 #include <Windows.h>
+#include <cstdlib>
 
 namespace Settings
 {
@@ -23,6 +24,8 @@ namespace Settings
 
 	inline int bSlowMotionPhysicsFix = 1;
 	inline int bSmallDebrisCap = 1;
+	inline float fSmallDebrisCullDelay = 3.0f;
+	inline int iSmallDebrisMaxTrackedChunks = 8192;
 	inline int bExplodingPantsFix = 0;
 	inline int bKillActorXPFix = 1;
 	inline int bReversePickpocketNoKarma = 0;
@@ -120,6 +123,14 @@ namespace Settings
 		return GetPrivateProfileIntA(section, key, defaultValue, iniPath);
 	}
 
+	inline float GetINIFloat(const char* section, const char* key, float defaultValue)
+	{
+		char text[32];
+		if (!GetPrivateProfileStringA(section, key, "", text, sizeof(text), iniPath) || !text[0])
+			return defaultValue;
+		return (float)atof(text);
+	}
+
 	inline bool IntegrationEnables(const char* section, const char* key)
 	{
 		char dirPath[MAX_PATH];
@@ -181,6 +192,8 @@ namespace Settings
 
 		bSlowMotionPhysicsFix = GetINIInt("Tweaks", "bSlowMotionPhysicsFix", 1);
 		bSmallDebrisCap = GetINIInt("Tweaks", "bSmallDebrisCap", 1);
+		fSmallDebrisCullDelay = GetINIFloat("SmallDebrisCap", "fCullDelay", 3.0f);
+		iSmallDebrisMaxTrackedChunks = GetINIInt("SmallDebrisCap", "iMaxTrackedChunks", 8192);
 		bExplodingPantsFix = GetINIInt("Tweaks", "bExplodingPantsFix", 0);
 		bKillActorXPFix = GetINIInt("Tweaks", "bKillActorXPFix", 1);
 		bReversePickpocketNoKarma = GetINIInt("Tweaks", "bReversePickpocketNoKarma", 0);

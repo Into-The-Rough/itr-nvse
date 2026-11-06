@@ -1,7 +1,5 @@
 #pragma once
 
-namespace RagdollPhantomWorldFix
-{
+namespace RagdollPhantomWorldFix {
 	void Init();
-	void Update();
 }

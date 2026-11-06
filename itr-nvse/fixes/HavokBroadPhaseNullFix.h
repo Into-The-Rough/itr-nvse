@@ -1,6 +1,5 @@
 #pragma once
 
-namespace HavokBroadPhaseNullFix
-{
+namespace HavokBroadPhaseNullFix {
 	void Init();
 }

@@ -1,6 +1,5 @@
 #pragma once
 
-namespace ActorRagdollLifetimeFix
-{
+namespace ActorRagdollLifetimeFix {
 	void Init();
 }

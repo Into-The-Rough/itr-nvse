@@ -691,7 +691,6 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 
 		case kMessage_MainGameLoop:
-			RagdollPhantomWorldFix::Update();
 			VATSProjectileFix::Update();
 			SmallDebrisCap::Update();
 			AshPileNames::Update();

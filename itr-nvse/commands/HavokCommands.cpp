@@ -557,7 +557,7 @@ namespace
 		com->bodies = 1;
 	}
 
-	//nodeName empty is the mass weighted center of every dynamic body in the scope
+	//nodeName empty is the mass weighted centre of every dynamic body in the scope
 	bool GetCenterOfMass(TESObjectREFR* ref, int bodyPart, const char* nodeName, float* outWorld)
 	{
 		CenterOfMassRecData com = {};
@@ -730,8 +730,8 @@ DEFINE_COMMAND_PLUGIN(IsRigidBodyAtRest, "returns whether a reference's loaded m
 DEFINE_COMMAND_PLUGIN(Ragdoll, "force actor ragdoll; args limb x y z spin duration flags (flags 1 = front/back flip)", 1, 7, kParams_Ragdoll);
 DEFINE_COMMAND_PLUGIN(RagdollLimb, "jolt one limb of an already-ragdolling actor; args limb x y z", 1, 4, kParams_RagdollLimb);
 DEFINE_COMMAND_PLUGIN(SetDismemberedLimbVelocity, "set velocity on a detached limb; args DismemberLimb bodyPart x y z mode nodeName (mode 0 linear, 1 angular, 2 local linear, 3 local angular; bodyPart -1 targets all; nodeName targets one bone)", 1, 6, kParams_DismemberedLimbVelocity);
-DEFINE_COMMAND_PLUGIN(GetRigidBodyCenterOfMass, "returns a rigid body's world center of mass as an array x y z in game units; args bodyPart nodeName (bodyPart -1 is the attached body, 0-14 that detached limb; no nodeName gives the mass weighted center of every dynamic body)", 1, 2, kParams_GetRigidBodyCenterOfMass);
-DEFINE_COMMAND_PLUGIN(SetRigidBodyCenterOfMass, "sets a rigid body's local center of mass in havok units, like the bhkRigidBody Center field; args bodyPart nodeName x y z (bodyPart -1 is the attached body, 0-14 that detached limb)", 1, 5, kParams_SetRigidBodyCenterOfMass);
+DEFINE_COMMAND_PLUGIN(GetRigidBodyCenterOfMass, "returns a rigid body's world centre of mass as an array x y z in game units; args bodyPart nodeName (bodyPart -1 is the attached body, 0-14 that detached limb; no nodeName gives the mass weighted centre of every dynamic body)", 1, 2, kParams_GetRigidBodyCenterOfMass);
+DEFINE_COMMAND_PLUGIN(SetRigidBodyCenterOfMass, "sets a rigid body's local centre of mass in havok units, like the bhkRigidBody Center field; args bodyPart nodeName x y z (bodyPart -1 is the attached body, 0-14 that detached limb)", 1, 5, kParams_SetRigidBodyCenterOfMass);
 
 bool Cmd_IsRigidBodyAtRest_Execute(COMMAND_ARGS)
 {
