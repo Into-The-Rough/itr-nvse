@@ -101,8 +101,8 @@ static bool ParseModNameFromVoicePath(const char* path, char* outName, size_t ou
 	return len > 0;
 }
 
-
-static ModInfo* FindMod(const char* modName) {
+static ModInfo* FindMod(const char* modName)
+{
 	return ThisCall<ModInfo*>(0x462F40, *g_dataHandlerPtr, modName);
 }
 
@@ -609,20 +609,18 @@ void Update()
 			cit = confirmedSpeaks.erase(cit);
 			continue;
 		}
-		
+
 		UInt32 fullFormID;
 		if (static_cast<DataHandler*>(*g_dataHandlerPtr)->SupportsNewFileTypes() && mod->IsSpecial()) {
 			if (mod->IsSmall()) {
 				fullFormID = ((UInt32)mod->modIndex << 24) | ((UInt32)mod->secondIndex << 12) | (cit->baseFormID & 0xFFF);
-			}
-			else if (mod->IsMedium()) {
+			} else if (mod->IsMedium()) {
 				fullFormID = ((UInt32)mod->modIndex << 24) | ((UInt32)mod->secondIndex << 16) | (cit->baseFormID & 0xFFFF);
 			}
-		}
-		else {
+		} else {
 			fullFormID = ((UInt32)mod->modIndex << 24) | cit->baseFormID;
 		}
-		
+
 		TESTopicInfo* info = reinterpret_cast<TESTopicInfo*>(Engine::LookupFormByID(fullFormID));
 		Actor* speaker = reinterpret_cast<Actor*>(Engine::LookupFormByID(cit->speakerRefID));
 		if (!info || !speaker || !IsWorldRef(speaker)) {

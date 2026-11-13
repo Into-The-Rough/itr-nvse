@@ -75,6 +75,7 @@ static_assert(offsetof(MobileObject, baseProcess) == 0x68);
 static_assert(offsetof(Actor, magicTarget) == 0x94);
 static_assert(offsetof(Actor, avOwner) == 0xA4);
 static_assert(offsetof(Actor, ragDollController) == 0xAC);
+static_assert(offsetof(Actor, ragDollPentrationUtil) == 0xB0);
 static_assert(offsetof(Actor, lifeState) == 0x108);
 static_assert(sizeof(Character) == 0x1C8);
 static_assert(sizeof(CharacterView) == sizeof(Character));

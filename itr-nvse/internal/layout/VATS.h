@@ -56,10 +56,13 @@ static_assert(offsetof(VATSTargetView, targetRef) == 0x00);
 static_assert(offsetof(VATSTargetView, type) == 0x04);
 static_assert(offsetof(VATSTargetView, bodyParts) == 0x08);
 static_assert(sizeof(VATSBodyPartView) == 0x3C);
+static_assert(offsetof(VATSBodyPartView, bodyPartID) == 0x20);
 static_assert(offsetof(VATSBodyPartView, percentVisible) == 0x24);
 static_assert(offsetof(VATSBodyPartView, hitChance) == 0x28);
 static_assert(offsetof(VATSBodyPartView, isOnScreen) == 0x2C);
 static_assert(offsetof(VATSBodyPartView, chanceCalculated) == 0x2D);
+static_assert(offsetof(VATSBodyPartView, firstTimeShown) == 0x2E);
+static_assert(offsetof(VATSBodyPartView, needsRecalc) == 0x2F);
 static_assert(sizeof(VATSTargetView) == 0x24);
 
 inline UInt32 VATSCameraDataGetMode(void* vatsCameraData)

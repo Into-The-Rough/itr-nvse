@@ -65,6 +65,7 @@
 #include "handlers/OnPreDamageHandler.h"
 
 #include "fixes/SlowMotionPhysicsFix.h"
+#include "fixes/SmallDebrisCap.h"
 #include "fixes/VATSProjectileFix.h"
 #include "fixes/VATSLimbFix.h"
 #include "fixes/KillActorXPFix.h"
@@ -86,6 +87,9 @@
 #include "fixes/PathingNullActorFix.h"
 #include "fixes/NavMeshInfoCrashFix.h"
 #include "fixes/InitHavokCrashFix.h"
+#include "fixes/ActorRagdollLifetimeFix.h"
+#include "fixes/HavokBroadPhaseNullFix.h"
+#include "fixes/RagdollPhantomWorldFix.h"
 #include "fixes/OwnedCorpses.h"
 #include "fixes/DetectionFollowerCrashFix.h"
 #include "fixes/GetLineOfSightCrashFix.h"
@@ -398,8 +402,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				ReversePickpocketNoKarmaFix::Init(Settings::bReversePickpocketNoKarma != 0);
 				if (Settings::bSaveFileSize)
 					SaveFileSizeHandler::Init((void*)s_nvseInterface);
-				if (Settings::bVATSProjectileFix)
-					VATSProjectileFix::Init();
+				if (Settings::bVATSProjectileFix || Settings::bVATSDiagnostic)
+					VATSProjectileFix::Init(Settings::bVATSProjectileFix != 0, Settings::bVATSDiagnostic != 0);
 				if (Settings::bVATSLimbFix)
 					VATSLimbFix::Init();
 				OwnedBeds::Init(Settings::bOwnedBeds != 0);
@@ -435,6 +439,12 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					NavMeshInfoCrashFix::Init();
 				if (Settings::bInitHavokCrashFix)
 					InitHavokCrashFix::Init();
+				if (Settings::bActorRagdollLifetimeFix)
+					ActorRagdollLifetimeFix::Init();
+				if (Settings::bHavokBroadPhaseNullFix)
+					HavokBroadPhaseNullFix::Init();
+				if (Settings::bRagdollPhantomWorldFix)
+					RagdollPhantomWorldFix::Init();
 				if (Settings::bDetectionFollowerCrashFix)
 					DetectionFollowerCrashFix::Init();
 				if (Settings::bGetLineOfSightCrashFix)
@@ -468,6 +478,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 
 		case NVSEMessagingInterface::kMessage_PostPostLoad:
+			SmallDebrisCap::InitHooks();
 			ItemModFlagSafety::InitJIPModFlagGate(); //after JIP's PostLoad installs GetEntryDataModFlagsHook
 			FallDamageHandler::InstallHook(); //after Stewie's bPowerArmorScalesFallDamage claims 0x8A63EC
 			DialogueCameraHandler::InstallCameraHooks(); //always install - hooks check bDialogueCamera at runtime
@@ -481,8 +492,13 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				ELMO::Init(Settings::bSuppressObjectives != 0, Settings::bSuppressReputation != 0);
 			break;
 
+		case NVSEMessagingInterface::kMessage_ExitToMainMenu:
+			SmallDebrisCap::ClearState(true);
+			break;
+
 		case NVSEMessagingInterface::kMessage_PreLoadGame:
 			g_isLoadingSave = true;
+			SmallDebrisCap::ClearState(true);
 			StartNewGameCommand::Abort();
 			HavokCommands::ClearState();
 			DetectionSoundCommands::ClearState();
@@ -530,6 +546,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 		case NVSEMessagingInterface::kMessage_NewGame:
 		case NVSEMessagingInterface::kMessage_PostLoadGame:
 			g_isLoadingSave = false;
+			SmallDebrisCap::ClearState(false);
 			if (msg->type == NVSEMessagingInterface::kMessage_NewGame)
 				CenterOnCellAltCommand::OnNewGame();
 			else
@@ -612,6 +629,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					bool oldSuppressReputation = Settings::bSuppressReputation != 0;
 					Settings::Load();
 					OpenDebugLog();
+					SmallDebrisCap::UpdateSettings();
 					DialogueCameraHandler::SetEnabled(Settings::bDialogueCamera != 0);
 
 					LocationVisitPopup::UpdateSettings(Settings::iLocationVisitCooldownSeconds, Settings::bLocationVisitDisableSound != 0);
@@ -673,6 +691,8 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			break;
 
 		case kMessage_MainGameLoop:
+			VATSProjectileFix::Update();
+			SmallDebrisCap::Update();
 			AshPileNames::Update();
 			if (Settings::bStuckCombatStateFix)
 				StuckCombatStateFix::Update();

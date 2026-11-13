@@ -57,6 +57,9 @@
 - SetDismemberedLimbVelocity - set world linear or angular velocity on an engine-created detached limb copy; uses DismemberLimb body-part IDs, or -1 for all, with an optional detached bone name
 - Gesture - procedural head gestures (nod/shake/tilt) with smoothstep blending, composed additively on the live animated pose so gestures layer over headtracking
 - IsRigidBodyAtRest - check whether loaded mobile Havok rigid bodies under a ref are inactive
+- GetRigidBodyCenterOfMass (GetRigidBodyCoM) - world centre of mass of one rigid body in game units, or the mass weighted centre of all dynamic bodies when no node is given; bodyPart -1 is the attached body, 0-14 a detached limb
+- SetRigidBodyCenterOfMass (SetRigidBodyCoM) - set one rigid body's local centre of mass in Havok units, same as the bhkRigidBody Center field in NifSkope
+- GetLimbGoneType - 0 if a body part is intact, 1 if it was dismembered, 2 if it was exploded; uses DismemberLimb body part IDs
 - SetOnContactWatch - enable physics contact tracking for a ref, or for all refs using a base form
 - GetOnContactWatch - get ref or base form contact watch state
 - GetTargetLastSeenLocation - array [x,y,z] of where observer last saw target
@@ -220,6 +223,7 @@
 
 ## Fixes
 
+- SmallDebrisCap - fade out and remove the oldest small debris above iDebrisMaxCount, delay and tracking budget in the [SmallDebrisCap] INI section
 - SlowMotionPhysicsFix - clamp physics timestep to prevent ragdoll energy gain during extreme slowmo
 - ExplodingPantsFix - prevent explosions from worn projectile items
 - VATSProjectileFix - fix projectile hit chance in VATS by correcting visibility
@@ -242,6 +246,9 @@
 - PathingNullActorFix - fix crash from null actor in pathing code
 - NavMeshInfoCrashFix - fix crash in NavMesh info processing
 - InitHavokCrashFix - fix crash during Havok physics initialization
+- ActorRagdollLifetimeFix - clear ragdoll pointers during actor destruction before later cleanup can reuse freed physics data (enabled by default)
+- HavokBroadPhaseNullFix - avoid a null entity read during collision processing while preserving the physics unlock (enabled by default)
+- RagdollPhantomWorldFix - fix crash from ragdoll rays cast by a phantom that has left the physics world (enabled by default)
 - DetectionFollowerCrashFix - fix null dereference in BuildFollowerListRecursive during cell transitions
 - GetLineOfSightCrashFix - fix crash from a null node in the line-of-sight check
 - LockpickOwnerKarmaFix - no karma loss picking a lock you already own

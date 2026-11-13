@@ -193,9 +193,8 @@ namespace QuickReadNote
 		} else if (noteType == kBGSNoteType_Voice) {
 			CharacterView* character = static_cast<CharacterView*>(Engine::GameHeapAlloc(sizeof(CharacterView)));
 			ThisCall<void>(0x8D1F40, character, false);
-			//form flag 0x4000 marks the scratch character temporary so it never saves,
-			//vanilla MapMenu::DoClick sets it via TESForm::MarkAsTemporary 0x484490
-			character->flags |= 0x00004000;
+			//same as vanilla MapMenu::DoClick, unlinks the fresh FF id from the form table before flagging temporary
+			ThisCall<void>(0x484490, character); //TESForm::MarkAsTemporary
 			ThisCall<void>(0x575690, character, BGSNoteGetSpeaker(note));
 
 			void* voice = BGSNoteGetVoice(note);

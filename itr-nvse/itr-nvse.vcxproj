@@ -149,6 +149,8 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="handlers\OnMenuSideChangeHandler.cpp" />
     <ClCompile Include="handlers\OnMenuListRefreshHandler.cpp" />
     <ClCompile Include="fixes\SlowMotionPhysicsFix.cpp" />
+    <ClCompile Include="fixes\SmallDebrisCap.cpp" />
+    <ClCompile Include="fixes\SmallDebrisCapEngine.cpp" />
     <ClCompile Include="fixes\VATSProjectileFix.cpp" />
     <ClCompile Include="fixes\VATSLimbFix.cpp" />
     <ClCompile Include="fixes\KillActorXPFix.cpp" />
@@ -171,6 +173,9 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="fixes\PathingNullActorFix.cpp" />
     <ClCompile Include="fixes\NavMeshInfoCrashFix.cpp" />
     <ClCompile Include="fixes\InitHavokCrashFix.cpp" />
+    <ClCompile Include="fixes\ActorRagdollLifetimeFix.cpp" />
+    <ClCompile Include="fixes\HavokBroadPhaseNullFix.cpp" />
+    <ClCompile Include="fixes\RagdollPhantomWorldFix.cpp" />
     <ClCompile Include="fixes\DetectionFollowerCrashFix.cpp" />
     <ClCompile Include="fixes\GetLineOfSightCrashFix.cpp" />
     <ClCompile Include="fixes\LockpickOwnerKarmaFix.cpp" />
@@ -224,6 +229,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="commands\ActorValueCommands.cpp" />
     <ClCompile Include="commands\GroundCommands.cpp" />
     <ClCompile Include="commands\HavokCommands.cpp" />
+    <ClCompile Include="commands\LimbCommands.cpp" />
     <ClCompile Include="commands\PathingCommands.cpp" />
     <ClCompile Include="commands\HairColorCommands.cpp" />
     <ClCompile Include="commands\CasinoBanCommands.cpp" />
@@ -281,6 +287,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="internal\BSSpinLock.h" />
     <ClInclude Include="internal\EventDispatch.h" />
     <ClInclude Include="internal\FootContactLogic.h" />
+    <ClInclude Include="internal\NearMissTracking.h" />
     <ClInclude Include="internal\TempEffectLogic.h" />
     <ClInclude Include="internal\TempEffects.h" />
     <ClInclude Include="internal\EngineFunctions.h" />
@@ -313,6 +320,8 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="handlers\OnMenuSideChangeHandler.h" />
     <ClInclude Include="handlers\OnMenuListRefreshHandler.h" />
     <ClInclude Include="fixes\SlowMotionPhysicsFix.h" />
+    <ClInclude Include="fixes\SmallDebrisCap.h" />
+    <ClInclude Include="fixes\SmallDebrisCapEngine.h" />
     <ClInclude Include="fixes\VATSProjectileFix.h" />
     <ClInclude Include="fixes\VATSLimbFix.h" />
     <ClInclude Include="fixes\KillActorXPFix.h" />
@@ -335,6 +344,9 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="fixes\PathingNullActorFix.h" />
     <ClInclude Include="fixes\NavMeshInfoCrashFix.h" />
     <ClInclude Include="fixes\InitHavokCrashFix.h" />
+    <ClInclude Include="fixes\ActorRagdollLifetimeFix.h" />
+    <ClInclude Include="fixes\HavokBroadPhaseNullFix.h" />
+    <ClInclude Include="fixes\RagdollPhantomWorldFix.h" />
     <ClInclude Include="fixes\DetectionFollowerCrashFix.h" />
     <ClInclude Include="fixes\GetLineOfSightCrashFix.h" />
     <ClInclude Include="fixes\LockpickOwnerKarmaFix.h" />
@@ -376,6 +388,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="commands\ActorValueCommands.h" />
     <ClInclude Include="commands\GroundCommands.h" />
     <ClInclude Include="commands\HavokCommands.h" />
+    <ClInclude Include="commands\LimbCommands.h" />
     <ClInclude Include="commands\PathingCommands.h" />
     <ClInclude Include="commands\HairColorCommands.h" />
     <ClInclude Include="commands\CasinoBanCommands.h" />

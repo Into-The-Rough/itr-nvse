@@ -6,6 +6,8 @@
 #include "internal/EngineFunctions.h"
 #include "internal/Detours.h"
 #include "internal/EventDispatch.h"
+#include "internal/NearMissTracking.h"
+#include "internal/globals.h"
 #include "internal/settings.h"
 #include <Windows.h>
 #include <math.h>
@@ -18,7 +20,6 @@ constexpr UInt32 kOff_NearestActors = 0x88;
 constexpr UInt32 kOff_NearestCount  = 0x150;
 constexpr UInt32 kMaxNearestActors  = 50;
 
-constexpr UInt32 kProj_ImpactList = 0x88; //tList<ImpactData>, one entry per contact, struck ref at +0
 constexpr UInt32 kRefr_Position   = 0x30;
 
 constexpr float kActorBodyHeight = 128.0f;
@@ -27,7 +28,7 @@ constexpr float kActorBodyHeight = 128.0f;
 constexpr UInt32 kLifeState_Alive      = 0;
 constexpr UInt32 kLifeState_Restrained = 5; //engine Actor::IsRestrained compares lifeState == 5
 
-struct Vec3 { float x, y, z; };
+using Vec3 = NearMissTracking::Point3;
 
 //projectile update runs on the main thread but inside the mobile-object iteration, so we
 //queue refIDs here and dispatch from the main loop to keep scripts off the live list
@@ -38,23 +39,27 @@ typedef int (__thiscall* ProjectileUpdate_t)(void*, int);
 static Detours::JumpDetour s_detour;
 static std::unordered_map<UInt64, UInt32> s_lastFire;
 static std::vector<QueuedNearMiss> s_pending;
+static NearMissTracking::FlightHistory s_flights;
+static UInt32 s_generation = 0;
+static bool s_dispatching = false;
 
 static void NearMissProbe(TESObjectREFR*, void*) {}
 static EventDispatch::ListenerProbe s_probe = { "ITR:OnNearMiss", "ITR_OnNearMissProbe", NearMissProbe };
 static volatile UInt8 s_hasListeners = 1;
 
-static void GetRefPos(void* ref, Vec3* out) {
-	const float* p = (const float*)((UInt8*)ref + kRefr_Position);
-	out->x = p[0]; out->y = p[1]; out->z = p[2];
+static Vec3 GetRefPos(TESObjectREFR* ref)
+{
+	return {ref->posX, ref->posY, ref->posZ};
 }
 
 static float Clamp01(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
 
 //true if the round already logged a collision with this actor this frame - it hit rather
 //than passed. the move populates impactDataList before this scan runs
-static bool ProjectileHitActor(void* proj, void* actor) {
-	for (void** node = (void**)((UInt8*)proj + kProj_ImpactList); node; node = (void**)node[1])
-		if (node[0] && *(void**)node[0] == actor) return true;
+static bool ProjectileHitActor(ProjectileView* proj, Actor* actor)
+{
+	for (auto it = proj->impacts.Begin(); !it.End(); ++it)
+		if (*it && it->ref == actor) return true;
 	return false;
 }
 
@@ -109,7 +114,8 @@ static bool PassesCooldown(TESObjectREFR* shooter, TESObjectREFR* victim, UInt32
 	return true;
 }
 
-static void ScanFlight(void* proj, TESObjectREFR* shooter, TESObjectWEAP* weapon, const Vec3& a, const Vec3& b) {
+static void ScanFlight(ProjectileView* proj, TESObjectREFR* shooter, TESObjectWEAP* weapon, const Vec3& a, const Vec3& b)
+{
 	const float radius = Settings::fNearMissRadius;
 	if (radius <= 0.0f) return;
 	const float r2 = radius * radius;
@@ -123,22 +129,21 @@ static void ScanFlight(void* proj, TESObjectREFR* shooter, TESObjectWEAP* weapon
 	UInt32 count = *(UInt32*)((UInt8*)g_processManager + kOff_NearestCount);
 	if (count > kMaxNearestActors) count = kMaxNearestActors;
 
-	for (UInt32 i = 0; i < count; ++i) {
-		Actor* actor = static_cast<Actor*>(nearest[i]);
-		if (!actor || actor == shooter) continue;
+	auto test = [&](Actor* actor) {
+		if (!actor || actor == shooter) return;
 		const UInt32 ls = actor->lifeState;
-		if (ls != kLifeState_Alive && ls != kLifeState_Restrained) continue; //corpses and downed actors do not near-miss
+		if (ls != kLifeState_Alive && ls != kLifeState_Restrained) return; //corpses and downed actors do not near-miss
 
 		const float* p = (const float*)((UInt8*)actor + kRefr_Position);
 		//where along this frame's sweep the actor's column lies - outside [0,1] is another frame
 		const float midz = p[2] + kActorBodyHeight * 0.5f;
 		const float u = ((p[0]-a.x)*abx + (p[1]-a.y)*aby + (midz-a.z)*abz) / seg2;
-		if (u < 0.0f || u > 1.0f) continue;
+		if (u < 0.0f || u > 1.0f) return;
 
 		Vec3 feet = { p[0], p[1], p[2] };
 		Vec3 head = { p[0], p[1], p[2] + kActorBodyHeight };
 		const float d2 = SegSegDistSq(a, b, feet, head);
-		if (d2 > r2 || ProjectileHitActor(proj, actor) || !PassesCooldown(shooter, actor, now)) continue;
+		if (d2 > r2 || ProjectileHitActor(proj, actor) || !PassesCooldown(shooter, actor, now)) return;
 
 		s_pending.push_back({
 			actor->refID,
@@ -146,100 +151,120 @@ static void ScanFlight(void* proj, TESObjectREFR* shooter, TESObjectWEAP* weapon
 			weapon ? weapon->refID : 0,
 			sqrtf(d2)
 		});
-	}
-}
+	};
 
-static int __fastcall HookProjectileUpdate(void* proj, void*, int a2) {
-	TESObjectREFR* shooter = nullptr;
-	TESObjectWEAP* weapon = nullptr;
-	const bool active = s_hasListeners && g_eventManagerInterface;
-	if (active) {
-		shooter = ProjectileGetSourceRef(proj);
-		weapon = ProjectileGetSourceWeapon(proj);
-	}
-
-	int ret = s_detour.GetTrampoline<ProjectileUpdate_t>()(proj, a2);
-
-	if (!active) return ret;
-	if (!TESFormIsActorRef(shooter) || !TESFormIsWeapon(weapon)) return ret;
-
-	//kVector is the launch aim on the first update and the applied move delta afterwards
-	//(Projectile::Move -> SetVector)
-	const float* v = (const float*)((UInt8*)proj + 0x104); //kVector
-	const float vlen = sqrtf(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-	if (vlen < 0.001f) return ret;
-
-	Vec3 pos;
-	GetRefPos(proj, &pos);
-
-	Vec3 a, b;
-	const float lifeTime = *(const float*)((UInt8*)proj + 0xD8);
-	if (lifeTime <= *g_frameTimePtr * 1.5f) {
-		//launch update - player rounds are near hitscan, one update with no reported motion,
-		//so sweep the aim line out to weapon range. the shooter is excluded by ref, so no
-		//muzzle offset, which would otherwise clip close friendlies
-		float range = *(float*)((UInt8*)proj + 0xD4); //fRange
-		if (range < 256.0f) range = 256.0f;
-		if (range > 8192.0f) range = 8192.0f;
-
-		const float inv = 1.0f / vlen;
-		const float dnx = v[0]*inv, dny = v[1]*inv, dnz = v[2]*inv;
-
-		//a round that already struck something stops there - no near-misses behind cover
-		for (void** node = (void**)((UInt8*)proj + kProj_ImpactList); node; node = (void**)node[1]) {
-			if (!node[0]) continue;
-			const float* ip = (const float*)((UInt8*)node[0] + 0x04); //Projectile::ImpactData.pos
-			const float t = (ip[0]-pos.x)*dnx + (ip[1]-pos.y)*dny + (ip[2]-pos.z)*dnz;
-			if (t >= 0.0f && t < range) range = t;
-		}
-		if (range <= 0.0f) return ret;
-
-		a = pos;
-		b = { pos.x + dnx*range, pos.y + dny*range, pos.z + dnz*range };
-	} else {
-		//in flight - sweep only the path travelled this update
-		a = { pos.x - v[0], pos.y - v[1], pos.z - v[2] };
-		b = pos;
-	}
-
-	ScanFlight(proj, shooter, weapon, a, b);
-	return ret;
+	for (UInt32 i = 0; i < count; ++i)
+		test(static_cast<Actor*>(nearest[i]));
+	//the nearest list is ranked by distance to the player, so the player is never in it
+	test(*g_thePlayerPtr);
 }
 
 namespace OnNearMissHandler {
-bool Init(void* nvseInterface) {
-	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
-	if (nvse->isEditor) return false;
+	static int __fastcall HookProjectileUpdate(TESObjectREFR* ref, void*, int a2)
+	{
+		auto original = s_detour.GetTrampoline<ProjectileUpdate_t>();
+		if (!s_hasListeners || !g_eventManagerInterface || g_isLoadingSave)
+			return original(ref, a2);
+		auto* proj = reinterpret_cast<ProjectileView*>(ref);
+		if (!TESFormIsActorRef(proj->sourceRef) || !TESFormIsWeapon(proj->sourceWeap))
+			return original(ref, a2);
 
-	//prologue: push ebx; mov ebx,esp; push ecx; and esp,~0xF; add esp,4 = 1+2+1+3+3 = 10
-	return s_detour.WriteRelJump(kAddr_ProjectileUpdate, HookProjectileUpdate, 10);
-}
+		const UInt32 refID = ref->refID;
+		const UInt32 shooterID = proj->sourceRef->refID;
+		const UInt32 weaponID = proj->sourceWeap->refID;
+		const UInt32 generation = s_generation;
+		const bool hitscan = (proj->flags & kProjectileRefFlag_Hitscan) != 0;
+		const float lifeBefore = proj->lifeTime;
+		const Vec3 before = GetRefPos(ref);
+		const NiVector3 direction = proj->vector;
+		const int ret = original(ref, a2);
 
-void ClearState() {
-	s_pending.clear();
-	s_lastFire.clear();
-}
+		//impact callbacks can delete forms or clear state during the original update
+		if (generation != s_generation || Engine::LookupFormByID(refID) != ref) return ret;
+		auto* shooter = static_cast<TESObjectREFR*>(Engine::LookupFormByID(shooterID));
+		auto* weapon = static_cast<TESObjectWEAP*>(Engine::LookupFormByID(weaponID));
+		if (!TESFormIsActorRef(shooter) || !TESFormIsWeapon(weapon)) return ret;
 
-void InstallListenerProbe() {
-	s_probe.Install();
-	s_hasListeners = 1;
-}
+		Vec3 a = before;
+		Vec3 b = GetRefPos(ref);
+		if (hitscan) {
+			if (lifeBefore > 0.0f) return ret;
+			const float length = sqrtf(direction.x * direction.x + direction.y * direction.y + direction.z * direction.z);
+			if (length < 0.001f) return ret;
+			const float dnx = direction.x / length;
+			const float dny = direction.y / length;
+			const float dnz = direction.z / length;
+			float range = proj->range;
+			if (range < 256.0f) range = 256.0f;
+			if (range > 8192.0f) range = 8192.0f;
+			for (auto it = proj->impacts.Begin(); !it.End(); ++it) {
+				if (!*it) continue;
+				const auto& pos = it->pos;
+				const float t = (pos.x - a.x) * dnx + (pos.y - a.y) * dny + (pos.z - a.z) * dnz;
+				if (t >= 0.0f && t < range) range = t;
+			}
+			if (range <= 0.0f) return ret;
+			b = {a.x + dnx * range, a.y + dny * range, a.z + dnz * range};
+		} else {
+			//grenade havok motion occurs between updates and never sets vector104 to its displacement
+			a = s_flights.Observe(refID, lifeBefore, proj->lifeTime, before, b);
+		}
+		ScanFlight(proj, shooter, weapon, a, b);
+		return ret;
+	}
 
-void Update() {
-	s_hasListeners = s_probe.Refresh(false) ? 1 : 0;
-	if (s_pending.empty() || !g_eventManagerInterface) {
+	bool Init(void* nvseInterface)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
+		if (nvse->isEditor) return false;
+
+		const UInt8 prologue[] = {0x53, 0x8B, 0xDC, 0x51, 0x83, 0xE4, 0xF0, 0x83, 0xC4, 0x04};
+		if (memcmp(reinterpret_cast<void*>(kAddr_ProjectileUpdate), prologue, sizeof(prologue))) {
+			Log("OnNearMiss: projectile update prologue already patched, hook skipped");
+			return false;
+		}
+		return s_detour.WriteRelJump(kAddr_ProjectileUpdate, HookProjectileUpdate, 10);
+	}
+
+	void ClearState()
+	{
+		++s_generation;
+		s_flights.Clear();
 		s_pending.clear();
-		return;
+		s_lastFire.clear();
 	}
-	std::vector<QueuedNearMiss> batch;
-	batch.swap(s_pending);
-	for (const auto& e : batch) {
-		TESForm* victim = (TESForm*)Engine::LookupFormByID(e.victimID);
-		if (!victim) continue;
-		TESForm* shooter = e.shooterID ? (TESForm*)Engine::LookupFormByID(e.shooterID) : nullptr;
-		TESForm* weapon = e.weaponID ? (TESForm*)Engine::LookupFormByID(e.weaponID) : nullptr;
-		g_eventManagerInterface->DispatchEvent("ITR:OnNearMiss", nullptr,
-			victim, shooter, weapon, PackEventFloatArg(e.dist));
+
+	void InstallListenerProbe()
+	{
+		s_probe.Install();
+		s_hasListeners = 1;
 	}
-}
+
+	void Update()
+	{
+		if (s_dispatching) return;
+		const bool hadListeners = s_hasListeners != 0;
+		s_hasListeners = s_probe.Refresh(false) ? 1 : 0;
+		if (hadListeners && !s_hasListeners) ClearState();
+		if (s_pending.empty() || !g_eventManagerInterface) {
+			s_pending.clear();
+			return;
+		}
+		std::vector<QueuedNearMiss> batch;
+		batch.swap(s_pending);
+		const UInt32 generation = s_generation;
+		s_dispatching = true;
+		for (const auto& e : batch) {
+			if (generation != s_generation) break;
+			TESForm* victim = (TESForm*)Engine::LookupFormByID(e.victimID);
+			if (!TESFormIsActorRef(victim)) continue;
+			TESForm* shooter = e.shooterID ? (TESForm*)Engine::LookupFormByID(e.shooterID) : nullptr;
+			TESForm* weapon = e.weaponID ? (TESForm*)Engine::LookupFormByID(e.weaponID) : nullptr;
+			if (!TESFormIsActorRef(shooter)) shooter = nullptr;
+			if (!TESFormIsWeapon(weapon)) weapon = nullptr;
+			g_eventManagerInterface->DispatchEvent("ITR:OnNearMiss", nullptr,
+				victim, shooter, weapon, PackEventFloatArg(e.dist));
+		}
+		s_dispatching = false;
+	}
 }

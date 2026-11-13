@@ -28,7 +28,9 @@ struct NiTObjectArrayView {
 };
 
 struct NiAVObjectView {
-	UInt8 pad00[0x18];
+	UInt8 pad00[0x08];
+	const char* name;
+	UInt8 pad0C[0x18 - 0x0C];
 	void* parent;
 	void* collisionObject;
 	UInt8 pad20[0x34 - 0x20];
@@ -91,6 +93,7 @@ static_assert(offsetof(NiTObjectArrayView<void*>, firstFreeEntry) == 0x0A);
 static_assert(offsetof(NiTObjectArrayView<void*>, numObjs) == 0x0C);
 
 static_assert(sizeof(NiAVObjectView) == 0x9C);
+static_assert(offsetof(NiAVObjectView, name) == 0x08);
 static_assert(offsetof(NiAVObjectView, parent) == 0x18);
 static_assert(offsetof(NiAVObjectView, collisionObject) == 0x1C);
 static_assert(offsetof(NiAVObjectView, local) == 0x34);

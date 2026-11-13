@@ -1,5 +1,6 @@
 #pragma once
 #include <Windows.h>
+#include <cstdlib>
 
 namespace Settings
 {
@@ -14,6 +15,7 @@ namespace Settings
 	inline int bAimZoomFirstPersonOnly = 0;
 	inline int bSuppressInputInConsole = 0;
 	inline int bDebugLog = 0;
+	inline int bVATSDiagnostic = 0;
 
 	inline int iQuickDropModifierKey = VK_SHIFT;
 	inline int iQuickDropControlID = 7; //ready weapon
@@ -21,6 +23,9 @@ namespace Settings
 	inline int iQuick180ControlID = 5; //run
 
 	inline int bSlowMotionPhysicsFix = 1;
+	inline int bSmallDebrisCap = 1;
+	inline float fSmallDebrisCullDelay = 3.0f;
+	inline int iSmallDebrisMaxTrackedChunks = 8192;
 	inline int bExplodingPantsFix = 0;
 	inline int bKillActorXPFix = 1;
 	inline int bReversePickpocketNoKarma = 0;
@@ -79,6 +84,9 @@ namespace Settings
 	inline int bPathingNullActorFix = 1;
 	inline int bNavMeshInfoCrashFix = 1;
 	inline int bInitHavokCrashFix = 1;
+	inline int bActorRagdollLifetimeFix = 1;
+	inline int bHavokBroadPhaseNullFix = 1;
+	inline int bRagdollPhantomWorldFix = 1;
 	inline int bMusicResetOnLoad = 1;
 	inline int bOwnedCorpses = 0;
 	inline int bDetectionFollowerCrashFix = 1;
@@ -113,6 +121,14 @@ namespace Settings
 	inline int GetINIInt(const char* section, const char* key, int defaultValue)
 	{
 		return GetPrivateProfileIntA(section, key, defaultValue, iniPath);
+	}
+
+	inline float GetINIFloat(const char* section, const char* key, float defaultValue)
+	{
+		char text[32];
+		if (!GetPrivateProfileStringA(section, key, "", text, sizeof(text), iniPath) || !text[0])
+			return defaultValue;
+		return (float)atof(text);
 	}
 
 	inline bool IntegrationEnables(const char* section, const char* key)
@@ -156,6 +172,7 @@ namespace Settings
 		strcat_s(iniPath, "\\Data\\config\\itr-nvse.ini");
 
 		bDebugLog = GetINIInt("Debug", "bDebugLog", 0);
+		bVATSDiagnostic = GetINIInt("Debug", "bVATSDiagnostic", 0);
 
 		bAutoGodMode = GetINIInt("Tweaks", "bAutoGodMode", 0);
 		bAutoQuickLoad = GetINIInt("Tweaks", "bAutoQuickLoad", 0);
@@ -174,6 +191,9 @@ namespace Settings
 		iQuick180ControlID = GetINIInt("Quick180", "iControlID", 5);
 
 		bSlowMotionPhysicsFix = GetINIInt("Tweaks", "bSlowMotionPhysicsFix", 1);
+		bSmallDebrisCap = GetINIInt("Tweaks", "bSmallDebrisCap", 1);
+		fSmallDebrisCullDelay = GetINIFloat("SmallDebrisCap", "fCullDelay", 3.0f);
+		iSmallDebrisMaxTrackedChunks = GetINIInt("SmallDebrisCap", "iMaxTrackedChunks", 8192);
 		bExplodingPantsFix = GetINIInt("Tweaks", "bExplodingPantsFix", 0);
 		bKillActorXPFix = GetINIInt("Tweaks", "bKillActorXPFix", 1);
 		bReversePickpocketNoKarma = GetINIInt("Tweaks", "bReversePickpocketNoKarma", 0);
@@ -229,6 +249,9 @@ namespace Settings
 		bPathingNullActorFix = GetINIInt("Tweaks", "bPathingNullActorFix", 1);
 		bNavMeshInfoCrashFix = GetINIInt("Tweaks", "bNavMeshInfoCrashFix", 1);
 		bInitHavokCrashFix = GetINIInt("Tweaks", "bInitHavokCrashFix", 1);
+		bActorRagdollLifetimeFix = GetINIInt("Tweaks", "bActorRagdollLifetimeFix", 1);
+		bHavokBroadPhaseNullFix = GetINIInt("Tweaks", "bHavokBroadPhaseNullFix", 1);
+		bRagdollPhantomWorldFix = GetINIInt("Tweaks", "bRagdollPhantomWorldFix", 1);
 
 		bMusicResetOnLoad = GetINIInt("Tweaks", "bMusicResetOnLoad", 1);
 		bOwnedCorpses = GetINIInt("Tweaks", "bOwnedCorpses", 0);

@@ -27,7 +27,7 @@ struct BhkCollisionObjectView {
 
 struct HkpWorldObjectView {
 	UInt8 pad00[0x08];
-	void* object;
+	void* world;
 	UInt8 pad0C[0x28 - 0x0C];
 	UInt8 collisionType;
 	UInt8 pad29[3];
@@ -47,8 +47,12 @@ struct HkpSimulationIslandView {
 struct HkpRigidBodyView {
 	UInt8 pad000[0xCC];
 	HkpSimulationIslandView* simulationIsland;
-	UInt8 pad0D0[0xE8 - 0xD0];
+	UInt8 pad0D0[0xE0 - 0xD0];
+	void* motionVtbl; //embedded hkpMotion
+	UInt8 pad0E4[0xE8 - 0xE4];
 	UInt8 motionType;
+	UInt8 pad0E9[0x1AC - 0xE9];
+	float massInv;
 };
 
 struct ProcessControllerView {
@@ -119,13 +123,15 @@ struct HkpContactPointAddedEventView {
 static_assert(sizeof(HkArrayView<void*>) == 0x0C);
 static_assert(offsetof(BhkCollisionObjectView, niNode) == 0x08);
 static_assert(offsetof(BhkCollisionObjectView, worldObject) == 0x10);
-static_assert(offsetof(HkpWorldObjectView, object) == 0x08);
+static_assert(offsetof(HkpWorldObjectView, world) == 0x08);
 static_assert(offsetof(HkpWorldObjectView, collisionType) == 0x28);
 static_assert(offsetof(HkpWorldObjectView, collisionFilterInfo) == 0x2C);
 static_assert(offsetof(HkpCollidableView, collisionFilterInfo) == 0x1C);
 static_assert(offsetof(HkpSimulationIslandView, stateFlags) == 0x26);
 static_assert(offsetof(HkpRigidBodyView, simulationIsland) == 0xCC);
 static_assert(offsetof(HkpRigidBodyView, motionType) == 0xE8);
+static_assert(offsetof(HkpRigidBodyView, motionVtbl) == 0xE0);
+static_assert(offsetof(HkpRigidBodyView, massInv) == 0x1AC);
 static_assert(offsetof(ProcessControllerView, characterController) == 0x138);
 static_assert(offsetof(BhkCharacterPhantomView, havokPhantom) == 0x08);
 

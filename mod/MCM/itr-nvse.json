@@ -1014,6 +1014,54 @@
 							"default": 0
 						}
 					]
+				},
+				"32": {
+					"title": "Small Debris Cap",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Fade out and remove the oldest small debris above the game debris limit",
+					"vars": [
+						{
+							"configINI": "Tweaks:bSmallDebrisCap",
+							"default": 1
+						}
+					]
+				},
+				"33": {
+					"title": "Actor Ragdoll Lifetime Fix",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Fix crash from ragdoll data used after an actor is destroyed. Requires restart after changing.",
+					"vars": [
+						{
+							"configINI": "Tweaks:bActorRagdollLifetimeFix",
+							"default": 1
+						}
+					]
+				},
+				"34": {
+					"title": "Havok Broad Phase Null Fix",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Fix crash from a removed physics body during collision processing. Requires restart after changing.",
+					"vars": [
+						{
+							"configINI": "Tweaks:bHavokBroadPhaseNullFix",
+							"default": 1
+						}
+					]
+				},
+				"35": {
+					"title": "Ragdoll Phantom World Fix",
+					"type": 5,
+					"enable": 1,
+					"mouse": "Fix crash from ragdoll rays cast outside the physics world. Requires restart after changing.",
+					"vars": [
+						{
+							"configINI": "Tweaks:bRagdollPhantomWorldFix",
+							"default": 1
+						}
+					]
 				}
 			}
 		},
