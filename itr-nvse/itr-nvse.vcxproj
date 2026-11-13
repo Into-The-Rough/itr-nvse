@@ -287,6 +287,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="internal\BSSpinLock.h" />
     <ClInclude Include="internal\EventDispatch.h" />
     <ClInclude Include="internal\FootContactLogic.h" />
+    <ClInclude Include="internal\NearMissTracking.h" />
     <ClInclude Include="internal\TempEffectLogic.h" />
     <ClInclude Include="internal\TempEffects.h" />
     <ClInclude Include="internal\EngineFunctions.h" />

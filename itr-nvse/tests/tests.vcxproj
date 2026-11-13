@@ -50,6 +50,7 @@
     <ClCompile Include="test_detours.cpp" />
     <ClCompile Include="test_footcontactlogic.cpp" />
     <ClCompile Include="test_smalldebris.cpp" />
+    <ClCompile Include="test_nearmisstracking.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="test.h" />
@@ -68,6 +69,7 @@
     <ClInclude Include="..\internal\Detours.h" />
     <ClInclude Include="..\internal\FootContactLogic.h" />
     <ClInclude Include="..\internal\TempEffectLogic.h" />
+    <ClInclude Include="..\internal\NearMissTracking.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
