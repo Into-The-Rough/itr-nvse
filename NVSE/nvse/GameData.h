@@ -171,8 +171,7 @@ struct ModInfo		// referred to by game as TESFile
 	UInt8								pad29B;
 	WIN32_FIND_DATA						fileData;			// 29C
 	FileHeader							header;				// 3DC
-	UInt8								flags;				// 3E8	Bit 0 is ESM . Runtime: Bit 2 is Valid, Bit 3 is Unselected Editor: 2 is selected, 3 is active, 4 may be invalid, 6 is endian, 14 controls VCI.
-	UInt8								pad3E9[3];
+	UInt32								flags;				// 3E8	Bit 0 is ESM . Runtime: Bit 2 is Valid, Bit 3 is Unselected Editor: 2 is selected, 3 is active, 4 may be invalid, 6 is endian, 14 controls VCI.;
 	tList<char*>						refModNames;		// 3EC
 	tList<MasterSize*>					refModData;			// 3F4 most likely full of 0
 	UInt32								numRefMods;			// 3FC related to modindex; see 4472D0
@@ -181,7 +180,7 @@ struct ModInfo		// referred to by game as TESFile
 	UInt32								unk404;				// 404
 	UInt32								unk408;				// 408
 	UInt8								modIndex;			// 40C init to 0xFF
-	UInt8								pad40D[3];
+	UInt16								secondIndex;
 	String								author;				// 410
 	String								description;		// 418
 	void								* dataBuf;			// 420 
@@ -192,6 +191,10 @@ struct ModInfo		// referred to by game as TESFile
 	// In Editor: 430 = ONAM array and 434 ONAM array count. Allocated at 0438
 	
 	bool IsLoaded() const { return true; }
+
+	bool IsSmall() const { return flags & 0x100; }
+	bool IsMedium() const { return flags & 0x400; }
+	bool IsSpecial() const { return flags & 0x700; }
 
 #if !EDITOR
 	/*** used by TESForm::LoadForm() among others ***/
@@ -226,7 +229,7 @@ public:
 	DataHandler();
 	~DataHandler();
 
-	UInt32							unk00;					// 000
+	UInt8							flags;					// 000
 	BoundObjectListHead				* boundObjectList;		// 004
 	tList<TESPackage>				packageList;			// 008
 	tList<TESWorldSpace>			worldSpaceList;			// 010
@@ -314,6 +317,9 @@ public:
 	UInt32							unk638;					// 638
 
 	static DataHandler* Get();
+	
+	bool SupportsNewFileTypes() const { return flags & 0x80; }
+
 	const ModInfo ** GetActiveModList();		// returns array of modEntry* corresponding to loaded mods sorted by mod index
 	const ModInfo* LookupModByName(const char* modName);
 	UInt8 GetModIndex(const char* modName);
