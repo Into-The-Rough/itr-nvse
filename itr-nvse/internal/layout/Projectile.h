@@ -1,4 +1,3 @@
-//Projectile layout - source ref/weapon and ref-flags read by near-miss / alt-trigger
 #pragma once
 
 #include <cstddef>
@@ -27,11 +26,6 @@ struct ProjectileView {
 	NiVector3 vector;
 };
 
-struct ProjectileRefFlagsView {
-	UInt8 pad00[0xC8];
-	UInt32 flags;
-};
-
 inline constexpr UInt32 kProjectileRefFlag_AltTrigger = 0x400;
 inline constexpr UInt32 kProjectileRefFlag_Hitscan = 0x1;
 
@@ -44,7 +38,6 @@ static_assert(offsetof(ProjectileView, lifeTime) == 0xD8);
 static_assert(offsetof(ProjectileView, sourceWeap) == 0xF8);
 static_assert(offsetof(ProjectileView, sourceRef) == 0xFC);
 static_assert(offsetof(ProjectileView, vector) == 0x104);
-static_assert(offsetof(ProjectileRefFlagsView, flags) == 0xC8);
 
 inline TESObjectWEAP* ProjectileGetSourceWeapon(void* projectile)
 {
@@ -58,5 +51,5 @@ inline TESObjectREFR* ProjectileGetSourceRef(void* projectile)
 
 inline bool ProjectileRefHasFlag(void* projectileRef, UInt32 flag)
 {
-	return projectileRef && (reinterpret_cast<ProjectileRefFlagsView*>(projectileRef)->flags & flag) != 0;
+	return projectileRef && (reinterpret_cast<ProjectileView*>(projectileRef)->flags & flag) != 0;
 }

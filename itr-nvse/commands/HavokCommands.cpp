@@ -422,9 +422,10 @@ namespace
 		return affected;
 	}
 
-	//engine havok to world factor, 69.99 / 10, set by the static initialiser at 0xF3D3B0
 	static const float* const kHavokToWorld = reinterpret_cast<const float*>(0x11C5880);
 	static constexpr int kAttachedBody = -1;
+	//bhkrigidbodyt's override subtracts its translation offset
+	static const auto BhkRigidBody_GetCenterOfMassInWorld = reinterpret_cast<void*(__thiscall*)(void*, float*)>(0xC8D240);
 
 	bool IsDismemberedLimbWrapper(NiAVObject* object)
 	{
@@ -437,7 +438,7 @@ namespace
 		return false;
 	}
 
-	//-1 is the ref's 3D minus the detached limb wrappers (stale collision pointers), 0-14 is the children of that wrapper
+	//detached limb wrappers retain stale collision pointers
 	template<typename Fn>
 	bool VisitBody(TESObjectREFR* ref, int bodyPart, Fn&& fn)
 	{
@@ -482,7 +483,6 @@ namespace
 		return found;
 	}
 
-	//returns the bhkRigidBody when the collision object's havok body is a rigid body
 	void* GetRigidBody(void* collisionObject, void** outHavokBody)
 	{
 		if (!collisionObject)
@@ -517,7 +517,7 @@ namespace
 			return;
 
 		alignas(16) float center[4] = {};
-		ThisCall<void*>(0xC8D240, rigidBody, center); //bhkRigidBody::GetCenterOfMassInWorld
+		BhkRigidBody_GetCenterOfMassInWorld(rigidBody, center);
 		const double mass = 1.0 / massInv;
 		com->sum[0] += center[0] * mass;
 		com->sum[1] += center[1] * mass;
@@ -534,9 +534,8 @@ namespace
 		if (!rigidBody || !HkpWorldObjectAsView(hkpObject)->world)
 			return;
 
-		//the base getter, bhkRigidBodyT's override subtracts its translation offset
 		alignas(16) float center[4] = {};
-		ThisCall<void*>(0xC8D240, rigidBody, center); //bhkRigidBody::GetCenterOfMassInWorld
+		BhkRigidBody_GetCenterOfMassInWorld(rigidBody, center);
 		com->sum[0] = center[0];
 		com->sum[1] = center[1];
 		com->sum[2] = center[2];
@@ -552,12 +551,10 @@ namespace
 			return;
 
 		alignas(16) float center[4] = {com->localCenter[0], com->localCenter[1], com->localCenter[2], 0.0f};
-		//every motion vtable has hkpMotion::setCenterOfMassInLocal at +0x2C
 		ThisCall<void>(0xC86380, &HkpRigidBodyAsView(hkpObject)->motionVtbl, center);
 		com->bodies = 1;
 	}
 
-	//nodeName empty is the mass weighted centre of every dynamic body in the scope
 	bool GetCenterOfMass(TESObjectREFR* ref, int bodyPart, const char* nodeName, float* outWorld)
 	{
 		CenterOfMassRecData com = {};

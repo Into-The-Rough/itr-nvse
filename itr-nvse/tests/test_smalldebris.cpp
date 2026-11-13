@@ -1,9 +1,9 @@
-//tests for fixes/SmallDebrisCap.cpp
-
 #define NOMINMAX
 #include <Windows.h>
+#include <cstdint>
 #include <atomic>
 #include <thread>
+#include "common/ITypes.h"
 #include "../fixes/SmallDebrisCap.cpp"
 #undef ASSERT
 #include "test.h"
@@ -18,11 +18,12 @@ namespace DebrisTest {
 		bool cullable = true;
 		float fade = 1.0f;
 	};
+
 	static bool invalidRelease;
 	static bool resetInCull;
 	static bool retainedDuringCull;
-	static UInt32 culls;
-	static SInt32 maxCount;
+	static uint32_t culls;
+	static int32_t maxCount;
 	static float fadeTime;
 
 	static void Start()
@@ -57,16 +58,24 @@ namespace DebrisTest {
 
 namespace SmallDebrisCap::Engine {
 	void Retain(void* p) { ++static_cast<DebrisTest::Node*>(p)->refs; }
+
 	void Release(void* p)
 	{
 		if (--static_cast<DebrisTest::Node*>(p)->refs < 1) DebrisTest::invalidRelease = true;
 	}
+
 	bool IsFadeNode(void* p) { return static_cast<DebrisTest::Node*>(p)->fadeNode; }
+
 	void* Root(void* p) { return p; }
+
 	bool InScene(void* p) { return static_cast<DebrisTest::Node*>(p)->inScene; }
+
 	void* DebrisNode(void* p) { return p; }
+
 	TESObjectREFR* CullableRef(void* p) { return static_cast<DebrisTest::Node*>(p)->cullable ? reinterpret_cast<TESObjectREFR*>(p) : nullptr; }
+
 	void Fade(void* p, float fraction) { static_cast<DebrisTest::Node*>(p)->fade = fraction; }
+
 	void Cull(void* p, bool, const bool& cancelled)
 	{
 		++DebrisTest::culls;
@@ -76,7 +85,9 @@ namespace SmallDebrisCap::Engine {
 			DebrisTest::retainedDuringCull = static_cast<DebrisTest::Node*>(p)->refs == 2 && cancelled;
 		}
 	}
-	SInt32 MaxCount() { return DebrisTest::maxCount; }
+
+	int32_t MaxCount() { return DebrisTest::maxCount; }
+
 	float FadeTime() { return DebrisTest::fadeTime; }
 }
 
@@ -90,7 +101,7 @@ TEST(SmallDebris_QueueFromWorkers)
 		workers[w] = std::thread([&, w] { for (int i = w * 1250; i < (w + 1) * 1250; ++i) QueueBody(&nodes[i]); });
 	for (auto& worker : workers) worker.join();
 	ASSERT_EQ(s_pendingCount, kPendingSlots);
-	UInt32 held = 0;
+	uint32_t held = 0;
 	for (auto& node : nodes) held += node.refs == 2;
 	ASSERT_EQ(held, kPendingSlots);
 	ClearState(true);
@@ -150,8 +161,8 @@ TEST(SmallDebris_FadeBudgetOldestFirst)
 	Update();
 	ASSERT_EQ(s_chunks[299].state, State::Marked);
 	for (int frame = 0; frame < 10; ++frame) Update();
-	UInt32 marked = 0;
-	for (UInt32 i = 0; i < s_count; ++i) marked += s_chunks[i].state == State::Marked;
+	uint32_t marked = 0;
+	for (uint32_t i = 0; i < s_count; ++i) marked += s_chunks[i].state == State::Marked;
 	ASSERT_EQ(marked, kMaxFading);
 	ClearState(true);
 	for (auto& node : nodes) ASSERT_EQ(node.refs, 1);

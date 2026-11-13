@@ -1,15 +1,14 @@
-//Actor::~Actor deletes the ragdoll controller and penetration util but leaves both pointers set, death handling callbacks then reuse freed physics data
-
 #include "ActorRagdollLifetimeFix.h"
+#include <cstdint>
 #include "internal/GameLayout.h"
 #include "internal/SafeWrite.h"
 #include "internal/globals.h"
 
 namespace ActorRagdollLifetimeFix {
-	static constexpr UInt32 kControllerLoad = 0x87DD29;
-	static constexpr UInt32 kPenetrationLoad = 0x87DD67;
-	static constexpr UInt32 kControllerResume = 0x87DD2F;
-	static constexpr UInt32 kPenetrationResume = 0x87DD6D;
+	static constexpr uint32_t kControllerLoad = 0x87DD29;
+	static constexpr uint32_t kPenetrationLoad = 0x87DD67;
+	static constexpr uint32_t kControllerResume = 0x87DD2F;
+	static constexpr uint32_t kPenetrationResume = 0x87DD6D;
 
 	//the destructor keeps the captured object for deletion, callbacks see a null owner slot
 	__declspec(naked) void DetachController()
@@ -34,16 +33,16 @@ namespace ActorRagdollLifetimeFix {
 
 	void Init()
 	{
-		static constexpr UInt8 controllerLoad[] = {0x8B, 0x88, 0xAC, 0x00, 0x00, 0x00};
-		static constexpr UInt8 penetrationLoad[] = {0x8B, 0x82, 0xB0, 0x00, 0x00, 0x00};
+		static constexpr uint8_t controllerLoad[] = {0x8B, 0x88, 0xAC, 0x00, 0x00, 0x00};
+		static constexpr uint8_t penetrationLoad[] = {0x8B, 0x82, 0xB0, 0x00, 0x00, 0x00};
 		if (memcmp((void*)kControllerLoad, controllerLoad, sizeof(controllerLoad)) != 0 || memcmp((void*)kPenetrationLoad, penetrationLoad, sizeof(penetrationLoad)) != 0) {
 			Log("ActorRagdollLifetimeFix: destructor bytes changed, skipping both hooks");
 			return;
 		}
 
-		SafeWrite::WriteRelJump(kControllerLoad, (UInt32)DetachController);
+		SafeWrite::WriteRelJump(kControllerLoad, (uint32_t)DetachController);
 		SafeWrite::Write8(kControllerLoad + 5, 0x90);
-		SafeWrite::WriteRelJump(kPenetrationLoad, (UInt32)DetachPenetrationUtil);
+		SafeWrite::WriteRelJump(kPenetrationLoad, (uint32_t)DetachPenetrationUtil);
 		SafeWrite::Write8(kPenetrationLoad + 5, 0x90);
 	}
 }
