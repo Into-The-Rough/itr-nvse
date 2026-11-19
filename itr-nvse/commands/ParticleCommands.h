@@ -1,6 +1,5 @@
 #pragma once
 
-namespace ParticleCommands
-{
+namespace ParticleCommands {
 	void RegisterCommands(void* nvse);
 }

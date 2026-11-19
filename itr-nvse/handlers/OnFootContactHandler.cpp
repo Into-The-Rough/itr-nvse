@@ -15,8 +15,7 @@
 #include <Windows.h>
 #include <cmath>
 
-namespace
-{
+namespace {
 	constexpr const char* kFootstepEvent = "ITR:OnActorFootstep";
 	constexpr const char* kFootContactEvent = "ITR:OnActorFootContact";
 	constexpr UInt32 kPendingCapacity = 64;
@@ -24,14 +23,12 @@ namespace
 	constexpr float kRayDepth = 96.0f;
 	constexpr UInt8 kProjectileLayer = 6;
 
-	struct PendingFootstep
-	{
+	struct PendingFootstep {
 		UInt32 refID;
 		SInt32 soundID;
 	};
 
-	struct Contact
-	{
+	struct Contact {
 		FootContactLogic::Point3 position;
 		FootContactLogic::Point3 normal;
 		SInt32 material;
@@ -41,12 +38,10 @@ namespace
 	Detours::CallDetour s_footstepDetour;
 	EventDispatch::ListenerProbe s_footstepProbe = {
 		kFootstepEvent, "ITR_OnActorFootstepProbe",
-		[](TESObjectREFR*, void*) {}
-	};
+		[](TESObjectREFR*, void*) {}};
 	EventDispatch::ListenerProbe s_contactProbe = {
 		kFootContactEvent, "ITR_OnActorFootContactProbe",
-		[](TESObjectREFR*, void*) {}
-	};
+		[](TESObjectREFR*, void*) {}};
 	CRITICAL_SECTION s_queueLock;
 	volatile LONG s_queueLockInit = 0;
 	PendingFootstep s_pending[kPendingCapacity] = {};
@@ -69,7 +64,7 @@ namespace
 		if (!actor || side == FootContactLogic::kSide_Unknown)
 			return false;
 
-		//getninode returns the active player root; foot contacts need the third-person skeleton
+		//getninode returns the active player root, foot contacts need the third-person skeleton
 		NiNode* root = reinterpret_cast<NiNode*(__thiscall*)(TESObjectREFR*, bool)>(0x950BB0)(actor, false);
 		if (!root)
 			return false;
@@ -82,7 +77,7 @@ namespace
 			return false;
 
 		const float* translate = NiAVObjectAsView(foot)->world.translate;
-		position = { translate[0], translate[1], translate[2] };
+		position = {translate[0], translate[1], translate[2]};
 		return FootContactLogic::IsFinite(position);
 	}
 
@@ -131,16 +126,14 @@ namespace
 		ray.layerType = kProjectileLayer;
 		ray.group = group;
 
-		if (!Engine::TESPickObject(&ray, true) || ray.budgetSpent ||
-			!ray.cdBody || !std::isfinite(ray.hitFraction) || ray.hitFraction >= 1.0f)
-		{
+		if (!Engine::TESPickObject(&ray, true) || ray.budgetSpent || !ray.cdBody || !std::isfinite(ray.hitFraction) || ray.hitFraction >= 1.0f) {
 			return false;
 		}
 
 		contact.position = FootContactLogic::Interpolate(from, to, ray.hitFraction);
-		contact.normal = { ray.normal[0], ray.normal[1], ray.normal[2] };
+		contact.normal = {ray.normal[0], ray.normal[1], ray.normal[2]};
 		if (!FootContactLogic::Normalize(contact.normal))
-			contact.normal = { 0.0f, 0.0f, 1.0f };
+			contact.normal = {0.0f, 0.0f, 1.0f};
 
 		const UInt32 filterInfo = HkpCollidableGetCollisionFilterInfo(ray.cdBody);
 		contact.layer = static_cast<UInt8>(filterInfo & 0x7F);
@@ -180,9 +173,9 @@ namespace
 			static_cast<int>(contact.layer));
 	}
 
-	struct DispatchGuard
-	{
+	struct DispatchGuard {
 		DispatchGuard() { s_inDispatch = true; }
+
 		~DispatchGuard() { s_inDispatch = false; }
 	};
 
@@ -199,13 +192,12 @@ namespace
 		DispatchGuard guard;
 		const UInt32 refID = actor->refID;
 		const int side = FootContactLogic::ResolveSide(soundID);
-		FootContactLogic::Point3 footPosition = { actor->posX, actor->posY, actor->posZ };
+		FootContactLogic::Point3 footPosition = {actor->posX, actor->posY, actor->posZ};
 		const bool hasFootPosition = GetFootPosition(actor, side, footPosition);
 
 		Contact contact = {};
 		bool hasContact = false;
-		if (wantsContact && hasFootPosition && actor->typeID == kFormType_ACHR)
-		{
+		if (wantsContact && hasFootPosition && actor->typeID == kFormType_ACHR) {
 			UInt16 group = 0;
 			if (GetActorCollisionGroup(actor, group))
 				hasContact = CastGround(footPosition, group, contact);
@@ -214,10 +206,8 @@ namespace
 		if (wantsFootstep)
 			DispatchFootstep(actor, soundID, side, footPosition);
 
-		if (hasContact)
-		{
-			if (wantsFootstep)
-			{
+		if (hasContact) {
+			if (wantsFootstep) {
 				actor = static_cast<Actor*>(Engine::LookupFormByID(refID));
 				if (!actor || actor->typeID != kFormType_ACHR || actor->refID != refID)
 					return;
@@ -233,12 +223,11 @@ namespace
 			return;
 
 		ScopedLock lock(&s_queueLock);
-		if (s_pendingCount >= kPendingCapacity)
-		{
+		if (s_pendingCount >= kPendingCapacity) {
 			++s_droppedCount;
 			return;
 		}
-		s_pending[s_pendingCount++] = { actor->refID, soundID };
+		s_pending[s_pendingCount++] = {actor->refID, soundID};
 	}
 
 	UInt32 DrainPending(PendingFootstep* local, UInt32& dropped)
@@ -253,20 +242,17 @@ namespace
 		return count;
 	}
 
-	using PlayFootstep_t = void (__cdecl*)(TESObjectREFR*, int);
+	using PlayFootstep_t = void(__cdecl*)(TESObjectREFR*, int);
 
-	void __cdecl PlayFootstepHook(TESObjectREFR* actor, int soundID)
+	void __cdecl Hook_PlayFootstep(TESObjectREFR* actor, int soundID)
 	{
 		reinterpret_cast<PlayFootstep_t>(s_footstepDetour.GetOverwrittenAddr())(actor, soundID);
 
-		if (!s_eventsReady || !IsActorRef(actor) ||
-			(!s_footstepProbe.hasListeners && !s_contactProbe.hasListeners))
-		{
+		if (!s_eventsReady || !IsActorRef(actor) || (!s_footstepProbe.hasListeners && !s_contactProbe.hasListeners)) {
 			return;
 		}
 
-		if (GetCurrentThreadId() != s_mainThreadID)
-		{
+		if (GetCurrentThreadId() != s_mainThreadID) {
 			QueueFootstep(actor, soundID);
 			return;
 		}
@@ -275,8 +261,7 @@ namespace
 	}
 }
 
-namespace OnFootContactHandler
-{
+namespace OnFootContactHandler {
 	bool Init(void* nvsePtr)
 	{
 		auto* nvse = static_cast<NVSEInterface*>(nvsePtr);
@@ -286,8 +271,7 @@ namespace OnFootContactHandler
 		InitCriticalSectionOnce(&s_queueLockInit, &s_queueLock);
 		s_mainThreadID = GetCurrentThreadId();
 
-		if (!s_footstepDetour.WriteRelCall(0x5F2F93, reinterpret_cast<UInt32>(PlayFootstepHook)))
-		{
+		if (!s_footstepDetour.WriteRelCall(0x5F2F93, reinterpret_cast<UInt32>(Hook_PlayFootstep))) {
 			Log("OnFootContactHandler failed: 0x5F2F93 is not an E8 call");
 			return false;
 		}
@@ -317,8 +301,7 @@ namespace OnFootContactHandler
 		if (dropped)
 			Log("OnFootContactHandler dropped %u off-thread footsteps", dropped);
 
-		for (UInt32 i = 0; i < count; ++i)
-		{
+		for (UInt32 i = 0; i < count; ++i) {
 			auto* actor = static_cast<Actor*>(Engine::LookupFormByID(local[i].refID));
 			if (IsActorRef(actor) && actor->refID == local[i].refID)
 				ProcessFootstep(actor, local[i].soundID);
@@ -327,8 +310,7 @@ namespace OnFootContactHandler
 
 	void ClearState()
 	{
-		if (s_queueLockInit == 2)
-		{
+		if (s_queueLockInit == 2) {
 			ScopedLock lock(&s_queueLock);
 			s_pendingCount = 0;
 			s_droppedCount = 0;

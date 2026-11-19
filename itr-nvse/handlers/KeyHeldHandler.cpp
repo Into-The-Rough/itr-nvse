@@ -14,46 +14,46 @@ static DWORD g_downSince[256];
 static DWORD g_lastDispatch[256];
 
 namespace KeyHeldHandler {
-void Update()
-{
-	if (!g_eventManagerInterface) return;
+	void Update()
+	{
+		if (!g_eventManagerInterface) return;
 
-	void* input = *g_inputGlobalsPtr;
-	if (!input) return;
-	UInt8* keys = OSInputGlobalsGetCurrentKeyStates(input);
-	DWORD now = GetTickCount();
+		void* input = *g_inputGlobalsPtr;
+		if (!input) return;
+		UInt8* keys = OSInputGlobalsGetCurrentKeyStates(input);
+		DWORD now = GetTickCount();
 
-	for (int i = 1; i < 256; i++) {
-		if (keys[i]) {
-			if (!g_downSince[i]) {
-				g_downSince[i] = now;
-				g_lastDispatch[i] = 0;
-			}
-			DWORD held = now - g_downSince[i];
-			if (held >= (DWORD)g_thresholdMs) {
-				if (!g_lastDispatch[i] || (now - g_lastDispatch[i]) >= (DWORD)g_repeatMs) {
-					float sec = held / 1000.0f;
-					g_eventManagerInterface->DispatchEvent("ITR:OnKeyHeld", nullptr, i, PackEventFloatArg(sec));
-					g_lastDispatch[i] = now;
+		for (int i = 1; i < 256; i++) {
+			if (keys[i]) {
+				if (!g_downSince[i]) {
+					g_downSince[i] = now;
+					g_lastDispatch[i] = 0;
 				}
+				DWORD held = now - g_downSince[i];
+				if (held >= (DWORD)g_thresholdMs) {
+					if (!g_lastDispatch[i] || (now - g_lastDispatch[i]) >= (DWORD)g_repeatMs) {
+						float sec = held / 1000.0f;
+						g_eventManagerInterface->DispatchEvent("ITR:OnKeyHeld", nullptr, i, PackEventFloatArg(sec));
+						g_lastDispatch[i] = now;
+					}
+				}
+			} else {
+				g_downSince[i] = 0;
 			}
-		} else {
-			g_downSince[i] = 0;
 		}
 	}
-}
 
-bool Init()
-{
-	char path[MAX_PATH];
-	GetModuleFileNameA(nullptr, path, MAX_PATH);
-	char* s = strrchr(path, '\\');
-	if (s) strcpy_s(s + 1, MAX_PATH - (s + 1 - path), "Data\\config\\itr-nvse.ini");
+	bool Init()
+	{
+		char path[MAX_PATH];
+		GetModuleFileNameA(nullptr, path, MAX_PATH);
+		char* s = strrchr(path, '\\');
+		if (s) strcpy_s(s + 1, MAX_PATH - (s + 1 - path), "Data\\config\\itr-nvse.ini");
 
-	g_thresholdMs = GetPrivateProfileIntA("Events", "iKeyHeldThresholdMs", 500, path);
-	g_repeatMs = GetPrivateProfileIntA("Events", "iKeyHeldRepeatMs", 250, path);
-	memset(g_downSince, 0, sizeof(g_downSince));
-	memset(g_lastDispatch, 0, sizeof(g_lastDispatch));
-	return true;
-}
+		g_thresholdMs = GetPrivateProfileIntA("Events", "iKeyHeldThresholdMs", 500, path);
+		g_repeatMs = GetPrivateProfileIntA("Events", "iKeyHeldRepeatMs", 250, path);
+		memset(g_downSince, 0, sizeof(g_downSince));
+		memset(g_lastDispatch, 0, sizeof(g_lastDispatch));
+		return true;
+	}
 }

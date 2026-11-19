@@ -17,6 +17,7 @@
 #include "internal/ScopedLock.h"
 
 #include "internal/settings.h"
+#include "internal/globals.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
@@ -119,7 +120,8 @@
 #include "features/NoWeaponSearch.h"
 #include "features/AutoQuickLoad.h"
 #include "features/AltTabMute.h"
-#include "features/PerkRuntimeFramework.h"
+#include "internal/PerkIndex.h"
+#include "commands/PerkCommands.h"
 #include "features/AimZoomFirstPersonOnly.h"
 #include "features/ConsoleInputSuppression.h"
 #include "features/AggroThreshold.h"
@@ -127,7 +129,6 @@
 #include "commands/ImperativeCommands.h"
 #include "commands/StringCommands.h"
 #include "commands/RadioCommands.h"
-#include "commands/CurrentDialogueCommands.h"
 #include "commands/ForceCombatTargetCommands.h"
 #include "commands/CrouchCommands.h"
 #include "commands/ChallengeCommands.h"
@@ -146,23 +147,15 @@
 #include "internal/Detours.h"
 
 #define kMessage_MainGameLoop 20
-#define kMessage_ReloadConfig 25  //sent via ReloadPluginConfig console command
-
+#define kMessage_ReloadConfig 25 //sent via ReloadPluginConfig console command
 
 const _ExtractArgs ExtractArgs = (_ExtractArgs)0x005ACCB0;
 const _FormHeap_Free FormHeap_Free = (_FormHeap_Free)0x00401030;
 
-//set true only while a user-typed console line (or bat file from console) is
-//running. hooks the two MenuConsole::Idle call sites into Script::Run. neither
-//bConsoleMode (TLS) nor Interface::IsConsoleVisible distinguish typed input
-//from ScriptRunner / RunScriptLine, but these call sites are unique to
-//MenuConsole::Idle.
+//true only during MenuConsole::Idle -> Script::Run (distinguishes typed console/bat from RunScriptLine)
 static thread_local bool s_inConsoleDispatch = false;
 
 using ConsoleScriptRun_t = int(__thiscall*)(Script*, void*, int, TESObjectREFR*);
-
-static Detours::CallDetour s_consoleDispatchBatDetour;
-static Detours::CallDetour s_consoleDispatchInputDetour;
 
 static const char* GetScriptText(Script* script)
 {
@@ -193,34 +186,34 @@ static int ConsoleScriptRunCommon(Script* script, void* scriptContext, int a3,
 	return result;
 }
 
-static int __fastcall Hook_ConsoleScriptRun_Bat(Script* script, void* /*edx*/, void* scriptContext, int a3, TESObjectREFR* calleeRef)
-{
-	return ConsoleScriptRunCommon(script, scriptContext, a3, calleeRef,
-		(ConsoleScriptRun_t)s_consoleDispatchBatDetour.GetOverwrittenAddr());
-}
+template<UInt32 kAddr>
+class ConsoleScriptRunHook {
+	static inline Detours::CallDetour s_detour;
 
-static int __fastcall Hook_ConsoleScriptRun_Input(Script* script, void* /*edx*/, void* scriptContext, int a3, TESObjectREFR* calleeRef)
-{
-	return ConsoleScriptRunCommon(script, scriptContext, a3, calleeRef,
-		(ConsoleScriptRun_t)s_consoleDispatchInputDetour.GetOverwrittenAddr());
-}
+	static int __fastcall Hook(Script* script, void* edx, void* scriptContext, int a3, TESObjectREFR* calleeRef)
+	{
+		return ConsoleScriptRunCommon(script, scriptContext, a3, calleeRef,
+			reinterpret_cast<ConsoleScriptRun_t>(s_detour.GetOverwrittenAddr()));
+	}
+
+public:
+	ConsoleScriptRunHook() { s_detour.WriteRelCall(kAddr, Hook); }
+};
 
 bool IsConsoleMode()
 {
 	return s_inConsoleDispatch;
 }
 
-extern void Log(const char* fmt, ...);
-
 static void InitConsoleDispatchHooks()
 {
-	const bool a = s_consoleDispatchBatDetour.WriteRelCall(0x71C3E8, (UInt32)Hook_ConsoleScriptRun_Bat);
-	const bool b = s_consoleDispatchInputDetour.WriteRelCall(0x71C846, (UInt32)Hook_ConsoleScriptRun_Input);
-	Log("ConsoleDispatch hooks: bat=%d input=%d", a ? 1 : 0, b ? 1 : 0);
+	//MenuConsole::Idle
+	ConsoleScriptRunHook<0x71C3E8>();
+	ConsoleScriptRunHook<0x71C846>();
 }
 
-typedef void* (*_GetSingleton)(bool canCreateNew);
-static const _GetSingleton ConsoleManager_GetSingleton = (_GetSingleton)0x0071B160;
+using GetSingleton_t = void* (*)(bool canCreateNew);
+static const GetSingleton_t ConsoleManager_GetSingleton = (GetSingleton_t)0x0071B160;
 
 void Console_Print(const char* fmt, ...)
 {
@@ -230,9 +223,9 @@ void Console_Print(const char* fmt, ...)
 
 	va_list args;
 	va_start(args, fmt);
-	// 0x71D0A0 is MenuConsole::Print(fmt, va_list), not a simple Print(const char*).
-	typedef void (__thiscall *_ConsolePrint)(void*, char*, va_list);
-	((_ConsolePrint)0x0071D0A0)(consoleManager, const_cast<char*>(fmt), args);
+	//0x71D0A0 = MenuConsole::Print(fmt, va_list)
+	using ConsolePrint_t = void(__thiscall*)(void*, char*, va_list);
+	((ConsolePrint_t)0x0071D0A0)(consoleManager, const_cast<char*>(fmt), args);
 	va_end(args);
 }
 
@@ -252,12 +245,12 @@ bool g_isLoadingSave = false;
 
 void Log(const char* fmt, ...); //forward decl
 
-typedef void (__cdecl *_StopPlayingMusic)();
-static const _StopPlayingMusic StopPlayingMusic = (_StopPlayingMusic)0x8304A0;
-typedef void (__cdecl *_MusicClearStopFlags)();
-static const _MusicClearStopFlags MusicClearStopFlags = (_MusicClearStopFlags)0x8304C0;
-typedef void (__cdecl *_PlayingMusicClearPauseAll)();
-static const _PlayingMusicClearPauseAll PlayingMusicClearPauseAll = (_PlayingMusicClearPauseAll)0x830660;
+using StopPlayingMusic_t = void(__cdecl*)();
+static const StopPlayingMusic_t StopPlayingMusic = (StopPlayingMusic_t)0x8304A0;
+using MusicClearStopFlags_t = void(__cdecl*)();
+static const MusicClearStopFlags_t MusicClearStopFlags = (MusicClearStopFlags_t)0x8304C0;
+using PlayingMusicClearPauseAll_t = void(__cdecl*)();
+static const PlayingMusicClearPauseAll_t PlayingMusicClearPauseAll = (PlayingMusicClearPauseAll_t)0x830660;
 
 static void ResetMusicStateForLoad()
 {
@@ -275,8 +268,7 @@ static bool g_vatsSpeechFixDisabledByStewie = false;
 //gated by Debug\bDebugLog, all Log() calls are no-ops while closed
 static void OpenDebugLog()
 {
-	if (Settings::bDebugLog && !g_logFile)
-	{
+	if (Settings::bDebugLog && !g_logFile) {
 		char logPath[MAX_PATH];
 		GetModuleFileNameA(nullptr, logPath, MAX_PATH);
 		char* lastSlash = strrchr(logPath, '\\');
@@ -284,9 +276,7 @@ static void OpenDebugLog()
 		strcat_s(logPath, "\\itr-nvse.log");
 		//fopen_s locks the file exclusively, this keeps it readable while the game runs
 		g_logFile = _fsopen(logPath, "w", _SH_DENYWR);
-	}
-	else if (!Settings::bDebugLog && g_logFile)
-	{
+	} else if (!Settings::bDebugLog && g_logFile) {
 		InitCriticalSectionOnce(&g_logLockInit, &g_logLock);
 		ScopedLock lock(&g_logLock);
 		FILE* f = g_logFile;
@@ -312,23 +302,16 @@ void Log(const char* fmt, ...)
 static void InitVATSSpeechFix()
 {
 	g_vatsSpeechFixDisabledByStewie = false;
-	if (GetModuleHandleA("nvse_stewie_tweaks.dll"))
-	{
-		if (memcmp((void*)0xAEDFBD, VATSSpeechFix::kStewieTimescalePatch, sizeof(VATSSpeechFix::kStewieTimescalePatch)) == 0)
-		{
+	if (GetModuleHandleA("nvse_stewie_tweaks.dll")) {
+		if (memcmp((void*)0xAEDFBD, VATSSpeechFix::kStewieTimescalePatch, sizeof(VATSSpeechFix::kStewieTimescalePatch)) == 0) {
 			g_vatsSpeechFixDisabledByStewie = true;
-		}
-		else
-		{
+		} else {
 			char gameDir[MAX_PATH];
 			GetModuleFileNameA(nullptr, gameDir, MAX_PATH);
 			char* lastSlash = strrchr(gameDir, '\\');
-			if (!lastSlash)
-			{
+			if (!lastSlash) {
 				g_vatsSpeechFixDisabledByStewie = true;
-			}
-			else
-			{
+			} else {
 				*lastSlash = '\0';
 
 				char stewieIniPath[MAX_PATH];
@@ -338,8 +321,7 @@ static void InitVATSSpeechFix()
 		}
 	}
 
-	if (g_vatsSpeechFixDisabledByStewie)
-	{
+	if (g_vatsSpeechFixDisabledByStewie) {
 		Log("VATSSpeechFix disabled: Stewie Tweaks Inlines.bAudio owns audio hooks");
 		return;
 	}
@@ -350,8 +332,7 @@ static void InitVATSSpeechFix()
 
 static void ApplyVATSSpeechFixSetting()
 {
-	if (g_vatsSpeechFixDisabledByStewie)
-	{
+	if (g_vatsSpeechFixDisabledByStewie) {
 		if (Settings::bVATSSpeechFix)
 			Log("VATSSpeechFix remains disabled: Stewie Tweaks Inlines.bAudio owns audio hooks");
 		return;
@@ -373,7 +354,7 @@ static void DeleteConsoleLog()
 
 	char logName[256];
 	GetPrivateProfileStringA("Main", "sConsoleOutputFile", "consoleout.txt",
-	                         logName, sizeof(logName), iniPath);
+		logName, sizeof(logName), iniPath);
 
 	char logPath[MAX_PATH];
 	sprintf_s(logPath, "%s\\%s", gameDir, logName);
@@ -385,15 +366,13 @@ static NVSEInterface* s_nvseInterface = nullptr;
 
 static void MessageHandler(NVSEMessagingInterface::Message* msg)
 {
-	switch (msg->type)
-	{
+	switch (msg->type) {
 		case NVSEMessagingInterface::kMessage_PostLoad:
-			if (!g_hooksInstalled)
-			{
+			if (!g_hooksInstalled) {
 				AlertCommands::Init(); //mask SetAlertNS out of the save bake
 				if (Settings::bQuickDrop || Settings::bQuick180)
 					PlayerUpdateHook::Init(Settings::bQuickDrop, Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
-					                       Settings::bQuick180, Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
+						Settings::bQuick180, Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
 				if (Settings::bSlowMotionPhysicsFix)
 					SlowMotionPhysicsFix::Init();
 				if (Settings::bExplodingPantsFix)
@@ -432,7 +411,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					NPCDoctorsBagUse::Init(Settings::fDoctorsBagUseTimer);
 				CompanionNoInfamy::Init(Settings::bCompanionNoInfamy != 0);
 				CompanionNoBlock::Init(Settings::bCompanionNoBlock != 0, Settings::iCompanionNoBlockReleaseFrames,
-				                       Settings::iCompanionNoBlockRestoreDistance, Settings::bCompanionNoBlockInteriorOnly != 0);
+					Settings::iCompanionNoBlockRestoreDistance, Settings::bCompanionNoBlockInteriorOnly != 0);
 				if (Settings::bPathingNullActorFix)
 					PathingNullActorFix::Init();
 				if (Settings::bNavMeshInfoCrashFix)
@@ -453,10 +432,10 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				if (Settings::bInlineGlyphFix)
 					InlineGlyphFix::Init();
 				AimZoomFirstPersonOnly::Init(Settings::bAimZoomFirstPersonOnly != 0);
-				CrouchCommands::InstallHooks();
+				CrouchCommands::Init();
 				ConsoleInputSuppression::InstallHook();
 				ItemModFlagSafety::Init();
-				ToggleAllPrimitives::InstallHooks();
+				ToggleAllPrimitives::Init();
 				EventDispatch::RegisterEvents();
 				if (!WeatherChangeEvent::Init())
 					Log("WeatherChangeEvent failed to initialise");
@@ -472,15 +451,15 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				OnPreDamageHandler::InstallListenerProbe();
 				OnPreStartCombatHandler::InstallListenerProbe();
 				OnNearMissHandler::InstallListenerProbe();
-				PerkRuntimeFramework::BuildIndex();
+				PerkIndex::BuildIndex();
 				g_hooksInstalled = true;
 			}
 			break;
 
 		case NVSEMessagingInterface::kMessage_PostPostLoad:
-			SmallDebrisCap::InitHooks();
+			SmallDebrisCap::Init();
 			ItemModFlagSafety::InitJIPModFlagGate(); //after JIP's PostLoad installs GetEntryDataModFlagsHook
-			FallDamageHandler::InstallHook(); //after Stewie's bPowerArmorScalesFallDamage claims 0x8A63EC
+			FallDamageHandler::Init(); //after Stewie's bPowerArmorScalesFallDamage claims 0x8A63EC
 			DialogueCameraHandler::InstallCameraHooks(); //always install - hooks check bDialogueCamera at runtime
 			InitVATSSpeechFix();
 			AshPileNames::Init();
@@ -551,8 +530,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				CenterOnCellAltCommand::OnNewGame();
 			else
 				CenterOnCellAltCommand::ClearPending();
-			if (msg->type == NVSEMessagingInterface::kMessage_PostLoadGame && Settings::bMusicResetOnLoad)
-			{
+			if (msg->type == NVSEMessagingInterface::kMessage_PostLoadGame && Settings::bMusicResetOnLoad) {
 				ResetMusicStateForLoad();
 			}
 			if (msg->type == NVSEMessagingInterface::kMessage_PostLoadGame && Settings::bLoopingSoundLoadFix)
@@ -587,7 +565,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			DoorPinchFix::ClearState();
 
 			OnEntryPointHandler::BuildEntryMap();
-			PerkRuntimeFramework::BuildIndex();
+			PerkIndex::BuildIndex();
 			OnJumpLandHandler::ClearState();
 			OnJumpLandHandler::InstallListenerProbes();
 			OnFootContactHandler::ClearState();
@@ -611,19 +589,16 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			LocationVisitPopup::ClearState();
 			VATSExtender::ClearState();
 			VATSHighlightDepthFix::ClearState();
-			if (Settings::bAutoGodMode && !g_godModeExecuted)
-			{
+			if (Settings::bAutoGodMode && !g_godModeExecuted) {
 				SetGodModeEnabled(true);
 				g_godModeExecuted = true;
 			}
 			break;
 
 		case kMessage_ReloadConfig:
-			if (msg->data && msg->dataLen > 0)
-			{
+			if (msg->data && msg->dataLen > 0) {
 				const char* pluginName = (const char*)msg->data;
-				if (_stricmp(pluginName, "itr-nvse") == 0)
-				{
+				if (_stricmp(pluginName, "itr-nvse") == 0) {
 					bool oldGodMode = Settings::bAutoGodMode;
 					bool oldSuppressObjectives = Settings::bSuppressObjectives != 0;
 					bool oldSuppressReputation = Settings::bSuppressReputation != 0;
@@ -636,7 +611,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 					if (Settings::bQuickDrop || Settings::bQuick180)
 						PlayerUpdateHook::UpdateSettings(Settings::iQuickDropModifierKey, Settings::iQuickDropControlID,
-						                                 Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
+							Settings::iQuick180ModifierKey, Settings::iQuick180ControlID);
 
 					OwnerNameInfoHandler::UpdateSettings();
 
@@ -653,7 +628,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					ReversePickpocketNoKarmaFix::SetEnabled(Settings::bReversePickpocketNoKarma != 0);
 					CompanionNoInfamy::SetEnabled(Settings::bCompanionNoInfamy != 0);
 					CompanionNoBlock::UpdateSettings(Settings::bCompanionNoBlock != 0, Settings::iCompanionNoBlockReleaseFrames,
-					                                 Settings::iCompanionNoBlockRestoreDistance, Settings::bCompanionNoBlockInteriorOnly != 0);
+						Settings::iCompanionNoBlockRestoreDistance, Settings::bCompanionNoBlockInteriorOnly != 0);
 					NPCDoorUnlockBlock::SetLevel(Settings::iNPCDoorUnlockBlock);
 					WakeyWakey::UpdateSettings(Settings::bWakeyWakey != 0, Settings::fWakeDistance, Settings::fQuietWakeDistance, Settings::iWakeCooldownMs);
 					NPCAntidoteUse::UpdateSettings(Settings::bNPCAntidoteUse != 0, Settings::fCombatItemCureTimer, Settings::fCureHealthThreshold);
@@ -663,25 +638,19 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 					AggroThreshold::SetEnabled(Settings::bAggroThreshold != 0);
 					AimZoomFirstPersonOnly::SetEnabled(Settings::bAimZoomFirstPersonOnly != 0);
 					if (Settings::bAutoQuickLoad)
-						AutoQuickLoad::InstallHook(); //idempotent, covers enabling at runtime
+						AutoQuickLoad::Init(); //idempotent, covers enabling at runtime
 
-					if (*g_thePlayerPtr)
-					{
-						if (Settings::bAutoGodMode && !oldGodMode)
-						{
+					if (*g_thePlayerPtr) {
+						if (Settings::bAutoGodMode && !oldGodMode) {
 							SetGodModeEnabled(true);
 							Console_Print("itr-nvse: God mode enabled");
-						}
-						else if (!Settings::bAutoGodMode && oldGodMode)
-						{
+						} else if (!Settings::bAutoGodMode && oldGodMode) {
 							SetGodModeEnabled(false);
 							Console_Print("itr-nvse: God mode disabled");
 						}
 					}
 
-					if ((Settings::bSuppressObjectives != 0) != oldSuppressObjectives ||
-						(Settings::bSuppressReputation != 0) != oldSuppressReputation)
-					{
+					if ((Settings::bSuppressObjectives != 0) != oldSuppressObjectives || (Settings::bSuppressReputation != 0) != oldSuppressReputation) {
 						Console_Print("itr-nvse: Suppress Objectives/Reputation changes require restart");
 					}
 
@@ -791,7 +760,7 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	logInit("OnPreDamageHandler", OnPreDamageHandler::Init((void*)nvse));
 	logInit("OnTileValueChangeHandler", OnTileValueChangeHandler::Init((void*)nvse));
 	logInit("OnDialogueMenuBuildHandler", OnDialogueMenuBuildHandler::Init((void*)nvse));
-	logInit("BarterCommands", BarterCommands::InitHooks());
+	logInit("BarterCommands", BarterCommands::Init());
 	NoWeaponSearch::Init();
 	bool preSwitchOk = OnPreWeaponSwitchHandler::Init((void*)nvse);
 	logInit("OnPreWeaponSwitchHandler", preSwitchOk);
@@ -800,12 +769,11 @@ static void RegisterHandlers(NVSEInterface* nvse)
 	PreventWeaponSwitch::Init();
 	OnPreWeaponSwitchHandler::SetExternalBlockCheck(&PreventWeaponSwitch::Get);
 	RadioInjection::Init((void*)nvse);
-	logInit("PerkRuntimeFramework", PerkRuntimeFramework::Init((void*)nvse));
+	logInit("PerkCommands", PerkCommands::Init((void*)nvse));
 	AggroThreshold::Init(Settings::bAggroThreshold != 0);
 }
 
-namespace ITR
-{
+namespace ITR {
 	bool Init(void* nvsePtr)
 	{
 		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
@@ -825,7 +793,7 @@ namespace ITR
 		OpenDebugLog();
 
 		if (Settings::bAutoQuickLoad)
-			AutoQuickLoad::InstallHook();
+			AutoQuickLoad::Init();
 
 		if (Settings::bConsoleLogCleaner)
 			DeleteConsoleLog();
@@ -841,7 +809,7 @@ namespace ITR
 		ForceCombatTargetCommands::Init();
 		StringCommands::Init((void*)nvse);
 		RadioCommands::Init((void*)nvse);
-		CurrentDialogueCommands::Init((void*)nvse);
+		DialogueCommands::Init((void*)nvse);
 		RegisterHandlers(nvse);
 
 		return true;

@@ -1,4 +1,3 @@
-//ExtraData views - weapon mod flags, ash pile ref, dismembered limbs
 #pragma once
 
 #include <cstddef>
@@ -50,6 +49,14 @@ struct ExtraDismemberedLimbsView : BSExtraData {
 	UInt32 limbsCapacity;
 };
 
+struct ExtraRadioDataView //kExtraData_RadioData (0x68)
+{
+	UInt8 pad00[0x10];
+	UInt32 rangeType;
+	float staticPerc;
+	TESObjectREFR* positionRef;
+};
+
 static_assert(sizeof(DismemberedLimbView) == 0x14);
 static_assert(offsetof(DismemberedLimbView, exploded) == 0x01);
 static_assert(offsetof(DismemberedLimbView, objects) == 0x08);
@@ -63,6 +70,8 @@ static_assert(sizeof(ExtraWeaponModFlagsView) == 0x10, "ExtraWeaponModFlags layo
 static_assert(offsetof(ExtraWeaponModFlagsView, flags) == 0x0C, "ExtraWeaponModFlags flags offset changed");
 static_assert(sizeof(ExtraAshPileRefView) == 0x10, "ExtraAshPileRef layout changed");
 static_assert(offsetof(ExtraAshPileRefView, sourceRef) == 0x0C, "ExtraAshPileRef sourceRef offset changed");
+static_assert(offsetof(ExtraRadioDataView, rangeType) == 0x10);
+static_assert(offsetof(ExtraRadioDataView, positionRef) == 0x18);
 
 inline TESObjectREFR* ExtraAshPileRefGetSourceRef(BSExtraData* extraData)
 {

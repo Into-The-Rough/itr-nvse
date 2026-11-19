@@ -1,9 +1,9 @@
 #pragma once
 
-#include "internal/UIMinimal.h"
+#include "internal/MenuLayout.h"
 
 namespace MessageBoxQuickClose {
-	using MessageMenuHandleClickObserver = void (*)(UIMinimal::MessageMenu* menu, SInt32 tileID, UIMinimal::Tile* clickedTile);
+	using MessageMenuHandleClickObserver = void (*)(MessageMenuView* menu, SInt32 tileID, TileView* clickedTile);
 
 	bool Init();
 	bool IsInstalled();

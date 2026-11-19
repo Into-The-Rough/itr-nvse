@@ -9,6 +9,7 @@
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
+#include "internal/GameLayout.h"
 #include "internal/DialogueLayout.h"
 #include "internal/MenuLayout.h"
 
@@ -20,8 +21,7 @@
 class BGSNote;
 class Tile;
 
-namespace QuickReadNote
-{
+namespace QuickReadNote {
 	static int g_timeoutMs = 5000;
 	static int g_controlID = 6;
 	static int g_maxLines = 0;
@@ -40,37 +40,47 @@ namespace QuickReadNote
 	constexpr UInt32 kVtbl_MessageMenu = 0x107566C;
 	constexpr UInt32 kOffset_HandleClick = 0x0C;
 
-	struct BSSoundHandle {
-		UInt32 uiSoundID; //0x00
-		bool bAssumeSuccess; //0x04
-		UInt32 uiState; //0x08
-		BSSoundHandle() : uiSoundID(0xFFFFFFFF), bAssumeSuccess(false), uiState(0) {}
+	struct BSSoundHandle : BSSoundHandleView {
+		BSSoundHandle()
+		{
+			uiSoundID = 0xFFFFFFFF;
+			bAssumeSuccess = false;
+			uiState = 0;
+		}
+
 		bool IsValid() const { return uiSoundID != 0xFFFFFFFF; }
-		bool IsPlaying() const {
+
+		bool IsPlaying() const
+		{
 			if (!IsValid()) return false;
 			return Engine::BSSoundHandle_IsPlaying(const_cast<BSSoundHandle*>(this));
 		}
-		bool Play(bool abUnk) {
+
+		bool Play(bool abUnk)
+		{
 			if (!IsValid()) return false;
 			return Engine::BSSoundHandle_Play(this, abUnk);
 		}
-		void Stop() {
+
+		void Stop()
+		{
 			if (!IsValid()) return;
 			Engine::BSSoundHandle_Stop(this);
 		}
-		void SetVolume(float volume) {
+
+		void SetVolume(float volume)
+		{
 			if (!IsValid()) return;
 			Engine::BSSoundHandle_SetVolume(this, volume);
 		}
 	};
-	static_assert(offsetof(BSSoundHandle, uiSoundID) == 0x00);
-	static_assert(offsetof(BSSoundHandle, bAssumeSuccess) == 0x04);
-	static_assert(offsetof(BSSoundHandle, uiState) == 0x08);
 
 	struct SoundList {
 		BSSoundHandle data;
 		SoundList* next;
+
 		void Append(BSSoundHandle* sound) { ThisCall<void>(0x7A19A0, this, sound); }
+
 		void FreeAll() { ThisCall<void>(0x76B7A0, this); }
 	};
 
@@ -83,47 +93,61 @@ namespace QuickReadNote
 
 	struct BSWin32Audio {
 		static BSWin32Audio* GetSingleton() { return static_cast<BSWin32Audio*>(GetBSWin32Audio()); }
+
 		enum AudioFlags : UInt32 {
 			kAudioFlags_2D = 0x1,
 			kAudioFlags_100 = 0x100,
 			kAudioFlags_SystemSound = 0x800
 		};
-		BSSoundHandle GetSoundHandleByFormID(UInt32 formID, UInt32 flags) {
+
+		BSSoundHandle GetSoundHandleByFormID(UInt32 formID, UInt32 flags)
+		{
 			BSSoundHandle handle;
 			ThisCall<void>(0xAD73B0, this, &handle, formID, flags);
 			return handle;
 		}
-		BSSoundHandle GetSoundHandleByFilePath(const char* filePath, UInt32 flags, void* sound) {
+
+		BSSoundHandle GetSoundHandleByFilePath(const char* filePath, UInt32 flags, void* sound)
+		{
 			BSSoundHandle handle;
 			ThisCall<void>(0xAD7480, this, &handle, filePath, flags, sound);
 			return handle;
 		}
-		BSSoundHandle GetSoundHandleByEditorName(const char* editorName, UInt32 flags) {
+
+		BSSoundHandle GetSoundHandleByEditorName(const char* editorName, UInt32 flags)
+		{
 			BSSoundHandle handle;
 			ThisCall<void>(0xAD7550, this, &handle, editorName, flags);
 			return handle;
 		}
+
 		void FadeInDialogueSound() { ThisCall<void>(0xAD85A0, this); }
+
 		void FadeOutDialogueSound() { ThisCall<void>(0xAD8650, this); }
 	};
 
-	static bool ConversationFirstItem(ConversationView* conversation) {
+	static bool ConversationFirstItem(ConversationView* conversation)
+	{
 		return ThisCall<bool>(0x83B9A0, conversation);
 	}
 
-	static DialogueItemView* ConversationGetCurrentItem(ConversationView* conversation) {
+	static DialogueItemView* ConversationGetCurrentItem(ConversationView* conversation)
+	{
 		return ThisCall<DialogueItemView*>(0x83C820, conversation);
 	}
 
-	static bool DialogueItemFirstResponse(DialogueItemView* item) {
+	static bool DialogueItemFirstResponse(DialogueItemView* item)
+	{
 		return ThisCall<bool>(0x83C7B0, item);
 	}
 
-	static bool DialogueItemNextResponse(DialogueItemView* item) {
+	static bool DialogueItemNextResponse(DialogueItemView* item)
+	{
 		return ThisCall<bool>(0x83C7E0, item);
 	}
 
-	static DialogueResponseView* DialogueItemGetCurrentItem(DialogueItemView* item) {
+	static DialogueResponseView* DialogueItemGetCurrentItem(DialogueItemView* item)
+	{
 		return ThisCall<DialogueResponseView*>(0x83C820, item);
 	}
 
@@ -139,12 +163,14 @@ namespace QuickReadNote
 		ListNode* next;
 	};
 
-	static void ClearHUDSubtitles() {
+	static void ClearHUDSubtitles()
+	{
 		if (void* hud = GetHUDMainMenu())
 			ThisCall<void>(0x775670, hud);
 	}
 
-	static void StopHolotape(void* map) {
+	static void StopHolotape(void* map)
+	{
 		auto* mapView = MapMenuAsView(map);
 		auto* currentSound = static_cast<SoundList*>(mapView->currentHolotapeDialogueSound);
 		if (currentSound && currentSound->data.IsPlaying())
@@ -169,7 +195,8 @@ namespace QuickReadNote
 		ClearHUDSubtitles();
 	}
 
-	static void PlayHolotape(BGSNote* note, bool playStartStopSound) {
+	static void PlayHolotape(BGSNote* note, bool playStartStopSound)
+	{
 		void* map = GetMapMenu();
 		if (!map) return;
 		auto* mapView = MapMenuAsView(map);
@@ -244,7 +271,8 @@ namespace QuickReadNote
 		}
 	}
 
-	static UInt32 GetMaxLines() {
+	static UInt32 GetMaxLines()
+	{
 		if (g_maxLines > 0) {
 			if (g_maxLines < 8) return 8;
 			if (g_maxLines > 48) return 48;
@@ -261,7 +289,8 @@ namespace QuickReadNote
 		return maxLines;
 	}
 
-	static const char* TruncateNoteText(const char* text, BGSNote* note) {
+	static const char* TruncateNoteText(const char* text, BGSNote* note)
+	{
 		size_t len = strlen(text);
 		UInt32 maxLines = GetMaxLines();
 		const UInt32 CHARS_PER_LINE = 65;
@@ -273,13 +302,19 @@ namespace QuickReadNote
 			if (text[i] == '\n') {
 				lines++;
 				charsOnCurrentLine = 0;
-				if (lines > maxLines) { breakPoint = i; break; }
+				if (lines > maxLines) {
+					breakPoint = i;
+					break;
+				}
 			} else {
 				charsOnCurrentLine++;
 				if (charsOnCurrentLine >= CHARS_PER_LINE) {
 					lines++;
 					charsOnCurrentLine = 0;
-					if (lines > maxLines) { breakPoint = i; break; }
+					if (lines > maxLines) {
+						breakPoint = i;
+						break;
+					}
 				}
 			}
 		}
@@ -307,12 +342,13 @@ namespace QuickReadNote
 		return g_truncatedBuffer;
 	}
 
-	typedef bool(__cdecl* _ShowMessageBox)(const char*, UInt32, UInt32, void*, UInt32, UInt32, float, float, ...);
-	static const _ShowMessageBox ShowMessageBox = (_ShowMessageBox)0x703E80;
+	using ShowMessageBox_t = bool(__cdecl*)(const char*, UInt32, UInt32, void*, UInt32, UInt32, float, float, ...);
+	static const ShowMessageBox_t ShowMessageBox = (ShowMessageBox_t)0x703E80;
 
 	static BGSNote* g_noteToSelect = nullptr;
 
-	static void SelectNoteInList(void* mapMenu, BGSNote* note) {
+	static void SelectNoteInList(void* mapMenu, BGSNote* note)
+	{
 		if (!mapMenu || !note) return;
 
 		UInt32 selectedTrait = Engine::Tile_TextToTrait("_selected");
@@ -360,7 +396,8 @@ namespace QuickReadNote
 		ThisCall<void>(0x7993D0, mapMenu, note);
 	}
 
-	static void SwitchToMiscTab() {
+	static void SwitchToMiscTab()
+	{
 		void* mapMenu = GetMapMenu();
 		if (!mapMenu) return;
 		auto* mapView = MapMenuAsView(mapMenu);
@@ -379,7 +416,8 @@ namespace QuickReadNote
 		}
 	}
 
-	static void OpenPipBoyToNotes() {
+	static void OpenPipBoyToNotes()
+	{
 		void* im = GetInterfaceManager();
 		if (im) {
 			ThisCall<void>(0x70F4E0, im, nullptr, 0x3FF);
@@ -387,15 +425,16 @@ namespace QuickReadNote
 		}
 	}
 
-	static void ShowNoteMenu(BGSNote* note) {
+	static void ShowNoteMenu(BGSNote* note)
+	{
 		if (!note) return;
 		UInt8 noteType = BGSNoteGetType(note);
 		if (noteType == kBGSNoteType_Text) {
 			void* noteText = BGSNoteGetTextSource(note);
 			if (noteText) {
 				void** vtable = *(void***)noteText;
-				typedef const char*(__thiscall* GetFn)(void*, void*, UInt32);
-				GetFn getFn = (GetFn)vtable[4];
+				using Get_t = const char*(__thiscall*)(void*, void*, UInt32);
+				Get_t getFn = (Get_t)vtable[4];
 				const char* text = getFn(noteText, note, 'MANT');
 				if (text && *text) {
 					const char* displayText = TruncateNoteText(text, note);
@@ -418,10 +457,11 @@ namespace QuickReadNote
 		}
 	}
 
-	typedef void(__thiscall* _MessageMenu_HandleClick)(void* menu, SInt32 tileID, Tile* clickedTile);
-	static _MessageMenu_HandleClick ChainedHandleClick = nullptr;
+	using MessageMenu_HandleClick_t = void(__thiscall*)(void* menu, SInt32 tileID, Tile* clickedTile);
+	static MessageMenu_HandleClick_t ChainedHandleClick = nullptr;
 
-	static void HandleTruncatedMessageClick() {
+	static void HandleTruncatedMessageClick()
+	{
 		bool wasOurMessage = g_noteWasTruncated && g_truncatedNote;
 		BGSNote* noteToOpen = wasOurMessage ? g_truncatedNote : nullptr;
 		if (wasOurMessage) {
@@ -440,13 +480,14 @@ namespace QuickReadNote
 		}
 	}
 
-	void __fastcall MessageMenu_HandleClick_Hook(void* menu, void* edx, SInt32 tileID, Tile* clickedTile) {
+	void __fastcall Hook_MessageMenu_HandleClick(void* menu, void* edx, SInt32 tileID, Tile* clickedTile)
+	{
 		if (ChainedHandleClick)
 			ChainedHandleClick(menu, tileID, clickedTile);
 		HandleTruncatedMessageClick();
 	}
 
-	static void OnMessageMenuHandleClick(UIMinimal::MessageMenu* menu, SInt32 tileID, UIMinimal::Tile* clickedTile)
+	static void OnMessageMenuHandleClick(MessageMenuView* menu, SInt32 tileID, TileView* clickedTile)
 	{
 		(void)menu;
 		(void)tileID;
@@ -454,7 +495,8 @@ namespace QuickReadNote
 		HandleTruncatedMessageClick();
 	}
 
-	void __cdecl OnNoteAddedCallback(BGSNote* note) {
+	void __cdecl OnNoteAddedCallback(BGSNote* note)
+	{
 		if (note) {
 			g_pendingNote = note;
 			g_pendingNoteType = BGSNoteGetType(note);
@@ -465,13 +507,14 @@ namespace QuickReadNote
 
 	static Detours::CallDetour s_noteAddedCall;
 
-	const char* __fastcall ProcessNoteAdded(void* setting, BGSNote* note) {
+	const char* __fastcall ProcessNoteAdded(void* setting, BGSNote* note)
+	{
 		OnNoteAddedCallback(note);
-		auto original = reinterpret_cast<const char*(__thiscall*)(void*)>(s_noteAddedCall.GetOverwrittenAddr());
-		return original ? original(setting) : "";
+		return reinterpret_cast<const char*(__thiscall*)(void*)>(s_noteAddedCall.GetOverwrittenAddr())(setting);
 	}
 
-	__declspec(naked) void OnNoteAddedHook() {
+	__declspec(naked) void Hook_OnNoteAdded()
+	{
 		__asm {
 			mov edx, [ebp+8] //BGSNote* arg from caller frame -> fastcall arg2
 			jmp ProcessNoteAdded //ecx (setting) already loaded by original call site
@@ -487,61 +530,65 @@ namespace QuickReadNote
 		"AlwaysRun", "AutoMove", "Jump", "TogglePOV", "MenuMode",
 		"Rest", "VATS", "Hotkey1", "Hotkey2", "Hotkey3",
 		"Hotkey4", "Hotkey5", "Hotkey6", "Hotkey7", "Hotkey8",
-		"QuickSave", "QuickLoad", "Grab"
-	};
+		"QuickSave", "QuickLoad", "Grab"};
 
 	//note being added by the current PlayerCharacter::AddNote call, captured by the naked
 	//thunk so the append only fires for the note that set g_pendingNote, not a stale one
 	//reaching the QueueUIMessage site via the already-owned path
 	static BGSNote* s_addNoteArg = nullptr;
 
-	char __cdecl OnQueueUIMessageHook(char* msg, UInt32 emotion, char* imagePath,
-		char* soundName, float time, char instantEnd) {
+	char __cdecl Hook_OnQueueUIMessage(char* msg, UInt32 emotion, char* imagePath,
+		char* soundName, float time, char instantEnd)
+	{
 		if (msg && g_pendingNote && g_pendingNote == s_addNoteArg) {
 			const char* controlName = (g_controlID >= 0 && g_controlID <= 27) ? kControlNames[g_controlID] : "Key";
 			const char* action = (g_pendingNoteType == 0 || g_pendingNoteType == 3) ? "listen" : "view";
 			snprintf(s_modifiedMessage, sizeof(s_modifiedMessage), "%s. Press %s to %s.", msg, controlName, action);
 			msg = s_modifiedMessage;
 		}
-		typedef char(__cdecl* QueueUIMessageFn)(char*, UInt32, char*, char*, float, char);
-		auto original = reinterpret_cast<QueueUIMessageFn>(s_queueUIMessageCall.GetOverwrittenAddr());
-		return original ? original(msg, emotion, imagePath, soundName, time, instantEnd) : 0;
+		using QueueUIMessage_t = char(__cdecl*)(char*, UInt32, char*, char*, float, char);
+		return reinterpret_cast<QueueUIMessage_t>(s_queueUIMessageCall.GetOverwrittenAddr())(msg, emotion, imagePath, soundName, time, instantEnd);
 	}
 
-	__declspec(naked) void OnQueueUIMessageNakedHook() {
+	__declspec(naked) void Hook_OnQueueUIMessageNaked()
+	{
 		__asm {
 			mov eax, [ebp + 8] //BGSNote* arg_0 of AddNote, the 0x966B53 site shares its frame
 			mov s_addNoteArg, eax
-			jmp OnQueueUIMessageHook
+			jmp Hook_OnQueueUIMessage
 		}
 	}
 
 	class OSInputGlobals {
 	public:
-		bool GetControlState(UInt32 controlCode, UInt8 state) {
+		bool GetControlState(UInt32 controlCode, UInt8 state)
+		{
 			return Engine::OSInputGlobals_GetControlState(this, controlCode, state);
 		}
+
 		static OSInputGlobals* GetSingleton() { return (OSInputGlobals*)*g_inputGlobalsPtr; }
 	};
 
-	void Init(int timeoutMs, int controlID, int maxLines) {
+	void Init(int timeoutMs, int controlID, int maxLines)
+	{
 		g_timeoutMs = timeoutMs;
 		g_controlID = controlID;
 		g_maxLines = maxLines;
 
-		s_noteAddedCall.WriteRelCall(0x966B0A, OnNoteAddedHook);
-		s_queueUIMessageCall.WriteRelCall(0x966B53, OnQueueUIMessageNakedHook);
+		s_noteAddedCall.WriteRelCall(0x966B0A, Hook_OnNoteAdded);
+		s_queueUIMessageCall.WriteRelCall(0x966B53, Hook_OnQueueUIMessageNaked);
 
 		if (MessageBoxQuickClose::IsInstalled()) {
 			MessageBoxQuickClose::SetHandleClickObserver(OnMessageMenuHandleClick);
 		} else {
 			UInt32* vtbl = reinterpret_cast<UInt32*>(kVtbl_MessageMenu);
-			ChainedHandleClick = reinterpret_cast<_MessageMenu_HandleClick>(vtbl[kOffset_HandleClick / 4]);
-			SafeWrite::Write32(kVtbl_MessageMenu + kOffset_HandleClick, reinterpret_cast<UInt32>(MessageMenu_HandleClick_Hook));
+			ChainedHandleClick = reinterpret_cast<MessageMenu_HandleClick_t>(vtbl[kOffset_HandleClick / 4]);
+			SafeWrite::Write32(kVtbl_MessageMenu + kOffset_HandleClick, reinterpret_cast<UInt32>(Hook_MessageMenu_HandleClick));
 		}
 	}
 
-	void Update() {
+	void Update()
+	{
 		if (g_openPipBoyPending) {
 			g_openPipBoyPending = false;
 			OpenPipBoyToNotes();
@@ -570,13 +617,15 @@ namespace QuickReadNote
 		g_controlWasPressed = isPressed;
 	}
 
-	void UpdateSettings(int timeoutMs, int controlID, int maxLines) {
+	void UpdateSettings(int timeoutMs, int controlID, int maxLines)
+	{
 		g_timeoutMs = timeoutMs;
 		g_controlID = controlID;
 		g_maxLines = maxLines;
 	}
 
-	void ClearState() {
+	void ClearState()
+	{
 		g_pendingNote = nullptr;
 		g_pendingNoteType = 0;
 		g_noteAddedTime = 0;

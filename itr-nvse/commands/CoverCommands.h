@@ -1,6 +1,5 @@
 #pragma once
 
-namespace CoverCommands
-{
+namespace CoverCommands {
 	void RegisterCommands(void* nvse);
 }

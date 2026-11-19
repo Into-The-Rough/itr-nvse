@@ -1,5 +1,4 @@
 #include "LimbCommands.h"
-#include <cstdint>
 #include "internal/EngineFunctions.h"
 #include "internal/layout/ExtraData.h"
 
@@ -29,7 +28,7 @@ namespace {
 		if (!limbs || !(limbs->dismemberedMask & (1u << bodyPart)))
 			return kLimbGone_Intact;
 
-		for (uint32_t i = 0; i < limbs->numLimbs; i++) {
+		for (UInt32 i = 0; i < limbs->numLimbs; i++) {
 			const DismemberedLimbView* limb = limbs->limbs ? limbs->limbs[i] : nullptr;
 			if (limb && limb->bodyPart == bodyPart)
 				return limb->exploded ? kLimbGone_Exploded : kLimbGone_Dismembered;

@@ -6,10 +6,8 @@
 
 extern const _ExtractArgs ExtractArgs;
 
-namespace
-{
-	enum WorldspaceOffsetComponent
-	{
+namespace {
+	enum WorldspaceOffsetComponent {
 		kWorldspaceOffset_X,
 		kWorldspaceOffset_Y,
 		kWorldspaceOffset_Scale,
@@ -20,8 +18,7 @@ namespace
 		if (!world)
 			return 0.0;
 
-		switch (component)
-		{
+		switch (component) {
 			case kWorldspaceOffset_X:
 				return world->worldMapCellX;
 			case kWorldspaceOffset_Y:
@@ -46,8 +43,8 @@ namespace
 	}
 
 	static ParamInfo kParams_OneWorldspace[1] =
-	{
-		{ "worldspace", kParamType_WorldSpace, 0 },
+		{
+			{"worldspace", kParamType_WorldSpace, 0},
 	};
 
 	DEFINE_COMMAND_PLUGIN(GetWorldspaceOffsetX, "returns a worldspace's map X offset", 0, 1, kParams_OneWorldspace);
@@ -70,8 +67,7 @@ namespace
 	}
 }
 
-namespace WorldspaceOffsetCommands
-{
+namespace WorldspaceOffsetCommands {
 	void RegisterCommands(void* nvsePtr)
 	{
 		NVSEInterface* nvse = static_cast<NVSEInterface*>(nvsePtr);

@@ -1,7 +1,6 @@
 //standalone commands that do stuff (not event handlers)
 
 #include "ImperativeCommands.h"
-#define FORMUTILS_USE_NVSE_TYPES
 #include "internal/FormUtils.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
@@ -15,8 +14,6 @@
 #include "nvse/ParamInfos.h"
 #include <vector>
 #include <unordered_set>
-
-extern void Log(const char* fmt, ...);
 #include <algorithm>
 #include <cmath>
 
@@ -26,9 +23,8 @@ extern NVSEArrayVarInterface* g_arrInterface;
 
 using namespace FormUtils;
 
-namespace
-{
-	using InventoryRefCreateEntry_t = TESObjectREFR* (__stdcall *)(TESObjectREFR* container, TESForm* itemForm, SInt32 countDelta, ExtraDataList* xData);
+namespace {
+	using InventoryRefCreateEntry_t = TESObjectREFR*(__stdcall*)(TESObjectREFR * container, TESForm* itemForm, SInt32 countDelta, ExtraDataList* xData);
 	constexpr UInt32 kNVSEData_InventoryReferenceCreateEntry = 7;
 	constexpr UInt32 kAVCode_PerceptionCondition = 0x19;
 	constexpr UInt32 kAVCode_RightMobilityCondition = 0x1E;
@@ -48,8 +44,7 @@ namespace
 		if (ignoreFlag != 0.0f)
 			return false;
 
-		for (UInt32 avCode = kAVCode_PerceptionCondition; avCode <= kAVCode_RightMobilityCondition; avCode++)
-		{
+		for (UInt32 avCode = kAVCode_PerceptionCondition; avCode <= kAVCode_RightMobilityCondition; avCode++) {
 			float condition = actor->avOwner.Fn_03(avCode);
 			if (condition <= 0.0f)
 				return true;
@@ -80,25 +75,19 @@ namespace
 		if (!defObjMgr)
 			return true;
 
-		auto showBlockedMessage = []()
-		{
+		auto showBlockedMessage = []() {
 			if (const char* message = GetFullHealthMessage())
 				Engine::QueueUIMessage(message, 0, nullptr, nullptr, 2.0f, false);
 		};
 
-		if (item == defObjMgr->defaultObjects.asStruct.Stimpak || item == defObjMgr->defaultObjects.asStruct.SuperStimpak)
-		{
+		if (item == defObjMgr->defaultObjects.asStruct.Stimpak || item == defObjMgr->defaultObjects.asStruct.SuperStimpak) {
 			double healthPercent = GetActorHealthPercent(actor);
-			if (healthPercent >= 1.0)
-			{
+			if (healthPercent >= 1.0) {
 				showBlockedMessage();
 				return false;
 			}
-		}
-		else if (item == defObjMgr->defaultObjects.asStruct.DoctorsBag)
-		{
-			if (!HasCrippledLimb(actor))
-			{
+		} else if (item == defObjMgr->defaultObjects.asStruct.DoctorsBag) {
+			if (!HasCrippledLimb(actor)) {
 				showBlockedMessage();
 				return false;
 			}
@@ -121,13 +110,13 @@ namespace
 }
 
 static ParamInfo kParams_GetRefsSortedByDistance[7] = {
-	{ "maxDistance",      kParamType_Float,   0 },
-	{ "formType",         kParamType_Integer, 1 },
-	{ "cellDepth",        kParamType_Integer, 1 },
-	{ "includeTakenRefs", kParamType_Integer, 1 },
-	{ "maxHeadingAngle",  kParamType_Float,   1 },
-	{ "limit",            kParamType_Integer, 1 },
-	{ "baseForm",         kParamType_AnyForm, 1 },
+	{"maxDistance", kParamType_Float, 0},
+	{"formType", kParamType_Integer, 1},
+	{"cellDepth", kParamType_Integer, 1},
+	{"includeTakenRefs", kParamType_Integer, 1},
+	{"maxHeadingAngle", kParamType_Float, 1},
+	{"limit", kParamType_Integer, 1},
+	{"baseForm", kParamType_AnyForm, 1},
 };
 
 DEFINE_COMMAND_PLUGIN(GetRefsSortedByDistance, "Returns array of refs sorted by distance from player", 0, 7, kParams_GetRefsSortedByDistance);
@@ -160,8 +149,7 @@ static bool MatchesFormType(TESObjectREFR* refr, UInt32 formType, bool includeTa
 
 	UInt8 baseType = refr->baseForm->typeID;
 
-	switch (formType)
-	{
+	switch (formType) {
 		case kFormTypeFilter_AnyType:
 			return true;
 		case kFormTypeFilter_Actor:
@@ -191,8 +179,7 @@ bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &maxDistance, &formType, &cellDepth, &includeTakenRefs, &maxHeadingAngle, &limit, &baseForm))
 		return true;
 
-	if (maxDistance <= 0)
-	{
+	if (maxDistance <= 0) {
 		if (IsConsoleMode()) Console_Print("GetRefsSortedByDistance >> maxDistance must be > 0");
 		return true;
 	}
@@ -211,33 +198,30 @@ bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 		TESObjectREFR* ref;
 		float distance;
 	};
+
 	std::vector<RefWithDist> refs;
 	if (limit > 0) refs.reserve(limit);
 
-	auto HeapCmp = [](const RefWithDist& a, const RefWithDist& b) { return a.distance < b.distance; };
+	auto HeapCmp = [](const RefWithDist& a, const RefWithDist& b) {
+		return a.distance < b.distance;
+	};
 
 	TESObjectCELL* playerCell = player->parentCell;
 
 	if (cellDepth == -1) cellDepth = 5;
 	if (cellDepth > 10) cellDepth = 10;
 
-	auto ProcessCell = [&](TESObjectCELL* cell)
-	{
+	auto ProcessCell = [&](TESObjectCELL* cell) {
 		if (!cell) return;
 
-		//filter under the cell ref lock into a bounded buffer, no allocation while it is held.
-		//main-thread command with one collection live at a time, so a shared static buffer
-		//keeps this off the stack. hard cap per cell, chosen well above any real cell ref
-		//count, a cell that exceeds it truncates in list order (logged below) and can miss
-		//the nearest ref, the trade is bounded collection under the lock
+		//bounded static buffer so we never allocate while holding the cell ref lock
 		constexpr UInt32 kMaxPerCell = 8192;
 		static RefWithDist found[kMaxPerCell];
 		UInt32 foundCount = 0;
 
 		{
 			ScopedCellRefLock lock(cell);
-			for (auto iter = cell->objectList.Begin(); !iter.End(); ++iter)
-			{
+			for (auto iter = cell->objectList.Begin(); !iter.End(); ++iter) {
 				TESObjectREFR* refr = iter.Get();
 				if (!refr || refr == player) continue;
 				if (!MatchesFormType(refr, formType, includeTakenRefs != 0)) continue;
@@ -246,18 +230,17 @@ bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 				float distSq = FormUtils::CalcDistanceSquared(refr, (TESObjectREFR*)player);
 				if (distSq > maxDistSq) continue;
 
-				if (useHeading)
-				{
+				if (useHeading) {
 					//FNV: rotZ measured from +Y, clockwise (matches atan2(dx,dy))
 					float dx = refr->posX - player->posX;
 					float dy = refr->posY - player->posY;
 					float delta = atan2f(dx, dy) - playerRotZ;
-					while (delta > kPi)  delta -= 2.0f * kPi;
+					while (delta > kPi) delta -= 2.0f * kPi;
 					while (delta < -kPi) delta += 2.0f * kPi;
 					if (fabsf(delta) > maxHeadingRad) continue;
 				}
 
-				found[foundCount++] = { refr, sqrtf(distSq) };
+				found[foundCount++] = {refr, sqrtf(distSq)};
 				if (foundCount == kMaxPerCell) break;
 			}
 		}
@@ -265,28 +248,21 @@ bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 		if (foundCount == kMaxPerCell)
 			Log("GetRefsSortedByDistance: cell ref cap %u hit, nearest results may be incomplete", kMaxPerCell);
 
-		for (UInt32 i = 0; i < foundCount; i++)
-		{
+		for (UInt32 i = 0; i < foundCount; i++) {
 			TESObjectREFR* refr = found[i].ref;
 			float dist = found[i].distance;
 
-			if (limit > 0)
-			{
-				if (refs.size() < limit)
-				{
-					refs.push_back({ refr, dist });
+			if (limit > 0) {
+				if (refs.size() < limit) {
+					refs.push_back({refr, dist});
 					std::push_heap(refs.begin(), refs.end(), HeapCmp);
-				}
-				else if (dist < refs.front().distance)
-				{
+				} else if (dist < refs.front().distance) {
 					std::pop_heap(refs.begin(), refs.end(), HeapCmp);
-					refs.back() = { refr, dist };
+					refs.back() = {refr, dist};
 					std::push_heap(refs.begin(), refs.end(), HeapCmp);
 				}
-			}
-			else
-			{
-				refs.push_back({ refr, dist });
+			} else {
+				refs.push_back({refr, dist});
 			}
 		}
 	};
@@ -294,15 +270,12 @@ bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 	ProcessCell(playerCell);
 
 	TESWorldSpace* world = playerCell->worldSpace;
-	if (world && world->cellMap && cellDepth > 0 && !playerCell->IsInterior() && playerCell->coords)
-	{
+	if (world && world->cellMap && cellDepth > 0 && !playerCell->IsInterior() && playerCell->coords) {
 		SInt32 baseX = (SInt32)playerCell->coords->x;
 		SInt32 baseY = (SInt32)playerCell->coords->y;
 
-		for (SInt32 dx = -cellDepth; dx <= cellDepth; dx++)
-		{
-			for (SInt32 dy = -cellDepth; dy <= cellDepth; dy++)
-			{
+		for (SInt32 dx = -cellDepth; dx <= cellDepth; dx++) {
+			for (SInt32 dy = -cellDepth; dy <= cellDepth; dy++) {
 				if (dx == 0 && dy == 0) continue;
 				UInt32 key = ((baseX + dx) << 16) | ((baseY + dy) & 0xFFFF);
 				TESObjectCELL* cell = world->cellMap->Lookup(key);
@@ -316,27 +289,25 @@ bool Cmd_GetRefsSortedByDistance_Execute(COMMAND_ARGS)
 	});
 
 	NVSEArrayVarInterface::Array* arr = g_arrInterface->CreateArray(nullptr, 0, scriptObj);
-	for (const auto& item : refs)
-	{
+	for (const auto& item : refs) {
 		NVSEArrayVarInterface::Element elem(item.ref);
 		g_arrInterface->AppendElement(arr, elem);
 	}
 
 	g_arrInterface->AssignCommandResult(arr, result);
 
-	if (IsConsoleMode())
-	{
+	if (IsConsoleMode()) {
 		Console_Print("GetRefsSortedByDistance >> Found %d refs within %.1f units", refs.size(), maxDistance);
 	}
 
 	return true;
 }
 
-typedef TESObjectREFR* (*_PlaceAtMe)(TESObjectREFR*, TESForm*, UInt32, UInt32, UInt32, float);
-static const _PlaceAtMe PlaceAtMe = (_PlaceAtMe)0x5C4B30;
+using PlaceAtMe_t = TESObjectREFR* (*)(TESObjectREFR*, TESForm*, UInt32, UInt32, UInt32, float);
+static const PlaceAtMe_t PlaceAtMe = (PlaceAtMe_t)0x5C4B30;
 
 static ParamInfo kParams_Duplicate[1] = {
-	{ "count", kParamType_Integer, 1 },
+	{"count", kParamType_Integer, 1},
 };
 
 DEFINE_COMMAND_PLUGIN(Duplicate, "Duplicates the reference and returns the new ref", 1, 1, kParams_Duplicate);
@@ -353,8 +324,7 @@ bool Cmd_Duplicate_Execute(COMMAND_ARGS)
 	if (count < 1) count = 1;
 	if (count > 1000) count = 1000;
 
-	if (!thisObj || !thisObj->baseForm)
-	{
+	if (!thisObj || !thisObj->baseForm) {
 		if (IsConsoleMode())
 			Console_Print("Duplicate >> No reference selected");
 		return true;
@@ -363,8 +333,7 @@ bool Cmd_Duplicate_Execute(COMMAND_ARGS)
 	TESObjectREFR* lastRef = nullptr;
 	UInt32 created = 0;
 
-	for (UInt32 i = 0; i < count; i++)
-	{
+	for (UInt32 i = 0; i < count; i++) {
 		TESObjectREFR* newRef = PlaceAtMe(
 			thisObj,
 			thisObj->baseForm,
@@ -373,21 +342,17 @@ bool Cmd_Duplicate_Execute(COMMAND_ARGS)
 			0,
 			1.0f);
 
-		if (newRef)
-		{
+		if (newRef) {
 			lastRef = newRef;
 			created++;
 		}
 	}
 
-	if (lastRef)
-	{
+	if (lastRef) {
 		*((UInt32*)result) = lastRef->refID;
 		if (IsConsoleMode())
 			Console_Print("Duplicate >> Created %d ref(s), last: %08X", created, lastRef->refID);
-	}
-	else
-	{
+	} else {
 		if (IsConsoleMode())
 			Console_Print("Duplicate >> Failed to create reference");
 	}
@@ -395,18 +360,18 @@ bool Cmd_Duplicate_Execute(COMMAND_ARGS)
 	return true;
 }
 
-typedef bool (__thiscall *_ConditionList_Evaluate)(void* conditionList, TESObjectREFR* runOnRef, TESForm* arg2, bool* result, bool arg4);
-static const _ConditionList_Evaluate ConditionList_Evaluate = (_ConditionList_Evaluate)0x680C60;
+using ConditionList_Evaluate_t = bool(__thiscall*)(void* conditionList, TESObjectREFR* runOnRef, TESForm* arg2, bool* result, bool arg4);
+static const ConditionList_Evaluate_t ConditionList_Evaluate = (ConditionList_Evaluate_t)0x680C60;
 
 //0x66EF50 returns float in st0 (fld/retn 4), an int-typed call reads eax garbage and leaks an x87 slot
-typedef double (__thiscall *_GetActorValue)(void* actorValueOwner, UInt32 avCode);
-static const _GetActorValue GetActorValue = (_GetActorValue)0x66EF50;
+using GetActorValue_t = double(__thiscall*)(void* actorValueOwner, UInt32 avCode);
+static const GetActorValue_t GetActorValue = (GetActorValue_t)0x66EF50;
 
-typedef SInt32 (__thiscall *_GetItemCount)(TESObjectREFR* container, TESForm* item);
-static const _GetItemCount GetItemCount = (_GetItemCount)0x575610;
+using GetItemCount_t = SInt32(__thiscall*)(TESObjectREFR* container, TESForm* item);
+static const GetItemCount_t GetItemCount = (GetItemCount_t)0x575610;
 
 static ParamInfo kParams_GetAvailableRecipes[1] = {
-	{ "category", kParamType_AnyForm, 1 },
+	{"category", kParamType_AnyForm, 1},
 };
 
 DEFINE_COMMAND_PLUGIN(GetAvailableRecipes, "Returns array of recipes player can craft", 0, 1, kParams_GetAvailableRecipes);
@@ -430,13 +395,11 @@ bool Cmd_GetAvailableRecipes_Execute(COMMAND_ARGS)
 	std::vector<TESForm*> availableRecipes;
 	tList<TESRecipe>* recipeList = &dataHandler->recipeList;
 
-	for (auto iter = recipeList->Begin(); !iter.End(); ++iter)
-	{
+	for (auto iter = recipeList->Begin(); !iter.End(); ++iter) {
 		TESRecipe* recipe = iter.Get();
 		if (!recipe) continue;
 
-		if (categoryFilter)
-		{
+		if (categoryFilter) {
 			TESRecipeCategory* cat = recipe->category;
 			TESRecipeCategory* subCat = recipe->subCategory;
 			if (cat != categoryFilter && subCat != categoryFilter)
@@ -449,8 +412,7 @@ bool Cmd_GetAvailableRecipes_Execute(COMMAND_ARGS)
 		if (!conditionsPassed)
 			continue;
 
-		if (recipe->reqSkill != (UInt32)-1 && recipe->reqSkillLevel > 0)
-		{
+		if (recipe->reqSkill != (UInt32)-1 && recipe->reqSkillLevel > 0) {
 			void* actorValueOwner = ActorGetActorValueOwner(player);
 			SInt32 playerSkill = (SInt32)GetActorValue(actorValueOwner, recipe->reqSkill);
 			if (playerSkill < (SInt32)recipe->reqSkillLevel)
@@ -458,15 +420,13 @@ bool Cmd_GetAvailableRecipes_Execute(COMMAND_ARGS)
 		}
 
 		bool hasAllInputs = true;
-		for (auto inputIter = recipe->inputs.Begin(); !inputIter.End(); ++inputIter)
-		{
+		for (auto inputIter = recipe->inputs.Begin(); !inputIter.End(); ++inputIter) {
 			ComponentEntry* component = inputIter.Get();
 			if (!component || !component->item)
 				continue;
 
 			UInt32 playerCount = GetItemCount(player, component->item);
-			if (playerCount < component->quantity)
-			{
+			if (playerCount < component->quantity) {
 				hasAllInputs = false;
 				break;
 			}
@@ -477,32 +437,29 @@ bool Cmd_GetAvailableRecipes_Execute(COMMAND_ARGS)
 		availableRecipes.push_back(recipe);
 	}
 
-	if (!availableRecipes.empty() && g_arrInterface)
-	{
+	if (!availableRecipes.empty() && g_arrInterface) {
 		NVSEArrayVarInterface::Array* arr = g_arrInterface->CreateArray(nullptr, 0, scriptObj);
-		for (TESForm* recipe : availableRecipes)
-		{
+		for (TESForm* recipe : availableRecipes) {
 			NVSEArrayVarInterface::Element elem(recipe);
 			g_arrInterface->AppendElement(arr, elem);
 		}
 		g_arrInterface->AssignCommandResult(arr, result);
 	}
 
-	if (IsConsoleMode())
-	{
+	if (IsConsoleMode()) {
 		Console_Print("GetAvailableRecipes >> Found %d craftable recipes", availableRecipes.size());
 	}
 
 	return true;
 }
 
-typedef void* (__thiscall *_GetCombatTargetForActor)(void* combatGroup, Actor* target);
-static const _GetCombatTargetForActor GetCombatTargetForActor = (_GetCombatTargetForActor)0x9865D0;
+using GetCombatTargetForActor_t = void*(__thiscall*)(void* combatGroup, Actor* target);
+static const GetCombatTargetForActor_t GetCombatTargetForActor = (GetCombatTargetForActor_t)0x9865D0;
 
 #ifdef _DEBUG
 //debug command to dump CombatTarget memory for offset verification
 static ParamInfo kParams_DumpCombatTarget[1] = {
-	{ "target", kParamType_Actor, 0 },
+	{"target", kParamType_Actor, 0},
 };
 
 DEFINE_COMMAND_PLUGIN(DumpCombatTarget, "Dumps CombatTarget structure for offset verification", 1, 1, kParams_DumpCombatTarget);
@@ -513,14 +470,12 @@ bool Cmd_DumpCombatTarget_Execute(COMMAND_ARGS)
 
 	Actor* target = nullptr;
 
-	if (!ExtractArgs(EXTRACT_ARGS, &target))
-	{
+	if (!ExtractArgs(EXTRACT_ARGS, &target)) {
 		Console_Print("DumpCombatTarget >> ExtractArgs failed");
 		return true;
 	}
 
-	if (!thisObj || !target || !IsActorRef(thisObj))
-	{
+	if (!thisObj || !target || !IsActorRef(thisObj)) {
 		Console_Print("DumpCombatTarget >> Call on actor ref with target as param");
 		return true;
 	}
@@ -529,22 +484,19 @@ bool Cmd_DumpCombatTarget_Execute(COMMAND_ARGS)
 
 	//get combat controller via direct function call
 	void* combatController = Engine::Actor_GetCombatController(observer);
-	if (!combatController)
-	{
+	if (!combatController) {
 		Console_Print("DumpCombatTarget >> Observer has no combat controller");
 		return true;
 	}
 
 	void* combatGroup = CombatControllerGetCombatGroup(combatController);
-	if (!combatGroup)
-	{
+	if (!combatGroup) {
 		Console_Print("DumpCombatTarget >> No combat group");
 		return true;
 	}
 
 	void* combatTarget = GetCombatTargetForActor(combatGroup, target);
-	if (!combatTarget)
-	{
+	if (!combatTarget) {
 		Console_Print("DumpCombatTarget >> No CombatTarget for target actor");
 		return true;
 	}
@@ -610,7 +562,7 @@ static bool CreatePositionArray(COMMAND_ARGS, const BGSWorldLocationView* locati
 
 //combat target location getters - all use same params
 static ParamInfo kParams_CombatTargetLocation[1] = {
-	{ "target", kParamType_Actor, 0 },
+	{"target", kParamType_Actor, 0},
 };
 
 DEFINE_COMMAND_PLUGIN(GetTargetLastSeenLocation, "Returns array [x,y,z] of where observer last saw target", 1, 1, kParams_CombatTargetLocation);
@@ -663,12 +615,12 @@ bool Cmd_GetTargetInitialLocation_Execute(COMMAND_ARGS)
 }
 
 static ParamInfo kParams_SetCreatureCombatSkill[2] = {
-	{ "value",    kParamType_Integer,  0 },
-	{ "creature", kParamType_AnyForm,  1 },
+	{"value", kParamType_Integer, 0},
+	{"creature", kParamType_AnyForm, 1},
 };
 
 static ParamInfo kParams_UseAidItem[1] = {
-	{ "item", kParamType_AnyForm, 0 },
+	{"item", kParamType_AnyForm, 0},
 };
 
 DEFINE_COMMAND_PLUGIN(UseAidItem, "Uses an aid item (AlchemyItem) on the calling actor", 1, 1, kParams_UseAidItem);
@@ -705,11 +657,9 @@ bool Cmd_UseAidItem_Execute(COMMAND_ARGS)
 	if (!CanUseAidItemVanilla(actor, item))
 		return true;
 
-	if (g_inventoryRefCreateEntry)
-	{
+	if (g_inventoryRefCreateEntry) {
 		ExtraDataList* xData = nullptr;
-		if (entry->extendData)
-		{
+		if (entry->extendData) {
 			auto it = entry->extendData->Begin();
 			if (!it.End())
 				xData = it.Get();
@@ -745,25 +695,21 @@ bool Cmd_SetCreatureCombatSkill_Execute(COMMAND_ARGS)
 }
 
 //ForceReload - forces actor to play reload animation and refill ammo
-typedef char (__thiscall *_ActorReload)(Actor*, TESObjectWEAP*, UInt32, bool);
-static const _ActorReload ActorReload = (_ActorReload)0x8A8420;
+using ActorReload_t = char(__thiscall*)(Actor*, TESObjectWEAP*, UInt32, bool);
+static const ActorReload_t ActorReload = (ActorReload_t)0x8A8420;
 
-typedef bool (__thiscall *_ItemChangeHasWeaponMod)(void*, UInt32);
-static const _ItemChangeHasWeaponMod ItemChangeHasWeaponMod = (_ItemChangeHasWeaponMod)0x4BDA70;
+using ItemChangeHasWeaponMod_t = bool(__thiscall*)(void*, UInt32);
+static const ItemChangeHasWeaponMod_t ItemChangeHasWeaponMod = (ItemChangeHasWeaponMod_t)0x4BDA70;
 
-//Actor::Reload calls TESObjectWEAP::GetEquippedAmmo which returns HighProcess->pCurrentAmmo
-//if set, else the weapon's default Ammo (not the AmmoList). On save-load the actor's
-//pCurrentAmmo is null, so a reload fails when the only inventory ammo is an override from
-//the weapon's AmmoList (e.g. Max Charge packs). Pre-seed pCurrentAmmo with the correct
-//entry the same way InventoryChanges::GetAmmoForWeapon resolves it.
-typedef void* (__cdecl *_GetInventoryChanges)(TESObjectREFR*);
-static const _GetInventoryChanges GetInventoryChanges = (_GetInventoryChanges)0x4BF220;
+//pre-seed HighProcess->pCurrentAmmo via GetAmmoForWeapon so AmmoList overrides reload after load
+using GetInventoryChanges_t = void*(__cdecl*)(TESObjectREFR*);
+static const GetInventoryChanges_t GetInventoryChanges = (GetInventoryChanges_t)0x4BF220;
 
-typedef TESForm* (__thiscall *_GetAmmoForWeapon)(void*, TESObjectWEAP*, bool*);
-static const _GetAmmoForWeapon GetAmmoForWeapon = (_GetAmmoForWeapon)0x4C7300;
+using GetAmmoForWeapon_t = TESForm*(__thiscall*)(void*, TESObjectWEAP*, bool*);
+static const GetAmmoForWeapon_t GetAmmoForWeapon = (GetAmmoForWeapon_t)0x4C7300;
 
-typedef void* (__thiscall *_GetInventoryItem)(void*, TESForm*, UInt32);
-static const _GetInventoryItem GetInventoryItem = (_GetInventoryItem)0x4D0650;
+using GetInventoryItem_t = void*(__thiscall*)(void*, TESForm*, UInt32);
+static const GetInventoryItem_t GetInventoryItem = (GetInventoryItem_t)0x4D0650;
 
 DEFINE_COMMAND_PLUGIN(ForceReload, "Forces actor to reload their weapon", 1, 0, nullptr);
 
@@ -807,8 +753,7 @@ bool Cmd_ForceReload_Execute(COMMAND_ARGS)
 			newEntry->count = 0;
 			BaseProcessSetAmmoInfo(process, newEntry);
 		}
-	}
-	else if (ammoInfo) {
+	} else if (ammoInfo) {
 		ammoInfo->count = 0;
 	}
 
@@ -820,23 +765,18 @@ bool Cmd_ForceReload_Execute(COMMAND_ARGS)
 }
 
 //TESDataHandler::CreateFormFromID - allocates a blank form of given type
-typedef TESForm* (*_CreateFormInstance)(UInt8 type);
-static const _CreateFormInstance CreateFormInstance = (_CreateFormInstance)0x465110;
+using CreateFormInstance_t = TESForm* (*)(UInt8 type);
+static const CreateFormInstance_t CreateFormInstance = (CreateFormInstance_t)0x465110;
 
 //DataHandler::DoAddForm - registers form in game DB, assigns runtime 0xFF formID
-typedef UInt32 (__thiscall *_DataHandler_DoAddForm)(void*, TESForm*);
-static const _DataHandler_DoAddForm DataHandler_DoAddForm = (_DataHandler_DoAddForm)0x4603B0;
+using DataHandler_DoAddForm_t = UInt32(__thiscall*)(void*, TESForm*);
+static const DataHandler_DoAddForm_t DataHandler_DoAddForm = (DataHandler_DoAddForm_t)0x4603B0;
 
-//xNVSE's TESForm::CloneForm is this same sequence plus a TESBoundObject bounds fixup, but it
-//reaches it through DYNAMIC_CAST, which drags the whole RTTI table into the build. NPC_ records
-//carry OBND as zeros, so the fixup would copy zeros onto zeros here
-//
-//0xFF form IDs are recycled per session, so this must be cleared on load or a stale ID can match
-//a foreign form
+//avoid xNVSE TESForm::CloneForm (pulls full RTTI table), clear on load since 0xFF IDs recycle
 static std::unordered_set<UInt32> s_raceCloneIDs;
 
 static ParamInfo kParams_SetRaceAlt[1] = {
-	{ "race", kParamType_Race, 0 },
+	{"race", kParamType_Race, 0},
 };
 
 DEFINE_COMMAND_PLUGIN(SetRaceAlt, "Sets race on a per-reference basis by cloning the base NPC", 1, 1, kParams_SetRaceAlt);
@@ -849,23 +789,20 @@ bool Cmd_SetRaceAlt_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &raceForm))
 		return true;
 
-	if (!thisObj || !thisObj->baseForm || !raceForm)
-	{
+	if (!thisObj || !thisObj->baseForm || !raceForm) {
 		if (IsConsoleMode())
 			Console_Print("SetRaceAlt >> Need an NPC ref and a race");
 		return true;
 	}
 
-	if (thisObj->baseForm->typeID != kFormType_NPC)
-	{
+	if (thisObj->baseForm->typeID != kFormType_NPC) {
 		if (IsConsoleMode())
 			Console_Print("SetRaceAlt >> Not an NPC ref");
 		return true;
 	}
 
 	//a runtime form variable can hold any form type
-	if (raceForm->typeID != kFormType_Race)
-	{
+	if (raceForm->typeID != kFormType_Race) {
 		if (IsConsoleMode())
 			Console_Print("SetRaceAlt >> Not a race form");
 		return true;
@@ -877,15 +814,11 @@ bool Cmd_SetRaceAlt_Execute(COMMAND_ARGS)
 
 	//reuse only a clone this command made, a foreign 0xFF base can be shared by other references
 	//and setting race on it would move them too
-	if (s_raceCloneIDs.count(origNPC->refID))
-	{
+	if (s_raceCloneIDs.count(origNPC->refID)) {
 		targetNPC = origNPC;
-	}
-	else
-	{
+	} else {
 		TESForm* cloneForm = CreateFormInstance(kFormType_NPC);
-		if (!cloneForm)
-		{
+		if (!cloneForm) {
 			if (IsConsoleMode())
 				Console_Print("SetRaceAlt >> Failed to create NPC form");
 			return true;
@@ -902,7 +835,6 @@ bool Cmd_SetRaceAlt_Execute(COMMAND_ARGS)
 		//runtime 0xFF clone is not serialised, the swap does not survive save/load,
 		//callers must reapply on load (documented in FEATURES.md)
 		thisObj->baseForm = cloneForm;
-
 	}
 
 	targetNPC->race.race = newRace;
@@ -922,245 +854,239 @@ bool Cmd_SetRaceAlt_Execute(COMMAND_ARGS)
 }
 
 namespace ImperativeCommands {
-void ClearState()
-{
-	s_raceCloneIDs.clear();
-}
-
-bool Init(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-
-	g_inventoryRefCreateEntry = nullptr;
-
-	NVSEDataInterface* dataInterface = reinterpret_cast<NVSEDataInterface*>(nvse->QueryInterface(kInterface_Data));
-	if (dataInterface)
+	void ClearState()
 	{
-		g_inventoryRefCreateEntry = reinterpret_cast<InventoryRefCreateEntry_t>(
-			dataInterface->GetFunc(kNVSEData_InventoryReferenceCreateEntry));
+		s_raceCloneIDs.clear();
 	}
 
-	return true;
-}
+	bool Init(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
 
-void RegisterCommands(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterTypedCommand(&kCommandInfo_GetRefsSortedByDistance, kRetnType_Array);
-	nvse->RegisterTypedCommand(&kCommandInfo_Duplicate, kRetnType_Form);
-	nvse->RegisterTypedCommand(&kCommandInfo_GetAvailableRecipes, kRetnType_Array);
-}
+		g_inventoryRefCreateEntry = nullptr;
 
-void RegisterCommands2(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterTypedCommand(&kCommandInfo_GetTargetLastSeenLocation, kRetnType_Array);
-	nvse->RegisterTypedCommand(&kCommandInfo_GetTargetDetectedLocation, kRetnType_Array);
-	nvse->RegisterTypedCommand(&kCommandInfo_GetTargetLastFullyVisibleLocation, kRetnType_Array);
-	nvse->RegisterTypedCommand(&kCommandInfo_GetTargetInitialLocation, kRetnType_Array);
-}
+		NVSEDataInterface* dataInterface = reinterpret_cast<NVSEDataInterface*>(nvse->QueryInterface(kInterface_Data));
+		if (dataInterface) {
+			g_inventoryRefCreateEntry = reinterpret_cast<InventoryRefCreateEntry_t>(
+				dataInterface->GetFunc(kNVSEData_InventoryReferenceCreateEntry));
+		}
+
+		return true;
+	}
+
+	void RegisterCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterTypedCommand(&kCommandInfo_GetRefsSortedByDistance, kRetnType_Array);
+		nvse->RegisterTypedCommand(&kCommandInfo_Duplicate, kRetnType_Form);
+		nvse->RegisterTypedCommand(&kCommandInfo_GetAvailableRecipes, kRetnType_Array);
+	}
+
+	void RegisterTargetLocationCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterTypedCommand(&kCommandInfo_GetTargetLastSeenLocation, kRetnType_Array);
+		nvse->RegisterTypedCommand(&kCommandInfo_GetTargetDetectedLocation, kRetnType_Array);
+		nvse->RegisterTypedCommand(&kCommandInfo_GetTargetLastFullyVisibleLocation, kRetnType_Array);
+		nvse->RegisterTypedCommand(&kCommandInfo_GetTargetInitialLocation, kRetnType_Array);
+	}
 
 #ifdef _DEBUG
-//own opcode base so the release command layout never shifts
-void RegisterDebugCommands(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_DumpCombatTarget);
-}
+	//own opcode base so the release command layout never shifts
+	void RegisterDebugCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_DumpCombatTarget);
+	}
 #endif
 
-void RegisterCommands3(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_UseAidItem);
-}
+	void RegisterAidCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_UseAidItem);
+	}
 
-void RegisterCommands4(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_SetCreatureCombatSkill);
-}
+	void RegisterCombatSkillCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_SetCreatureCombatSkill);
+	}
 
-void RegisterCommands5(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_ForceReload);
-}
+	void RegisterForceReloadCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_ForceReload);
+	}
 
-void RegisterCommands6(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_SetRaceAlt);
-}
-
+	void RegisterSetRaceCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_SetRaceAlt);
+	}
 }
 
 #include "handlers/OnContactHandler.h"
 
 namespace ImperativeCommands {
 
-static ParamInfo kParams_ContactWatch[2] = {
-	{"watch", kParamType_Integer, 0},
-	{"target", kParamType_AnyForm, 1},
-};
-DEFINE_COMMAND_PLUGIN(SetOnContactWatch, "Enable/disable contact event watching for a ref or base form", 0, 2, kParams_ContactWatch);
+	static ParamInfo kParams_ContactWatch[2] = {
+		{"watch", kParamType_Integer, 0},
+		{"target", kParamType_AnyForm, 1},
+	};
+	DEFINE_COMMAND_PLUGIN(SetOnContactWatch, "Enable/disable contact event watching for a ref or base form", 0, 2, kParams_ContactWatch);
 
-bool Cmd_SetOnContactWatch_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-	UInt32 watch = 0;
-	TESForm* target = nullptr;
-	if (!ExtractArgs(EXTRACT_ARGS, &watch, &target)) return true;
+	bool Cmd_SetOnContactWatch_Execute(COMMAND_ARGS)
+	{
+		*result = 0;
+		UInt32 watch = 0;
+		TESForm* target = nullptr;
+		if (!ExtractArgs(EXTRACT_ARGS, &watch, &target)) return true;
 
-	UInt32 formID = 0;
-	bool targetIsBaseForm = false;
-	if (target) {
-		if (target->IsReference())
-			formID = target->refID;
-		else {
-			formID = target->refID;
-			targetIsBaseForm = true;
+		UInt32 formID = 0;
+		bool targetIsBaseForm = false;
+		if (target) {
+			if (target->IsReference())
+				formID = target->refID;
+			else {
+				formID = target->refID;
+				targetIsBaseForm = true;
+			}
+		} else {
+			if (!thisObj) return true;
+			formID = thisObj->refID;
 		}
-	} else {
+
+		if (!formID) return true;
+
+		if (targetIsBaseForm) {
+			if (watch)
+				OnContactHandler::AddBaseWatch(formID);
+			else
+				OnContactHandler::RemoveBaseWatch(formID);
+		} else {
+			if (watch)
+				OnContactHandler::AddWatch(formID);
+			else
+				OnContactHandler::RemoveWatch(formID);
+		}
+
+		*result = 1;
+		if (IsConsoleMode())
+			Console_Print("SetOnContactWatch >> %s %s (0x%08X)",
+				watch ? "watching" : "unwatching",
+				targetIsBaseForm ? "base form" : "ref",
+				formID);
+		return true;
+	}
+
+	static ParamInfo kParams_GetContactWatch[1] = {
+		{"target", kParamType_AnyForm, 1},
+	};
+	DEFINE_COMMAND_PLUGIN(GetOnContactWatch, "Check if a ref or base form is being watched for contacts", 0, 1, kParams_GetContactWatch);
+
+	bool Cmd_GetOnContactWatch_Execute(COMMAND_ARGS)
+	{
+		*result = 0;
+		TESForm* target = nullptr;
+		if (!ExtractArgs(EXTRACT_ARGS, &target)) return true;
+
+		if (target) {
+			if (target->IsReference())
+				*result = OnContactHandler::IsRefWatched(target->refID) ? 1.0 : 0.0;
+			else
+				*result = OnContactHandler::IsBaseWatched(target->refID) ? 1.0 : 0.0;
+			return true;
+		}
+
 		if (!thisObj) return true;
-		formID = thisObj->refID;
-	}
-
-	if (!formID) return true;
-
-	if (targetIsBaseForm) {
-		if (watch)
-			OnContactHandler::AddBaseWatch(formID);
-		else
-			OnContactHandler::RemoveBaseWatch(formID);
-	} else {
-		if (watch)
-			OnContactHandler::AddWatch(formID);
-		else
-			OnContactHandler::RemoveWatch(formID);
-	}
-
-	*result = 1;
-	if (IsConsoleMode())
-		Console_Print("SetOnContactWatch >> %s %s (0x%08X)",
-			watch ? "watching" : "unwatching",
-			targetIsBaseForm ? "base form" : "ref",
-			formID);
-	return true;
-}
-
-static ParamInfo kParams_GetContactWatch[1] = {
-	{"target", kParamType_AnyForm, 1},
-};
-DEFINE_COMMAND_PLUGIN(GetOnContactWatch, "Check if a ref or base form is being watched for contacts", 0, 1, kParams_GetContactWatch);
-
-bool Cmd_GetOnContactWatch_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-	TESForm* target = nullptr;
-	if (!ExtractArgs(EXTRACT_ARGS, &target)) return true;
-
-	if (target) {
-		if (target->IsReference())
-			*result = OnContactHandler::IsRefWatched(target->refID) ? 1.0 : 0.0;
-		else
-			*result = OnContactHandler::IsBaseWatched(target->refID) ? 1.0 : 0.0;
+		*result = OnContactHandler::IsRefWatched(thisObj->refID) ? 1.0 : 0.0;
 		return true;
 	}
 
-	if (!thisObj) return true;
-	*result = OnContactHandler::IsRefWatched(thisObj->refID) ? 1.0 : 0.0;
-	return true;
-}
+	void RegisterContactWatchCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_SetOnContactWatch);
+		nvse->RegisterCommand(&kCommandInfo_GetOnContactWatch);
+	}
 
-void RegisterCommands7(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_SetOnContactWatch);
-	nvse->RegisterCommand(&kCommandInfo_GetOnContactWatch);
-}
+	//RefillAmmo - adds ammo to actor's inventory and fills their clip
+	//based on RefillPlayerAmmo from ShowOff-NVSE by Demorome, generalized for any actor
+	//ShowOff-NVSE: use permitted with credit (https://github.com/Demorome/ShowOff-NVSE)
+	using GetRegenRate_t = double(__thiscall*)(void*, bool);
+	static const GetRegenRate_t GetWeaponRegenRate = (GetRegenRate_t)0x709430;
 
-//RefillAmmo - adds ammo to actor's inventory and fills their clip
-//based on RefillPlayerAmmo from ShowOff-NVSE by Demorome, generalized for any actor
-//ShowOff-NVSE: use permitted with credit (https://github.com/Demorome/ShowOff-NVSE)
-typedef double (__thiscall *_GetRegenRate)(void*, bool);
-static const _GetRegenRate GetWeaponRegenRate = (_GetRegenRate)0x709430;
+	using GetClipSize_t = SInt32(__thiscall*)(void*, bool);
+	static const GetClipSize_t GetClipSize = (GetClipSize_t)0x4FE160;
 
-typedef SInt32 (__thiscall *_GetClipSize)(void*, bool);
-static const _GetClipSize GetClipSize = (_GetClipSize)0x4FE160;
+	using GetDefaultAmmo_t = TESForm*(__thiscall*)(BGSAmmoForm*);
+	static const GetDefaultAmmo_t GetDefaultAmmo = (GetDefaultAmmo_t)0x474920;
 
-typedef TESForm* (__thiscall *_GetDefaultAmmo)(BGSAmmoForm*);
-static const _GetDefaultAmmo GetDefaultAmmo = (_GetDefaultAmmo)0x474920;
+	static ParamInfo kParams_RefillAmmo[1] = {
+		{"count", kParamType_Integer, 0},
+	};
 
-static ParamInfo kParams_RefillAmmo[1] = {
-	{ "count", kParamType_Integer, 0 },
-};
+	DEFINE_COMMAND_PLUGIN(RefillAmmo, "Adds ammo and fills clip for calling ref", 1, 1, kParams_RefillAmmo);
 
-DEFINE_COMMAND_PLUGIN(RefillAmmo, "Adds ammo and fills clip for calling ref", 1, 1, kParams_RefillAmmo);
+	bool Cmd_RefillAmmo_Execute(COMMAND_ARGS)
+	{
+		*result = 0;
+		SInt32 count = 0;
+		if (!ExtractArgs(EXTRACT_ARGS, &count)) return true;
+		if (count <= 0) return true;
+		if (!thisObj || !IsActorRef(thisObj)) return true;
 
-bool Cmd_RefillAmmo_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-	SInt32 count = 0;
-	if (!ExtractArgs(EXTRACT_ARGS, &count)) return true;
-	if (count <= 0) return true;
-	if (!thisObj || !IsActorRef(thisObj)) return true;
+		Actor* actor = (Actor*)thisObj;
+		if (Engine::Actor_IsDead(actor, false)) return true;
 
-	Actor* actor = (Actor*)thisObj;
-	if (Engine::Actor_IsDead(actor, false)) return true;
+		BaseProcess* process = actor->baseProcess;
+		if (!process) return true;
+		if (process->processLevel != 0) return true; //must be HighProcess
 
-	BaseProcess* process = actor->baseProcess;
-	if (!process) return true;
-	if (process->processLevel != 0) return true; //must be HighProcess
+		BaseProcess::WeaponInfo* weaponInfo = process->GetWeaponInfo();
+		if (!weaponInfo) return true;
 
-	BaseProcess::WeaponInfo* weaponInfo = process->GetWeaponInfo();
-	if (!weaponInfo) return true;
+		TESObjectWEAP* weapon = weaponInfo->weapon;
+		if (!weapon) return true;
 
-	TESObjectWEAP* weapon = weaponInfo->weapon;
-	if (!weapon) return true;
+		//reject regen weapons
+		bool hasRegen = ItemChangeHasWeaponMod(weaponInfo, 6); //kWeaponModEffect_RegenerateAmmo
+		if (hasRegen && GetWeaponRegenRate(weapon, true) > 0.0)
+			return true;
 
-	//reject regen weapons
-	bool hasRegen = ItemChangeHasWeaponMod(weaponInfo, 6); //kWeaponModEffect_RegenerateAmmo
-	if (hasRegen && GetWeaponRegenRate(weapon, true) > 0.0)
+		bool hasExtendedClip = ItemChangeHasWeaponMod(weaponInfo, 2); //kWeaponModEffect_IncreaseClipCapacity
+
+		BaseProcess::AmmoInfo* ammoInfo = process->GetAmmoInfo();
+
+		if (ammoInfo) {
+			TESAmmo* ammoForm = ammoInfo->ammo;
+			if (!ammoForm) return true;
+
+			actor->AddItem(ammoForm, nullptr, count);
+
+			SInt32 clipMax = GetClipSize(weapon, hasExtendedClip);
+			SInt32 currentCount = ammoInfo->count;
+			SInt32 toAdd = clipMax - currentCount;
+			if (toAdd > count) toAdd = count;
+			if (toAdd > 0) ammoInfo->count = currentCount + toAdd;
+		} else {
+			//no ammo loaded, find default ammo from weapon form
+			TESForm* defaultAmmo = GetDefaultAmmo(TESObjectWEAPGetAmmoForm(weapon));
+			if (!defaultAmmo) return true;
+
+			actor->AddItem(defaultAmmo, nullptr, count);
+
+			//force reload since weapon was empty
+			ActorReload(actor, weapon, 2, hasExtendedClip);
+		}
+
+		*result = 1;
 		return true;
-
-	bool hasExtendedClip = ItemChangeHasWeaponMod(weaponInfo, 2); //kWeaponModEffect_IncreaseClipCapacity
-
-	BaseProcess::AmmoInfo* ammoInfo = process->GetAmmoInfo();
-
-	if (ammoInfo)
-	{
-		TESAmmo* ammoForm = ammoInfo->ammo;
-		if (!ammoForm) return true;
-
-		actor->AddItem(ammoForm, nullptr, count);
-
-		SInt32 clipMax = GetClipSize(weapon, hasExtendedClip);
-		SInt32 currentCount = ammoInfo->count;
-		SInt32 toAdd = clipMax - currentCount;
-		if (toAdd > count) toAdd = count;
-		if (toAdd > 0) ammoInfo->count = currentCount + toAdd;
-	}
-	else
-	{
-		//no ammo loaded, find default ammo from weapon form
-		TESForm* defaultAmmo = GetDefaultAmmo(TESObjectWEAPGetAmmoForm(weapon));
-		if (!defaultAmmo) return true;
-
-		actor->AddItem(defaultAmmo, nullptr, count);
-
-		//force reload since weapon was empty
-		ActorReload(actor, weapon, 2, hasExtendedClip);
 	}
 
-	*result = 1;
-	return true;
-}
-
-void RegisterCommands8(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_RefillAmmo);
-}
-
+	void RegisterRefillAmmoCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_RefillAmmo);
+	}
 }

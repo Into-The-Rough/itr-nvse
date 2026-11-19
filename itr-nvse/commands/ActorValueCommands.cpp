@@ -6,8 +6,9 @@
 #include "nvse/GameAPI.h"
 #include "nvse/ParamInfos.h"
 
+#include "internal/globals.h"
+
 extern const _ExtractArgs ExtractArgs;
-extern void Log(const char* fmt, ...);
 
 static bool IsActorRef(TESForm* form)
 {
@@ -34,13 +35,11 @@ bool Cmd_DamageActorValueAlt_Execute(COMMAND_ARGS)
 	float amount = 0.0f;
 	TESObjectREFR* attackerRef = nullptr;
 
-	if (!ExtractArgs(EXTRACT_ARGS, &avCode, &amount, &attackerRef))
-	{
+	if (!ExtractArgs(EXTRACT_ARGS, &avCode, &amount, &attackerRef)) {
 		return true;
 	}
 
-	if (attackerRef)
-	{
+	if (attackerRef) {
 		if (!IsActorRef(attackerRef)) attackerRef = nullptr; //non-actor issuer would misread +0xA4
 	}
 
@@ -52,7 +51,7 @@ bool Cmd_DamageActorValueAlt_Execute(COMMAND_ARGS)
 	}
 
 	//0x3AC takes a signed delta, negative health deltas apply damage
-	typedef void (__thiscall *DamageAV_t)(void*, UInt32, float, void*);
+	using DamageAV_t = void(__thiscall*)(void*, UInt32, float, void*);
 	(*(DamageAV_t**)thisObj)[0x3AC / 4](thisObj, avCode, -amount, attackerRef);
 
 	*result = 1;
@@ -60,11 +59,11 @@ bool Cmd_DamageActorValueAlt_Execute(COMMAND_ARGS)
 }
 
 namespace ActorValueCommands {
-void Init(void* nvse) {}
+	void Init(void* nvse) {}
 
-void RegisterCommands(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_DamageActorValueAlt);
-}
+	void RegisterCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_DamageActorValueAlt);
+	}
 }

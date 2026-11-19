@@ -1,7 +1,6 @@
 #pragma once
 
-namespace CenterOnCellAltCommand
-{
+namespace CenterOnCellAltCommand {
 	void RegisterCommands(void* nvsePtr);
 	void OnNewGame();
 	void ClearPending();

@@ -9,13 +9,17 @@
 
 #include "internal/globals.h"
 
-namespace PlayerUpdateHook
-{
+namespace PlayerUpdateHook {
 	constexpr float PI = 3.14159265358979323846f;
 	//E8 call to PlayerCharacter::UpdateMenuModeButton(float) inside PlayerCharacter::Update
-	constexpr uint32_t kAddr_UpdateMenuModeButtonCall = 0x940C78;
+	constexpr UInt32 kAddr_UpdateMenuModeButtonCall = 0x940C78;
 
-	enum KeyState { isHeld, isPressed, isDepressed, isChanged };
+	enum KeyState {
+		isHeld,
+		isPressed,
+		isDepressed,
+		isChanged
+	};
 
 	static bool g_quickDropEnabled = false;
 	static int g_quickDropModifierKey = 0;
@@ -27,21 +31,25 @@ namespace PlayerUpdateHook
 	bool g_quickDropLastPressed = false;
 	bool g_quick180LastPressed = false;
 	static Detours::CallDetour s_menuModeButtonCall;
-	typedef void(__thiscall* UpdateMenuModeButton_t)(void*, float);
+	using UpdateMenuModeButton_t = void(__thiscall*)(void*, float);
 
-	bool GetControlState(void* input, uint32_t controlCode, KeyState state) {
+	bool GetControlState(void* input, UInt32 controlCode, KeyState state)
+	{
 		return Engine::OSInputGlobals_GetControlState(input, controlCode, (UInt8)state);
 	}
 
-	void* GetEquippedWeapon(void* actor) {
+	void* GetEquippedWeapon(void* actor)
+	{
 		return Engine::Actor_GetEquippedWeapon(actor);
 	}
 
-	void TryDropWeapon(void* actor) {
+	void TryDropWeapon(void* actor)
+	{
 		Engine::Actor_TryDropWeapon(actor);
 	}
 
-	void RotatePlayer180(void* player) {
+	void RotatePlayer180(void* player)
+	{
 		float* rotZ = TESObjectREFRGetRotZ(static_cast<TESObjectREFR*>(player));
 		if (!rotZ) return;
 		*rotZ += PI;
@@ -49,7 +57,8 @@ namespace PlayerUpdateHook
 		while (*rotZ < -PI) *rotZ += 2.0f * PI;
 	}
 
-	void __fastcall UpdateMenuModeButton_Hook(void* player, void* edx, float timeDelta) {
+	void __fastcall Hook_UpdateMenuModeButton(void* player, void* edx, float timeDelta)
+	{
 		auto original = reinterpret_cast<UpdateMenuModeButton_t>(s_menuModeButtonCall.GetOverwrittenAddr());
 		if (original)
 			original(player, timeDelta);
@@ -94,7 +103,7 @@ namespace PlayerUpdateHook
 	}
 
 	void Init(bool quickDrop, int quickDropModKey, int quickDropControlID,
-	          bool quick180, int quick180ModKey, int quick180ControlID)
+		bool quick180, int quick180ModKey, int quick180ControlID)
 	{
 		g_quickDropEnabled = quickDrop;
 		g_quickDropModifierKey = quickDropModKey;
@@ -102,11 +111,11 @@ namespace PlayerUpdateHook
 		g_quick180Enabled = quick180;
 		g_quick180ModifierKey = quick180ModKey;
 		g_quick180ControlID = quick180ControlID;
-		s_menuModeButtonCall.WriteRelCall(kAddr_UpdateMenuModeButtonCall, UpdateMenuModeButton_Hook);
+		s_menuModeButtonCall.WriteRelCall(kAddr_UpdateMenuModeButtonCall, Hook_UpdateMenuModeButton);
 	}
 
 	void UpdateSettings(int quickDropModKey, int quickDropControlID,
-	                    int quick180ModKey, int quick180ControlID)
+		int quick180ModKey, int quick180ControlID)
 	{
 		g_quickDropModifierKey = quickDropModKey;
 		g_quickDropControlID = quickDropControlID;

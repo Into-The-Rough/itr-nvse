@@ -182,8 +182,7 @@ TEST(GestureMath_EyeRollRisesHoldsAndReturns)
 
 TEST(GestureMath_EyeRollNeverExceedsFullDeflection)
 {
-	for (uint32_t ms = 0; ms <= 800; ms += 10)
-	{
+	for (UInt32 ms = 0; ms <= 800; ms += 10) {
 		float weight = GestureMath::ComputeMorphWeight(GestureMath::kGesture_EyeRoll, ms, 800, 1.0f, 0.4f);
 		ASSERT(weight >= 0.0f);
 		ASSERT(weight <= 1.0f);

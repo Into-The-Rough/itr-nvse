@@ -12,13 +12,12 @@
 #include "internal/layout/Process.h"
 
 #include "internal/HavokLayout.h"
+#include "internal/globals.h"
 #include <vector>
 #include <algorithm>
 #include <cstddef>
 #include <unordered_set>
 #include <unordered_map>
-
-extern void Log(const char* fmt, ...);
 
 enum ContactChannel : UInt8 {
 	kChannel_RigidBody = 0,
@@ -38,13 +37,16 @@ struct ContactPair {
 	UInt32 refA;
 	UInt32 refB;
 	UInt8 channel;
-	bool operator==(const ContactPair& o) const {
+
+	bool operator==(const ContactPair& o) const
+	{
 		return refA == o.refA && refB == o.refB && channel == o.channel;
 	}
 };
 
 struct ContactPairHash {
-	size_t operator()(const ContactPair& p) const {
+	size_t operator()(const ContactPair& p) const
+	{
 		size_t h = p.refA;
 		h ^= p.refB + 0x9e3779b9 + (h << 6) + (h >> 2);
 		h ^= p.channel + 0x9e3779b9 + (h << 6) + (h >> 2);
@@ -65,11 +67,11 @@ struct WatchedActorCandidate {
 	TESObjectREFR* ref;
 };
 
-static std::unordered_set<UInt32> g_watchedRefIDs;         //main thread only (mutation)
-static std::unordered_set<UInt32> g_watchedBaseFormIDs;    //main thread only (mutation)
-static std::unordered_set<UInt32> g_watchedSnapshot;       //read by hooks under lock
-static std::unordered_set<UInt32> g_watchedBaseSnapshot;   //read by hooks under lock
-static volatile LONG g_watchActive = 0;                    //lock-free idle gate for the contact hooks
+static std::unordered_set<UInt32> g_watchedRefIDs; //main thread only (mutation)
+static std::unordered_set<UInt32> g_watchedBaseFormIDs; //main thread only (mutation)
+static std::unordered_set<UInt32> g_watchedSnapshot; //read by hooks under lock
+static std::unordered_set<UInt32> g_watchedBaseSnapshot; //read by hooks under lock
+static volatile LONG g_watchActive = 0; //lock-free idle gate for the contact hooks
 static std::unordered_map<ContactPair, int, ContactPairHash> g_activeContacts;
 static std::vector<QueuedContactEvent> g_pendingEvents;
 static CRITICAL_SECTION g_contactLock;
@@ -77,32 +79,33 @@ static volatile LONG g_lockInit = 0;
 static DWORD g_mainThreadId = 0;
 static bool g_snapshotDirty = true;
 
-static std::unordered_map<void*, UInt32> g_proxyToRefID;   //read by hooks under lock
-static std::unordered_map<void*, UInt32> g_phantomToRefID;  //read by hooks under lock
+static std::unordered_map<void*, UInt32> g_proxyToRefID; //read by hooks under lock
+static std::unordered_map<void*, UInt32> g_phantomToRefID; //read by hooks under lock
 
 static constexpr size_t kMaxQueuedEvents = 2048;
 static constexpr float kDeadActorContactRadiusSq = 56.0f * 56.0f;
 static constexpr float kDeadActorContactMaxZBelow = 20.0f;
 static constexpr float kDeadActorContactMaxZAbove = 56.0f;
 
-typedef void* (__thiscall *_getRoot)(void*);
-typedef void* (__cdecl *_hkpGetRigidBody)(void* collidable);
-typedef void* (__cdecl *_GetbhkCollisionObject)(void* worldObj);
-typedef void* (__cdecl *_FindReferenceFor3D)(void* niNode);
+using getRoot_t = void*(__thiscall*)(void*);
+using hkpGetRigidBody_t = void*(__cdecl*)(void* collidable);
+using GetbhkCollisionObject_t = void*(__cdecl*)(void* worldObj);
+using FindReferenceFor3D_t = void*(__cdecl*)(void* niNode);
 
-static const _getRoot getRoot = (_getRoot)0x624020;
-static const _hkpGetRigidBody hkpGetRigidBody = (_hkpGetRigidBody)0x4B59F0;
-static const _GetbhkCollisionObject GetbhkCollisionObject = (_GetbhkCollisionObject)0x4B5A20;
-static const _FindReferenceFor3D FindReferenceFor3D = (_FindReferenceFor3D)0x56F930;
+static const getRoot_t getRoot = (getRoot_t)0x624020;
+static const hkpGetRigidBody_t hkpGetRigidBody = (hkpGetRigidBody_t)0x4B59F0;
+static const GetbhkCollisionObject_t GetbhkCollisionObject = (GetbhkCollisionObject_t)0x4B5A20;
+static const FindReferenceFor3D_t FindReferenceFor3D = (FindReferenceFor3D_t)0x56F930;
 
-typedef void* (__cdecl *_bhkNiCollisionObject_Getbhk)(void* worldObj);
-static const _bhkNiCollisionObject_Getbhk bhkNiCollisionObject_Getbhk = (_bhkNiCollisionObject_Getbhk)0x4B5A20;
+using bhkNiCollisionObject_Getbhk_t = void*(__cdecl*)(void* worldObj);
+static const bhkNiCollisionObject_Getbhk_t bhkNiCollisionObject_Getbhk = (bhkNiCollisionObject_Getbhk_t)0x4B5A20;
 
 static bool HasAnyWatchSnapshot();
 static bool ShouldQueueCandidateLocked(UInt32 refID, UInt32 baseID = 0);
 
 //straight off the resolved ref, no form-table lookup - safe on the havok thread
-static UInt32 RefrToRefIDBase(TESObjectREFR* refr, UInt32* outBaseID) {
+static UInt32 RefrToRefIDBase(TESObjectREFR* refr, UInt32* outBaseID)
+{
 	UInt32 refID = refr->refID;
 	if (outBaseID) {
 		TESForm* baseForm = refr->baseForm;
@@ -111,7 +114,8 @@ static UInt32 RefrToRefIDBase(TESObjectREFR* refr, UInt32* outBaseID) {
 	return refID;
 }
 
-static UInt32 ResolveCollidableToRefID(void* collidable, UInt32* outBaseID = nullptr) {
+static UInt32 ResolveCollidableToRefID(void* collidable, UInt32* outBaseID = nullptr)
+{
 	if (outBaseID) *outBaseID = 0;
 	if (!collidable) return 0;
 	void* root = getRoot(collidable);
@@ -143,29 +147,33 @@ static UInt32 ResolveCollidableToRefID(void* collidable, UInt32* outBaseID = nul
 	return 0;
 }
 
-static UInt32 ResolveWorldObjToRefID(void* worldObj) {
+static UInt32 ResolveWorldObjToRefID(void* worldObj)
+{
 	if (!worldObj) return 0;
 	void* collidable = static_cast<UInt8*>(worldObj) + kHkpWorldObject_Collidable;
 	return ResolveCollidableToRefID(collidable);
 }
 
-static void QueueEvent(UInt32 watchedRefID, UInt32 otherRefID, UInt8 channel, bool isBegin) {
+static void QueueEvent(UInt32 watchedRefID, UInt32 otherRefID, UInt8 channel, bool isBegin)
+{
 	//caller must already hold g_contactLock
 	if (g_pendingEvents.size() >= kMaxQueuedEvents)
 		return;
 	g_pendingEvents.push_back({watchedRefID, otherRefID, channel, isBegin});
 }
 
-static UInt32 LookupMappedRefID(const std::unordered_map<void*, UInt32>& refMap, void* key) {
+static UInt32 LookupMappedRefID(const std::unordered_map<void*, UInt32>& refMap, void* key)
+{
 	auto it = refMap.find(key);
 	return it != refMap.end() ? it->second : 0;
 }
 
 static Detours::JumpDetour s_rigidBodyDetour;
-typedef void (__thiscall *_FOCollisionListener_contactPointAdded)(void*, void*);
+using FOCollisionListener_contactPointAdded_t = void(__thiscall*)(void*, void*);
 
-static void __fastcall Hook_ContactPointAdded(void* listener, void* edx, void* event) {
-	s_rigidBodyDetour.GetTrampoline<_FOCollisionListener_contactPointAdded>()(listener, event);
+static void __fastcall Hook_ContactPointAdded(void* listener, void* edx, void* event)
+{
+	s_rigidBodyDetour.GetTrampoline<FOCollisionListener_contactPointAdded_t>()(listener, event);
 
 	if (!g_watchActive) return;
 
@@ -186,43 +194,53 @@ static void __fastcall Hook_ContactPointAdded(void* listener, void* edx, void* e
 		QueueEvent(refB, refA, kChannel_RigidBody, true);
 }
 
-static bool IsActorTypeID(UInt8 typeID) {
+static bool IsActorTypeID(UInt8 typeID)
+{
 	return typeID == kFormType_ACHR || typeID == kFormType_ACRE;
 }
 
-static bool IsDeadActor(Actor* actor) {
+static bool IsDeadActor(Actor* actor)
+{
 	return actor && actor->lifeState == 2;
 }
 
-static bool HasLoadedRootNode(TESObjectREFR* ref) {
+static bool HasLoadedRootNode(TESObjectREFR* ref)
+{
 	if (!ref) return false;
 	return ref->renderState && ref->renderState->niNode;
 }
 
 static float GetRefPosX(TESObjectREFR* ref) { return ref->posX; }
+
 static float GetRefPosY(TESObjectREFR* ref) { return ref->posY; }
+
 static float GetRefPosZ(TESObjectREFR* ref) { return ref->posZ; }
+
 static UInt32 GetRefID(TESObjectREFR* ref) { return ref ? ref->refID : 0; }
 
-static UInt32 GetBaseFormID(TESObjectREFR* ref) {
+static UInt32 GetBaseFormID(TESObjectREFR* ref)
+{
 	if (!ref) return 0;
 	TESForm* baseForm = ref->baseForm;
 	return baseForm ? baseForm->refID : 0;
 }
 
-static UInt32 GetBaseFormID(UInt32 refID) {
+static UInt32 GetBaseFormID(UInt32 refID)
+{
 	auto* ref = (TESObjectREFR*)Engine::LookupFormByID(refID);
 	return GetBaseFormID(ref);
 }
 
-static bool IsRefWatchedOnMain(UInt32 refID) {
+static bool IsRefWatchedOnMain(UInt32 refID)
+{
 	if (!refID) return false;
 	if (g_watchedRefIDs.count(refID)) return true;
 	UInt32 baseFormID = GetBaseFormID(refID);
 	return baseFormID && g_watchedBaseFormIDs.count(baseFormID);
 }
 
-static bool IsRefWatchedOnMain(TESObjectREFR* ref) {
+static bool IsRefWatchedOnMain(TESObjectREFR* ref)
+{
 	if (!ref) return false;
 	UInt32 refID = GetRefID(ref);
 	if (g_watchedRefIDs.count(refID)) return true;
@@ -230,11 +248,13 @@ static bool IsRefWatchedOnMain(TESObjectREFR* ref) {
 	return baseFormID && g_watchedBaseFormIDs.count(baseFormID);
 }
 
-static bool HasAnyWatchSnapshot() {
+static bool HasAnyWatchSnapshot()
+{
 	return !g_watchedSnapshot.empty() || !g_watchedBaseSnapshot.empty();
 }
 
-static bool ShouldQueueCandidateLocked(UInt32 refID, UInt32 baseID) {
+static bool ShouldQueueCandidateLocked(UInt32 refID, UInt32 baseID)
+{
 	if (!refID) return false;
 	if (g_watchedSnapshot.count(refID)) return true;
 	if (g_watchedBaseSnapshot.empty()) return false;
@@ -245,7 +265,8 @@ static bool ShouldQueueCandidateLocked(UInt32 refID, UInt32 baseID) {
 	return g_watchedBaseSnapshot.count(baseID) != 0;
 }
 
-static BhkCharacterControllerView* GetActorController(Actor* actor) {
+static BhkCharacterControllerView* GetActorController(Actor* actor)
+{
 	BaseProcess* process = actor ? actor->baseProcess : nullptr;
 	if (!process) return nullptr;
 	if (process->processLevel > 1) return nullptr;
@@ -253,14 +274,13 @@ static BhkCharacterControllerView* GetActorController(Actor* actor) {
 		reinterpret_cast<ProcessControllerView*>(process)->characterController);
 }
 
-static bool HasRealContactPair(UInt32 watchedRefID, UInt32 otherRefID) {
-	return
-		g_activeContacts.find({watchedRefID, otherRefID, kChannel_RigidBody}) != g_activeContacts.end() ||
-		g_activeContacts.find({watchedRefID, otherRefID, kChannel_CharProxy}) != g_activeContacts.end() ||
-		g_activeContacts.find({watchedRefID, otherRefID, kChannel_Phantom}) != g_activeContacts.end();
+static bool HasRealContactPair(UInt32 watchedRefID, UInt32 otherRefID)
+{
+	return g_activeContacts.find({watchedRefID, otherRefID, kChannel_RigidBody}) != g_activeContacts.end() || g_activeContacts.find({watchedRefID, otherRefID, kChannel_CharProxy}) != g_activeContacts.end() || g_activeContacts.find({watchedRefID, otherRefID, kChannel_Phantom}) != g_activeContacts.end();
 }
 
-static void DispatchContactEventDirect(UInt32 watchedRefID, UInt32 otherRefID, UInt8 channel, bool isBegin) {
+static void DispatchContactEventDirect(UInt32 watchedRefID, UInt32 otherRefID, UInt8 channel, bool isBegin)
+{
 	if (!IsRefWatchedOnMain(watchedRefID)) return;
 	auto* watched = (TESObjectREFR*)Engine::LookupFormByID(watchedRefID);
 	if (!watched) return;
@@ -270,8 +290,9 @@ static void DispatchContactEventDirect(UInt32 watchedRefID, UInt32 otherRefID, U
 	g_eventManagerInterface->DispatchEvent(eventName, watched, (TESForm*)other, (int)channel);
 }
 
-static void CollectLoadedDeadActors(std::vector<DeadActorCandidate>& out) {
-	auto* pm = reinterpret_cast<ProcessManagerLite*>(g_processManager);
+static void CollectLoadedDeadActors(std::vector<DeadActorCandidate>& out)
+{
+	auto* pm = reinterpret_cast<ProcessManagerView*>(g_processManager);
 	if (!pm || !pm->objects.data) return;
 
 	static std::unordered_set<UInt32> seenRefIDs; //main thread only, reused to avoid per-frame churn
@@ -306,7 +327,8 @@ static void AddWatchedActorCandidate(TESObjectREFR* actor, std::unordered_set<UI
 	out.push_back({refID, actor});
 }
 
-static void CollectLoadedWatchedActors(std::vector<WatchedActorCandidate>& out) {
+static void CollectLoadedWatchedActors(std::vector<WatchedActorCandidate>& out)
+{
 	static std::unordered_set<UInt32> seenRefIDs; //main thread only, reused to avoid per-frame churn
 	seenRefIDs.clear();
 
@@ -315,7 +337,7 @@ static void CollectLoadedWatchedActors(std::vector<WatchedActorCandidate>& out) 
 		AddWatchedActorCandidate(actor, seenRefIDs, out);
 	}
 
-	auto* pm = reinterpret_cast<ProcessManagerLite*>(g_processManager);
+	auto* pm = reinterpret_cast<ProcessManagerView*>(g_processManager);
 	if (pm && pm->objects.data) {
 		UInt32 upper = pm->objects.firstFreeEntry;
 		for (int bucket = 0; bucket < 2; bucket++) {
@@ -333,7 +355,8 @@ static void CollectLoadedWatchedActors(std::vector<WatchedActorCandidate>& out) 
 		AddWatchedActorCandidate((TESObjectREFR*)*playerPtr, seenRefIDs, out);
 }
 
-static bool ShouldSynthesizeDeadActorContact(TESObjectREFR* watched, const DeadActorCandidate& deadActor) {
+static bool ShouldSynthesizeDeadActorContact(TESObjectREFR* watched, const DeadActorCandidate& deadActor)
+{
 	if (!watched || !deadActor.ref) return false;
 	if (GetRefID(watched) == deadActor.refID) return false;
 	if (!HasLoadedRootNode(watched)) return false;
@@ -350,7 +373,8 @@ static bool ShouldSynthesizeDeadActorContact(TESObjectREFR* watched, const DeadA
 	return true;
 }
 
-static void PollDeadActorProximityContacts() {
+static void PollDeadActorProximityContacts()
+{
 	if (g_watchedRefIDs.empty() && g_watchedBaseFormIDs.empty()) return;
 
 	//main thread only, reused across frames to avoid per-frame heap churn while watches are active
@@ -403,7 +427,8 @@ static void PollDeadActorProximityContacts() {
 }
 
 //removed callbacks do not reliably close rigid-body and proxy contacts, so poll for stale pairs
-static void PollContactEnd() {
+static void PollContactEnd()
+{
 	std::vector<ContactPair> stale;
 
 	for (auto it = g_activeContacts.begin(); it != g_activeContacts.end(); ++it) {
@@ -411,7 +436,10 @@ static void PollContactEnd() {
 			continue;
 
 		auto* form = reinterpret_cast<TESObjectREFR*>(Engine::LookupFormByID(it->first.refA));
-		if (!form) { stale.push_back(it->first); continue; }
+		if (!form) {
+			stale.push_back(it->first);
+			continue;
+		}
 
 		if (!IsActorTypeID(form->typeID)) {
 			stale.push_back(it->first);
@@ -419,14 +447,20 @@ static void PollContactEnd() {
 		}
 
 		BhkCharacterControllerView* ctrl = GetActorController(reinterpret_cast<Actor*>(form));
-		if (!ctrl) { stale.push_back(it->first); continue; }
+		if (!ctrl) {
+			stale.push_back(it->first);
+			continue;
+		}
 
 		bool found = false;
 		auto& contactBodies = ctrl->proxy.pointCollector.contactBodies;
 		for (SInt32 i = 0; i < contactBodies.size && contactBodies.data; i++) {
 			if (!contactBodies.data[i]) continue;
 			UInt32 contactRefID = ResolveWorldObjToRefID(contactBodies.data[i]);
-			if (contactRefID == it->first.refB) { found = true; break; }
+			if (contactRefID == it->first.refB) {
+				found = true;
+				break;
+			}
 		}
 
 		if (!found) {
@@ -451,10 +485,11 @@ static void PollContactEnd() {
 }
 
 static Detours::JumpDetour s_charAddedDetour;
-typedef void (__thiscall *_fireContact)(void*, void*);
+using fireContact_t = void(__thiscall*)(void*, void*);
 
-static void __fastcall Hook_CharProxyContactAdded(void* proxy, void* edx, void* point) {
-	s_charAddedDetour.GetTrampoline<_fireContact>()(proxy, point);
+static void __fastcall Hook_CharProxyContactAdded(void* proxy, void* edx, void* point)
+{
+	s_charAddedDetour.GetTrampoline<fireContact_t>()(proxy, point);
 
 	if (!g_watchActive) return;
 
@@ -482,9 +517,10 @@ static Detours::JumpDetour s_simpleRemoveDetour;
 static Detours::JumpDetour s_cachingAddDetour;
 static Detours::JumpDetour s_cachingRemoveDetour;
 
-typedef void (__thiscall *_phantomOverlap)(void*, void*);
+using phantomOverlap_t = void(__thiscall*)(void*, void*);
 
-static void PhantomOverlapCommon(void* phantom, void* cdBody, bool isAdd) {
+static void PhantomOverlapCommon(void* phantom, void* cdBody, bool isAdd)
+{
 	if (!g_watchActive) return;
 
 	void* rootCollidable = cdBody ? getRoot(cdBody) : nullptr;
@@ -516,23 +552,27 @@ static void PhantomOverlapCommon(void* phantom, void* cdBody, bool isAdd) {
 		QueueEvent(bodyRefID, phantomRefID, kChannel_Phantom, isAdd);
 }
 
-static void __fastcall Hook_SimpleAdd(void* phantom, void* edx, void* cdBody) {
-	s_simpleAddDetour.GetTrampoline<_phantomOverlap>()(phantom, cdBody);
+static void __fastcall Hook_SimpleAdd(void* phantom, void* edx, void* cdBody)
+{
+	s_simpleAddDetour.GetTrampoline<phantomOverlap_t>()(phantom, cdBody);
 	PhantomOverlapCommon(phantom, cdBody, true);
 }
 
-static void __fastcall Hook_SimpleRemove(void* phantom, void* edx, void* cdBody) {
-	s_simpleRemoveDetour.GetTrampoline<_phantomOverlap>()(phantom, cdBody);
+static void __fastcall Hook_SimpleRemove(void* phantom, void* edx, void* cdBody)
+{
+	s_simpleRemoveDetour.GetTrampoline<phantomOverlap_t>()(phantom, cdBody);
 	PhantomOverlapCommon(phantom, cdBody, false);
 }
 
-static void __fastcall Hook_CachingAdd(void* phantom, void* edx, void* cdBody) {
-	s_cachingAddDetour.GetTrampoline<_phantomOverlap>()(phantom, cdBody);
+static void __fastcall Hook_CachingAdd(void* phantom, void* edx, void* cdBody)
+{
+	s_cachingAddDetour.GetTrampoline<phantomOverlap_t>()(phantom, cdBody);
 	PhantomOverlapCommon(phantom, cdBody, true);
 }
 
-static void __fastcall Hook_CachingRemove(void* phantom, void* edx, void* cdBody) {
-	s_cachingRemoveDetour.GetTrampoline<_phantomOverlap>()(phantom, cdBody);
+static void __fastcall Hook_CachingRemove(void* phantom, void* edx, void* cdBody)
+{
+	s_cachingRemoveDetour.GetTrampoline<phantomOverlap_t>()(phantom, cdBody);
 	PhantomOverlapCommon(phantom, cdBody, false);
 }
 
@@ -546,7 +586,8 @@ static void MapActorPhantom(Actor* actor, UInt32 refID,
 	if (havokPhantom) phantomMap[havokPhantom] = refID;
 }
 
-static void RebuildProxyMap() {
+static void RebuildProxyMap()
+{
 	std::unordered_map<void*, UInt32> newProxyMap;
 	std::unordered_map<void*, UInt32> newPhantomMap;
 
@@ -562,7 +603,7 @@ static void RebuildProxyMap() {
 		MapActorPhantom(actor, refID, newPhantomMap);
 	}
 
-	auto* pm = reinterpret_cast<ProcessManagerLite*>(g_processManager);
+	auto* pm = reinterpret_cast<ProcessManagerView*>(g_processManager);
 	if (pm && pm->objects.data) {
 		UInt32 upper = pm->objects.firstFreeEntry;
 		for (int bucket = 0; bucket < 2; bucket++) {
@@ -607,233 +648,233 @@ static void RebuildProxyMap() {
 
 namespace OnContactHandler {
 
-bool Init(void* nvseInterface)
-{
-	auto* nvse = (NVSEInterface*)nvseInterface;
-	if (nvse->isEditor) return false;
+	bool Init(void* nvseInterface)
+	{
+		auto* nvse = (NVSEInterface*)nvseInterface;
+		if (nvse->isEditor) return false;
 
-	InitCriticalSectionOnce(&g_lockInit, &g_contactLock);
-	g_mainThreadId = GetCurrentThreadId();
+		InitCriticalSectionOnce(&g_lockInit, &g_contactLock);
+		g_mainThreadId = GetCurrentThreadId();
 
-	//prologue: 55 8B EC 83 EC 7C (6 bytes)
-	if (!s_rigidBodyDetour.WriteRelJump(0x623CB0, Hook_ContactPointAdded, 6)) {
-		Log("OnContactHandler: ch0 hook failed at 0x623CB0");
-		return false;
+		//prologue: 55 8B EC 83 EC 7C (6 bytes)
+		if (!s_rigidBodyDetour.WriteRelJump(0x623CB0, Hook_ContactPointAdded, 6)) {
+			Log("OnContactHandler: ch0 hook failed at 0x623CB0");
+			return false;
+		}
+
+		//both prologues: 56 57 8B F9 8B B7 84 00 00 00 (need 10 bytes for clean boundary)
+		if (!s_charAddedDetour.WriteRelJump(0xCAD480, Hook_CharProxyContactAdded, 10)) {
+			Log("OnContactHandler: ch1 added hook failed at 0xCAD480");
+			return false;
+		}
+		//simple add: 53 8B 5C 24 08 83 3B 00 (need >=5 clean bytes)
+		if (!s_simpleAddDetour.WriteRelJump(0xD1F690, Hook_SimpleAdd, 5)) {
+			Log("OnContactHandler: ch2 simple-add hook failed at 0xD1F690");
+			return false;
+		}
+		//simple remove: 56 57 8B F9 8B 4C 24 0C (need 8 clean bytes for 1+1+2+4)
+		if (!s_simpleRemoveDetour.WriteRelJump(0xD1F5A0, Hook_SimpleRemove, 8)) {
+			Log("OnContactHandler: ch2 simple-remove hook failed at 0xD1F5A0");
+			return false;
+		}
+		//caching add: 55 8B EC 83 E4 F0 (6 bytes)
+		if (!s_cachingAddDetour.WriteRelJump(0xD4CF10, Hook_CachingAdd, 6)) {
+			Log("OnContactHandler: ch2 caching-add hook failed at 0xD4CF10");
+			return false;
+		}
+		//caching remove: 83 EC 18 56 57 8B F9 8B (need 7 clean bytes: 3+1+1+2)
+		if (!s_cachingRemoveDetour.WriteRelJump(0xD4CCA0, Hook_CachingRemove, 7)) {
+			Log("OnContactHandler: ch2 caching-remove hook failed at 0xD4CCA0");
+			return false;
+		}
+
+		return true;
 	}
 
-	//both prologues: 56 57 8B F9 8B B7 84 00 00 00 (need 10 bytes for clean boundary)
-	if (!s_charAddedDetour.WriteRelJump(0xCAD480, Hook_CharProxyContactAdded, 10)) {
-		Log("OnContactHandler: ch1 added hook failed at 0xCAD480");
-		return false;
-	}
-	//simple add: 53 8B 5C 24 08 83 3B 00 (need >=5 clean bytes)
-	if (!s_simpleAddDetour.WriteRelJump(0xD1F690, Hook_SimpleAdd, 5)) {
-		Log("OnContactHandler: ch2 simple-add hook failed at 0xD1F690");
-		return false;
-	}
-	//simple remove: 56 57 8B F9 8B 4C 24 0C (need 8 clean bytes for 1+1+2+4)
-	if (!s_simpleRemoveDetour.WriteRelJump(0xD1F5A0, Hook_SimpleRemove, 8)) {
-		Log("OnContactHandler: ch2 simple-remove hook failed at 0xD1F5A0");
-		return false;
-	}
-	//caching add: 55 8B EC 83 E4 F0 (6 bytes)
-	if (!s_cachingAddDetour.WriteRelJump(0xD4CF10, Hook_CachingAdd, 6)) {
-		Log("OnContactHandler: ch2 caching-add hook failed at 0xD4CF10");
-		return false;
-	}
-	//caching remove: 83 EC 18 56 57 8B F9 8B (need 7 clean bytes: 3+1+1+2)
-	if (!s_cachingRemoveDetour.WriteRelJump(0xD4CCA0, Hook_CachingRemove, 7)) {
-		Log("OnContactHandler: ch2 caching-remove hook failed at 0xD4CCA0");
-		return false;
-	}
+	void Update()
+	{
+		if (g_lockInit != 2) return;
 
-	return true;
-}
+		DWORD tid = GetCurrentThreadId();
+		if (!g_mainThreadId) g_mainThreadId = tid;
+		if (tid != g_mainThreadId) return;
 
-void Update()
-{
-	if (g_lockInit != 2) return;
+		static int s_proxyMapTimer = 0;
+		if (g_snapshotDirty) {
+			{
+				ScopedLock lock(&g_contactLock);
+				g_watchedSnapshot = g_watchedRefIDs;
+				g_watchedBaseSnapshot = g_watchedBaseFormIDs;
+				g_watchActive = HasAnyWatchSnapshot() ? 1 : 0;
+			}
+			RebuildProxyMap();
+			g_snapshotDirty = false;
+			s_proxyMapTimer = 0;
 
-	DWORD tid = GetCurrentThreadId();
-	if (!g_mainThreadId) g_mainThreadId = tid;
-	if (tid != g_mainThreadId) return;
+			std::vector<QueuedContactEvent> seedEvents;
+			std::vector<WatchedActorCandidate> watchedActors;
+			CollectLoadedWatchedActors(watchedActors);
 
-	static int s_proxyMapTimer = 0;
-	if (g_snapshotDirty) {
+			//add callbacks only fire for new contacts, so seed the ones already touching
+			for (const auto& watchedActor : watchedActors) {
+				UInt32 refID = watchedActor.refID;
+				auto* form = watchedActor.ref;
+				if (!form) continue;
+				if (!IsActorTypeID(form->typeID)) continue;
+
+				auto* actor = reinterpret_cast<Actor*>(form);
+				BhkCharacterControllerView* ctrl = GetActorController(actor);
+				if (!ctrl) continue;
+
+				//collect first, dispatching here would let a handler mutate watch state mid-scan
+				auto& contactBodies = ctrl->proxy.pointCollector.contactBodies;
+				for (SInt32 i = 0; i < contactBodies.size && contactBodies.data; i++) {
+					if (!contactBodies.data[i]) continue;
+					UInt32 otherRefID = ResolveWorldObjToRefID(contactBodies.data[i]);
+					if (otherRefID && otherRefID != refID)
+						seedEvents.push_back({refID, otherRefID, kChannel_CharProxy, true});
+				}
+
+				if (!ctrl->noContact && ctrl->bodyUnderFeet) {
+					UInt32 feetRefID = ResolveWorldObjToRefID(ctrl->bodyUnderFeet);
+					if (feetRefID && feetRefID != refID)
+						seedEvents.push_back({refID, feetRefID, kChannel_CharProxy, true});
+				}
+			}
+
+			if (!seedEvents.empty()) {
+				ScopedLock lock(&g_contactLock);
+				size_t room = kMaxQueuedEvents > g_pendingEvents.size() ? kMaxQueuedEvents - g_pendingEvents.size() : 0;
+				size_t toAdd = seedEvents.size() < room ? seedEvents.size() : room;
+				g_pendingEvents.insert(g_pendingEvents.end(), seedEvents.begin(), seedEvents.begin() + toAdd);
+			}
+		}
+
+		if ((!g_watchedRefIDs.empty() || !g_watchedBaseFormIDs.empty()) && ++s_proxyMapTimer >= 60) {
+			RebuildProxyMap();
+			s_proxyMapTimer = 0;
+		}
+
+		std::vector<QueuedContactEvent> events;
 		{
 			ScopedLock lock(&g_contactLock);
-			g_watchedSnapshot = g_watchedRefIDs;
-			g_watchedBaseSnapshot = g_watchedBaseFormIDs;
-			g_watchActive = HasAnyWatchSnapshot() ? 1 : 0;
+			events.swap(g_pendingEvents);
 		}
-		RebuildProxyMap();
+
+		for (const auto& evt : events) {
+			//re-check per event, a handler callback can drop the watch mid-drain
+			if (!IsRefWatchedOnMain(evt.watchedRefID)) continue;
+
+			ContactPair pair = {evt.watchedRefID, evt.otherRefID, evt.channel};
+
+			if (evt.isBegin) {
+				int& count = g_activeContacts[pair];
+				count++;
+				if (count != 1) continue;
+			} else {
+				auto it = g_activeContacts.find(pair);
+				if (it == g_activeContacts.end()) continue;
+				it->second--;
+				if (it->second > 0) continue;
+				g_activeContacts.erase(it);
+			}
+
+			auto* watched = (TESObjectREFR*)Engine::LookupFormByID(evt.watchedRefID);
+			if (!watched) continue;
+
+			auto* other = evt.otherRefID ? (TESObjectREFR*)Engine::LookupFormByID(evt.otherRefID) : nullptr;
+
+			if (g_eventManagerInterface) {
+				const char* eventName = evt.isBegin ? "ITR:OnContactBegin" : "ITR:OnContactEnd";
+				g_eventManagerInterface->DispatchEvent(eventName, watched,
+					(TESForm*)other, (int)evt.channel);
+			}
+		}
+
+		PollContactEnd();
+		PollDeadActorProximityContacts();
+	}
+
+	void ClearState()
+	{
+		if (g_lockInit != 2) return;
+		ScopedLock lock(&g_contactLock);
+		g_pendingEvents.clear();
+		g_activeContacts.clear();
+		g_watchedRefIDs.clear();
+		g_watchedBaseFormIDs.clear();
+		g_watchedSnapshot.clear();
+		g_watchedBaseSnapshot.clear();
+		g_watchActive = 0;
+		g_proxyToRefID.clear();
+		g_phantomToRefID.clear();
 		g_snapshotDirty = false;
-		s_proxyMapTimer = 0;
+	}
 
-		std::vector<QueuedContactEvent> seedEvents;
-		std::vector<WatchedActorCandidate> watchedActors;
-		CollectLoadedWatchedActors(watchedActors);
+	void AddWatch(UInt32 refID)
+	{
+		g_watchedRefIDs.insert(refID);
+		g_snapshotDirty = true;
+	}
 
-		//add callbacks only fire for new contacts, so seed the ones already touching
-		for (const auto& watchedActor : watchedActors) {
-			UInt32 refID = watchedActor.refID;
-			auto* form = watchedActor.ref;
-			if (!form) continue;
-			if (!IsActorTypeID(form->typeID)) continue;
+	void RemoveWatch(UInt32 refID)
+	{
+		g_watchedRefIDs.erase(refID);
+		g_snapshotDirty = true;
 
-			auto* actor = reinterpret_cast<Actor*>(form);
-			BhkCharacterControllerView* ctrl = GetActorController(actor);
-			if (!ctrl) continue;
+		if (IsRefWatchedOnMain(refID))
+			return;
 
-			//collect first, dispatching here would let a handler mutate watch state mid-scan
-			auto& contactBodies = ctrl->proxy.pointCollector.contactBodies;
-			for (SInt32 i = 0; i < contactBodies.size && contactBodies.data; i++) {
-				if (!contactBodies.data[i]) continue;
-				UInt32 otherRefID = ResolveWorldObjToRefID(contactBodies.data[i]);
-				if (otherRefID && otherRefID != refID)
-					seedEvents.push_back({refID, otherRefID, kChannel_CharProxy, true});
-			}
-
-			if (!ctrl->noContact && ctrl->bodyUnderFeet) {
-				UInt32 feetRefID = ResolveWorldObjToRefID(ctrl->bodyUnderFeet);
-				if (feetRefID && feetRefID != refID)
-					seedEvents.push_back({refID, feetRefID, kChannel_CharProxy, true});
-			}
-		}
-
-		if (!seedEvents.empty()) {
+		{
 			ScopedLock lock(&g_contactLock);
-			size_t room = kMaxQueuedEvents > g_pendingEvents.size() ? kMaxQueuedEvents - g_pendingEvents.size() : 0;
-			size_t toAdd = seedEvents.size() < room ? seedEvents.size() : room;
-			g_pendingEvents.insert(g_pendingEvents.end(), seedEvents.begin(), seedEvents.begin() + toAdd);
+			g_pendingEvents.erase(
+				std::remove_if(g_pendingEvents.begin(), g_pendingEvents.end(),
+					[refID](const QueuedContactEvent& e) { return e.watchedRefID == refID; }),
+				g_pendingEvents.end());
+		}
+
+		for (auto it = g_activeContacts.begin(); it != g_activeContacts.end();) {
+			if (it->first.refA == refID)
+				it = g_activeContacts.erase(it);
+			else
+				++it;
 		}
 	}
 
-	if ((!g_watchedRefIDs.empty() || !g_watchedBaseFormIDs.empty()) && ++s_proxyMapTimer >= 60) {
-		RebuildProxyMap();
-		s_proxyMapTimer = 0;
-	}
-
-	std::vector<QueuedContactEvent> events;
+	bool IsWatched(UInt32 refID)
 	{
-		ScopedLock lock(&g_contactLock);
-		events.swap(g_pendingEvents);
+		return g_watchedRefIDs.count(refID) != 0;
 	}
 
-	for (const auto& evt : events) {
-		//re-check per event, a handler callback can drop the watch mid-drain
-		if (!IsRefWatchedOnMain(evt.watchedRefID)) continue;
-
-		ContactPair pair = {evt.watchedRefID, evt.otherRefID, evt.channel};
-
-		if (evt.isBegin) {
-			int& count = g_activeContacts[pair];
-			count++;
-			if (count != 1) continue;
-		} else {
-			auto it = g_activeContacts.find(pair);
-			if (it == g_activeContacts.end()) continue;
-			it->second--;
-			if (it->second > 0) continue;
-			g_activeContacts.erase(it);
-		}
-
-		auto* watched = (TESObjectREFR*)Engine::LookupFormByID(evt.watchedRefID);
-		if (!watched) continue;
-
-		auto* other = evt.otherRefID ? (TESObjectREFR*)Engine::LookupFormByID(evt.otherRefID) : nullptr;
-
-		if (g_eventManagerInterface) {
-			const char* eventName = evt.isBegin ? "ITR:OnContactBegin" : "ITR:OnContactEnd";
-			g_eventManagerInterface->DispatchEvent(eventName, watched,
-				(TESForm*)other, (int)evt.channel);
-		}
-	}
-
-	PollContactEnd();
-	PollDeadActorProximityContacts();
-}
-
-void ClearState()
-{
-	if (g_lockInit != 2) return;
-	ScopedLock lock(&g_contactLock);
-	g_pendingEvents.clear();
-	g_activeContacts.clear();
-	g_watchedRefIDs.clear();
-	g_watchedBaseFormIDs.clear();
-	g_watchedSnapshot.clear();
-	g_watchedBaseSnapshot.clear();
-	g_watchActive = 0;
-	g_proxyToRefID.clear();
-	g_phantomToRefID.clear();
-	g_snapshotDirty = false;
-}
-
-void AddWatch(UInt32 refID)
-{
-	g_watchedRefIDs.insert(refID);
-	g_snapshotDirty = true;
-}
-
-void RemoveWatch(UInt32 refID)
-{
-	g_watchedRefIDs.erase(refID);
-	g_snapshotDirty = true;
-
-	if (IsRefWatchedOnMain(refID))
-		return;
-
+	void AddBaseWatch(UInt32 baseFormID)
 	{
-		ScopedLock lock(&g_contactLock);
-		g_pendingEvents.erase(
-			std::remove_if(g_pendingEvents.begin(), g_pendingEvents.end(),
-				[refID](const QueuedContactEvent& e) { return e.watchedRefID == refID; }),
-			g_pendingEvents.end());
+		if (!baseFormID) return;
+		g_watchedBaseFormIDs.insert(baseFormID);
+		g_snapshotDirty = true;
 	}
 
-	for (auto it = g_activeContacts.begin(); it != g_activeContacts.end();) {
-		if (it->first.refA == refID)
-			it = g_activeContacts.erase(it);
-		else
-			++it;
+	void RemoveBaseWatch(UInt32 baseFormID)
+	{
+		if (!baseFormID) return;
+		g_watchedBaseFormIDs.erase(baseFormID);
+		g_snapshotDirty = true;
+
+		for (auto it = g_activeContacts.begin(); it != g_activeContacts.end();) {
+			if (!g_watchedRefIDs.count(it->first.refA) && GetBaseFormID(it->first.refA) == baseFormID)
+				it = g_activeContacts.erase(it);
+			else
+				++it;
+		}
 	}
-}
 
-bool IsWatched(UInt32 refID)
-{
-	return g_watchedRefIDs.count(refID) != 0;
-}
-
-void AddBaseWatch(UInt32 baseFormID)
-{
-	if (!baseFormID) return;
-	g_watchedBaseFormIDs.insert(baseFormID);
-	g_snapshotDirty = true;
-}
-
-void RemoveBaseWatch(UInt32 baseFormID)
-{
-	if (!baseFormID) return;
-	g_watchedBaseFormIDs.erase(baseFormID);
-	g_snapshotDirty = true;
-
-	for (auto it = g_activeContacts.begin(); it != g_activeContacts.end();) {
-		if (!g_watchedRefIDs.count(it->first.refA) && GetBaseFormID(it->first.refA) == baseFormID)
-			it = g_activeContacts.erase(it);
-		else
-			++it;
+	bool IsBaseWatched(UInt32 baseFormID)
+	{
+		return g_watchedBaseFormIDs.count(baseFormID) != 0;
 	}
-}
 
-bool IsBaseWatched(UInt32 baseFormID)
-{
-	return g_watchedBaseFormIDs.count(baseFormID) != 0;
-}
-
-bool IsRefWatched(UInt32 refID)
-{
-	return IsRefWatchedOnMain(refID);
-}
+	bool IsRefWatched(UInt32 refID)
+	{
+		return IsRefWatchedOnMain(refID);
+	}
 
 } //namespace OnContactHandler

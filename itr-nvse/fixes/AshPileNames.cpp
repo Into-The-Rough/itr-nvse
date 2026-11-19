@@ -5,7 +5,6 @@
 #include "nvse/GameObjects.h"
 #include "nvse/GameForms.h"
 #include <Windows.h>
-#include <cstdint>
 
 #include "internal/globals.h"
 #include "internal/Detours.h"
@@ -13,15 +12,17 @@
 #include "internal/GameSDK.h"
 #include "internal/layout/ExtraData.h"
 #include "internal/GameGlobals.h"
-namespace Settings { extern int bAshPileNames; }
 
-namespace AshPileNames
-{
+namespace Settings {
+	extern int bAshPileNames;
+}
+
+namespace AshPileNames {
 	static bool s_hookInstalled = false;
 	static bool s_initFailed = false;
 	static Detours::CallDetour s_getBaseFullNameCall;
 
-	static const UInt32 kAddr_HookSite = 0x776F66; //call GetBaseFullName in SetHUDCrosshairStrings
+	static constexpr UInt32 kAddr_HookSite = 0x776F66; //call GetBaseFullName in SetHUDCrosshairStrings
 
 	static BSExtraData* GetExtraDataByType(BaseExtraList* list, UInt32 type)
 	{
@@ -54,15 +55,14 @@ namespace AshPileNames
 		return nullptr;
 	}
 
-	typedef const char* (__thiscall* GetBaseFullName_t)(TESObjectREFR* apRef);
+	using GetBaseFullName_t = const char*(__thiscall*)(TESObjectREFR * apRef);
 
 	static const char* __fastcall Hook_GetBaseFullName(TESObjectREFR* thisRef, void* edx)
 	{
 		if (!thisRef || !thisRef->baseForm)
 			return "";
 
-		if (Settings::bAshPileNames && !IsGameLoading())
-		{
+		if (Settings::bAshPileNames && !IsGameLoading()) {
 			const char* actorName = GetActorNameFromAshPile(thisRef);
 			if (actorName)
 				return actorName;
@@ -77,8 +77,7 @@ namespace AshPileNames
 		if (s_hookInstalled || !Settings::bAshPileNames)
 			return;
 
-		if (!s_getBaseFullNameCall.WriteRelCall(kAddr_HookSite, Hook_GetBaseFullName))
-		{
+		if (!s_getBaseFullNameCall.WriteRelCall(kAddr_HookSite, Hook_GetBaseFullName)) {
 			Log("AshPileNames failed: expected call opcode at 0x%08X", kAddr_HookSite);
 			s_initFailed = true;
 			return;

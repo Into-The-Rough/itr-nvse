@@ -3,7 +3,7 @@
 //intended for animation mods that need to know when an actor enters, peeks from or leaves cover
 
 #include "CoverCommands.h"
-#include "commands/PathingShared.h"
+#include "internal/layout/Pathing.h"
 #include "internal/CallTemplates.h"
 #include "internal/EngineFunctions.h"
 #include "internal/layout/Combat.h"
@@ -20,8 +20,7 @@
 extern const _ExtractArgs ExtractArgs;
 extern NVSEArrayVarInterface* g_arrInterface;
 
-namespace
-{
+namespace {
 	using Element = NVSEArrayVarInterface::Element;
 	using Array = NVSEArrayVarInterface::Array;
 
@@ -29,12 +28,11 @@ namespace
 	constexpr UInt32 kVtbl_CombatProcedureBeInCover = 0x10910F4;
 	constexpr UInt32 kTriangleFlag_Disabled = 0x20;
 
-	using GetProcedureByType_t = void* (__thiscall*)(void*, UInt32);
+	using GetProcedureByType_t = void*(__thiscall*)(void*, UInt32);
 	const auto CombatControllerGetProcedureByType = reinterpret_cast<GetProcedureByType_t>(0x980400);
 
 	//0x68F040 hands back pointers into the navmesh vertex array, not copies
-	struct EdgeEndpoints
-	{
+	struct EdgeEndpoints {
 		const PathPoint3* p0;
 		const PathPoint3* p1;
 	};
@@ -87,8 +85,8 @@ namespace
 	{
 		if (!ref || !ref->parentCell) return false;
 
-		const PathPoint3 point = { ref->posX, ref->posY, ref->posZ };
-		alignas(4) UInt8 loc[sizeof(PathingLocationLayout)] = {};
+		const PathPoint3 point = {ref->posX, ref->posY, ref->posZ};
+		alignas(4) UInt8 loc[sizeof(PathingLocationView)] = {};
 		ThisCall<void>(0x6DCEE0, loc, &point, ref->parentCell, ref->parentCell->worldSpace); //PathingLocation ctor
 
 		//stored navMeshInfo/navMeshes are borrowed engine pointers, the NavMeshPtr below is the owned one
@@ -100,7 +98,7 @@ namespace
 	void* GetTriangle(void* navMesh, UInt16 index)
 	{
 		if (!navMesh) return nullptr;
-		auto* triArr = reinterpret_cast<BSSimpleArrayLayout<UInt8>*>(static_cast<UInt8*>(navMesh) + 0x38);
+		auto* triArr = reinterpret_cast<PathingSimpleArrayView<UInt8>*>(static_cast<UInt8*>(navMesh) + 0x38);
 		if (!triArr->data || index >= triArr->size) return nullptr;
 		return triArr->data + index * 0x10;
 	}
@@ -113,7 +111,7 @@ namespace
 
 	Array* MakeVector(const float* v, Script* scriptObj)
 	{
-		const Element data[3] = { Element((double)v[0]), Element((double)v[1]), Element((double)v[2]) };
+		const Element data[3] = {Element((double)v[0]), Element((double)v[1]), Element((double)v[2])};
 		return g_arrInterface->CreateArray(data, 3, scriptObj);
 	}
 
@@ -139,8 +137,7 @@ namespace
 		if (!edges)
 			return nullptr;
 
-		for (UInt32 slot = 0; slot < 2; ++slot)
-		{
+		for (UInt32 slot = 0; slot < 2; ++slot) {
 			UInt16 bucket = 0;
 			bool leftOpen = false, rightOpen = false;
 			ThisCall<void>(0x691040, tri, slot, &bucket, &leftOpen, &rightOpen); //GetEdgeCoverData
@@ -173,15 +170,14 @@ namespace
 	//the AI's reserved cover spot, which carries its own triangle and pre-classified edge
 	Array* BuildAICover(void* coverLocation, CombatProcedureBeInCoverView* proc, Script* scriptObj)
 	{
-		auto* cover = &reinterpret_cast<CombatCoverLocationLayout*>(coverLocation)->cover;
+		auto* cover = &reinterpret_cast<CombatCoverLocationView*>(coverLocation)->cover;
 
 		std::vector<const char*> keys;
 		std::vector<Element> values;
 
 		ScopedNavMeshPtr navMesh;
 		UInt16 triangle = 0xFFFF;
-		if (ThisCall<bool>(0x6DD640, &cover->location, navMesh.Slot(), &triangle))
-		{
+		if (ThisCall<bool>(0x6DD640, &cover->location, navMesh.Slot(), &triangle)) {
 			AddKey(keys, values, "triangle", Element((double)triangle));
 			if (auto* navForm = static_cast<TESForm*>(navMesh.Get()))
 				AddKey(keys, values, "navmesh", Element(navForm));
@@ -197,10 +193,9 @@ namespace
 		AddVector(keys, values, "edgeB", &cover->edgeB.x, scriptObj);
 		AddVector(keys, values, "coverNormal", &cover->coverNormal.x, scriptObj);
 		AddVector(keys, values, "position",
-			&reinterpret_cast<CombatCoverLocationLayout*>(coverLocation)->position.x, scriptObj);
+			&reinterpret_cast<CombatCoverLocationView*>(coverLocation)->position.x, scriptObj);
 
-		if (proc)
-		{
+		if (proc) {
 			AddVector(keys, values, "coverPos", proc->coverPos, scriptObj);
 			AddVector(keys, values, "firePos", proc->firePos, scriptObj);
 		}
@@ -248,8 +243,7 @@ bool Cmd_GetActorCoverInfo_Execute(COMMAND_ARGS)
 	std::vector<const char*> keys;
 	std::vector<Element> values;
 
-	if (onNavmesh)
-	{
+	if (onNavmesh) {
 		AddKey(keys, values, "triangle", Element((double)triangle));
 		if (auto* navForm = static_cast<TESForm*>(navMesh.Get()))
 			AddKey(keys, values, "navmesh", Element(navForm));
@@ -258,8 +252,7 @@ bool Cmd_GetActorCoverInfo_Execute(COMMAND_ARGS)
 		const bool usable = tri && !ThisCall<bool>(0x691140, tri, kTriangleFlag_Disabled); //IsFlagSet
 		const bool hasCover = usable && ThisCall<bool>(0x690770, tri); //NavMeshTriangle::HasCover
 		AddKey(keys, values, "hasCover", Element((double)hasCover));
-		if (hasCover)
-		{
+		if (hasCover) {
 			if (Array* edges = BuildEdges(navMesh.Get(), triangle, tri, scriptObj))
 				AddKey(keys, values, "edges", Element(edges));
 		}
@@ -271,8 +264,7 @@ bool Cmd_GetActorCoverInfo_Execute(COMMAND_ARGS)
 		AddKey(keys, values, "stateName", Element(kCoverStateNames[state]));
 	AddKey(keys, values, "hasProcedure", Element((double)(proc != nullptr)));
 
-	if (coverLocation)
-	{
+	if (coverLocation) {
 		if (Array* aiCover = BuildAICover(coverLocation, proc, scriptObj))
 			AddKey(keys, values, "cover", Element(aiCover));
 	}
@@ -285,8 +277,7 @@ bool Cmd_GetActorCoverInfo_Execute(COMMAND_ARGS)
 	return true;
 }
 
-namespace CoverCommands
-{
+namespace CoverCommands {
 	void RegisterCommands(void* nvsePtr)
 	{
 		auto* nvse = (NVSEInterface*)nvsePtr;

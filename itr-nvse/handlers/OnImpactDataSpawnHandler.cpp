@@ -17,22 +17,23 @@ constexpr UInt32 kAddr_GetImpactDataForMaterial = 0x522BA0;
 
 struct NiPoint3 { float x, y, z; };
 
-typedef void (__thiscall* SpawnCollisionEffects_t)(void*, TESObjectREFR*, NiPoint3*, NiPoint3*, int, UInt32);
-typedef void* (__thiscall* GetImpactDataForMaterial_t)(void*, UInt32);
+using SpawnCollisionEffects_t = void(__thiscall*)(void*, TESObjectREFR*, NiPoint3*, NiPoint3*, int, UInt32);
+using GetImpactDataForMaterial_t = void*(__thiscall*)(void*, UInt32);
 
 static Detours::CallDetour s_spawnCall;
 
-static bool IsActorTypeID(UInt8 typeID) {
+static bool IsActorTypeID(UInt8 typeID)
+{
 	return typeID == kFormType_ACHR || typeID == kFormType_ACRE;
 }
 
-static void __fastcall HookSpawnCollisionEffects(
+static void __fastcall Hook_SpawnCollisionEffects(
 	void* this_, void* edx,
 	TESObjectREFR* a2, NiPoint3* aCoord, NiPoint3* a4,
 	int a5, UInt32 material)
 {
-	NiPoint3 capturedPos = aCoord ? *aCoord : NiPoint3{0,0,0};
-	NiPoint3 capturedNormal = a4 ? *a4 : NiPoint3{0,0,0};
+	NiPoint3 capturedPos = aCoord ? *aCoord : NiPoint3{0, 0, 0};
+	NiPoint3 capturedNormal = a4 ? *a4 : NiPoint3{0, 0, 0};
 
 	((SpawnCollisionEffects_t)s_spawnCall.GetOverwrittenAddr())(this_, a2, aCoord, a4, a5, material);
 
@@ -63,23 +64,23 @@ static void __fastcall HookSpawnCollisionEffects(
 		(TESForm*)this_,
 		(TESForm*)a2,
 		(TESForm*)weapon,
-		(int)material
-	);
+		(int)material);
 }
 
 namespace OnImpactDataSpawnHandler {
-bool Init(void* nvseInterface) {
-	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
-	if (nvse->isEditor) return false;
+	bool Init(void* nvseInterface)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
+		if (nvse->isEditor) return false;
 
-	if (!s_spawnCall.WriteRelCall(kAddr_SpawnCollisionEffectsCall, HookSpawnCollisionEffects)) {
-		Log("OnImpactDataSpawn: call site at 0x%X is not an E8 call, disabled", kAddr_SpawnCollisionEffectsCall);
-		return false;
+		if (!s_spawnCall.WriteRelCall(kAddr_SpawnCollisionEffectsCall, Hook_SpawnCollisionEffects)) {
+			Log("OnImpactDataSpawn: call site at 0x%X is not an E8 call, disabled", kAddr_SpawnCollisionEffectsCall);
+			return false;
+		}
+		UInt32 original = s_spawnCall.GetOverwrittenAddr();
+		Log("OnImpactDataSpawn: %08X hooked, original=%08X vanilla=%08X", kAddr_SpawnCollisionEffectsCall,
+			original, kAddr_SpawnCollisionEffects);
+
+		return true;
 	}
-	UInt32 original = s_spawnCall.GetOverwrittenAddr();
-	Log("OnImpactDataSpawn: %08X hooked, original=%08X vanilla=%08X", kAddr_SpawnCollisionEffectsCall,
-		original, kAddr_SpawnCollisionEffects);
-
-	return true;
-}
 }

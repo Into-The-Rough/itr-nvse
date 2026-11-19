@@ -11,8 +11,7 @@
 
 extern const _ExtractArgs ExtractArgs;
 
-namespace
-{
+namespace {
 	bool Cmd_SpawnTempParticle_Execute(COMMAND_ARGS)
 	{
 		*result = 0;
@@ -27,9 +26,8 @@ namespace
 		float yawDegrees = 0.0f;
 
 		if (!ExtractArgs(EXTRACT_ARGS, modelPath, &duration,
-			&position.x, &position.y, &position.z,
-			&normal.x, &normal.y, &normal.z, &scale, &yawDegrees))
-		{
+				&position.x, &position.y, &position.z,
+				&normal.x, &normal.y, &normal.z, &scale, &yawDegrees)) {
 			return true;
 		}
 
@@ -37,8 +35,7 @@ namespace
 			return true;
 
 		if (!TempEffects::SpawnSurfaceParticle(
-			thisObj->parentCell, duration, modelPath, position, normal, scale, yawDegrees))
-		{
+				thisObj->parentCell, duration, modelPath, position, normal, scale, yawDegrees)) {
 			return true;
 		}
 
@@ -47,28 +44,26 @@ namespace
 	}
 
 	ParamInfo kParams_SpawnTempParticle[10] = {
-		{ "modelPath", kParamType_String, 0 },
-		{ "duration", kParamType_Float, 0 },
-		{ "x", kParamType_Float, 0 },
-		{ "y", kParamType_Float, 0 },
-		{ "z", kParamType_Float, 0 },
-		{ "normalX", kParamType_Float, 0 },
-		{ "normalY", kParamType_Float, 0 },
-		{ "normalZ", kParamType_Float, 0 },
-		{ "scale", kParamType_Float, 0 },
-		{ "yawDegrees", kParamType_Float, 1 },
+		{"modelPath", kParamType_String, 0},
+		{"duration", kParamType_Float, 0},
+		{"x", kParamType_Float, 0},
+		{"y", kParamType_Float, 0},
+		{"z", kParamType_Float, 0},
+		{"normalX", kParamType_Float, 0},
+		{"normalY", kParamType_Float, 0},
+		{"normalZ", kParamType_Float, 0},
+		{"scale", kParamType_Float, 0},
+		{"yawDegrees", kParamType_Float, 1},
 	};
 
 	CommandInfo kCommandInfo_SpawnTempParticle = {
 		"SpawnTempParticle", "", 0,
 		"spawn a temporary particle NIF at a world position, aligned to a surface normal",
 		1, 10, kParams_SpawnTempParticle,
-		Cmd_SpawnTempParticle_Execute, nullptr, nullptr, 0
-	};
+		Cmd_SpawnTempParticle_Execute, nullptr, nullptr, 0};
 }
 
-namespace ParticleCommands
-{
+namespace ParticleCommands {
 	void RegisterCommands(void* nvsePtr)
 	{
 		auto* nvse = static_cast<NVSEInterface*>(nvsePtr);

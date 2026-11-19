@@ -1,7 +1,7 @@
 #pragma once
 
 namespace SmallDebrisCap {
-	void InitHooks();
+	void Init();
 	void UpdateSettings();
 	void Update();
 	void ClearState(bool loading);

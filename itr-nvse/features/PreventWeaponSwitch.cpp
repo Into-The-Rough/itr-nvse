@@ -2,7 +2,6 @@
 //hooks CombatProcedureSwitchWeapon::Update and finishes it early if actor is blocked
 
 #include <Windows.h>
-#include <cstdint>
 #include <cstring>
 #include "internal/Detours.h"
 #include "internal/NVSEPluginAPI.h"
@@ -15,7 +14,7 @@
 
 //local ExtractArgs, different from NVSEScriptInterface version
 #define EXTRACT_ARGS paramInfo, scriptData, opcodeOffsetPtr, thisObj, containingObj, scriptObj, eventList
-typedef bool (*ExtractArgs_t)(ParamInfo*, void*, UInt32*, TESObjectREFR*, TESObjectREFR*, Script*, ScriptEventList*, ...);
+using ExtractArgs_t = bool (*)(ParamInfo*, void*, UInt32*, TESObjectREFR*, TESObjectREFR*, Script*, ScriptEventList*, ...);
 static ExtractArgs_t ExtractArgs = (ExtractArgs_t)0x5ACCB0;
 
 static const int MAX_BLOCKED = 64;
@@ -46,19 +45,14 @@ static bool IsBlocked(UInt32 refID)
 static void SetBlocked(UInt32 refID, bool block)
 {
 	ScopedLock lock(&g_lock);
-	if (block)
-	{
+	if (block) {
 		for (int i = 0; i < g_count; i++)
 			if (g_blocked[i] == refID) return;
 		if (g_count < MAX_BLOCKED)
 			g_blocked[g_count++] = refID;
-	}
-	else
-	{
-		for (int i = 0; i < g_count; i++)
-		{
-			if (g_blocked[i] == refID)
-			{
+	} else {
+		for (int i = 0; i < g_count; i++) {
+			if (g_blocked[i] == refID) {
 				g_blocked[i] = g_blocked[--g_count];
 				g_blocked[g_count] = 0;
 				break;
@@ -70,79 +64,74 @@ static void SetBlocked(UInt32 refID, bool block)
 //the 0x9DA7C0 detour is owned by OnPreWeaponSwitchHandler, which calls
 //PreventWeaponSwitch::Get via SetExternalBlockCheck to preserve blocking
 namespace PreventWeaponSwitch {
-void Init()
-{
-	EnsureLockInit();
-}
+	void Init()
+	{
+		EnsureLockInit();
+	}
 
-void Set(Actor* actor, bool block)
-{
-	if (!actor)
-		return;
+	void Set(Actor* actor, bool block)
+	{
+		if (!actor)
+			return;
 
-	UInt32 refID = actor->refID;
-	SetBlocked(refID, block);
-}
+		UInt32 refID = actor->refID;
+		SetBlocked(refID, block);
+	}
 
-bool Get(Actor* actor)
-{
-	if (!actor)
-		return false;
+	bool Get(Actor* actor)
+	{
+		if (!actor)
+			return false;
 
-	UInt32 refID = actor->refID;
-	return IsBlocked(refID);
-}
+		UInt32 refID = actor->refID;
+		return IsBlocked(refID);
+	}
 
-static bool Cmd_SetPreventWeaponSwitch_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-	UInt32 block = 0;
-	if (!ExtractArgs(EXTRACT_ARGS, &block))
+	static bool Cmd_SetPreventWeaponSwitch_Execute(COMMAND_ARGS)
+	{
+		*result = 0;
+		UInt32 block = 0;
+		if (!ExtractArgs(EXTRACT_ARGS, &block))
+			return true;
+
+		if (Engine::TESObjectREFR_IsActor(thisObj)) {
+			Set((Actor*)thisObj, block != 0);
+			*result = 1;
+		}
 		return true;
-
-	if (Engine::TESObjectREFR_IsActor(thisObj))
-	{
-		Set((Actor*)thisObj, block != 0);
-		*result = 1;
 	}
-	return true;
-}
 
-static bool Cmd_GetPreventWeaponSwitch_Execute(COMMAND_ARGS)
-{
-	*result = 0;
-	if (Engine::TESObjectREFR_IsActor(thisObj))
+	static bool Cmd_GetPreventWeaponSwitch_Execute(COMMAND_ARGS)
 	{
-		*result = Get((Actor*)thisObj) ? 1 : 0;
+		*result = 0;
+		if (Engine::TESObjectREFR_IsActor(thisObj)) {
+			*result = Get((Actor*)thisObj) ? 1 : 0;
+		}
+		return true;
 	}
-	return true;
-}
 
-static ParamInfo kParams_SetPreventWeaponSwitch[1] = {
-	{"block", kParamType_Integer, 0}
-};
+	static ParamInfo kParams_SetPreventWeaponSwitch[1] = {
+		{"block", kParamType_Integer, 0}};
 
-static CommandInfo kCommandInfo_SetPreventWeaponSwitch = {
-	"SetPreventWeaponSwitch", "", 0, "Prevent actor from switching weapons",
-	1, 1, kParams_SetPreventWeaponSwitch, Cmd_SetPreventWeaponSwitch_Execute, nullptr, nullptr, 0
-};
+	static CommandInfo kCommandInfo_SetPreventWeaponSwitch = {
+		"SetPreventWeaponSwitch", "", 0, "Prevent actor from switching weapons",
+		1, 1, kParams_SetPreventWeaponSwitch, Cmd_SetPreventWeaponSwitch_Execute, nullptr, nullptr, 0};
 
-static CommandInfo kCommandInfo_GetPreventWeaponSwitch = {
-	"GetPreventWeaponSwitch", "", 0, "Check if actor weapon switching is prevented",
-	1, 0, nullptr, Cmd_GetPreventWeaponSwitch_Execute, nullptr, nullptr, 0
-};
+	static CommandInfo kCommandInfo_GetPreventWeaponSwitch = {
+		"GetPreventWeaponSwitch", "", 0, "Check if actor weapon switching is prevented",
+		1, 0, nullptr, Cmd_GetPreventWeaponSwitch_Execute, nullptr, nullptr, 0};
 
-void RegisterCommands(void* nvse)
-{
-	NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
-	nvseIntf->RegisterCommand(&kCommandInfo_SetPreventWeaponSwitch);
-	nvseIntf->RegisterCommand(&kCommandInfo_GetPreventWeaponSwitch);
-}
+	void RegisterCommands(void* nvse)
+	{
+		NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
+		nvseIntf->RegisterCommand(&kCommandInfo_SetPreventWeaponSwitch);
+		nvseIntf->RegisterCommand(&kCommandInfo_GetPreventWeaponSwitch);
+	}
 
-void ClearState()
-{
-	EnsureLockInit();
-	ScopedLock lock(&g_lock);
-	g_count = 0;
-}
+	void ClearState()
+	{
+		EnsureLockInit();
+		ScopedLock lock(&g_lock);
+		g_count = 0;
+	}
 }

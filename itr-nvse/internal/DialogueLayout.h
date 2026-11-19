@@ -24,7 +24,7 @@ struct DialogueResponseView {
 	UInt32 unk028;
 };
 
-template <typename T>
+template<typename T>
 struct BSSimpleListNodeView {
 	T item;
 	BSSimpleListNodeView<T>* next;

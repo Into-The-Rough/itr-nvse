@@ -19,8 +19,7 @@
 #include "internal/EngineHelpers.h"
 #include "internal/GameLayout.h"
 
-struct QueuedDialogueEvent
-{
+struct QueuedDialogueEvent {
 	UInt32 speakerRefID;
 	UInt32 topicInfoRefID;
 	UInt32 topicRefID;
@@ -30,8 +29,7 @@ struct QueuedDialogueEvent
 	char text[512];
 };
 
-struct ConfirmedSpeak
-{
+struct ConfirmedSpeak {
 	UInt32 speakerRefID;
 	UInt32 baseFormID;
 	UInt8 responseNum;
@@ -41,8 +39,7 @@ struct ConfirmedSpeak
 	char voicePath[260];
 };
 
-struct RecentSpeak
-{
+struct RecentSpeak {
 	UInt32 speakerRefID;
 	UInt32 baseFormID;
 	UInt8 responseNum;
@@ -61,10 +58,11 @@ namespace DialogueTextFilter {
 }
 
 struct SpokenLine {
-	UInt32	speakerRefID;
-	DWORD	expiryTick;
-	char	text[512];
+	UInt32 speakerRefID;
+	DWORD expiryTick;
+	char text[512];
 };
+
 static SpokenLine g_spokenLines[16] = {};
 
 static CRITICAL_SECTION g_dtfStateLock;
@@ -88,7 +86,8 @@ static const char* StringCStr(const String& str)
 	return str.m_data ? str.m_data : "";
 }
 
-static bool ParseModNameFromVoicePath(const char* path, char* outName, size_t outSize) {
+static bool ParseModNameFromVoicePath(const char* path, char* outName, size_t outSize)
+{
 	const char* p = strstr(path, "Voice\\");
 	if (!p) return false;
 	p += 6;
@@ -106,7 +105,8 @@ static ModInfo* FindMod(const char* modName)
 	return ThisCall<ModInfo*>(0x462F40, *g_dataHandlerPtr, modName);
 }
 
-static BGSVoiceType* GetActorVoiceType(Actor* actor) {
+static BGSVoiceType* GetActorVoiceType(Actor* actor)
+{
 	if (!actor) return nullptr;
 	TESForm* baseForm = actor->baseForm;
 	if (!baseForm) return nullptr;
@@ -123,7 +123,8 @@ static BGSVoiceType* GetActorVoiceType(Actor* actor) {
 	return nullptr;
 }
 
-static const char* GetVoiceTypeEditorID(BGSVoiceType* voiceType) {
+static const char* GetVoiceTypeEditorID(BGSVoiceType* voiceType)
+{
 	if (!voiceType) return nullptr;
 	auto* view = reinterpret_cast<BGSVoiceTypeEditorIDView*>(voiceType);
 	return StringCStr(view->editorID);
@@ -135,8 +136,8 @@ static TESTopic* GetTopicInfoParentTopic(TESTopicInfo* topicInfo)
 }
 
 static bool BuildVoicePath(char* outPath, size_t outSize,
-	                          TESTopicInfo* topicInfo, TESTopic* topic, Actor* speaker,
-	                          UInt8 responseNum)
+	TESTopicInfo* topicInfo, TESTopic* topic, Actor* speaker,
+	UInt8 responseNum)
 {
 	if (!outPath || !topicInfo || !speaker) return false;
 	outPath[0] = '\0';
@@ -180,15 +181,16 @@ static bool BuildVoicePath(char* outPath, size_t outSize,
 	}
 
 	sprintf_s(outPath, outSize,
-	          "Data\\Sound\\Voice\\%s\\%s\\%s_%s_%08X_%u.ogg",
-	          modName, voiceTypeID, questBuf, topicBuf, baseFormID, responseNum);
+		"Data\\Sound\\Voice\\%s\\%s\\%s_%s_%08X_%u.ogg",
+		modName, voiceTypeID, questBuf, topicBuf, baseFormID, responseNum);
 
 	return true;
 }
 
 //extract base formID and response number from engine voice path
 //format: ...\QuestID_TopicID_FORMID_N.ogg
-static bool ParseVoicePathIDs(const char* path, UInt32& outFormID, UInt8& outRespNum) {
+static bool ParseVoicePathIDs(const char* path, UInt32& outFormID, UInt8& outRespNum)
+{
 	if (!path || !*path) return false;
 
 	const char* p = strrchr(path, '\\');
@@ -201,7 +203,10 @@ static bool ParseVoicePathIDs(const char* path, UInt32& outFormID, UInt8& outRes
 	for (const char* c = dot - 1; c >= filename; c--) {
 		if (*c == '_') {
 			if (!us2) us2 = c;
-			else if (!us1) { us1 = c; break; }
+			else if (!us1) {
+				us1 = c;
+				break;
+			}
 		}
 	}
 	if (!us1 || !us2) return false;
@@ -222,14 +227,16 @@ static bool ParseVoicePathIDs(const char* path, UInt32& outFormID, UInt8& outRes
 }
 
 namespace DialogueTextFilter {
-void Suppress(bool suppress) {
-	g_suppressed = suppress;
-}
+	void Suppress(bool suppress)
+	{
+		g_suppressed = suppress;
+	}
 }
 
-//RunResult can fire for script-chain side effects during greeting evaluation.
-//Ignore topicInfo mismatches unless SpeakSound already confirmed the line.
-static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt32 speakerRefID) {
+//RunResult can fire for script-chain side effects during greeting evaluation,
+//ignore topicInfo mismatches unless SpeakSound already confirmed the line
+static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt32 speakerRefID)
+{
 	//talking activators reach this hook too - skip non-actors before walking MobileObject
 	TESForm* baseForm = speaker->baseForm;
 	if (!baseForm) return false;
@@ -262,17 +269,20 @@ static bool IsGreetingFalsePositive(Actor* speaker, UInt32 topicInfoRefID, UInt3
 	return false;
 }
 
-static bool IsActorRef(TESForm* form) {
+static bool IsActorRef(TESForm* form)
+{
 	if (!form) return false;
 	return form->typeID == kFormType_ACHR || form->typeID == kFormType_ACRE;
 }
 
-static bool IsWorldRef(TESForm* form) {
+static bool IsWorldRef(TESForm* form)
+{
 	if (!form) return false;
 	return form->typeID >= kFormType_Reference && form->typeID <= kFormType_ACRE;
 }
 
-static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
+static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker)
+{
 	if (DialogueTextFilter::g_suppressed) return;
 	if (!topicInfo || !speaker)
 		return;
@@ -316,9 +326,7 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 
 			bool isDuplicate = false;
 			for (const auto& existing : DialogueTextFilter::g_pendingEvents) {
-				if (existing.speakerRefID == speakerRefID &&
-					existing.topicInfoRefID == topicInfoRefID &&
-					existing.responseNum == responseNum) {
+				if (existing.speakerRefID == speakerRefID && existing.topicInfoRefID == topicInfoRefID && existing.responseNum == responseNum) {
 					isDuplicate = true;
 					break;
 				}
@@ -337,14 +345,14 @@ static void __cdecl HookCallback(TESTopicInfo* topicInfo, Actor* speaker) {
 			++queuedCount;
 		}
 	}
-
 }
 
 using RunResult_t = void(__thiscall*)(TESTopicInfo*, int, Actor*);
 static Detours::JumpDetour g_runResultDetour;
 static RunResult_t g_runResult = nullptr;
 
-static void __fastcall DialogueTextHook(TESTopicInfo* topicInfo, void*, int responseIndex, Actor* speaker) {
+static void __fastcall Hook_DialogueText(TESTopicInfo* topicInfo, void* edx, int responseIndex, Actor* speaker)
+{
 	if (responseIndex == 0)
 		HookCallback(topicInfo, speaker);
 
@@ -355,7 +363,8 @@ static void __fastcall DialogueTextHook(TESTopicInfo* topicInfo, void*, int resp
 //SpeakSound computes the final engine duration immediately before returning it.
 constexpr UInt32 kAddr_SpeakSoundDuration = 0x8A2CD3;
 
-static void __cdecl OnSpeakConfirm(Actor* speaker, const char* voicePath, float durationSeconds) {
+static void __cdecl OnSpeakConfirm(Actor* speaker, const char* voicePath, float durationSeconds)
+{
 	if (g_isLoadingSave) return;
 	if (!speaker || !voicePath || !*voicePath) return;
 	if (!IsWorldRef(speaker)) return;
@@ -377,10 +386,7 @@ static void __cdecl OnSpeakConfirm(Actor* speaker, const char* voicePath, float 
 	//dedup: engine fires SPEAK twice per line
 	DWORD now = GetTickCount();
 	for (const auto& rs : DialogueTextFilter::g_recentSpeaks) {
-		if (rs.speakerRefID == speakerRefID &&
-			rs.baseFormID == baseFormID &&
-			rs.responseNum == respNum &&
-			(now - rs.timestamp) < 2000) {
+		if (rs.speakerRefID == speakerRefID && rs.baseFormID == baseFormID && rs.responseNum == respNum && (now - rs.timestamp) < 2000) {
 			return;
 		}
 	}
@@ -404,14 +410,15 @@ static auto g_speakCallback = &OnSpeakConfirm;
 static Detours::JumpDetour g_speakDurationDetour;
 static UInt8* g_speakDurationTrampoline = nullptr;
 
-static __declspec(naked) void SpeakSoundDurationHook() {
+static __declspec(naked) void Hook_SpeakSoundDuration()
+{
 	__asm {
 		pushad
 		pushfd
 
-		push    dword ptr [ebp-228h]          //cdecl arg3: durationSeconds
-		push    dword ptr [ebp+08h]           //cdecl arg2: voicePath
-		push    dword ptr [ebp-298h]          //cdecl arg1: speaker
+		push    dword ptr [ebp-228h] //cdecl arg3: durationSeconds
+		push    dword ptr [ebp+08h] //cdecl arg2: voicePath
+		push    dword ptr [ebp-298h] //cdecl arg1: speaker
 		call    [g_speakCallback]
 		add     esp, 0Ch
 
@@ -433,7 +440,10 @@ static void LatchSpokenLine(UInt32 speakerRefID, const char* text, float duratio
 	DWORD now = GetTickCount();
 	SpokenLine* slot = nullptr;
 	for (auto& line : g_spokenLines) {
-		if (line.speakerRefID == speakerRefID) { slot = &line; break; }
+		if (line.speakerRefID == speakerRefID) {
+			slot = &line;
+			break;
+		}
 		if (!slot && (!line.speakerRefID || (LONG)(now - line.expiryTick) > 0)) slot = &line;
 	}
 	if (!slot)
@@ -446,280 +456,267 @@ static void LatchSpokenLine(UInt32 speakerRefID, const char* text, float duratio
 }
 
 namespace DialogueTextFilter {
-const char* GetSpokenLine(UInt32 speakerRefID)
-{
-	if (!speakerRefID)
-		return nullptr;
-	EnsureStateLockInitialized();
-	ScopedLock lock(&g_dtfStateLock);
-	DWORD now = GetTickCount();
-	for (auto& line : g_spokenLines) {
-		if (line.speakerRefID != speakerRefID)
-			continue;
-		if ((LONG)(now - line.expiryTick) > 0)
+	const char* GetSpokenLine(UInt32 speakerRefID)
+	{
+		if (!speakerRefID)
 			return nullptr;
-		return line.text[0] ? line.text : nullptr;
+		EnsureStateLockInitialized();
+		ScopedLock lock(&g_dtfStateLock);
+		DWORD now = GetTickCount();
+		for (auto& line : g_spokenLines) {
+			if (line.speakerRefID != speakerRefID)
+				continue;
+			if ((LONG)(now - line.expiryTick) > 0)
+				return nullptr;
+			return line.text[0] ? line.text : nullptr;
+		}
+		return nullptr;
 	}
-	return nullptr;
-}
 }
 
 namespace DialogueTextFilter {
-void ClearState()
-{
-	EnsureStateLockInitialized();
-	ScopedLock lock(&g_dtfStateLock);
-	g_pendingEvents.clear();
-	g_confirmedSpeaks.clear();
-	g_recentSpeaks.clear();
-	g_recentFallbacks.clear();
-	g_spokenGreets.clear();
-	memset(g_spokenLines, 0, sizeof(g_spokenLines));
-	g_mainThreadId = 0;
-}
-
-void Update()
-{
-	EnsureStateLockInitialized();
-	if (g_dtfStateLockInit != 2) return;
-	if (!g_eventManagerInterface) return;
-	if (g_isLoadingSave) {
-		ClearState();
-		return;
-	}
-
-	DWORD currentThreadId = GetCurrentThreadId();
-	if (!DialogueTextFilter::g_mainThreadId)
-		DialogueTextFilter::g_mainThreadId = currentThreadId;
-	if (currentThreadId != DialogueTextFilter::g_mainThreadId)
-		return;
-
-	//prune old dedup entries (>30s)
+	void ClearState()
 	{
+		EnsureStateLockInitialized();
 		ScopedLock lock(&g_dtfStateLock);
-		DWORD now = GetTickCount();
-		for (auto it = DialogueTextFilter::g_recentSpeaks.begin();
-			 it != DialogueTextFilter::g_recentSpeaks.end(); ) {
-			if (now - it->timestamp > 10000)
-				it = DialogueTextFilter::g_recentSpeaks.erase(it);
-			else
-				++it;
-		}
-		for (auto it = DialogueTextFilter::g_recentFallbacks.begin();
-			 it != DialogueTextFilter::g_recentFallbacks.end(); ) {
-			if (now - it->timestamp > 30000)
-				it = DialogueTextFilter::g_recentFallbacks.erase(it);
-			else
-				++it;
-		}
+		g_pendingEvents.clear();
+		g_confirmedSpeaks.clear();
+		g_recentSpeaks.clear();
+		g_recentFallbacks.clear();
+		g_spokenGreets.clear();
+		memset(g_spokenLines, 0, sizeof(g_spokenLines));
+		g_mainThreadId = 0;
 	}
 
-	std::vector<QueuedDialogueEvent> pendingEvents;
-	std::vector<ConfirmedSpeak> confirmedSpeaks;
+	void Update()
 	{
-		ScopedLock lock(&g_dtfStateLock);
-		pendingEvents.swap(DialogueTextFilter::g_pendingEvents);
-		confirmedSpeaks.swap(DialogueTextFilter::g_confirmedSpeaks);
-	}
-
-	DWORD nowTick = GetTickCount();
-	std::vector<QueuedDialogueEvent> deferredEvents;
-	deferredEvents.reserve(pendingEvents.size());
-
-	for (const auto& evt : pendingEvents) {
-		if ((LONG)(nowTick - evt.dispatchAfterTick) < 0) {
-			deferredEvents.push_back(evt);
-			continue;
+		EnsureStateLockInitialized();
+		if (g_dtfStateLockInit != 2) return;
+		if (!g_eventManagerInterface) return;
+		if (g_isLoadingSave) {
+			ClearState();
+			return;
 		}
 
-		Actor* speaker = reinterpret_cast<Actor*>(Engine::LookupFormByID(evt.speakerRefID));
-		TESTopicInfo* topicInfo = reinterpret_cast<TESTopicInfo*>(Engine::LookupFormByID(evt.topicInfoRefID));
-		TESTopic* topic = reinterpret_cast<TESTopic*>(Engine::LookupFormByID(evt.topicRefID));
+		DWORD currentThreadId = GetCurrentThreadId();
+		if (!DialogueTextFilter::g_mainThreadId)
+			DialogueTextFilter::g_mainThreadId = currentThreadId;
+		if (currentThreadId != DialogueTextFilter::g_mainThreadId)
+			return;
 
-		if (!speaker || !topicInfo || !topic || !IsWorldRef(speaker)) {
-			continue;
-		}
-
-		char voicePath[512] = {0};
-		bool hasVoice = IsActorRef(speaker) &&
-			BuildVoicePath(voicePath, sizeof(voicePath), topicInfo, topic, speaker, evt.responseNum);
-
-		if (!hasVoice) {
-			LatchSpokenLine(evt.speakerRefID, evt.text, evt.duration);
-			g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
-				reinterpret_cast<TESObjectREFR*>(speaker),
-				speaker, topic, topicInfo, evt.text, "", PackEventFloatArg(evt.duration));
-			continue;
-		}
-
-		const UInt32 baseFormID = topicInfo->GetFormIDWithoutIndex();
-		bool confirmed = false;
-		float durationSeconds = 0.0f;
-		char confirmedVoicePath[260] = {0};
-		for (auto cit = confirmedSpeaks.begin(); cit != confirmedSpeaks.end(); ++cit) {
-			if (cit->speakerRefID == evt.speakerRefID &&
-				cit->baseFormID == baseFormID &&
-				cit->responseNum == evt.responseNum) {
-				confirmed = true;
-				durationSeconds = cit->durationSeconds;
-				strncpy_s(confirmedVoicePath, sizeof(confirmedVoicePath), cit->voicePath, _TRUNCATE);
-				confirmedSpeaks.erase(cit);
-				break;
+		//prune old dedup entries (>30s)
+		{
+			ScopedLock lock(&g_dtfStateLock);
+			DWORD now = GetTickCount();
+			for (auto it = DialogueTextFilter::g_recentSpeaks.begin();
+				it != DialogueTextFilter::g_recentSpeaks.end();) {
+				if (now - it->timestamp > 10000)
+					it = DialogueTextFilter::g_recentSpeaks.erase(it);
+				else
+					++it;
+			}
+			for (auto it = DialogueTextFilter::g_recentFallbacks.begin();
+				it != DialogueTextFilter::g_recentFallbacks.end();) {
+				if (now - it->timestamp > 30000)
+					it = DialogueTextFilter::g_recentFallbacks.erase(it);
+				else
+					++it;
 			}
 		}
 
-		if (confirmed) {
-			bool alreadyFallback = false;
-			{
-				ScopedLock lock(&g_dtfStateLock);
-				for (auto it = DialogueTextFilter::g_recentFallbacks.begin();
-					 it != DialogueTextFilter::g_recentFallbacks.end(); ++it) {
-					if (it->speakerRefID == evt.speakerRefID &&
-						it->baseFormID == baseFormID &&
-						it->responseNum == evt.responseNum) {
-						alreadyFallback = true;
-						DialogueTextFilter::g_recentFallbacks.erase(it);
+		std::vector<QueuedDialogueEvent> pendingEvents;
+		std::vector<ConfirmedSpeak> confirmedSpeaks;
+		{
+			ScopedLock lock(&g_dtfStateLock);
+			pendingEvents.swap(DialogueTextFilter::g_pendingEvents);
+			confirmedSpeaks.swap(DialogueTextFilter::g_confirmedSpeaks);
+		}
+
+		DWORD nowTick = GetTickCount();
+		std::vector<QueuedDialogueEvent> deferredEvents;
+		deferredEvents.reserve(pendingEvents.size());
+
+		for (const auto& evt : pendingEvents) {
+			if ((LONG)(nowTick - evt.dispatchAfterTick) < 0) {
+				deferredEvents.push_back(evt);
+				continue;
+			}
+
+			Actor* speaker = reinterpret_cast<Actor*>(Engine::LookupFormByID(evt.speakerRefID));
+			TESTopicInfo* topicInfo = reinterpret_cast<TESTopicInfo*>(Engine::LookupFormByID(evt.topicInfoRefID));
+			TESTopic* topic = reinterpret_cast<TESTopic*>(Engine::LookupFormByID(evt.topicRefID));
+
+			if (!speaker || !topicInfo || !topic || !IsWorldRef(speaker)) {
+				continue;
+			}
+
+			char voicePath[512] = {0};
+			bool hasVoice = IsActorRef(speaker) && BuildVoicePath(voicePath, sizeof(voicePath), topicInfo, topic, speaker, evt.responseNum);
+
+			if (!hasVoice) {
+				LatchSpokenLine(evt.speakerRefID, evt.text, evt.duration);
+				g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
+					reinterpret_cast<TESObjectREFR*>(speaker),
+					speaker, topic, topicInfo, evt.text, "", PackEventFloatArg(evt.duration));
+				continue;
+			}
+
+			const UInt32 baseFormID = topicInfo->GetFormIDWithoutIndex();
+			bool confirmed = false;
+			float durationSeconds = 0.0f;
+			char confirmedVoicePath[260] = {0};
+			for (auto cit = confirmedSpeaks.begin(); cit != confirmedSpeaks.end(); ++cit) {
+				if (cit->speakerRefID == evt.speakerRefID && cit->baseFormID == baseFormID && cit->responseNum == evt.responseNum) {
+					confirmed = true;
+					durationSeconds = cit->durationSeconds;
+					strncpy_s(confirmedVoicePath, sizeof(confirmedVoicePath), cit->voicePath, _TRUNCATE);
+					confirmedSpeaks.erase(cit);
+					break;
+				}
+			}
+
+			if (confirmed) {
+				bool alreadyFallback = false;
+				{
+					ScopedLock lock(&g_dtfStateLock);
+					for (auto it = DialogueTextFilter::g_recentFallbacks.begin();
+						it != DialogueTextFilter::g_recentFallbacks.end(); ++it) {
+						if (it->speakerRefID == evt.speakerRefID && it->baseFormID == baseFormID && it->responseNum == evt.responseNum) {
+							alreadyFallback = true;
+							DialogueTextFilter::g_recentFallbacks.erase(it);
+							break;
+						}
+					}
+				}
+				if (alreadyFallback) {
+					continue;
+				}
+				LatchSpokenLine(evt.speakerRefID, evt.text,
+					durationSeconds > 0.0f ? durationSeconds : evt.duration);
+				g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
+					reinterpret_cast<TESObjectREFR*>(speaker),
+					speaker, topic, topicInfo, evt.text,
+					confirmedVoicePath[0] ? confirmedVoicePath : voicePath,
+					PackEventFloatArg(durationSeconds > 0.0f ? durationSeconds : evt.duration));
+			} else if (nowTick - evt.dispatchAfterTick > 30000) {
+				//gave up waiting for speaksound confirm, drop the event
+			} else {
+				deferredEvents.push_back(evt);
+			}
+		}
+
+		//some lines confirm through SpeakSound after reload without a matching RunResult
+		for (auto cit = confirmedSpeaks.begin(); cit != confirmedSpeaks.end();) {
+			if (nowTick - cit->timestamp < 500) {
+				++cit;
+				continue;
+			}
+
+			const ModInfo* mod = FindMod(cit->modName);
+			if (!mod) {
+				cit = confirmedSpeaks.erase(cit);
+				continue;
+			}
+
+			UInt32 fullFormID;
+			if (static_cast<DataHandler*>(*g_dataHandlerPtr)->SupportsNewFileTypes() && mod->IsSpecial()) {
+				if (mod->IsSmall()) {
+					fullFormID = ((UInt32)mod->modIndex << 24) | ((UInt32)mod->secondIndex << 12) | (cit->baseFormID & 0xFFF);
+				} else if (mod->IsMedium()) {
+					fullFormID = ((UInt32)mod->modIndex << 24) | ((UInt32)mod->secondIndex << 16) | (cit->baseFormID & 0xFFFF);
+				}
+			} else {
+				fullFormID = ((UInt32)mod->modIndex << 24) | cit->baseFormID;
+			}
+
+			TESTopicInfo* info = reinterpret_cast<TESTopicInfo*>(Engine::LookupFormByID(fullFormID));
+			Actor* speaker = reinterpret_cast<Actor*>(Engine::LookupFormByID(cit->speakerRefID));
+			if (!info || !speaker || !IsWorldRef(speaker)) {
+				cit = confirmedSpeaks.erase(cit);
+				continue;
+			}
+
+			TESTopicInfoResponse** ppResp = ThisCall<TESTopicInfoResponse**>(
+				kAddr_GetResponses, info, nullptr);
+			char textBuf[1024] = {0};
+			bool gotText = false;
+			if (ppResp && *ppResp) {
+				UInt8 rn = 1;
+				for (auto* r = *ppResp; r; r = r->next, rn++) {
+					if (rn == cit->responseNum) {
+						const char* src = StringCStr(r->responseText);
+						if (src && *src) {
+							strncpy_s(textBuf, sizeof(textBuf), src, _TRUNCATE);
+							gotText = true;
+						}
 						break;
 					}
 				}
 			}
-			if (alreadyFallback) {
+
+			if (!gotText) {
+				cit = confirmedSpeaks.erase(cit);
 				continue;
 			}
-			LatchSpokenLine(evt.speakerRefID, evt.text,
-				durationSeconds > 0.0f ? durationSeconds : evt.duration);
+
+			TESTopic* topic = GetTopicInfoParentTopic(info);
+
+			LatchSpokenLine(cit->speakerRefID, textBuf, cit->durationSeconds);
 			g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
 				reinterpret_cast<TESObjectREFR*>(speaker),
-				speaker, topic, topicInfo, evt.text,
-				confirmedVoicePath[0] ? confirmedVoicePath : voicePath,
-				PackEventFloatArg(durationSeconds > 0.0f ? durationSeconds : evt.duration));
-		} else if (nowTick - evt.dispatchAfterTick > 30000) {
-			//gave up waiting for speaksound confirm, drop the event
-		} else {
-			deferredEvents.push_back(evt);
-		}
-	}
-
-	//Some lines confirm through SpeakSound after reload without a matching RunResult.
-	for (auto cit = confirmedSpeaks.begin(); cit != confirmedSpeaks.end(); ) {
-		if (nowTick - cit->timestamp < 500) { ++cit; continue; }
-
-		const ModInfo* mod = FindMod(cit->modName);
-		if (!mod) {
-			cit = confirmedSpeaks.erase(cit);
-			continue;
-		}
-
-		UInt32 fullFormID;
-		if (static_cast<DataHandler*>(*g_dataHandlerPtr)->SupportsNewFileTypes() && mod->IsSpecial()) {
-			if (mod->IsSmall()) {
-				fullFormID = ((UInt32)mod->modIndex << 24) | ((UInt32)mod->secondIndex << 12) | (cit->baseFormID & 0xFFF);
-			} else if (mod->IsMedium()) {
-				fullFormID = ((UInt32)mod->modIndex << 24) | ((UInt32)mod->secondIndex << 16) | (cit->baseFormID & 0xFFFF);
+				speaker, topic, info, textBuf, cit->voicePath, PackEventFloatArg(cit->durationSeconds));
+			{
+				ScopedLock lock(&g_dtfStateLock);
+				DialogueTextFilter::g_recentFallbacks.push_back(
+					{cit->speakerRefID, cit->baseFormID, cit->responseNum, nowTick});
 			}
-		} else {
-			fullFormID = ((UInt32)mod->modIndex << 24) | cit->baseFormID;
-		}
 
-		TESTopicInfo* info = reinterpret_cast<TESTopicInfo*>(Engine::LookupFormByID(fullFormID));
-		Actor* speaker = reinterpret_cast<Actor*>(Engine::LookupFormByID(cit->speakerRefID));
-		if (!info || !speaker || !IsWorldRef(speaker)) {
 			cit = confirmedSpeaks.erase(cit);
-			continue;
 		}
 
-		TESTopicInfoResponse** ppResp = ThisCall<TESTopicInfoResponse**>(
-			kAddr_GetResponses, info, nullptr);
-		char textBuf[1024] = {0};
-		bool gotText = false;
-		if (ppResp && *ppResp) {
-			UInt8 rn = 1;
-			for (auto* r = *ppResp; r; r = r->next, rn++) {
-				if (rn == cit->responseNum) {
-					const char* src = StringCStr(r->responseText);
-					if (src && *src) {
-						strncpy_s(textBuf, sizeof(textBuf), src, _TRUNCATE);
-						gotText = true;
-					}
-					break;
-				}
-			}
-		}
-
-		if (!gotText) {
-			cit = confirmedSpeaks.erase(cit);
-			continue;
-		}
-
-		TESTopic* topic = GetTopicInfoParentTopic(info);
-
-		LatchSpokenLine(cit->speakerRefID, textBuf, cit->durationSeconds);
-		g_eventManagerInterface->DispatchEvent("ITR:OnDialogueText",
-			reinterpret_cast<TESObjectREFR*>(speaker),
-			speaker, topic, info, textBuf, cit->voicePath, PackEventFloatArg(cit->durationSeconds));
 		{
 			ScopedLock lock(&g_dtfStateLock);
-			DialogueTextFilter::g_recentFallbacks.push_back(
-				{cit->speakerRefID, cit->baseFormID, cit->responseNum, nowTick});
-		}
+			if (!deferredEvents.empty()) {
+				DialogueTextFilter::g_pendingEvents.insert(
+					DialogueTextFilter::g_pendingEvents.begin(),
+					deferredEvents.begin(), deferredEvents.end());
 
-		cit = confirmedSpeaks.erase(cit);
+				constexpr size_t kMaxQueuedDialogueEvents = 256;
+				if (DialogueTextFilter::g_pendingEvents.size() > kMaxQueuedDialogueEvents)
+					DialogueTextFilter::g_pendingEvents.resize(kMaxQueuedDialogueEvents);
+			}
+			if (!confirmedSpeaks.empty()) {
+				DialogueTextFilter::g_confirmedSpeaks.insert(
+					DialogueTextFilter::g_confirmedSpeaks.end(),
+					confirmedSpeaks.begin(), confirmedSpeaks.end());
+				if (DialogueTextFilter::g_confirmedSpeaks.size() > 128)
+					DialogueTextFilter::g_confirmedSpeaks.erase(
+						DialogueTextFilter::g_confirmedSpeaks.begin(),
+						DialogueTextFilter::g_confirmedSpeaks.begin() + (DialogueTextFilter::g_confirmedSpeaks.size() - 128));
+			}
+		}
 	}
 
+	bool Init(void* nvseInterface)
 	{
-		ScopedLock lock(&g_dtfStateLock);
-		if (!deferredEvents.empty()) {
-			DialogueTextFilter::g_pendingEvents.insert(
-				DialogueTextFilter::g_pendingEvents.begin(),
-				deferredEvents.begin(), deferredEvents.end());
+		NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
+		if (nvse->isEditor) return false;
 
-			constexpr size_t kMaxQueuedDialogueEvents = 256;
-			if (DialogueTextFilter::g_pendingEvents.size() > kMaxQueuedDialogueEvents)
-				DialogueTextFilter::g_pendingEvents.resize(kMaxQueuedDialogueEvents);
-		}
-		if (!confirmedSpeaks.empty()) {
-			DialogueTextFilter::g_confirmedSpeaks.insert(
-				DialogueTextFilter::g_confirmedSpeaks.end(),
-				confirmedSpeaks.begin(), confirmedSpeaks.end());
-			if (DialogueTextFilter::g_confirmedSpeaks.size() > 128)
-				DialogueTextFilter::g_confirmedSpeaks.erase(
-					DialogueTextFilter::g_confirmedSpeaks.begin(),
-					DialogueTextFilter::g_confirmedSpeaks.begin() +
-						(DialogueTextFilter::g_confirmedSpeaks.size() - 128));
-		}
+		EnsureStateLockInitialized();
+		DialogueTextFilter::g_mainThreadId = 0;
+
+		bool runResultHooked = (*(UInt8*)kAddr_RunResult == 0xE9)
+			? g_runResultDetour.WriteRelJumpChainable(kAddr_RunResult, Hook_DialogueText, 5)
+			: g_runResultDetour.WriteRelJump(kAddr_RunResult, Hook_DialogueText, 6);
+		if (!runResultHooked)
+			return false;
+		g_runResult = g_runResultDetour.GetTrampoline<RunResult_t>();
+
+		static const UInt8 expectedSpeakDurationBytes[] = {0xD9, 0x85, 0xD8, 0xFD, 0xFF, 0xFF};
+		if (memcmp((void*)kAddr_SpeakSoundDuration, expectedSpeakDurationBytes, sizeof(expectedSpeakDurationBytes)) == 0)
+			g_speakDurationDetour.WriteRelJump(kAddr_SpeakSoundDuration, Hook_SpeakSoundDuration, sizeof(expectedSpeakDurationBytes), &g_speakDurationTrampoline);
+		DialogueTextFilter::g_hookInstalled = true;
+
+		return true;
 	}
-}
-
-bool Init(void* nvseInterface) {
-	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
-	if (nvse->isEditor) return false;
-
-	EnsureStateLockInitialized();
-	DialogueTextFilter::g_mainThreadId = 0;
-
-	bool runResultHooked = false;
-	if (*(UInt8*)kAddr_RunResult == 0xE9)
-		runResultHooked = g_runResultDetour.WriteRelJumpChainable(kAddr_RunResult, DialogueTextHook, 5);
-	else
-		runResultHooked = g_runResultDetour.WriteRelJump(kAddr_RunResult, DialogueTextHook, 6);
-	if (!runResultHooked) {
-		Log("DialogueTextFilter: failed to install RunResult detour");
-		return false;
-	}
-	g_runResult = g_runResultDetour.GetTrampoline<RunResult_t>();
-	if (!g_runResult) {
-		Log("DialogueTextFilter: RunResult trampoline missing");
-		g_runResultDetour.Remove();
-		return false;
-	}
-
-	static const UInt8 expectedSpeakDurationBytes[] = { 0xD9, 0x85, 0xD8, 0xFD, 0xFF, 0xFF };
-	if (memcmp((void*)kAddr_SpeakSoundDuration, expectedSpeakDurationBytes, sizeof(expectedSpeakDurationBytes)) == 0) {
-		if (!g_speakDurationDetour.WriteRelJump(kAddr_SpeakSoundDuration, SpeakSoundDurationHook, sizeof(expectedSpeakDurationBytes), &g_speakDurationTrampoline))
-			Log("DialogueTextFilter: failed to install SpeakSound duration detour");
-	}
-	DialogueTextFilter::g_hookInstalled = true;
-
-	return true;
-}
 }

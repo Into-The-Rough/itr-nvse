@@ -1,7 +1,6 @@
 #pragma once
 
-namespace LoopingSoundLoadFix
-{
+namespace LoopingSoundLoadFix {
 	void Init();
 	void OnPostLoadGame();
 }

@@ -1,6 +1,5 @@
 #pragma once
 
-namespace PathingCommands
-{
+namespace PathingCommands {
 	void RegisterCommands(void* nvse);
 }

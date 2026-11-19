@@ -3,18 +3,16 @@
 //so the fade completes instantly without visual effect
 
 #include "NoDoorFade.h"
-#include <cstdint>
 
 #include "internal/Detours.h"
 #include "internal/GameSDK.h"
 #include "internal/layout/Process.h"
 #include "internal/globals.h"
 
-namespace NoDoorFade
-{
+namespace NoDoorFade {
 	static bool g_enabled = false;
 
-	typedef void (__thiscall* FadeOut_t)(void* process, void* actor, void* doorRef, bool teleport);
+	using FadeOut_t = void(__thiscall*)(void* process, void* actor, void* doorRef, bool teleport);
 	static Detours::CallDetour s_fadeOutCall;
 
 	void __fastcall Hook_FadeOut(void* process, void* edx, void* actor, void* doorRef, bool teleport)

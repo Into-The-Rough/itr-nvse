@@ -1,10 +1,5 @@
-//navmesh probes exposed as script commands
-//GetPathLength reuses the standalone PathingRequest/Solution flow from PathingCommands
-//IsPointOnNavmesh resolves a triangle via a stack PathingLocation
-//GetCoverPointsInRadius resolves each cell NavMeshInfo to its NavMesh and reads the cover triangle array
-
 #include "NavmeshCommands.h"
-#include "commands/PathingShared.h"
+#include "internal/layout/Pathing.h"
 #include "internal/CallTemplates.h"
 #include "internal/EngineFunctions.h"
 #include "internal/RayCast.h"
@@ -21,8 +16,7 @@
 extern const _ExtractArgs ExtractArgs;
 extern NVSEArrayVarInterface* g_arrInterface;
 
-namespace
-{
+namespace {
 	DWORD s_mainThreadId = 0;
 
 	bool IsMainThread()
@@ -52,7 +46,7 @@ namespace
 		ScopedPathingRequest request;
 		ScopedPathingSolution solution;
 
-		PathPoint3 destination = { target->posX, target->posY, target->posZ };
+		PathPoint3 destination = {target->posX, target->posY, target->posZ};
 		CdeclCall<void>(0x9DBC90, actor, request.Get(), &destination, target->parentCell,
 			target->parentCell->worldSpace, 0.0f, static_cast<void*>(nullptr)); //PathManager::BuildPath
 
@@ -68,14 +62,12 @@ namespace
 		float distance = 0.0f;
 		PathPoint3 prev = {};
 		bool havePrev = false;
-		for (UInt32 i = 0; i < nodeCount; ++i)
-		{
-			auto* node = ThisCall<PathingNodeLayout*>(0x6E7970, solution.Get(), i); //PathingSolution::GetNode
+		for (UInt32 i = 0; i < nodeCount; ++i) {
+			auto* node = ThisCall<PathingNodeView*>(0x6E7970, solution.Get(), i); //PathingSolution::GetNode
 			if (!node)
 				break;
 			const PathPoint3& pos = node->pathingLocation.location;
-			if (havePrev)
-			{
+			if (havePrev) {
 				const float dx = pos.x - prev.x;
 				const float dy = pos.y - prev.y;
 				const float dz = pos.z - prev.z;
@@ -93,23 +85,21 @@ namespace
 		if (!cell)
 			return false;
 
-		alignas(4) UInt8 loc[sizeof(PathingLocationLayout)] = {};
+		alignas(4) UInt8 loc[sizeof(PathingLocationView)] = {};
 		ThisCall<void>(0x6DCEE0, loc, &point, cell, worldSpace); //PathingLocation::PathingLocation
 
 		//stored navMeshInfo/navMeshes are borrowed engine pointers, no owned refs to release
 		const bool resolved = ThisCall<bool>(0x6DD6F0, loc, 0); //PathingLocation::ResolveTriangle
-		const UInt16 triangle = reinterpret_cast<PathingLocationLayout*>(loc)->triangle;
+		const UInt16 triangle = reinterpret_cast<PathingLocationView*>(loc)->triangle;
 		return resolved && triangle != 0xFFFF;
 	}
 
-	struct EdgeEndpoints
-	{
+	struct EdgeEndpoints {
 		const PathPoint3* p0;
 		const PathPoint3* p1;
 	};
 
-	struct CoverPoint
-	{
+	struct CoverPoint {
 		PathPoint3 pos;
 		UInt32 flags;
 		float distSq;
@@ -118,8 +108,7 @@ namespace
 	constexpr UInt32 kMaxCoverPoints = 128;
 
 	//nearest-N by distance to the query point, so the result never depends on cell scan order
-	struct CoverPool
-	{
+	struct CoverPool {
 		CoverPoint items[kMaxCoverPoints];
 		UInt32 count = 0;
 	};
@@ -129,8 +118,7 @@ namespace
 		if (pool.count == kMaxCoverPoints && item.distSq >= pool.items[kMaxCoverPoints - 1].distSq)
 			return;
 		UInt32 pos = (pool.count < kMaxCoverPoints) ? pool.count : (kMaxCoverPoints - 1);
-		while (pos > 0 && pool.items[pos - 1].distSq > item.distSq)
-		{
+		while (pos > 0 && pool.items[pos - 1].distSq > item.distSq) {
 			pool.items[pos] = pool.items[pos - 1];
 			--pos;
 		}
@@ -149,12 +137,11 @@ namespace
 		if (!container)
 			return;
 
-		auto* infoArr = reinterpret_cast<BSSimpleArrayLayout<void*>*>(container);
+		auto* infoArr = reinterpret_cast<PathingSimpleArrayView<void*>*>(container);
 		if (!infoArr->data)
 			return;
 
-		for (UInt32 n = 0; n < infoArr->size; ++n)
-		{
+		for (UInt32 n = 0; n < infoArr->size; ++n) {
 			void* info = infoArr->data[n];
 			if (!info)
 				continue;
@@ -165,15 +152,14 @@ namespace
 				continue;
 
 			UInt8* mesh = static_cast<UInt8*>(navMesh.Get());
-			auto* coverArr = reinterpret_cast<BSSimpleArrayLayout<UInt16>*>(mesh + 0x78); //cover triangle indices
-			auto* triArr = reinterpret_cast<BSSimpleArrayLayout<UInt8>*>(mesh + 0x38); //triangles, stride 0x10
+			auto* coverArr = reinterpret_cast<PathingSimpleArrayView<UInt16>*>(mesh + 0x78); //cover triangle indices
+			auto* triArr = reinterpret_cast<PathingSimpleArrayView<UInt8>*>(mesh + 0x38); //triangles, stride 0x10
 			if (!coverArr->data || !triArr->data)
 				continue;
 
 			const UInt32 coverCount = coverArr->size;
 			const UInt32 triCount = triArr->size;
-			for (UInt32 c = 0; c < coverCount; ++c)
-			{
+			for (UInt32 c = 0; c < coverCount; ++c) {
 				const UInt16 triIndex = coverArr->data[c];
 				if (triIndex >= triCount)
 					continue;
@@ -182,8 +168,7 @@ namespace
 				if (ThisCall<bool>(0x691140, tri, 0x20)) //NavMeshTriangle::IsFlagSet, 0x20 = disabled
 					continue;
 
-				for (UInt32 slot = 0; slot < 2; ++slot)
-				{
+				for (UInt32 slot = 0; slot < 2; ++slot) {
 					UInt16 bucket = 0;
 					bool leftOpen = false, rightOpen = false;
 					ThisCall<void>(0x691040, tri, slot, &bucket, &leftOpen, &rightOpen); //NavMeshTriangle::GetEdgeCoverData
@@ -226,8 +211,7 @@ namespace
 
 		const float radiusSq = radius * radius;
 		TESObjectCELL* anchorCell = player->parentCell;
-		if (anchorCell->IsInterior())
-		{
+		if (anchorCell->IsInterior()) {
 			GatherCellCover(anchorCell, query, radiusSq, pool);
 			return;
 		}
@@ -241,10 +225,8 @@ namespace
 		SInt32 cellRadius = static_cast<SInt32>(ceilf(radius / 4096.0f));
 		if (cellRadius > 2) cellRadius = 2;
 
-		for (SInt32 dx = -cellRadius; dx <= cellRadius; ++dx)
-		{
-			for (SInt32 dy = -cellRadius; dy <= cellRadius; ++dy)
-			{
+		for (SInt32 dx = -cellRadius; dx <= cellRadius; ++dx) {
+			for (SInt32 dy = -cellRadius; dy <= cellRadius; ++dy) {
 				const SInt32 cellX = centreX + dx;
 				const SInt32 cellY = centreY + dy;
 				const float minX = cellX * 4096.0f;
@@ -303,33 +285,33 @@ namespace
 }
 
 static ParamInfo kParams_GetPathLength[2] = {
-	{ "target", kParamType_ObjectRef, 0 },
-	{ "source", kParamType_ObjectRef, 1 },
+	{"target", kParamType_ObjectRef, 0},
+	{"source", kParamType_ObjectRef, 1},
 };
 
 static ParamInfo kParams_IsPointOnNavmesh[4] = {
-	{ "x",         kParamType_Float,     0 },
-	{ "y",         kParamType_Float,     0 },
-	{ "z",         kParamType_Float,     0 },
-	{ "anchorRef", kParamType_ObjectRef, 1 },
+	{"x", kParamType_Float, 0},
+	{"y", kParamType_Float, 0},
+	{"z", kParamType_Float, 0},
+	{"anchorRef", kParamType_ObjectRef, 1},
 };
 
 static ParamInfo kParams_GetCoverPointsInRadius[4] = {
-	{ "x",      kParamType_Float, 0 },
-	{ "y",      kParamType_Float, 0 },
-	{ "z",      kParamType_Float, 0 },
-	{ "radius", kParamType_Float, 0 },
+	{"x", kParamType_Float, 0},
+	{"y", kParamType_Float, 0},
+	{"z", kParamType_Float, 0},
+	{"radius", kParamType_Float, 0},
 };
 
 static ParamInfo kParams_GetBestCoverFromThreat[8] = {
-	{ "threatX",    kParamType_Float,   0 },
-	{ "threatY",    kParamType_Float,   0 },
-	{ "threatZ",    kParamType_Float,   0 },
-	{ "searchX",    kParamType_Float,   0 },
-	{ "searchY",    kParamType_Float,   0 },
-	{ "searchZ",    kParamType_Float,   0 },
-	{ "radius",     kParamType_Float,   0 },
-	{ "maxResults", kParamType_Integer, 1 },
+	{"threatX", kParamType_Float, 0},
+	{"threatY", kParamType_Float, 0},
+	{"threatZ", kParamType_Float, 0},
+	{"searchX", kParamType_Float, 0},
+	{"searchY", kParamType_Float, 0},
+	{"searchZ", kParamType_Float, 0},
+	{"radius", kParamType_Float, 0},
+	{"maxResults", kParamType_Integer, 1},
 };
 
 DEFINE_COMMAND_PLUGIN(GetPathLength, "returns the complete path length from source (default calling ref) to target, or -1 on failure", 0, 2, kParams_GetPathLength);
@@ -378,7 +360,7 @@ bool Cmd_IsPointOnNavmesh_Execute(COMMAND_ARGS)
 	if (!cell)
 		return true;
 
-	PathPoint3 point = { x, y, z };
+	PathPoint3 point = {x, y, z};
 	if (PointOnNavmesh(point, cell, cell->worldSpace))
 		*result = 1;
 
@@ -401,7 +383,7 @@ bool Cmd_GetCoverPointsInRadius_Execute(COMMAND_ARGS)
 	if (!ValidRadius(radius) || !ValidCoord(x) || !ValidCoord(y) || !ValidCoord(z))
 		return true;
 
-	const PathPoint3 query = { x, y, z };
+	const PathPoint3 query = {x, y, z};
 
 	CoverPool pool;
 	GatherCoverAround(query, radius, pool);
@@ -409,8 +391,7 @@ bool Cmd_GetCoverPointsInRadius_Execute(COMMAND_ARGS)
 	NVSEArrayVarInterface::Array* arr = g_arrInterface->CreateArray(nullptr, 0, scriptObj);
 	if (!arr)
 		return true;
-	for (UInt32 i = 0; i < pool.count; ++i)
-	{
+	for (UInt32 i = 0; i < pool.count; ++i) {
 		const CoverPoint& point = pool.items[i];
 		NVSEArrayVarInterface::Array* sub = g_arrInterface->CreateArray(nullptr, 0, scriptObj);
 		if (!sub)
@@ -451,8 +432,8 @@ bool Cmd_GetBestCoverFromThreat_Execute(COMMAND_ARGS)
 	if (maxResults < 1) maxResults = 1;
 	if (maxResults > static_cast<SInt32>(kMaxBestCover)) maxResults = kMaxBestCover;
 
-	const PathPoint3 threat = { threatX, threatY, threatZ };
-	const PathPoint3 search = { searchX, searchY, searchZ };
+	const PathPoint3 threat = {threatX, threatY, threatZ};
+	const PathPoint3 search = {searchX, searchY, searchZ};
 
 	CoverPool pool;
 	GatherCoverAround(search, radius, pool);
@@ -463,8 +444,7 @@ bool Cmd_GetBestCoverFromThreat_Execute(COMMAND_ARGS)
 
 	//pool is already nearest-first, so the raycasts stop once maxResults have passed
 	UInt32 emitted = 0;
-	for (UInt32 i = 0; i < pool.count && emitted < static_cast<UInt32>(maxResults); ++i)
-	{
+	for (UInt32 i = 0; i < pool.count && emitted < static_cast<UInt32>(maxResults); ++i) {
 		const CoverPoint& point = pool.items[i];
 		if (!ThreatBlockedFromPoint(threat, point.pos))
 			continue;
@@ -484,8 +464,7 @@ bool Cmd_GetBestCoverFromThreat_Execute(COMMAND_ARGS)
 	return true;
 }
 
-namespace NavmeshCommands
-{
+namespace NavmeshCommands {
 	void RegisterCommands(void* nvsePtr)
 	{
 		s_mainThreadId = GetCurrentThreadId();

@@ -22,7 +22,7 @@ static void DispatchKeyEnabledEvent(UInt32 keycode, UInt32 mask)
 
 static ParamInfo kParams_KeyEx[2] = {
 	{"keycode", kParamType_Integer, 0},
-	{"mask",    kParamType_Integer, 1},
+	{"mask", kParamType_Integer, 1},
 };
 
 DEFINE_COMMAND_PLUGIN(DisableKeyEx,
@@ -80,28 +80,28 @@ bool Cmd_EnableKeyEx_Execute(COMMAND_ARGS)
 }
 
 namespace OnKeyStateHandler {
-bool Init(void* nvseInterface)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
-	if (nvse->isEditor) return false;
+	bool Init(void* nvseInterface)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
+		if (nvse->isEditor) return false;
 
-	auto* script = (NVSEScriptInterface*)nvse->QueryInterface(kInterface_Script);
-	if (!script) return false;
-	g_ExtractArgsEx = script->ExtractArgsEx;
+		auto* script = (NVSEScriptInterface*)nvse->QueryInterface(kInterface_Script);
+		if (!script) return false;
+		g_ExtractArgsEx = script->ExtractArgsEx;
 
-	auto* dataInterface = reinterpret_cast<NVSEDataInterface*>(nvse->QueryInterface(kInterface_Data));
-	if (!dataInterface) return false;
+		auto* dataInterface = reinterpret_cast<NVSEDataInterface*>(nvse->QueryInterface(kInterface_Data));
+		if (!dataInterface) return false;
 
-	g_diHookControl = reinterpret_cast<DIHook::ControlView*>(dataInterface->GetSingleton(DIHook::kNVSEData_DIHookControl));
-	if (!g_diHookControl) return false;
+		g_diHookControl = reinterpret_cast<DIHook::ControlView*>(dataInterface->GetSingleton(DIHook::kNVSEData_DIHookControl));
+		if (!g_diHookControl) return false;
 
-	return true;
-}
+		return true;
+	}
 
-void RegisterCommands(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_DisableKeyEx);
-	nvse->RegisterCommand(&kCommandInfo_EnableKeyEx);
-}
+	void RegisterCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_DisableKeyEx);
+		nvse->RegisterCommand(&kCommandInfo_EnableKeyEx);
+	}
 }

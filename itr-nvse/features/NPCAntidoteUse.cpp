@@ -3,8 +3,7 @@
 #include "NPCAntidoteUse.h"
 #include "internal/CombatItemUse.h"
 
-namespace NPCAntidoteUse
-{
+namespace NPCAntidoteUse {
 	static CombatItemUse::TimerPool s_timers;
 	static float g_cooldown = 10.0f;
 	static float g_healthThreshold = 25.0f;
@@ -25,8 +24,7 @@ namespace NPCAntidoteUse
 		auto* effectList = MagicTargetGetEffectList(ActorGetMagicTarget(actor));
 		if (!effectList) return false;
 
-		for (auto* node = effectList->Head(); node; node = node->Next())
-		{
+		for (auto* node = effectList->Head(); node; node = node->Next()) {
 			auto* effect = node->Item();
 			if (effect && effect->spellType == 5) //poison
 				return true;
@@ -43,7 +41,7 @@ namespace NPCAntidoteUse
 
 	void UpdateSettings(bool enabled, float cureTimer, float healthThreshold)
 	{
-		g_enabled = enabled;   //reloadable, Check is called every combat frame and gates on this
+		g_enabled = enabled; //reloadable, Check is called every combat frame and gates on this
 		g_cooldown = cureTimer;
 		g_healthThreshold = healthThreshold;
 	}
@@ -59,7 +57,7 @@ namespace NPCAntidoteUse
 		if (GetHealthPercent(actor) < g_healthThreshold) return;
 		if (!IsPoisoned(actor)) return;
 
-		uint32_t refID = CombatItemUse::GetRefID(actor);
+		UInt32 refID = CombatItemUse::GetRefID(actor);
 		if (!s_timers.TryAcquire(refID, g_cooldown)) return;
 
 		//NVAntivenomEffect "Cure Animal Poison" [MGEF:000E2C6D]

@@ -1,11 +1,10 @@
 #pragma once
 
-enum CornerMessageMetaType
-{
-    kCornerMeta_Generic = 0,
-    kCornerMeta_ObjectiveDisplayed = 1,
-    kCornerMeta_ObjectiveCompleted = 2,
-    kCornerMeta_ReputationChange = 3,
+enum CornerMessageMetaType {
+	kCornerMeta_Generic = 0,
+	kCornerMeta_ObjectiveDisplayed = 1,
+	kCornerMeta_ObjectiveCompleted = 2,
+	kCornerMeta_ReputationChange = 3,
 };
 
 namespace CornerMessageHandler {

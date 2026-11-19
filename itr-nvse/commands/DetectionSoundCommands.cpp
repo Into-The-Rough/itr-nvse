@@ -14,8 +14,7 @@
 
 extern const _ExtractArgs ExtractArgs;
 
-namespace
-{
+namespace {
 	constexpr UInt32 kCreateDetectionEventVtableOffset = 0x0FC;
 	constexpr UInt32 kProcessLevelHigh = 0;
 	constexpr UInt32 kProcessLevelMiddleHigh = 1;
@@ -55,29 +54,18 @@ namespace
 	constexpr UInt32 kTopic_PLAYERFIREWEAPON = 0x000000CB;
 	constexpr UInt32 kDefaultAlertTimerMs = 4000;
 
-	struct ForcedAlert
-	{
+	struct ForcedAlert {
 		UInt32 refID;
 		DWORD expiresAt;
 	};
 
-	struct PendingBark
-	{
+	struct PendingBark {
 		UInt32 speakerRefID;
 		UInt32 topicRefID;
 	};
 
 	std::vector<ForcedAlert> g_forcedAlerts;
 	std::vector<PendingBark> g_pendingBarks;
-
-	struct BGSWorldLocationLite
-	{
-		float x;
-		float y;
-		float z;
-		TESObjectCELL* cellOrWorld;
-	};
-	static_assert(sizeof(BGSWorldLocationLite) == 0x10, "BGSWorldLocationLite must match BGSWorldLocation");
 
 	bool IsActorRef(TESObjectREFR* ref)
 	{
@@ -174,8 +162,7 @@ namespace
 
 	bool IsTemporaryAlertTracked(UInt32 refID)
 	{
-		for (const auto& alert : g_forcedAlerts)
-		{
+		for (const auto& alert : g_forcedAlerts) {
 			if (alert.refID == refID)
 				return true;
 		}
@@ -188,16 +175,14 @@ namespace
 			return;
 
 		const DWORD expiresAt = GetTickCount() + GetAlertTimerMs();
-		for (auto& alert : g_forcedAlerts)
-		{
-			if (alert.refID == actor->refID)
-			{
+		for (auto& alert : g_forcedAlerts) {
+			if (alert.refID == actor->refID) {
 				alert.expiresAt = expiresAt;
 				return;
 			}
 		}
 
-		g_forcedAlerts.push_back({ actor->refID, expiresAt });
+		g_forcedAlerts.push_back({actor->refID, expiresAt});
 	}
 
 	bool IsExpired(DWORD now, DWORD expiresAt)
@@ -217,24 +202,24 @@ namespace
 		return combatGroup && CombatGroupGetNumTargets(combatGroup) > 0;
 	}
 
-	bool TryPushSearchLocation(Actor* actor, const BGSWorldLocationLite& location, float strength, std::unordered_set<void*>& seenGroups)
+	bool TryPushSearchLocation(Actor* actor, const BGSWorldLocationView& location, float strength, std::unordered_set<void*>& seenGroups)
 	{
 		void* combatGroup = GetCombatGroup(actor);
 		if (!combatGroup || !seenGroups.insert(combatGroup).second)
 			return false;
 
-		AddCombatSearchLocation(combatGroup, const_cast<BGSWorldLocationLite*>(&location), strength, 0);
+		AddCombatSearchLocation(combatGroup, const_cast<BGSWorldLocationView*>(&location), strength, 0);
 		if (!CombatGroupHasSearch(combatGroup) && CombatGroupGetNumTargets(combatGroup) > 0)
 			CombatGroupStartSearch(combatGroup);
 		return true;
 	}
 
-	bool ShouldRequireSameCell(const BGSWorldLocationLite& location, UInt32 flags)
+	bool ShouldRequireSameCell(const BGSWorldLocationView& location, UInt32 flags)
 	{
-		if (!location.cellOrWorld)
+		if (!location.form)
 			return false;
 
-		return (flags & kFlag_SameCellOnly) || location.cellOrWorld->IsInterior();
+		return (flags & kFlag_SameCellOnly) || static_cast<TESObjectCELL*>(location.form)->IsInterior();
 	}
 
 	TESTopic* GetPlayerFireWeaponTopic()
@@ -262,7 +247,7 @@ namespace
 		if (!actor || !responseTopic)
 			return;
 
-		g_pendingBarks.push_back({ actor->refID, responseTopic->refID });
+		g_pendingBarks.push_back({actor->refID, responseTopic->refID});
 	}
 
 	void StartResponseBark(Actor* actor, TESTopic* topic)
@@ -277,7 +262,7 @@ namespace
 		StartGreetingPlayer(actor, topic);
 	}
 
-	UInt32 ProcessAnonymousSoundForActor(Actor* actor, const BGSWorldLocationLite& location, float radiusSq,
+	UInt32 ProcessAnonymousSoundForActor(Actor* actor, const BGSWorldLocationView& location, float radiusSq,
 		UInt32 soundLevel, UInt32 flags, TESTopic* responseTopic, std::unordered_set<UInt32>& seenActors,
 		std::unordered_set<void*>& seenGroups)
 	{
@@ -291,14 +276,14 @@ namespace
 		if (!actor->parentCell || !IsHearingProcess(static_cast<BaseProcess*>(Engine::Actor_GetProcess(actor))))
 			return 0;
 
-		if (ShouldRequireSameCell(location, flags) && actor->parentCell != location.cellOrWorld)
+		if (ShouldRequireSameCell(location, flags) && actor->parentCell != location.form)
 			return 0;
 
 		if (DistanceSquared(actor, location.x, location.y, location.z) > radiusSq)
 			return 0;
 
 		AlertActorForSound(actor, flags);
-		if (location.cellOrWorld)
+		if (location.form)
 			TryPushSearchLocation(actor, location, GetSearchStrength(soundLevel), seenGroups);
 		if (responseTopic)
 			QueueResponseBark(actor, responseTopic);
@@ -311,11 +296,11 @@ namespace
 		if (radius <= 0.0f)
 			return 0;
 
-		auto* processManager = reinterpret_cast<ProcessManagerLite*>(g_processManager);
+		auto* processManager = reinterpret_cast<ProcessManagerView*>(g_processManager);
 		if (!processManager || !processManager->objects.data)
 			return 0;
 
-		BGSWorldLocationLite location = { x, y, z, cell };
+		BGSWorldLocationView location = {x, y, z, cell};
 		const float radiusSq = radius * radius;
 		responseTopic = GetResponseTopic(responseTopic, flags);
 
@@ -327,8 +312,7 @@ namespace
 		UInt32 heardCount = 0;
 		UInt32 upperBound = processManager->objects.firstFreeEntry;
 
-		for (int bucket = 0; bucket < 2; ++bucket)
-		{
+		for (int bucket = 0; bucket < 2; ++bucket) {
 			UInt32 begin = processManager->beginOffsets[bucket];
 			UInt32 end = processManager->endOffsets[bucket];
 			if (begin > upperBound) begin = upperBound;
@@ -336,8 +320,7 @@ namespace
 
 			auto** current = processManager->objects.data + begin;
 			auto** last = processManager->objects.data + end;
-			for (; current < last; ++current)
-			{
+			for (; current < last; ++current) {
 				auto* ref = reinterpret_cast<TESObjectREFR*>(*current);
 				if (IsActorRef(ref))
 					heardCount += ProcessAnonymousSoundForActor(static_cast<Actor*>(ref), location, radiusSq, soundLevel, flags, responseTopic, seenActors, seenGroups);
@@ -361,22 +344,22 @@ namespace
 }
 
 static ParamInfo kParams_CreateDetectionSoundAt[4] =
-{
-	{ "x", kParamType_Float, 0 },
-	{ "y", kParamType_Float, 0 },
-	{ "z", kParamType_Float, 0 },
-	{ "sound level", kParamType_Integer, 0 },
+	{
+		{"x", kParamType_Float, 0},
+		{"y", kParamType_Float, 0},
+		{"z", kParamType_Float, 0},
+		{"sound level", kParamType_Integer, 0},
 };
 
 static ParamInfo kParams_CreateAnonymousDetectionSoundAt[7] =
-{
-	{ "x", kParamType_Float, 0 },
-	{ "y", kParamType_Float, 0 },
-	{ "z", kParamType_Float, 0 },
-	{ "sound level", kParamType_Integer, 0 },
-	{ "radius", kParamType_Float, 0 },
-	{ "flags", kParamType_Integer, 1 },
-	{ "response topic", kParamType_Topic, 1 },
+	{
+		{"x", kParamType_Float, 0},
+		{"y", kParamType_Float, 0},
+		{"z", kParamType_Float, 0},
+		{"sound level", kParamType_Integer, 0},
+		{"radius", kParamType_Float, 0},
+		{"flags", kParamType_Integer, 1},
+		{"response topic", kParamType_Topic, 1},
 };
 
 DEFINE_COMMAND_PLUGIN(CreateDetectionSoundAt, "Creates an actor-attributed detection sound at world coordinates", 1, 4, kParams_CreateDetectionSoundAt);
@@ -422,8 +405,7 @@ bool Cmd_CreateAnonymousDetectionSoundAt_Execute(COMMAND_ARGS)
 	return true;
 }
 
-namespace DetectionSoundCommands
-{
+namespace DetectionSoundCommands {
 	void RegisterCommands(void* nvsePtr)
 	{
 		auto* nvse = static_cast<NVSEInterface*>(nvsePtr);
@@ -433,29 +415,24 @@ namespace DetectionSoundCommands
 
 	void Update()
 	{
-		if (!g_forcedAlerts.empty())
-		{
+		if (!g_forcedAlerts.empty()) {
 			const DWORD now = GetTickCount();
-			for (std::size_t i = 0; i < g_forcedAlerts.size();)
-			{
+			for (size_t i = 0; i < g_forcedAlerts.size();) {
 				ForcedAlert& alert = g_forcedAlerts[i];
-				if (!IsExpired(now, alert.expiresAt))
-				{
+				if (!IsExpired(now, alert.expiresAt)) {
 					++i;
 					continue;
 				}
 
 				Actor* actor = LookupActor(alert.refID);
-				if (actor && HasCombatTargets(actor))
-				{
+				if (actor && HasCombatTargets(actor)) {
 					//still fighting, keep the entry armed so the alert flag gets cleared by us once combat ends
 					alert.expiresAt = now + GetAlertTimerMs();
 					++i;
 					continue;
 				}
 
-				if (actor && GetAlert(actor))
-				{
+				if (actor && GetAlert(actor)) {
 					SetAlert(actor, false);
 					EvaluatePackage(actor, false, false);
 				}
@@ -465,13 +442,11 @@ namespace DetectionSoundCommands
 			}
 		}
 
-		if (!g_pendingBarks.empty())
-		{
+		if (!g_pendingBarks.empty()) {
 			std::vector<PendingBark> pendingBarks;
 			pendingBarks.swap(g_pendingBarks);
 
-			for (const auto& bark : pendingBarks)
-			{
+			for (const auto& bark : pendingBarks) {
 				Actor* actor = LookupActor(bark.speakerRefID);
 				auto* topic = reinterpret_cast<TESTopic*>(Engine::LookupFormByID(bark.topicRefID));
 				if (actor && topic)

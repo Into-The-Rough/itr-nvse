@@ -1,7 +1,6 @@
 #pragma once
 
-namespace StuckCombatStateFix
-{
+namespace StuckCombatStateFix {
 	void Init();
 	void Update();
 	void ClearState();

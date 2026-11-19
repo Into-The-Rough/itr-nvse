@@ -6,25 +6,24 @@
 #include "internal/globals.h"
 #include "internal/Detours.h"
 
-namespace FriendlyFire
-{
+namespace FriendlyFire {
 	static bool g_enabled = false;
 	static bool g_installed = false;
-	static Detours::CallDetour s_inCombatWithDetour;     //0x9C314E in Projectile::9C30D0
-	static Detours::CallDetour s_isCombatTargetDetour;   //0x899D50 in Actor::899CB0
+	static Detours::CallDetour s_inCombatWithDetour; //0x9C314E in Projectile::9C30D0
+	static Detours::CallDetour s_isCombatTargetDetour; //0x899D50 in Actor::899CB0
 
-	typedef bool (__thiscall *_ActorBoolFn)(void*, void*);
+	using ActorBoolFn_t = bool(__thiscall*)(void*, void*);
 
-	static bool __fastcall Hook_IsInCombatWithActor(void* thisActor, void*, void* otherActor)
+	static bool __fastcall Hook_IsInCombatWithActor(void* thisActor, void* edx, void* otherActor)
 	{
 		if (g_enabled) return true;
-		return ((_ActorBoolFn)s_inCombatWithDetour.GetOverwrittenAddr())(thisActor, otherActor);
+		return ((ActorBoolFn_t)s_inCombatWithDetour.GetOverwrittenAddr())(thisActor, otherActor);
 	}
 
-	static bool __fastcall Hook_IsActoraCombatTarget(void* controller, void*, void* actor)
+	static bool __fastcall Hook_IsActoraCombatTarget(void* controller, void* edx, void* actor)
 	{
 		if (g_enabled) return true;
-		return ((_ActorBoolFn)s_isCombatTargetDetour.GetOverwrittenAddr())(controller, actor);
+		return ((ActorBoolFn_t)s_isCombatTargetDetour.GetOverwrittenAddr())(controller, actor);
 	}
 
 	void SetEnabled(bool enabled)

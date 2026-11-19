@@ -12,8 +12,7 @@
 
 extern const _ExtractArgs ExtractArgs;
 
-namespace AimZoomFirstPersonOnly
-{
+namespace AimZoomFirstPersonOnly {
 	using UpdateAimZoom_t = void(__thiscall*)(void* player, float delta);
 
 	//both sites call the aim-zoom update at 0x95DE30, from PlayerCharacter::Update and the secondary update path
@@ -60,15 +59,13 @@ namespace AimZoomFirstPersonOnly
 			return;
 
 		const bool suppressAimZoom = ShouldSuppressAimZoom(player);
-		if (!suppressAimZoom)
-		{
+		if (!suppressAimZoom) {
 			original(player, delta);
 			return;
 		}
 
 		auto* ironSightsZoomDefault = Engine::GetSettingFloatPtr(g_fIronSightsZoomDefaultSetting);
-		if (!ironSightsZoomDefault)
-		{
+		if (!ironSightsZoomDefault) {
 			original(player, delta);
 			ResetAimZoomToDefaults(player);
 			return;
@@ -81,12 +78,12 @@ namespace AimZoomFirstPersonOnly
 		ResetAimZoomToDefaults(player);
 	}
 
-	static void __fastcall Hook_UpdateAimZoomFromPlayerUpdate(void* player, void*, float delta)
+	static void __fastcall Hook_UpdateAimZoomFromPlayerUpdate(void* player, void* edx, float delta)
 	{
 		CallOriginal(s_playerUpdateOriginal, player, delta);
 	}
 
-	static void __fastcall Hook_UpdateAimZoomFromSecondaryUpdate(void* player, void*, float delta)
+	static void __fastcall Hook_UpdateAimZoomFromSecondaryUpdate(void* player, void* edx, float delta)
 	{
 		CallOriginal(s_secondaryUpdateOriginal, player, delta);
 	}
@@ -131,7 +128,7 @@ namespace AimZoomFirstPersonOnly
 }
 
 static ParamInfo kParams_SetAimZoomFirstPersonOnly[1] = {
-	{ "enable", kParamType_Integer, 0 },
+	{"enable", kParamType_Integer, 0},
 };
 
 DEFINE_COMMAND_PLUGIN(SetAimZoomFirstPersonOnly, "Enable or disable first-person-only aiming zoom", 0, 1, kParams_SetAimZoomFirstPersonOnly);
@@ -160,8 +157,7 @@ bool Cmd_GetAimZoomFirstPersonOnly_Execute(COMMAND_ARGS)
 	return true;
 }
 
-namespace AimZoomFirstPersonOnly
-{
+namespace AimZoomFirstPersonOnly {
 	void RegisterCommands(void* nvsePtr)
 	{
 		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;

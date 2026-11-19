@@ -1,4 +1,3 @@
-//Magic effect layout - alchemy/magic item effect list nodes
 #pragma once
 
 #include <cstddef>

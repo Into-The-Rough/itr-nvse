@@ -24,38 +24,36 @@ static bool IsActorRef(TESObjectREFR* ref)
 	return ref->baseForm->typeID == kFormType_Creature || ref->baseForm->typeID == kFormType_NPC;
 }
 
-typedef void* (__thiscall *_GetCombatTargetForActor)(void* combatGroup, Actor* target);
-typedef bool (__thiscall *_CombatGroupCanAddTarget)(void* combatGroup, Actor* target);
-typedef UInt8 (__thiscall *_CharacterIsGuardForForceCombatTarget)(Character*);
-typedef void (__thiscall *_CombatControllerSetTarget)(void* combatController, Actor* target);
-typedef void (__thiscall *_CombatControllerAddCombatTarget)(void* combatController, Actor* target, SInt32 a3, SInt32 a4, float a5, float a6);
-typedef void* (__thiscall *_CombatManagerAddCombatant)(void* combatManager, Actor* actor, Actor* target, SInt32 a4, SInt32 a5);
-typedef void (__thiscall *_ActorStartCombat)(Actor* actor, Actor* target, void* combatGroup, bool ignoreActorLimit, bool isAggressor, bool a6, UInt32 a7, bool a8, TESPackage* package);
-typedef void (__thiscall *_ActorPutCreatedPackage)(Actor* actor, void* package, UInt32 unk1, UInt32 unk2);
-typedef void (__thiscall *_ProcessComputeLastTimeProcessed)(void* process);
-typedef void (__thiscall *_ProcessSavePackageToExtraData)(void* process, Actor* actor);
-typedef void (__thiscall *_CombatControllerSetByte0C4)(void* combatController);
-static const _GetCombatTargetForActor GetCombatTargetForActor = (_GetCombatTargetForActor)0x9865D0;
-static const _CombatGroupCanAddTarget CombatGroupCanAddTarget = (_CombatGroupCanAddTarget)0x9866D0;
-static const _CharacterIsGuardForForceCombatTarget CharacterIsGuardForForceCombatTarget = (_CharacterIsGuardForForceCombatTarget)0x8D1ED0;
-static const _CombatControllerSetTarget CombatControllerSetTarget = (_CombatControllerSetTarget)0x980830;
-static const _CombatControllerAddCombatTarget CombatControllerAddCombatTarget = (_CombatControllerAddCombatTarget)0x97F930;
-static const _CombatManagerAddCombatant CombatManagerAddCombatant = (_CombatManagerAddCombatant)0x992110;
-static const _ActorStartCombat ActorStartCombat = (_ActorStartCombat)0x89FCF0;
-static const _ActorPutCreatedPackage ActorPutCreatedPackage = (_ActorPutCreatedPackage)0x87EAC0;
-static const _ProcessComputeLastTimeProcessed ProcessComputeLastTimeProcessed = (_ProcessComputeLastTimeProcessed)0x907650;
-static const _ProcessSavePackageToExtraData ProcessSavePackageToExtraData = (_ProcessSavePackageToExtraData)0x9130F0;
-static const _CombatControllerSetByte0C4 CombatControllerSetByte0C4 = (_CombatControllerSetByte0C4)0x8A0250;
+using GetCombatTargetForActor_t = void*(__thiscall*)(void* combatGroup, Actor* target);
+using CombatGroupCanAddTarget_t = bool(__thiscall*)(void* combatGroup, Actor* target);
+using CharacterIsGuardForForceCombatTarget_t = UInt8(__thiscall*)(Character*);
+using CombatControllerSetTarget_t = void(__thiscall*)(void* combatController, Actor* target);
+using CombatControllerAddCombatTarget_t = void(__thiscall*)(void* combatController, Actor* target, SInt32 a3, SInt32 a4, float a5, float a6);
+using CombatManagerAddCombatant_t = void*(__thiscall*)(void* combatManager, Actor* actor, Actor* target, SInt32 a4, SInt32 a5);
+using ActorStartCombat_t = void(__thiscall*)(Actor* actor, Actor* target, void* combatGroup, bool ignoreActorLimit, bool isAggressor, bool a6, UInt32 a7, bool a8, TESPackage* package);
+using ActorPutCreatedPackage_t = void(__thiscall*)(Actor* actor, void* package, UInt32 unk1, UInt32 unk2);
+using ProcessComputeLastTimeProcessed_t = void(__thiscall*)(void* process);
+using ProcessSavePackageToExtraData_t = void(__thiscall*)(void* process, Actor* actor);
+using CombatControllerSetByte0C4_t = void(__thiscall*)(void* combatController);
+static const GetCombatTargetForActor_t GetCombatTargetForActor = (GetCombatTargetForActor_t)0x9865D0;
+static const CombatGroupCanAddTarget_t CombatGroupCanAddTarget = (CombatGroupCanAddTarget_t)0x9866D0;
+static const CharacterIsGuardForForceCombatTarget_t CharacterIsGuardForForceCombatTarget = (CharacterIsGuardForForceCombatTarget_t)0x8D1ED0;
+static const CombatControllerSetTarget_t CombatControllerSetTarget = (CombatControllerSetTarget_t)0x980830;
+static const CombatControllerAddCombatTarget_t CombatControllerAddCombatTarget = (CombatControllerAddCombatTarget_t)0x97F930;
+static const CombatManagerAddCombatant_t CombatManagerAddCombatant = (CombatManagerAddCombatant_t)0x992110;
+static const ActorStartCombat_t ActorStartCombat = (ActorStartCombat_t)0x89FCF0;
+static const ActorPutCreatedPackage_t ActorPutCreatedPackage = (ActorPutCreatedPackage_t)0x87EAC0;
+static const ProcessComputeLastTimeProcessed_t ProcessComputeLastTimeProcessed = (ProcessComputeLastTimeProcessed_t)0x907650;
+static const ProcessSavePackageToExtraData_t ProcessSavePackageToExtraData = (ProcessSavePackageToExtraData_t)0x9130F0;
+static const CombatControllerSetByte0C4_t CombatControllerSetByte0C4 = (CombatControllerSetByte0C4_t)0x8A0250;
 
-namespace
-{
-	using EvaluateCombatTargets_t = Actor* (__thiscall*)(void* combatGroup, Actor* actor);
-	using CanAttackActor_t = bool (__thiscall*)(Actor* actor, Actor* target);
+namespace {
+	using EvaluateCombatTargets_t = Actor*(__thiscall*)(void* combatGroup, Actor* actor);
+	using CanAttackActor_t = bool(__thiscall*)(Actor* actor, Actor* target);
 	static constexpr UInt32 kAddr_ActorCanAttackActor = 0x8B0670;
 	static const CanAttackActor_t ActorCanAttackActor = reinterpret_cast<CanAttackActor_t>(kAddr_ActorCanAttackActor);
 
-	enum class ForceCombatTargetResult
-	{
+	enum class ForceCombatTargetResult {
 		kSuccess,
 		kInvalidArgs,
 		kNoProcess,
@@ -107,8 +105,7 @@ namespace
 			CombatControllerSetByte0C4(combatController);
 
 		void* process = Engine::Actor_GetProcess(actor);
-		if (process)
-		{
+		if (process) {
 			ProcessComputeLastTimeProcessed(process);
 			ProcessSavePackageToExtraData(process, actor);
 		}
@@ -154,7 +151,7 @@ namespace
 		s_hasForcedTargets = !g_forcedCombatTargets.empty();
 	}
 
-	static Actor* __fastcall Hook_EvaluateCombatTargets(void* combatGroup, void*, Actor* actor)
+	static Actor* __fastcall Hook_EvaluateCombatTargets(void* combatGroup, void* edx, Actor* actor)
 	{
 		if (!s_hasForcedTargets || !combatGroup || !actor)
 			return s_evaluateCombatTargetsOriginal(combatGroup, actor);
@@ -165,8 +162,7 @@ namespace
 
 		TESForm* forcedForm = (TESForm*)Engine::LookupFormByID(forcedTargetRefID);
 		Actor* forcedTarget = forcedForm && IsActorRef((TESObjectREFR*)forcedForm) ? (Actor*)forcedForm : nullptr;
-		if (!forcedTarget || forcedTarget == actor || Engine::Actor_IsDead(forcedTarget, false))
-		{
+		if (!forcedTarget || forcedTarget == actor || Engine::Actor_IsDead(forcedTarget, false)) {
 			ClearForcedCombatTargetRefID(actor->refID);
 			return s_evaluateCombatTargetsOriginal(combatGroup, actor);
 		}
@@ -177,7 +173,7 @@ namespace
 		return s_evaluateCombatTargetsOriginal(combatGroup, actor);
 	}
 
-	static bool __fastcall Hook_CanAttackActor(Actor* actor, void*, Actor* target)
+	static bool __fastcall Hook_CanAttackActor(Actor* actor, void* edx, Actor* target)
 	{
 		//zero-cost vanilla path while no targets are forced, stale flag read is benign
 		if (!s_hasForcedTargets)
@@ -196,8 +192,7 @@ namespace
 			return false;
 
 		if (!s_forceCombatCanAttackDetour.WriteRelJump(kAddr_ActorCanAttackActor, Hook_CanAttackActor, 6,
-				(UInt8**)&s_canAttackActorOriginal))
-		{
+				(UInt8**)&s_canAttackActorOriginal)) {
 			if (s_forceCombatTargetDetour.Remove())
 				s_evaluateCombatTargetsOriginal = nullptr;
 			return false;
@@ -209,28 +204,27 @@ namespace
 
 	static const char* ForceCombatTargetResultToString(ForceCombatTargetResult result)
 	{
-		switch (result)
-		{
-		case ForceCombatTargetResult::kSuccess:
-			return "success";
-		case ForceCombatTargetResult::kInvalidArgs:
-			return "invalid actor/target";
-		case ForceCombatTargetResult::kNoProcess:
-			return "actor or target has no current process";
-		case ForceCombatTargetResult::kActorDead:
-			return "actor or target is dead";
-		case ForceCombatTargetResult::kHookFailed:
-			return "target-selection hook unavailable";
-		case ForceCombatTargetResult::kNoCombatController:
-			return "failed to create or get combat controller";
-		case ForceCombatTargetResult::kNoCombatGroup:
-			return "combat controller has no combat group";
-		case ForceCombatTargetResult::kCannotAddTarget:
-			return "combat group rejected target (likely faction/aggression relation)";
-		case ForceCombatTargetResult::kAddTargetFailed:
-			return "target was not added to combat group";
-		default:
-			return "unknown";
+		switch (result) {
+			case ForceCombatTargetResult::kSuccess:
+				return "success";
+			case ForceCombatTargetResult::kInvalidArgs:
+				return "invalid actor/target";
+			case ForceCombatTargetResult::kNoProcess:
+				return "actor or target has no current process";
+			case ForceCombatTargetResult::kActorDead:
+				return "actor or target is dead";
+			case ForceCombatTargetResult::kHookFailed:
+				return "target-selection hook unavailable";
+			case ForceCombatTargetResult::kNoCombatController:
+				return "failed to create or get combat controller";
+			case ForceCombatTargetResult::kNoCombatGroup:
+				return "combat controller has no combat group";
+			case ForceCombatTargetResult::kCannotAddTarget:
+				return "combat group rejected target (likely faction/aggression relation)";
+			case ForceCombatTargetResult::kAddTargetFailed:
+				return "target was not added to combat group";
+			default:
+				return "unknown";
 		}
 	}
 
@@ -248,8 +242,7 @@ namespace
 		SetForcedCombatTargetRefID(actor->refID, target->refID);
 
 		void* combatController = Engine::Actor_GetCombatController(actor);
-		if (!combatController)
-		{
+		if (!combatController) {
 			const bool ignoreActorLimit = true;
 			bool isGuard = actor->baseForm && actor->baseForm->typeID == kFormType_NPC
 				&& CharacterIsGuardForForceCombatTarget((Character*)actor) != 0;
@@ -259,31 +252,26 @@ namespace
 				combatController = TryAddCombatantBootstrap(actor, target, ignoreActorLimit);
 		}
 
-		if (!combatController)
-		{
+		if (!combatController) {
 			ClearForcedCombatTargetRefID(actor->refID);
 			return ForceCombatTargetResult::kNoCombatController;
 		}
 
 		void* combatGroup = CombatControllerGetCombatGroup(combatController);
-		if (!combatGroup)
-		{
+		if (!combatGroup) {
 			ClearForcedCombatTargetRefID(actor->refID);
 			return ForceCombatTargetResult::kNoCombatGroup;
 		}
 
-		if (!GetCombatTargetForActor(combatGroup, target))
-		{
-			if (!CombatGroupCanAddTarget(combatGroup, target))
-			{
+		if (!GetCombatTargetForActor(combatGroup, target)) {
+			if (!CombatGroupCanAddTarget(combatGroup, target)) {
 				ClearForcedCombatTargetRefID(actor->refID);
 				return ForceCombatTargetResult::kCannotAddTarget;
 			}
 			CombatControllerAddCombatTarget(combatController, target, 0, 0, 0.0f, 0.0f);
 		}
 
-		if (!GetCombatTargetForActor(combatGroup, target))
-		{
+		if (!GetCombatTargetForActor(combatGroup, target)) {
 			ClearForcedCombatTargetRefID(actor->refID);
 			return ForceCombatTargetResult::kAddTargetFailed;
 		}
@@ -328,8 +316,7 @@ bool Cmd_ForceCombatTarget_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &target))
 		return true;
 
-	if (!target)
-	{
+	if (!target) {
 		ClearForcedCombatTarget(actor);
 		*result = 1;
 		if (IsConsoleMode())
@@ -338,8 +325,7 @@ bool Cmd_ForceCombatTarget_Execute(COMMAND_ARGS)
 	}
 
 	ForceCombatTargetResult forceResult = TryForceCombatTarget(actor, target);
-	if (forceResult != ForceCombatTargetResult::kSuccess)
-	{
+	if (forceResult != ForceCombatTargetResult::kSuccess) {
 		if (IsConsoleMode())
 			Console_Print("ForceCombatTarget >> failed: %s", ForceCombatTargetResultToString(forceResult));
 		return true;
@@ -353,27 +339,25 @@ bool Cmd_ForceCombatTarget_Execute(COMMAND_ARGS)
 
 namespace ForceCombatTargetCommands {
 
-void Init()
-{
-	EnsureForceCombatTargetLockInit();
-	if (!InstallForceCombatTargetHooks())
-		Log("ForceCombatTarget: hook install failed (site already patched by another mod?)");
-}
-
-void ClearState()
-{
-	if (g_forceCombatTargetLockInit == 2)
+	void Init()
 	{
-		ScopedLock lock(&g_forceCombatTargetLock);
-		g_forcedCombatTargets.clear();
-		s_hasForcedTargets = false;
+		EnsureForceCombatTargetLockInit();
+		if (!InstallForceCombatTargetHooks())
+			Log("ForceCombatTarget: hook install failed (site already patched by another mod?)");
 	}
-}
 
-void RegisterCommands(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_ForceCombatTarget);
-}
+	void ClearState()
+	{
+		if (g_forceCombatTargetLockInit == 2) {
+			ScopedLock lock(&g_forceCombatTargetLock);
+			g_forcedCombatTargets.clear();
+			s_hasForcedTargets = false;
+		}
+	}
 
+	void RegisterCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_ForceCombatTarget);
+	}
 }

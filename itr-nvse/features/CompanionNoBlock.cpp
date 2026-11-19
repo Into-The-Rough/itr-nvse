@@ -5,17 +5,15 @@
 
 #include "internal/GameGlobals.h"
 #include "internal/HavokLayout.h"
+#include "internal/globals.h"
 
 #include <cstring>
 #include <unordered_map>
 #include <unordered_set>
 
-extern void Log(const char* fmt, ...);
-
-namespace
-{
-	typedef void* (__thiscall* _getRoot)(void*);
-	const _getRoot getRoot = reinterpret_cast<_getRoot>(0x624020); //hkpCollidable::getRoot
+namespace {
+	using getRoot_t = void*(__thiscall*)(void*);
+	const getRoot_t getRoot = reinterpret_cast<getRoot_t>(0x624020); //hkpCollidable::getRoot
 
 	constexpr UInt32 kStalePairSteps = 600;
 	constexpr UInt32 kRebuildInterval = 60; //proxy map only changes on cell/teammate change - no need to rebuild every frame
@@ -37,7 +35,11 @@ namespace
 	std::unordered_set<void*> g_teammatePhantoms;
 	std::unordered_map<void*, void*> g_proxyToPhantom; //pair key lookup on the teammate side
 
-	struct PairContact { UInt32 count; UInt32 lastStep; };
+	struct PairContact {
+		UInt32 count;
+		UInt32 lastStep;
+	};
+
 	std::unordered_map<void*, PairContact> g_contactDur; //keyed by teammate phantom
 
 	//owning hkpWorldObject of a contact collidable, hkpCollidable is embedded at hkpWorldObject+0x10
@@ -86,8 +88,7 @@ namespace
 		const UInt32 step = static_cast<UInt32>(g_stepCounter);
 		const UInt32 release = static_cast<UInt32>(g_releaseFrames);
 		PairContact& e = it->second;
-		if (e.lastStep != step)
-		{
+		if (e.lastStep != step) {
 			e.count = (e.lastStep == step - 1) ? e.count + 1 : 1;
 			e.lastStep = step;
 		}
@@ -104,31 +105,24 @@ namespace
 			return;
 
 		int n = collectorView->hits.size;
-		for (int i = 0; i < n; )
-		{
+		for (int i = 0; i < n;) {
 			HkpRootCdPointView* pt = hits + i;
 			void* otherColl = pt->rootCollidableB;
 			void* otherWO = ResolveCollidableToWorldObj(otherColl);
 
 			void* pairKey = nullptr;
-			if (proxyIsPlayer)
-			{
+			if (proxyIsPlayer) {
 				if (otherWO && g_teammatePhantoms.count(otherWO) != 0)
 					pairKey = otherWO;
-			}
-			else if (otherWO && otherWO == g_playerPhantom)
-			{
+			} else if (otherWO && otherWO == g_playerPhantom) {
 				pairKey = selfPhantom;
 			}
 
-			if (pairKey && PairShouldGhost(pairKey))
-			{
+			if (pairKey && PairShouldGhost(pairKey)) {
 				--n;
 				if (i != n)
 					memcpy(pt, hits + n, sizeof(HkpRootCdPointView));
-			}
-			else
-			{
+			} else {
 				++i;
 			}
 		}
@@ -136,20 +130,17 @@ namespace
 	}
 
 	Detours::JumpDetour g_updateManifoldDetour;
-	typedef void (__thiscall* _updateManifold)(void*, void*, void*, bool);
+	using updateManifold_t = void(__thiscall*)(void*, void*, void*, bool);
 
-	void __fastcall Hook_UpdateManifold(void* proxy, void*, void* startCollector, void* castCollector, bool isMultithreaded)
+	void __fastcall Hook_UpdateManifold(void* proxy, void* edx, void* startCollector, void* castCollector, bool isMultithreaded)
 	{
-		if (g_active && proxy)
-		{
+		if (g_active && proxy) {
 			EnterCriticalSection(&g_lock);
 			bool proxyIsPlayer = (proxy == g_playerProxy && g_playerProxy != nullptr);
 			bool proxyIsTeammate = !proxyIsPlayer && g_teammateProxies.count(proxy) != 0;
-			if (proxyIsPlayer || proxyIsTeammate)
-			{
+			if (proxyIsPlayer || proxyIsTeammate) {
 				void* selfPhantom = nullptr;
-				if (proxyIsTeammate)
-				{
+				if (proxyIsTeammate) {
 					auto it = g_proxyToPhantom.find(proxy);
 					if (it != g_proxyToPhantom.end())
 						selfPhantom = it->second;
@@ -160,7 +151,7 @@ namespace
 			LeaveCriticalSection(&g_lock);
 		}
 
-		g_updateManifoldDetour.GetTrampoline<_updateManifold>()(proxy, startCollector, castCollector, isMultithreaded);
+		g_updateManifoldDetour.GetTrampoline<updateManifold_t>()(proxy, startCollector, castCollector, isMultithreaded);
 	}
 
 	void InstallHook()
@@ -168,10 +159,9 @@ namespace
 		if (g_hookInstalled)
 			return;
 
-		//hkpCharacterProxy::updateManifold: push ebp; mov ebp,esp; and esp,0FFFFFFF0h (6 bytes)
-		static const UInt8 kPrologue[6] = { 0x55, 0x8B, 0xEC, 0x83, 0xE4, 0xF0 };
-		if (memcmp(reinterpret_cast<void*>(0xCAF4D0), kPrologue, sizeof(kPrologue)) != 0)
-		{
+		//hkpCharacterProxy::updateManifold: push ebp + mov ebp,esp + and esp,0FFFFFFF0h (6 bytes)
+		static const UInt8 kPrologue[6] = {0x55, 0x8B, 0xEC, 0x83, 0xE4, 0xF0};
+		if (memcmp(reinterpret_cast<void*>(0xCAF4D0), kPrologue, sizeof(kPrologue)) != 0) {
 			Log("CompanionNoBlock: unexpected bytes at 0xCAF4D0, not installing");
 			return;
 		}
@@ -190,8 +180,7 @@ namespace
 
 		PlayerCharacter* player = *g_thePlayerPtr;
 		bool gateOpen = false;
-		if (player && player->parentCell && player->refID)
-		{
+		if (player && player->parentCell && player->refID) {
 			gateOpen = !g_interiorOnly || player->parentCell->IsInterior();
 			BhkCharacterControllerView* playerCtrl = GetActorController(player);
 			playerProxy = GetActorProxy(playerCtrl);
@@ -199,8 +188,7 @@ namespace
 			if (playerProxy && playerPhantom)
 				proxyToPhantom[playerProxy] = playerPhantom;
 
-			for (auto iter = player->teammates.Begin(); !iter.End(); ++iter)
-			{
+			for (auto iter = player->teammates.Begin(); !iter.End(); ++iter) {
 				Actor* actor = iter.Get();
 				if (!actor || actor == player || !actor->refID)
 					continue;
@@ -226,8 +214,7 @@ namespace
 		g_proxyToPhantom.swap(proxyToPhantom);
 		const UInt32 step = static_cast<UInt32>(g_stepCounter);
 		g_contactDur.reserve(g_teammatePhantoms.size());
-		for (auto it = g_contactDur.begin(); it != g_contactDur.end(); )
-		{
+		for (auto it = g_contactDur.begin(); it != g_contactDur.end();) {
 			if (g_teammatePhantoms.count(it->first) == 0 || step - it->second.lastStep > kStalePairSteps)
 				it = g_contactDur.erase(it);
 			else
@@ -235,18 +222,16 @@ namespace
 		}
 		for (auto phantom : g_teammatePhantoms)
 			if (g_contactDur.find(phantom) == g_contactDur.end())
-				g_contactDur.emplace(phantom, PairContact{ 0, 0 });
+				g_contactDur.emplace(phantom, PairContact{0, 0});
 		g_active = g_enabled && gateOpen && playerProxy != nullptr && !g_teammateProxies.empty();
 		LeaveCriticalSection(&g_lock);
 	}
 }
 
-namespace CompanionNoBlock
-{
+namespace CompanionNoBlock {
 	void Init(bool enabled, int releaseFrames, int, bool interiorOnly)
 	{
-		if (!g_lockInit)
-		{
+		if (!g_lockInit) {
 			InitializeCriticalSection(&g_lock);
 			g_lockInit = true;
 		}
@@ -273,13 +258,10 @@ namespace CompanionNoBlock
 			return;
 
 		InterlockedIncrement(&g_stepCounter);
-		if (g_rebuildCountdown == 0)
-		{
+		if (g_rebuildCountdown == 0) {
 			RebuildProxyMap();
 			g_rebuildCountdown = kRebuildInterval;
-		}
-		else
-		{
+		} else {
 			--g_rebuildCountdown;
 		}
 	}

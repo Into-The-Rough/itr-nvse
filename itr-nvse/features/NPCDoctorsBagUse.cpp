@@ -3,13 +3,12 @@
 #include "NPCDoctorsBagUse.h"
 #include "internal/CombatItemUse.h"
 
-namespace NPCDoctorsBagUse
-{
+namespace NPCDoctorsBagUse {
 	static CombatItemUse::TimerPool s_timers;
 	static float g_cooldown = 15.0f;
 	static bool g_enabled = false;
 
-	static float GetActorValue(Actor* actor, uint32_t avCode)
+	static float GetActorValue(Actor* actor, UInt32 avCode)
 	{
 		return ActorValueOwnerGetValue(ActorGetActorValueOwner(actor), avCode);
 	}
@@ -20,7 +19,7 @@ namespace NPCDoctorsBagUse
 			return false;
 
 		//PerceptionCondition(0x19) through RightMobilityCondition(0x1E)
-		for (uint32_t av = 0x19; av <= 0x1E; av++)
+		for (UInt32 av = 0x19; av <= 0x1E; av++)
 			if (GetActorValue(actor, av) <= 0.0f)
 				return true;
 
@@ -35,7 +34,7 @@ namespace NPCDoctorsBagUse
 
 	void UpdateSettings(bool enabled, float useTimer)
 	{
-		g_enabled = enabled;   //reloadable, Check is called every combat frame and gates on this
+		g_enabled = enabled; //reloadable, Check is called every combat frame and gates on this
 		g_cooldown = useTimer;
 	}
 
@@ -48,7 +47,7 @@ namespace NPCDoctorsBagUse
 
 		if (!HasCrippledLimb(actor)) return;
 
-		uint32_t refID = CombatItemUse::GetRefID(actor);
+		UInt32 refID = CombatItemUse::GetRefID(actor);
 		if (!s_timers.TryAcquire(refID, g_cooldown)) return;
 
 		//NVRestoreLimbs "Restore Limb Condition" [MGEF:000FFCA0]

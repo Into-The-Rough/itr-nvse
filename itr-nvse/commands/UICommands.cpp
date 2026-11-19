@@ -12,8 +12,7 @@ extern const _ExtractArgs ExtractArgs;
 #include <cmath>
 #include <cstring>
 
-namespace
-{
+namespace {
 	constexpr UInt32 kTileType_Image = 0x386;
 	constexpr UInt32 kTileType_Radial = 0x38C;
 
@@ -38,8 +37,8 @@ namespace
 	static UInt32 GetTileType(void* tile)
 	{
 		auto vtbl = *reinterpret_cast<UInt32**>(tile);
-		typedef UInt32(__thiscall* GetTypeFn)(void*);
-		return reinterpret_cast<GetTypeFn>(vtbl[3])(tile);
+		using GetType_t = UInt32(__thiscall*)(void*);
+		return reinterpret_cast<GetType_t>(vtbl[3])(tile);
 	}
 
 	static bool IsImageTile(void* tile)
@@ -57,8 +56,8 @@ namespace
 			return nullptr;
 
 		auto vtbl = *reinterpret_cast<UInt32**>(tile);
-		typedef void*(__thiscall* GetShaderPropertyFn)(void*);
-		return reinterpret_cast<GetShaderPropertyFn>(vtbl[8])(tile);
+		using GetShaderProperty_t = void*(__thiscall*)(void*);
+		return reinterpret_cast<GetShaderProperty_t>(vtbl[8])(tile);
 	}
 
 	static bool ShaderRotates(void* shader)
@@ -73,8 +72,7 @@ namespace
 
 	static void* FindChild(void* parent, const char* name)
 	{
-		for (auto node = GetFirstChild(parent); node; node = node->next)
-		{
+		for (auto node = GetFirstChild(parent); node; node = node->next) {
 			const char* childName = GetTileName(node->data);
 			if (childName && !_stricmp(childName, name))
 				return node->data;
@@ -94,12 +92,10 @@ namespace
 
 		void* tile = nullptr;
 		auto* tileMenuArray = GetTileMenuArray();
-		for (UInt16 i = 0; i < tileMenuArray->firstFreeEntry; i++)
-		{
+		for (UInt16 i = 0; i < tileMenuArray->firstFreeEntry; i++) {
 			auto tm = tileMenuArray->data[i];
 			const char* tileName = GetTileName(tm);
-			if (tileName && !_stricmp(tileName, menuName))
-			{
+			if (tileName && !_stricmp(tileName, menuName)) {
 				tile = tm;
 				break;
 			}
@@ -109,8 +105,7 @@ namespace
 			return nullptr;
 
 		char* segment = nullptr;
-		while ((segment = strtok_s(nullptr, "\\/", &ctx)) != nullptr)
-		{
+		while ((segment = strtok_s(nullptr, "\\/", &ctx)) != nullptr) {
 			tile = FindChild(tile, segment);
 			if (!tile)
 				return nullptr;
@@ -175,24 +170,21 @@ namespace
 			return true;
 
 		void* tile = ResolveTilePath(tilePath);
-		if (!IsImageTile(tile))
-		{
+		if (!IsImageTile(tile)) {
 			if (IsConsoleMode())
 				Console_Print("SetUIAlphaMap >> image tile not found: %s", tilePath);
 			return true;
 		}
 
 		void* shader = GetShaderProperty(tile);
-		if (!shader)
-		{
+		if (!shader) {
 			if (IsConsoleMode())
 				Console_Print("SetUIAlphaMap >> tile has no shader property: %s", tilePath);
 			return true;
 		}
 
 		void* texture = CreateNiSourceTexture(texturePath);
-		if (!texture)
-		{
+		if (!texture) {
 			if (IsConsoleMode())
 				Console_Print("SetUIAlphaMap >> texture not loaded: %s", texturePath);
 			return true;
@@ -215,16 +207,14 @@ namespace
 			return true;
 
 		void* tile = ResolveTilePath(tilePath);
-		if (!IsImageTile(tile))
-		{
+		if (!IsImageTile(tile)) {
 			if (IsConsoleMode())
 				Console_Print("SetUITexOffset >> image tile not found: %s", tilePath);
 			return true;
 		}
 
 		void* shader = GetShaderProperty(tile);
-		if (!shader)
-		{
+		if (!shader) {
 			if (IsConsoleMode())
 				Console_Print("SetUITexOffset >> tile has no shader property: %s", tilePath);
 			return true;
@@ -240,8 +230,7 @@ namespace
 	}
 }
 
-namespace UICommands
-{
+namespace UICommands {
 	bool Init(void* nvsePtr)
 	{
 		return true;
@@ -253,7 +242,7 @@ namespace UICommands
 		nvse->RegisterCommand(&kCommandInfo_SetUIAlphaMap);
 	}
 
-	void RegisterCommands2(void* nvsePtr)
+	void RegisterTexOffsetCommands(void* nvsePtr)
 	{
 		NVSEInterface* nvse = static_cast<NVSEInterface*>(nvsePtr);
 		nvse->RegisterCommand(&kCommandInfo_SetUITexOffset);

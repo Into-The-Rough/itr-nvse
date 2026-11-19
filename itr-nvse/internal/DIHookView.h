@@ -7,25 +7,21 @@
 
 #include "common/ITypes.h"
 
-namespace DIHook
-{
-	enum
-	{
+namespace DIHook {
+	enum {
 		kNVSEData_DIHookControl = 1,
 		kMacro_MouseButtonOffset = 256,
 		kMacro_MouseWheelOffset = kMacro_MouseButtonOffset + 8,
 		kMaxMacros = kMacro_MouseWheelOffset + 2,
 	};
 
-	enum
-	{
+	enum {
 		kDisable_User = 1 << 0,
 		kDisable_Script = 1 << 1,
 		kDisable_All = kDisable_User | kDisable_Script,
 	};
 
-	struct KeyInfo
-	{
+	struct KeyInfo {
 		bool rawState;
 		bool gameState;
 		bool insertedState;
@@ -35,8 +31,7 @@ namespace DIHook
 		bool scriptDisable;
 	};
 
-	struct ControlView
-	{
+	struct ControlView {
 		void* vtable;
 		KeyInfo keys[kMaxMacros];
 

@@ -53,20 +53,18 @@ static void EnsureStateLockInitialized()
 	InitCriticalSectionOnce(&OnKnockdownHandler::g_stateLockInit, &OnKnockdownHandler::g_stateLock);
 }
 
-typedef void(__thiscall* KnockdownFSM_t)(void* process, TESObjectREFR* actor);
+using KnockdownFSM_t = void(__thiscall*)(void* process, TESObjectREFR* actor);
 static KnockdownFSM_t s_origHigh = nullptr;
 static KnockdownFSM_t s_origMiddleHigh = nullptr;
 
-//per-process last-seen knockedState, keyed by process pointer. detects external
-//writes (PushActorAway 0->2) via prev->before and FSM-internal writes via before->after.
-//actorRefID guards against process allocator reuse handing the address to a new actor,
-//lastTouchFrame lets Update() sweep entries whose actor unloaded while not upright
+//actorRefID guards against process reuse, lastTouchFrame sweeps unloaded actors
 struct ProcessStateEntry {
 	void* process;
 	UInt32 actorRefID;
 	UInt32 lastTouchFrame;
 	SInt8 lastState;
 };
+
 static ProcessStateEntry s_stateCache[64] = {0};
 static volatile UInt32 s_frameCounter = 0;
 constexpr UInt32 kCacheStaleFrames = 600; //knocked actors tick every frame, 10s idle means gone
@@ -89,17 +87,25 @@ static ProcessStateEntry* AllocCacheEntry(void* process, bool* evicted)
 	*evicted = false;
 	ProcessStateEntry* stalest = nullptr;
 	for (ProcessStateEntry& e : s_stateCache) {
-		if (!e.process) { e.process = process; return &e; }
+		if (!e.process) {
+			e.process = process;
+			return &e;
+		}
 		if (!stalest || e.lastTouchFrame < stalest->lastTouchFrame) stalest = &e;
 	}
-	if (stalest) { stalest->process = process; *evicted = true; }
+	if (stalest) {
+		stalest->process = process;
+		*evicted = true;
+	}
 	return stalest;
 }
 
 static void KnockdownProbe(TESObjectREFR*, void*) {}
+
 static void GetUpProbe(TESObjectREFR*, void*) {}
-static EventDispatch::ListenerProbe s_probeKnockdown = { "ITR:OnKnockdown", "ITR_OnKnockdownProbe", KnockdownProbe };
-static EventDispatch::ListenerProbe s_probeGetUp = { "ITR:OnGetUp", "ITR_OnGetUpProbe", GetUpProbe };
+
+static EventDispatch::ListenerProbe s_probeKnockdown = {"ITR:OnKnockdown", "ITR_OnKnockdownProbe", KnockdownProbe};
+static EventDispatch::ListenerProbe s_probeGetUp = {"ITR:OnGetUp", "ITR_OnGetUpProbe", GetUpProbe};
 
 static void QueueEvent(UInt32 actorRefID, bool isGetUp, int code)
 {
@@ -130,18 +136,18 @@ static void ObserveTransition(void* process, TESObjectREFR* actor, SInt8 before,
 			//a full-cache eviction can throw out a still-ragdolled actor, whose next tick
 			//re-creates it as fresh at a ragdoll state and would re-fire the knockdown.
 			//first sight already mid-ragdoll on a reused slot counts as continuing
-			continuing = evicted &&
-				(before == kState_RagdollImpulse || before == kState_Paralysis || before == kState_RagdollHavok);
-		}
-		else if (entry->actorRefID != actorRefID) fresh = true; //process address recycled for a new actor
+			continuing = evicted && (before == kState_RagdollImpulse || before == kState_Paralysis || before == kState_RagdollHavok);
+		} else if (entry->actorRefID != actorRefID) fresh = true; //process address recycled for a new actor
 		if (entry) {
 			if (fresh) entry->actorRefID = actorRefID;
 			entry->lastTouchFrame = s_frameCounter;
 			prev = fresh ? before : entry->lastState;
-			if (after == kState_Upright) { entry->process = nullptr; entry->actorRefID = 0; entry->lastState = 0; }
-			else entry->lastState = after;
-		}
-		else prev = before;
+			if (after == kState_Upright) {
+				entry->process = nullptr;
+				entry->actorRefID = 0;
+				entry->lastState = 0;
+			} else entry->lastState = after;
+		} else prev = before;
 	}
 
 	//force knockdown: PushActorAway writes state 2 outside the FSM. upright actors aren't cached,
@@ -153,30 +159,27 @@ static void ObserveTransition(void* process, TESObjectREFR* actor, SInt8 before,
 	//FSM-internal writes, seen as before->after
 	if (before == kState_Upright && after == kState_Paralysis) {
 		if (s_probeKnockdown.hasListeners) QueueEvent(actorRefID, false, kCauseParalysis);
-	}
-	else if (before == kState_Upright && after == kState_RagdollHavok) {
+	} else if (before == kState_Upright && after == kState_RagdollHavok) {
 		if (s_probeKnockdown.hasListeners) QueueEvent(actorRefID, false, kCauseHavok);
-	}
-	else if (after == kState_GetUpAnim && before != kState_GetUpAnim && before != kState_GetUpFinal) {
+	} else if (after == kState_GetUpAnim && before != kState_GetUpAnim && before != kState_GetUpFinal) {
 		if (s_probeGetUp.hasListeners) QueueEvent(actorRefID, true, kPhaseBegin);
-	}
-	else if (before == kState_GetUpFinal && after == kState_Upright) {
+	} else if (before == kState_GetUpFinal && after == kState_Upright) {
 		if (s_probeGetUp.hasListeners) QueueEvent(actorRefID, true, kPhaseComplete);
 	}
 }
 
-static void __fastcall Hook_KnockdownFSM(void* process, void*, TESObjectREFR* actor)
+static void __fastcall Hook_KnockdownFSM(void* process, void* edx, TESObjectREFR* actor)
 {
 	UInt32 vtbl = *(UInt32*)process;
 	KnockdownFSM_t orig = (vtbl == kVtbl_HighProcess) ? s_origHigh : s_origMiddleHigh;
 
 	if (!s_probeKnockdown.hasListeners && !s_probeGetUp.hasListeners) {
-		if (orig) orig(process, actor);
+		orig(process, actor);
 		return;
 	}
 
 	SInt8 before = ReadKnockedState(process);
-	if (orig) orig(process, actor);
+	orig(process, actor);
 	SInt8 after = ReadKnockedState(process);
 
 	if (before != after || after == kState_RagdollImpulse)
@@ -184,89 +187,93 @@ static void __fastcall Hook_KnockdownFSM(void* process, void*, TESObjectREFR* ac
 }
 
 namespace OnKnockdownHandler {
-void InstallListenerProbe()
-{
-	s_probeKnockdown.Install();
-	s_probeGetUp.Install();
-}
-
-void Update()
-{
-	if (OnKnockdownHandler::g_stateLockInit != 2) return;
-
-	s_probeKnockdown.Refresh(false);
-	s_probeGetUp.Refresh(false);
-
-	DWORD currentThreadId = GetCurrentThreadId();
-	if (!OnKnockdownHandler::g_mainThreadId)
-		OnKnockdownHandler::g_mainThreadId = currentThreadId;
-	if (currentThreadId != OnKnockdownHandler::g_mainThreadId)
-		return;
-
-	s_frameCounter++;
-
-	std::vector<QueuedKnockEvent> queuedEvents;
+	void InstallListenerProbe()
 	{
-		ScopedLock lock(&OnKnockdownHandler::g_stateLock);
-		queuedEvents.swap(OnKnockdownHandler::g_pendingEvents);
+		s_probeKnockdown.Install();
+		s_probeGetUp.Install();
+	}
 
-		//sweep entries whose actor unloaded/died while not upright, they never
-		//see the upright transition that normally evicts them
-		if ((s_frameCounter & 63) == 0) {
-			for (ProcessStateEntry& e : s_stateCache) {
-				if (e.process && s_frameCounter - e.lastTouchFrame > kCacheStaleFrames) {
-					e.process = nullptr;
-					e.actorRefID = 0;
-					e.lastState = 0;
+	void Update()
+	{
+		if (OnKnockdownHandler::g_stateLockInit != 2) return;
+
+		s_probeKnockdown.Refresh(false);
+		s_probeGetUp.Refresh(false);
+
+		DWORD currentThreadId = GetCurrentThreadId();
+		if (!OnKnockdownHandler::g_mainThreadId)
+			OnKnockdownHandler::g_mainThreadId = currentThreadId;
+		if (currentThreadId != OnKnockdownHandler::g_mainThreadId)
+			return;
+
+		s_frameCounter++;
+
+		std::vector<QueuedKnockEvent> queuedEvents;
+		{
+			ScopedLock lock(&OnKnockdownHandler::g_stateLock);
+			queuedEvents.swap(OnKnockdownHandler::g_pendingEvents);
+
+			//sweep entries whose actor unloaded/died while not upright, they never
+			//see the upright transition that normally evicts them
+			if ((s_frameCounter & 63) == 0) {
+				for (ProcessStateEntry& e : s_stateCache) {
+					if (e.process && s_frameCounter - e.lastTouchFrame > kCacheStaleFrames) {
+						e.process = nullptr;
+						e.actorRefID = 0;
+						e.lastState = 0;
+					}
 				}
+			}
+		}
+
+		for (const QueuedKnockEvent& evt : queuedEvents) {
+			Actor* actor = reinterpret_cast<Actor*>(Engine::LookupFormByID(evt.actorRefID));
+			if (!actor) continue;
+			if (!g_eventManagerInterface) break;
+
+			if (evt.isGetUp) {
+				Log("OnKnockdownHandler: OnGetUp actor=%08X phase=%d", evt.actorRefID, evt.code);
+				g_eventManagerInterface->DispatchEvent("ITR:OnGetUp",
+					reinterpret_cast<TESObjectREFR*>(actor), actor, evt.code);
+			} else {
+				Log("OnKnockdownHandler: OnKnockdown actor=%08X cause=%d", evt.actorRefID, evt.code);
+				g_eventManagerInterface->DispatchEvent("ITR:OnKnockdown",
+					reinterpret_cast<TESObjectREFR*>(actor), actor, evt.code);
 			}
 		}
 	}
 
-	for (const QueuedKnockEvent& evt : queuedEvents) {
-		Actor* actor = reinterpret_cast<Actor*>(Engine::LookupFormByID(evt.actorRefID));
-		if (!actor) continue;
-		if (!g_eventManagerInterface) break;
-
-		if (evt.isGetUp) {
-			Log("OnKnockdownHandler: OnGetUp actor=%08X phase=%d", evt.actorRefID, evt.code);
-			g_eventManagerInterface->DispatchEvent("ITR:OnGetUp",
-				reinterpret_cast<TESObjectREFR*>(actor), actor, evt.code);
-		}
-		else {
-			Log("OnKnockdownHandler: OnKnockdown actor=%08X cause=%d", evt.actorRefID, evt.code);
-			g_eventManagerInterface->DispatchEvent("ITR:OnKnockdown",
-				reinterpret_cast<TESObjectREFR*>(actor), actor, evt.code);
+	void ClearState()
+	{
+		if (OnKnockdownHandler::g_stateLockInit != 2) return;
+		ScopedLock lock(&OnKnockdownHandler::g_stateLock);
+		OnKnockdownHandler::g_pendingEvents.clear();
+		for (ProcessStateEntry& e : s_stateCache) {
+			e.process = nullptr;
+			e.actorRefID = 0;
+			e.lastTouchFrame = 0;
+			e.lastState = 0;
 		}
 	}
-}
 
-void ClearState()
-{
-	if (OnKnockdownHandler::g_stateLockInit != 2) return;
-	ScopedLock lock(&OnKnockdownHandler::g_stateLock);
-	OnKnockdownHandler::g_pendingEvents.clear();
-	for (ProcessStateEntry& e : s_stateCache) { e.process = nullptr; e.actorRefID = 0; e.lastTouchFrame = 0; e.lastState = 0; }
-}
+	bool Init(void* nvseInterface)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
+		if (nvse->isEditor) return false;
 
-bool Init(void* nvseInterface)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
-	if (nvse->isEditor) return false;
+		EnsureStateLockInitialized();
+		OnKnockdownHandler::g_mainThreadId = GetCurrentThreadId();
 
-	EnsureStateLockInitialized();
-	OnKnockdownHandler::g_mainThreadId = GetCurrentThreadId();
+		//chain-tolerant: capture whatever is currently in the slot as our original
+		s_origHigh = (KnockdownFSM_t) * (UInt32*)(kVtbl_HighProcess + kFSMSlotOffset);
+		s_origMiddleHigh = (KnockdownFSM_t) * (UInt32*)(kVtbl_MiddleHighProcess + kFSMSlotOffset);
+		if (!s_origHigh || !s_origMiddleHigh) return false;
 
-	//chain-tolerant: capture whatever is currently in the slot as our original
-	s_origHigh = (KnockdownFSM_t)*(UInt32*)(kVtbl_HighProcess + kFSMSlotOffset);
-	s_origMiddleHigh = (KnockdownFSM_t)*(UInt32*)(kVtbl_MiddleHighProcess + kFSMSlotOffset);
-	if (!s_origHigh || !s_origMiddleHigh) return false;
+		SafeWrite::Write32(kVtbl_HighProcess + kFSMSlotOffset, (UInt32)&Hook_KnockdownFSM);
+		SafeWrite::Write32(kVtbl_MiddleHighProcess + kFSMSlotOffset, (UInt32)&Hook_KnockdownFSM);
 
-	SafeWrite::Write32(kVtbl_HighProcess + kFSMSlotOffset, (UInt32)&Hook_KnockdownFSM);
-	SafeWrite::Write32(kVtbl_MiddleHighProcess + kFSMSlotOffset, (UInt32)&Hook_KnockdownFSM);
-
-	Log("OnKnockdownHandler: FSM slot swapped, originals High=%08X MiddleHigh=%08X",
-		(UInt32)s_origHigh, (UInt32)s_origMiddleHigh);
-	return true;
-}
+		Log("OnKnockdownHandler: FSM slot swapped, originals High=%08X MiddleHigh=%08X",
+			(UInt32)s_origHigh, (UInt32)s_origMiddleHigh);
+		return true;
+	}
 }

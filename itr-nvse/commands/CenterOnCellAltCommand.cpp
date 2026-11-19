@@ -9,14 +9,12 @@
 
 #include <cstring>
 
+#include "internal/globals.h"
+
 extern const _ExtractArgs ExtractArgs;
-extern bool IsConsoleMode();
-extern void Console_Print(const char* fmt, ...);
-extern void Log(const char* fmt, ...);
 extern NVSEMessagingInterface* g_msgInterface;
 
-namespace
-{
+namespace {
 	constexpr UInt32 kCenterDelayFrames = 2;
 	constexpr UInt32 kSessionDelayFrames = 2;
 	constexpr UInt32 kPendingTimeoutFrames = 1800;
@@ -70,8 +68,7 @@ namespace
 
 	void DispatchNewSession()
 	{
-		if (!g_msgInterface)
-		{
+		if (!g_msgInterface) {
 			Log("CenterOnCellAlt could not dispatch new session: messaging interface unavailable");
 			s_seenNewGame = true;
 			s_framesAfterNewGame = 0;
@@ -79,8 +76,7 @@ namespace
 		}
 
 		Log("CenterOnCellAlt dispatching synthetic kMessage_NewGame for %s", s_pendingCellName);
-		if (!g_msgInterface->Dispatch(0, NVSEMessagingInterface::kMessage_NewGame, nullptr, 0, nullptr))
-		{
+		if (!g_msgInterface->Dispatch(0, NVSEMessagingInterface::kMessage_NewGame, nullptr, 0, nullptr)) {
 			Log("CenterOnCellAlt synthetic kMessage_NewGame had no listeners for %s", s_pendingCellName);
 			s_seenNewGame = true;
 			s_framesAfterNewGame = 0;
@@ -106,18 +102,17 @@ namespace
 }
 
 static ParamInfo kParams_CenterOnCellAlt[1] =
-{
-	{ "cellName", kParamType_String, 0 },
+	{
+		{"cellName", kParamType_String, 0},
 };
 
 extern bool Cmd_CenterOnCellAlt_Execute(COMMAND_ARGS);
 static CommandInfo kCommandInfo_CenterOnCellAlt =
-{
-	"CenterOnCellAlt", "COCA", 0,
-	"CenterOnCell after dispatching a new session when used from the main menu",
-	0, 1, kParams_CenterOnCellAlt,
-	Cmd_CenterOnCellAlt_Execute, nullptr, nullptr, 0
-};
+	{
+		"CenterOnCellAlt", "COCA", 0,
+		"CenterOnCell after dispatching a new session when used from the main menu",
+		0, 1, kParams_CenterOnCellAlt,
+		Cmd_CenterOnCellAlt_Execute, nullptr, nullptr, 0};
 
 bool Cmd_CenterOnCellAlt_Execute(COMMAND_ARGS)
 {
@@ -127,8 +122,7 @@ bool Cmd_CenterOnCellAlt_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, cellName) || !cellName[0])
 		return true;
 
-	if (IsMainMenuCOC())
-	{
+	if (IsMainMenuCOC()) {
 		QueueNewSessionCenter(cellName);
 		*result = 1;
 		return true;
@@ -139,8 +133,7 @@ bool Cmd_CenterOnCellAlt_Execute(COMMAND_ARGS)
 	return true;
 }
 
-namespace CenterOnCellAltCommand
-{
+namespace CenterOnCellAltCommand {
 	void RegisterCommands(void* nvsePtr)
 	{
 		auto* nvse = static_cast<NVSEInterface*>(nvsePtr);
@@ -149,8 +142,7 @@ namespace CenterOnCellAltCommand
 
 	void OnNewGame()
 	{
-		if (s_pending)
-		{
+		if (s_pending) {
 			s_seenNewGame = true;
 			s_framesAfterNewGame = 0;
 			Log("CenterOnCellAlt saw kMessage_NewGame for %s", s_pendingCellName);
@@ -173,15 +165,13 @@ namespace CenterOnCellAltCommand
 		if (!s_pending)
 			return;
 
-		if (++s_waitFrames > kPendingTimeoutFrames)
-		{
+		if (++s_waitFrames > kPendingTimeoutFrames) {
 			Log("CenterOnCellAlt timed out waiting to COC %s", s_pendingCellName);
 			ClearPending();
 			return;
 		}
 
-		if (s_sessionQueued)
-		{
+		if (s_sessionQueued) {
 			if (++s_sessionDelayFrames < kSessionDelayFrames)
 				return;
 

@@ -1,6 +1,5 @@
 #pragma once
 
-namespace WorldspaceOffsetCommands
-{
+namespace WorldspaceOffsetCommands {
 	void RegisterCommands(void* nvse);
 }

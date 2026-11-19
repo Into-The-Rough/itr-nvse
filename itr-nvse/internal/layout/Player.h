@@ -1,4 +1,3 @@
-//Player layout - aim-zoom POV/FOV, casino data, killcam timer
 #pragma once
 
 #include <cstddef>

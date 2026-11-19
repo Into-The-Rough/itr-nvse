@@ -1,7 +1,4 @@
-//ForceCrouch / DisableCrouching
-//
-//hooks Actor::SetMovementFlag (0x8B39F0) and CombatController::SetShouldSneak
-//(0x981520) at function level to cover all callers
+//hooks Actor::SetMovementFlag (0x8B39F0) and CombatController::SetShouldSneak (0x981520)
 
 #include "CrouchCommands.h"
 #include "internal/Detours.h"
@@ -25,11 +22,13 @@ static CRITICAL_SECTION g_crouchLock;
 static volatile LONG g_crouchLockInit = 0;
 static std::set<UInt32> g_crouchDisabledActors;
 
-static void EnsureCrouchLock() {
+static void EnsureCrouchLock()
+{
 	InitCriticalSectionOnce(&g_crouchLockInit, &g_crouchLock);
 }
 
-static bool IsCrouchDisabled(UInt32 refID) {
+static bool IsCrouchDisabled(UInt32 refID)
+{
 	if (!refID || g_crouchLockInit != 2)
 		return false;
 
@@ -43,20 +42,22 @@ static bool IsActorRef(TESObjectREFR* ref)
 	return ref->baseForm->typeID == kFormType_Creature || ref->baseForm->typeID == kFormType_NPC;
 }
 
-typedef void (__thiscall *_SetShouldSneak)(void*, bool);
-typedef void (__thiscall *_SetMovementFlag)(Actor*, UInt32);
-static _SetShouldSneak OrigSetShouldSneak = nullptr;
-static _SetMovementFlag OrigSetMovementFlag = nullptr;
+using SetShouldSneak_t = void(__thiscall*)(void*, bool);
+using SetMovementFlag_t = void(__thiscall*)(Actor*, UInt32);
+static SetShouldSneak_t OrigSetShouldSneak = nullptr;
+static SetMovementFlag_t OrigSetMovementFlag = nullptr;
 
 //trampoline for Actor::SetMovementFlag - strips 0x400 for disabled actors
-static void __fastcall Hook_SetMovementFlag(Actor* actor, void* edx, UInt32 flags) {
+static void __fastcall Hook_SetMovementFlag(Actor* actor, void* edx, UInt32 flags)
+{
 	if ((flags & 0x400) && IsCrouchDisabled(actor->refID))
 		flags &= ~0x400;
 	OrigSetMovementFlag(actor, flags);
 }
 
 //trampoline for CombatController::SetShouldSneak - forces false for disabled actors
-static void __fastcall Hook_SetShouldSneak(void* cc, void* edx, bool shouldSneak) {
+static void __fastcall Hook_SetShouldSneak(void* cc, void* edx, bool shouldSneak)
+{
 	if (shouldSneak) {
 		Actor* owner = CombatControllerGetPackageOwner(cc);
 		if (owner && IsCrouchDisabled(owner->refID))
@@ -69,7 +70,9 @@ static Detours::JumpDetour s_moveFlagDetour;
 static Detours::JumpDetour s_sneakDetour;
 
 static bool g_crouchHookInstalled = false;
-static bool InstallCrouchHooks() {
+
+static bool InstallCrouchHooks()
+{
 	if (g_crouchHookInstalled) return true;
 	EnsureCrouchLock();
 
@@ -78,8 +81,7 @@ static bool InstallCrouchHooks() {
 			(UInt8**)&OrigSetMovementFlag))
 		return false;
 	if (!s_sneakDetour.WriteRelJump(0x981520, Hook_SetShouldSneak, 7,
-			(UInt8**)&OrigSetShouldSneak))
-	{
+			(UInt8**)&OrigSetShouldSneak)) {
 		if (s_moveFlagDetour.Remove())
 			OrigSetMovementFlag = nullptr;
 		return false;
@@ -102,10 +104,10 @@ bool Cmd_ForceCrouch_Execute(COMMAND_ARGS)
 	if (!IsActorRef(thisObj)) return true;
 
 	auto* actor = (Actor*)thisObj;
-	typedef UInt32 (__thiscall *_GetFlags)(Actor*);
-	auto GetMoveFlags = (_GetFlags)0x8846E0;
+	using GetFlags_t = UInt32(__thiscall*)(Actor*);
+	auto GetMoveFlags = (GetFlags_t)0x8846E0;
 
-	//hooks are prologue patches, installed once at PostLoad via InstallHooks, never from live command execution
+	//hooks are prologue patches, installed once at PostLoad via Init, never from live command execution
 	if (!g_crouchHookInstalled) return true;
 
 	void* cc = Engine::Actor_GetCombatController(actor);
@@ -164,24 +166,23 @@ bool Cmd_DisableCrouching_Execute(COMMAND_ARGS)
 
 namespace CrouchCommands {
 
-void InstallHooks()
-{
-	InstallCrouchHooks();
-}
-
-void ClearState()
-{
-	if (g_crouchLockInit == 2) {
-		ScopedLock lock(&g_crouchLock);
-		g_crouchDisabledActors.clear();
+	void Init()
+	{
+		InstallCrouchHooks();
 	}
-}
 
-void RegisterCommands(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_ForceCrouch);
-	nvse->RegisterCommand(&kCommandInfo_DisableCrouching);
-}
+	void ClearState()
+	{
+		if (g_crouchLockInit == 2) {
+			ScopedLock lock(&g_crouchLock);
+			g_crouchDisabledActors.clear();
+		}
+	}
 
+	void RegisterCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_ForceCrouch);
+		nvse->RegisterCommand(&kCommandInfo_DisableCrouching);
+	}
 }

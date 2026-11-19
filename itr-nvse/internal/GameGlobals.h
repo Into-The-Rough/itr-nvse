@@ -14,12 +14,14 @@ struct TileMenuArrayView;
 
 struct GameSettingView {
 	void* vtbl;
+
 	union {
 		UInt32 uint;
 		SInt32 i;
 		float f;
 		char* str;
 	} data;
+
 	const char* name;
 };
 

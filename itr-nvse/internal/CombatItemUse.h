@@ -1,17 +1,14 @@
 #pragma once
 #include <Windows.h>
-#include <cstdint>
 #include "EngineFunctions.h"
 #include "EngineHelpers.h"
 #include "GameLayout.h"
 #include "ScopedLock.h"
 
-namespace CombatItemUse
-{
-	struct TimerPool
-	{
+namespace CombatItemUse {
+	struct TimerPool {
 		static constexpr int kMax = 64;
-		uint32_t refIDs[kMax] = {0};
+		UInt32 refIDs[kMax] = {0};
 		DWORD values[kMax] = {0};
 		int count = 0;
 		CRITICAL_SECTION cs;
@@ -27,19 +24,16 @@ namespace CombatItemUse
 		TimerPool& operator=(const TimerPool&) = delete;
 
 		//checks cooldown and stamps timestamp atomically
-		bool TryAcquire(uint32_t refID, float cooldownSec)
+		bool TryAcquire(UInt32 refID, float cooldownSec)
 		{
 			EnsureInit();
 			EnterCriticalSection(&cs);
 			DWORD now = GetTickCount();
 			DWORD cooldownMs = (DWORD)(cooldownSec * 1000.0f);
 			int freeSlot = -1;
-			for (int i = 0; i < count; i++)
-			{
-				if (refIDs[i] == refID)
-				{
-					if ((now - values[i]) < cooldownMs)
-					{
+			for (int i = 0; i < count; i++) {
+				if (refIDs[i] == refID) {
+					if ((now - values[i]) < cooldownMs) {
 						LeaveCriticalSection(&cs);
 						return false;
 					}
@@ -50,19 +44,14 @@ namespace CombatItemUse
 				if (freeSlot < 0 && (now - values[i]) >= cooldownMs)
 					freeSlot = i; //expired entry, reusable once the pool fills
 			}
-			if (count < kMax)
-			{
+			if (count < kMax) {
 				refIDs[count] = refID;
 				values[count] = now;
 				count++;
-			}
-			else if (freeSlot >= 0)
-			{
+			} else if (freeSlot >= 0) {
 				refIDs[freeSlot] = refID;
 				values[freeSlot] = now;
-			}
-			else
-			{
+			} else {
 				LeaveCriticalSection(&cs);
 				return false; //all slots within cooldown, too many actors at once
 			}
@@ -71,7 +60,7 @@ namespace CombatItemUse
 		}
 	};
 
-	inline uint32_t GetRefID(Actor* actor) { return actor ? actor->refID : 0; }
+	inline UInt32 GetRefID(Actor* actor) { return actor ? actor->refID : 0; }
 
 	inline bool IsCharacter(TESObjectREFR* actor)
 	{
@@ -97,13 +86,12 @@ namespace CombatItemUse
 		return actor;
 	}
 
-	inline bool AlchemyItemHasEffect(AlchemyItem* alchItem, uint32_t effectFormID)
+	inline bool AlchemyItemHasEffect(AlchemyItem* alchItem, UInt32 effectFormID)
 	{
 		auto* effectList = AlchemyItemGetEffectListView(alchItem);
 		if (!effectList) return false;
 
-		for (auto* node = &effectList->effects; node; node = node->next)
-		{
+		for (auto* node = &effectList->effects; node; node = node->next) {
 			EffectItem* effect = node->item;
 			EffectSetting* setting = effect ? effect->setting : nullptr;
 			if (setting && setting->refID == effectFormID)
@@ -112,7 +100,7 @@ namespace CombatItemUse
 		return false;
 	}
 
-	inline TESForm* FindAlchemyItemWithEffect(Actor* actor, uint32_t effectFormID)
+	inline TESForm* FindAlchemyItemWithEffect(Actor* actor, UInt32 effectFormID)
 	{
 		if (!actor) return nullptr;
 
@@ -124,13 +112,11 @@ namespace CombatItemUse
 		if (!objList) return nullptr;
 
 		int count = 0;
-		for (auto* node = objList->Head(); node; node = node->Next())
-		{
+		for (auto* node = objList->Head(); node; node = node->Next()) {
 			if (++count > 500) break;
 			auto* entry = node->Item();
 			TESForm* form = entry ? entry->type : nullptr;
-			if (form && form->typeID == kFormType_AlchemyItem &&
-				AlchemyItemHasEffect(static_cast<AlchemyItem*>(form), effectFormID))
+			if (form && form->typeID == kFormType_AlchemyItem && AlchemyItemHasEffect(static_cast<AlchemyItem*>(form), effectFormID))
 				return form;
 		}
 		return nullptr;
@@ -140,21 +126,19 @@ namespace CombatItemUse
 	{
 		//play eating animation (spoof as stimpak)
 		void* process = Engine::Actor_GetProcess(actor);
-		if (process)
-		{
+		if (process) {
 			void* food = Engine::LookupFormByID(0x00015169); //stimpak
-			if (food)
-			{
-				typedef void(__cdecl* SetUsedItem_t)(void*);
+			if (food) {
+				using SetUsedItem_t = void(__cdecl*)(void*);
 				((SetUsedItem_t)0x600900)(food);
 
-				typedef bool(__thiscall* FindIdle_t)(void*, void*, void*, void*);
+				using FindIdle_t = bool(__thiscall*)(void*, void*, void*, void*);
 				((FindIdle_t)0x8FF0B0)(process, actor, food, nullptr);
 			}
 		}
 
 		//consume item
-		typedef bool(__thiscall* UseAlchItem_t)(void*, void*, void*, bool);
+		using UseAlchItem_t = bool(__thiscall*)(void*, void*, void*, bool);
 		((UseAlchItem_t)0x8C1F80)(actor, item, nullptr, true);
 	}
 }

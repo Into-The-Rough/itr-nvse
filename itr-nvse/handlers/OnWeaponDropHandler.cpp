@@ -8,9 +8,8 @@
 #include "internal/Detours.h"
 #include "internal/GameSDK.h"
 
-
 namespace OnWeaponDropHandler {
-    bool g_hookInstalled = false;
+	bool g_hookInstalled = false;
 }
 
 static Detours::JumpDetour s_tryDropWeaponDetour;
@@ -19,36 +18,36 @@ static TryDropWeapon_t s_originalTryDropWeapon = nullptr;
 
 static void DispatchWeaponDropEvent(Actor* actor)
 {
-    if (!actor) return;
+	if (!actor) return;
 
-    auto* weapon = ActorGetCurrentWeapon(actor);
-    if (!weapon) return;
+	auto* weapon = ActorGetCurrentWeapon(actor);
+	if (!weapon) return;
 
-    if (g_eventManagerInterface)
-        g_eventManagerInterface->DispatchEventThreadSafe("ITR:OnWeaponDrop",
-            nullptr, reinterpret_cast<TESObjectREFR*>(actor),
-            actor, weapon);
+	if (g_eventManagerInterface)
+		g_eventManagerInterface->DispatchEventThreadSafe("ITR:OnWeaponDrop",
+			nullptr, reinterpret_cast<TESObjectREFR*>(actor),
+			actor, weapon);
 }
 
-static int __fastcall TryDropWeaponHook(Actor* actor, void*)
+static int __fastcall Hook_TryDropWeapon(Actor* actor, void* edx)
 {
-    DispatchWeaponDropEvent(actor);
-    return s_originalTryDropWeapon ? s_originalTryDropWeapon(actor) : 0;
+	DispatchWeaponDropEvent(actor);
+	return s_originalTryDropWeapon(actor);
 }
 
 namespace OnWeaponDropHandler {
-bool Init(void* nvseInterface)
-{
-    NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
-    if (nvse->isEditor) return false;
+	bool Init(void* nvseInterface)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
+		if (nvse->isEditor) return false;
 
-    if (!g_hookInstalled) {
-        if (!s_tryDropWeaponDetour.WriteRelJump((UInt32)Engine::Actor_TryDropWeapon, TryDropWeaponHook, 6))
-            return false;
-        s_originalTryDropWeapon = s_tryDropWeaponDetour.GetTrampoline<TryDropWeapon_t>();
-        g_hookInstalled = true;
-    }
+		if (!g_hookInstalled) {
+			if (!s_tryDropWeaponDetour.WriteRelJump((UInt32)Engine::Actor_TryDropWeapon, Hook_TryDropWeapon, 6))
+				return false;
+			s_originalTryDropWeapon = s_tryDropWeaponDetour.GetTrampoline<TryDropWeapon_t>();
+			g_hookInstalled = true;
+		}
 
-    return true;
-}
+		return true;
+	}
 }

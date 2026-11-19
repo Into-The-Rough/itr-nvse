@@ -9,8 +9,7 @@
 
 #include "internal/globals.h"
 
-namespace SlowMotionPhysicsFix
-{
+namespace SlowMotionPhysicsFix {
 	constexpr UInt32 kAddr_StepDeltaTimeCall = 0xC6AFF9;
 	constexpr UInt32 kAddr_SetFrameTimeMarkerCall = 0xC6AFC5;
 	constexpr float kMinStepTime = 0.001f;
@@ -19,7 +18,7 @@ namespace SlowMotionPhysicsFix
 
 	static Detours::CallDetour s_stepDeltaTimeCall;
 	static Detours::CallDetour s_setFrameTimeMarkerCall;
-	typedef void(__thiscall* HavokWorldFloatFn)(void*, float);
+	using HavokWorldFloat_t = void(__thiscall*)(void*, float);
 
 	static float GetEffectiveStepTime(float timeMult)
 	{
@@ -29,7 +28,8 @@ namespace SlowMotionPhysicsFix
 		return stepTime;
 	}
 
-	void __fastcall Hook_SetFrameTimeMarker(void* hkpWorld, void* edx, float delta) {
+	void __fastcall Hook_SetFrameTimeMarker(void* hkpWorld, void* edx, float delta)
+	{
 		if (!::IsVATSActive()) {
 			float timeMult = GetGlobalTimeMultiplier();
 			if (timeMult < kSlowMotionThreshold) {
@@ -38,12 +38,13 @@ namespace SlowMotionPhysicsFix
 					delta = maxDelta;
 			}
 		}
-		auto original = reinterpret_cast<HavokWorldFloatFn>(s_setFrameTimeMarkerCall.GetOverwrittenAddr());
+		auto original = reinterpret_cast<HavokWorldFloat_t>(s_setFrameTimeMarkerCall.GetOverwrittenAddr());
 		original(hkpWorld, delta);
 	}
 
-	void __fastcall Hook_StepDeltaTime(void* hkpWorld, void* edx, float stepTime) {
-		auto original = reinterpret_cast<HavokWorldFloatFn>(s_stepDeltaTimeCall.GetOverwrittenAddr());
+	void __fastcall Hook_StepDeltaTime(void* hkpWorld, void* edx, float stepTime)
+	{
+		auto original = reinterpret_cast<HavokWorldFloat_t>(s_stepDeltaTimeCall.GetOverwrittenAddr());
 
 		if (::IsVATSActive()) {
 			original(hkpWorld, stepTime);
@@ -54,7 +55,8 @@ namespace SlowMotionPhysicsFix
 		original(hkpWorld, stepTime);
 	}
 
-	void Init() {
+	void Init()
+	{
 		s_setFrameTimeMarkerCall.WriteRelCall(kAddr_SetFrameTimeMarkerCall, Hook_SetFrameTimeMarker);
 		s_stepDeltaTimeCall.WriteRelCall(kAddr_StepDeltaTimeCall, Hook_StepDeltaTime);
 	}

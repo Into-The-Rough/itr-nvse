@@ -13,36 +13,36 @@ static bool g_wasDown[256];
 static DWORD g_lastPressTime[256];
 
 namespace DoubleTapHandler {
-void Update()
-{
-	if (!g_eventManagerInterface) return;
+	void Update()
+	{
+		if (!g_eventManagerInterface) return;
 
-	void* input = *g_inputGlobalsPtr;
-	if (!input) return;
-	UInt8* keys = OSInputGlobalsGetCurrentKeyStates(input);
-	DWORD now = GetTickCount();
+		void* input = *g_inputGlobalsPtr;
+		if (!input) return;
+		UInt8* keys = OSInputGlobalsGetCurrentKeyStates(input);
+		DWORD now = GetTickCount();
 
-	for (int i = 1; i < 256; i++) {
-		bool down = keys[i] != 0;
-		if (down && !g_wasDown[i]) {
-			if (g_lastPressTime[i] && (now - g_lastPressTime[i]) <= (DWORD)g_thresholdMs)
-				g_eventManagerInterface->DispatchEvent("ITR:OnDoubleTap", nullptr, i);
-			g_lastPressTime[i] = now;
+		for (int i = 1; i < 256; i++) {
+			bool down = keys[i] != 0;
+			if (down && !g_wasDown[i]) {
+				if (g_lastPressTime[i] && (now - g_lastPressTime[i]) <= (DWORD)g_thresholdMs)
+					g_eventManagerInterface->DispatchEvent("ITR:OnDoubleTap", nullptr, i);
+				g_lastPressTime[i] = now;
+			}
+			g_wasDown[i] = down;
 		}
-		g_wasDown[i] = down;
 	}
-}
 
-bool Init()
-{
-	char path[MAX_PATH];
-	GetModuleFileNameA(nullptr, path, MAX_PATH);
-	char* s = strrchr(path, '\\');
-	if (s) strcpy_s(s + 1, MAX_PATH - (s + 1 - path), "Data\\config\\itr-nvse.ini");
+	bool Init()
+	{
+		char path[MAX_PATH];
+		GetModuleFileNameA(nullptr, path, MAX_PATH);
+		char* s = strrchr(path, '\\');
+		if (s) strcpy_s(s + 1, MAX_PATH - (s + 1 - path), "Data\\config\\itr-nvse.ini");
 
-	g_thresholdMs = GetPrivateProfileIntA("Events", "iDoubleTapThresholdMs", 300, path);
-	memset(g_wasDown, 0, sizeof(g_wasDown));
-	memset(g_lastPressTime, 0, sizeof(g_lastPressTime));
-	return true;
-}
+		g_thresholdMs = GetPrivateProfileIntA("Events", "iDoubleTapThresholdMs", 300, path);
+		memset(g_wasDown, 0, sizeof(g_wasDown));
+		memset(g_lastPressTime, 0, sizeof(g_lastPressTime));
+		return true;
+	}
 }

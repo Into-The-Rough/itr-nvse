@@ -2,7 +2,7 @@
 //builds a standalone PathingRequest/Solution instead of reading an actor's live mover path
 
 #include "PathingCommands.h"
-#include "PathingShared.h"
+#include "internal/layout/Pathing.h"
 #include "internal/CallTemplates.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/GameAPI.h"
@@ -18,10 +18,8 @@
 extern const _ExtractArgs ExtractArgs;
 extern NVSEArrayVarInterface* g_arrInterface;
 
-namespace
-{
-	struct PathResult
-	{
+namespace {
+	struct PathResult {
 		bool complete = false;
 		float distance = -1.0f;
 		std::vector<PathPoint3> nodes;
@@ -68,7 +66,7 @@ namespace
 		ScopedPathingRequest request;
 		ScopedPathingSolution solution;
 
-		PathPoint3 destination = { target->posX, target->posY, target->posZ };
+		PathPoint3 destination = {target->posX, target->posY, target->posZ};
 		CdeclCall<void>(
 			0x9DBC90,
 			actor,
@@ -90,9 +88,8 @@ namespace
 		const UInt32 safeCount = (std::min)(nodeCount, kMaxPathNodes);
 		out.nodes.reserve(safeCount);
 
-		for (UInt32 i = 0; i < safeCount; ++i)
-		{
-			auto* node = ThisCall<PathingNodeLayout*>(0x6E7970, solution.Get(), i);
+		for (UInt32 i = 0; i < safeCount; ++i) {
+			auto* node = ThisCall<PathingNodeView*>(0x6E7970, solution.Get(), i);
 			if (!node)
 				break;
 			out.nodes.push_back(node->pathingLocation.location);
@@ -201,8 +198,7 @@ bool Cmd_GetNthPathNode_Execute(COMMAND_ARGS)
 	UInt32 index = 0;
 	auto* arr = CreateArray(scriptObj);
 
-	if (ExtractArgs(EXTRACT_ARGS, &target, &index))
-	{
+	if (ExtractArgs(EXTRACT_ARGS, &target, &index)) {
 		PathResult path;
 		if (GetPath(thisObj, target, path) && index < path.nodes.size() && arr)
 			AppendPointComponents(arr, path.nodes[index]);
@@ -219,11 +215,9 @@ bool Cmd_GetPathToRef_Execute(COMMAND_ARGS)
 	TESObjectREFR* target = nullptr;
 	auto* arr = CreateArray(scriptObj);
 
-	if (ExtractArgs(EXTRACT_ARGS, &target))
-	{
+	if (ExtractArgs(EXTRACT_ARGS, &target)) {
 		PathResult path;
-		if (GetPath(thisObj, target, path) && arr)
-		{
+		if (GetPath(thisObj, target, path) && arr) {
 			for (const auto& node : path.nodes)
 				AppendPointArray(arr, node, scriptObj);
 		}
@@ -234,12 +228,12 @@ bool Cmd_GetPathToRef_Execute(COMMAND_ARGS)
 }
 
 static ParamInfo kParams_OneTargetRef[1] = {
-	{ "target", kParamType_ObjectRef, 0 },
+	{"target", kParamType_ObjectRef, 0},
 };
 
 static ParamInfo kParams_TargetRef_OneIndex[2] = {
-	{ "target", kParamType_ObjectRef, 0 },
-	{ "index", kParamType_Integer, 0 },
+	{"target", kParamType_ObjectRef, 0},
+	{"index", kParamType_Integer, 0},
 };
 
 DEFINE_COMMAND_PLUGIN(CanPathToRef, "returns 1 if the calling actor can build a complete path to target", true, 1, kParams_OneTargetRef);
@@ -248,8 +242,7 @@ DEFINE_COMMAND_PLUGIN(GetPathNodeCount, "returns waypoint count for a complete p
 DEFINE_COMMAND_PLUGIN(GetNthPathNode, "returns [x,y,z] for waypoint index in the complete path to target", true, 2, kParams_TargetRef_OneIndex);
 DEFINE_COMMAND_PLUGIN(GetPathToRef, "returns [[x,y,z], ...] for the complete path to target", true, 1, kParams_OneTargetRef);
 
-namespace PathingCommands
-{
+namespace PathingCommands {
 	void RegisterCommands(void* nvsePtr)
 	{
 		s_mainThreadId = GetCurrentThreadId();

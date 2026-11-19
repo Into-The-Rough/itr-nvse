@@ -17,12 +17,10 @@
 
 extern const _ExtractArgs ExtractArgs;
 
-namespace
-{
+namespace {
 	using DoorTeleportData = ExtraTeleport::Data;
 
-	struct TeleportPathData
-	{
+	struct TeleportPathData {
 		BSSimpleArray<BGSQuestObjective::ParentSpaceNode> parentSpaceNodes;
 		BSSimpleArray<BGSQuestObjective::TeleportLink> teleportLinks;
 		float startPos[3];
@@ -31,8 +29,7 @@ namespace
 
 	static_assert(sizeof(TeleportPathData) == 0x38, "TeleportPathData must match engine TeleportPath");
 
-	class ScopedTeleportPathData
-	{
+	class ScopedTeleportPathData {
 	public:
 		ScopedTeleportPathData()
 		{
@@ -53,15 +50,13 @@ namespace
 		TeleportPathData data_;
 	};
 
-	struct TravelSpace
-	{
+	struct TravelSpace {
 		bool isWorldspace = false;
 		TESWorldSpace* worldspace = nullptr;
 		TESObjectCELL* cell = nullptr;
 	};
 
-	struct RouteNode
-	{
+	struct RouteNode {
 		TravelSpace space;
 		float cost = 0.0f;
 		float arrival[3] = {};
@@ -69,21 +64,19 @@ namespace
 		bool visited = false;
 	};
 
-	struct FallbackRoute
-	{
+	struct FallbackRoute {
 		TravelSpace targetSpace;
 		TESObjectREFR* door = nullptr;
 	};
 
-	struct OpenEntry
-	{
+	struct OpenEntry {
 		float cost;
 		SInt32 index;
+
 		bool operator>(const OpenEntry& rhs) const { return cost > rhs.cost; }
 	};
 
-	struct RouteCache
-	{
+	struct RouteCache {
 		bool valid = false;
 		TravelSpace startSpace;
 		std::vector<RouteNode> nodes;
@@ -91,7 +84,7 @@ namespace
 		std::vector<FallbackRoute> fallbacks;
 		//space pointer (cell for interior, worldspace for exterior) -> nodes index
 		std::unordered_map<void*, SInt32> nodeIndex;
-		//min-heap of (cost, index); stale entries skipped lazily on pop
+		//min-heap of (cost, index), stale entries skipped lazily on pop
 		std::priority_queue<OpenEntry, std::vector<OpenEntry>, std::greater<OpenEntry>> open;
 	};
 
@@ -147,9 +140,7 @@ namespace
 
 	static bool IsSameTravelSpace(const TravelSpace& lhs, const TravelSpace& rhs)
 	{
-		return lhs.isWorldspace == rhs.isWorldspace &&
-		       lhs.worldspace == rhs.worldspace &&
-		       lhs.cell == rhs.cell;
+		return lhs.isWorldspace == rhs.isWorldspace && lhs.worldspace == rhs.worldspace && lhs.cell == rhs.cell;
 	}
 
 	static TravelSpace GetTravelSpace(TESObjectCELL* cell)
@@ -158,15 +149,15 @@ namespace
 			return {};
 
 		if (cell->IsInterior())
-			return { false, nullptr, cell };
+			return {false, nullptr, cell};
 
-		return { true, cell->worldSpace, nullptr };
+		return {true, cell->worldSpace, nullptr};
 	}
 
 	static TravelSpace GetTeleportDestinationSpace(DoorTeleportData* teleport)
 	{
 		if (TESWorldSpace* worldspace = GetTeleportWorldSpace(teleport))
-			return { true, worldspace, nullptr };
+			return {true, worldspace, nullptr};
 
 		return GetTravelSpace(GetTeleportCell(teleport));
 	}
@@ -206,8 +197,7 @@ namespace
 
 	static SInt32 FindBestOpenRouteNode()
 	{
-		while (!s_routeCache.open.empty())
-		{
+		while (!s_routeCache.open.empty()) {
 			OpenEntry top = s_routeCache.open.top();
 			s_routeCache.open.pop();
 			const RouteNode& n = s_routeCache.nodes[top.index];
@@ -225,17 +215,15 @@ namespace
 			return;
 
 		const SInt32 existingIndex = FindRouteNode(space);
-		if (existingIndex >= 0)
-		{
+		if (existingIndex >= 0) {
 			RouteNode& existing = s_routeCache.nodes[existingIndex];
-			if (!existing.visited && cost < existing.cost)
-			{
+			if (!existing.visited && cost < existing.cost) {
 				existing.cost = cost;
 				existing.arrival[0] = arrival[0];
 				existing.arrival[1] = arrival[1];
 				existing.arrival[2] = arrival[2];
 				existing.firstDoor = firstDoor;
-				s_routeCache.open.push({ cost, existingIndex });
+				s_routeCache.open.push({cost, existingIndex});
 			}
 			return;
 		}
@@ -250,7 +238,7 @@ namespace
 		const SInt32 newIndex = static_cast<SInt32>(s_routeCache.nodes.size());
 		s_routeCache.nodes.push_back(node);
 		s_routeCache.nodeIndex[TravelSpaceKey(space)] = newIndex;
-		s_routeCache.open.push({ cost, newIndex });
+		s_routeCache.open.push({cost, newIndex});
 	}
 
 	static bool GetFallbackRoute(const TravelSpace& targetSpace, TESObjectREFR*& door)
@@ -258,10 +246,8 @@ namespace
 		if (!IsValidTravelSpace(targetSpace))
 			return false;
 
-		for (const FallbackRoute& route : s_routeCache.fallbacks)
-		{
-			if (IsSameTravelSpace(route.targetSpace, targetSpace))
-			{
+		for (const FallbackRoute& route : s_routeCache.fallbacks) {
+			if (IsSameTravelSpace(route.targetSpace, targetSpace)) {
 				door = route.door;
 				return true;
 			}
@@ -275,7 +261,7 @@ namespace
 		if (!IsValidTravelSpace(targetSpace))
 			return;
 
-		s_routeCache.fallbacks.push_back({ targetSpace, door });
+		s_routeCache.fallbacks.push_back({targetSpace, door});
 	}
 
 	static bool ContainsCell(const std::vector<TESObjectCELL*>& cells, TESObjectCELL* cell)
@@ -302,8 +288,7 @@ namespace
 
 		ScopedCellRefLock lock(cell);
 
-		for (auto iter = cell->objectList.Begin(); !iter.End(); ++iter)
-		{
+		for (auto iter = cell->objectList.Begin(); !iter.End(); ++iter) {
 			TESObjectREFR* ref = iter.Get();
 			if (IsUsableLoadDoor(ref))
 				doors.push_back(ref);
@@ -312,8 +297,7 @@ namespace
 
 	static void CollectLoadDoors(const TravelSpace& space, std::vector<TESObjectREFR*>& doors)
 	{
-		if (space.isWorldspace)
-		{
+		if (space.isWorldspace) {
 			if (space.worldspace)
 				CollectLoadDoors(space.worldspace->cell, doors);
 			return;
@@ -342,30 +326,27 @@ namespace
 		startNode.arrival[2] = player->posZ;
 		s_routeCache.nodes.push_back(startNode);
 		s_routeCache.nodeIndex[TravelSpaceKey(startSpace)] = 0;
-		s_routeCache.open.push({ 0.0f, 0 });
+		s_routeCache.open.push({0.0f, 0});
 		return true;
 	}
 
 	static void ExpandRouteNode(SInt32 nodeIndex)
 	{
-		if (nodeIndex < 0 || static_cast<std::size_t>(nodeIndex) >= s_routeCache.nodes.size())
+		if (nodeIndex < 0 || static_cast<size_t>(nodeIndex) >= s_routeCache.nodes.size())
 			return;
 
 		RouteNode node = s_routeCache.nodes[nodeIndex];
 		s_routeCache.doors.clear();
 		CollectLoadDoors(node.space, s_routeCache.doors);
 
-		for (TESObjectREFR* door : s_routeCache.doors)
-		{
+		for (TESObjectREFR* door : s_routeCache.doors) {
 			DoorTeleportData* teleport = GetTeleport(door);
 			TravelSpace destination = GetTeleportDestinationSpace(teleport);
 			if (!IsValidTravelSpace(destination) || IsSameTravelSpace(destination, node.space))
 				continue;
 
-			float arrival[3] = { teleport->x, teleport->y, teleport->z };
-			float cost = node.cost +
-			             GetDistance(node.arrival[0], node.arrival[1], node.arrival[2], door->posX, door->posY, door->posZ) +
-			             GetDoorPenalty(door);
+			float arrival[3] = {teleport->x, teleport->y, teleport->z};
+			float cost = node.cost + GetDistance(node.arrival[0], node.arrival[1], node.arrival[2], door->posX, door->posY, door->posZ) + GetDoorPenalty(door);
 			TESObjectREFR* firstDoor = node.firstDoor ? node.firstDoor : door;
 			AddOrUpdateRouteNode(destination, cost, arrival, firstDoor);
 		}
@@ -376,8 +357,7 @@ namespace
 		if (!EnsureRouteCache(player, playerCell) || !IsValidTravelSpace(targetSpace))
 			return nullptr;
 
-		while (true)
-		{
+		while (true) {
 			SInt32 targetIndex = FindRouteNode(targetSpace);
 			if (targetIndex >= 0 && s_routeCache.nodes[targetIndex].visited)
 				return s_routeCache.nodes[targetIndex].firstDoor;
@@ -400,8 +380,7 @@ namespace
 		std::vector<TESObjectCELL*> visited;
 		queue.push_back(startCell);
 
-		for (std::size_t index = 0; index < queue.size(); ++index)
-		{
+		for (size_t index = 0; index < queue.size(); ++index) {
 			TESObjectCELL* cell = queue[index];
 			if (!cell || ContainsCell(visited, cell))
 				continue;
@@ -411,8 +390,7 @@ namespace
 			std::vector<TESObjectREFR*> doors;
 			CollectLoadDoors(cell, doors);
 
-			for (TESObjectREFR* door : doors)
-			{
+			for (TESObjectREFR* door : doors) {
 				DoorTeleportData* teleport = GetTeleport(door);
 				if (!teleport || !teleport->linkedDoor)
 					continue;
@@ -425,9 +403,7 @@ namespace
 				if (!linkedCell || !linkedCell->IsInterior() || linkedWorld)
 					return teleport->linkedDoor;
 
-				if (linkedCell && linkedCell->IsInterior() &&
-					!ContainsCell(visited, linkedCell) && !ContainsCell(queue, linkedCell))
-				{
+				if (linkedCell && linkedCell->IsInterior() && !ContainsCell(visited, linkedCell) && !ContainsCell(queue, linkedCell)) {
 					queue.push_back(linkedCell);
 				}
 			}
@@ -437,14 +413,14 @@ namespace
 	}
 
 	static ParamInfo kParams_GetRefExteriorDoor[1] =
-	{
-		{ "refr", kParamType_AnyForm, 1 },
+		{
+			{"refr", kParamType_AnyForm, 1},
 	};
 
 	static ParamInfo kParams_GetRefNextTeleportDoor[2] =
-	{
-		{ "refr", kParamType_AnyForm, 1 },
-		{ "forceRefresh", kParamType_Integer, 1 },
+		{
+			{"refr", kParamType_AnyForm, 1},
+			{"forceRefresh", kParamType_Integer, 1},
 	};
 
 	DEFINE_COMMAND_PLUGIN(GetRefExteriorDoor, "returns the exterior-side load door reachable from a reference", 0, 1, kParams_GetRefExteriorDoor);
@@ -459,8 +435,7 @@ namespace
 		ExtractArgs(EXTRACT_ARGS, &explicitForm);
 
 		TESObjectREFR* targetRef = thisObj;
-		if (explicitForm)
-		{
+		if (explicitForm) {
 			if (!explicitForm->IsReference())
 				return true;
 
@@ -474,8 +449,7 @@ namespace
 		if (!parentCell)
 			return true;
 
-		if (!parentCell->IsInterior())
-		{
+		if (!parentCell->IsInterior()) {
 			*refResult = targetRef->refID;
 			return true;
 		}
@@ -499,8 +473,7 @@ namespace
 			ClearRouteCache();
 
 		TESObjectREFR* targetRef = thisObj;
-		if (explicitForm)
-		{
+		if (explicitForm) {
 			if (!explicitForm->IsReference())
 				return true;
 
@@ -519,21 +492,18 @@ namespace
 		TravelSpace targetSpace = GetTravelSpace(targetCell);
 
 		//same-space paths contain no teleport links, so the next thing to point at is the target
-		if (IsSameTravelSpace(GetTravelSpace(playerCell), targetSpace))
-		{
+		if (IsSameTravelSpace(GetTravelSpace(playerCell), targetSpace)) {
 			*refResult = targetRef->refID;
 			return true;
 		}
 
-		if (TESObjectREFR* cachedDoor = FindCachedRouteDoor(player, playerCell, targetSpace))
-		{
+		if (TESObjectREFR* cachedDoor = FindCachedRouteDoor(player, playerCell, targetSpace)) {
 			*refResult = cachedDoor->refID;
 			return true;
 		}
 
 		TESObjectREFR* fallbackDoor = nullptr;
-		if (GetFallbackRoute(targetSpace, fallbackDoor))
-		{
+		if (GetFallbackRoute(targetSpace, fallbackDoor)) {
 			if (fallbackDoor)
 				*refResult = fallbackDoor->refID;
 			return true;
@@ -543,8 +513,7 @@ namespace
 		ThisCall<void>(0x952D60, player, targetRef, path.Get(), 1);
 
 		TeleportPathData* pathData = path.Get();
-		if (pathData->teleportLinks.size == 0 || !pathData->teleportLinks.data)
-		{
+		if (pathData->teleportLinks.size == 0 || !pathData->teleportLinks.data) {
 			CacheFallbackRoute(targetSpace, nullptr);
 			return true;
 		}
@@ -558,15 +527,14 @@ namespace
 	}
 }
 
-namespace ExteriorDoorCommands
-{
+namespace ExteriorDoorCommands {
 	void RegisterCommands(void* nvsePtr)
 	{
 		NVSEInterface* nvse = static_cast<NVSEInterface*>(nvsePtr);
 		nvse->RegisterTypedCommand(&kCommandInfo_GetRefExteriorDoor, kRetnType_Form);
 	}
 
-	void RegisterCommands2(void* nvsePtr)
+	void RegisterNextTeleportCommands(void* nvsePtr)
 	{
 		NVSEInterface* nvse = static_cast<NVSEInterface*>(nvsePtr);
 		nvse->RegisterTypedCommand(&kCommandInfo_GetRefNextTeleportDoor, kRetnType_Form);

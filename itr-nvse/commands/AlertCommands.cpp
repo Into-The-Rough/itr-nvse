@@ -8,11 +8,11 @@
 
 #include <vector>
 
-extern const _ExtractArgs ExtractArgs;
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
-namespace
-{
+extern const _ExtractArgs ExtractArgs;
+
+namespace {
 	using SetAlert_t = void(__thiscall*)(Actor*, bool);
 	using GetAlert_t = bool(__thiscall*)(Actor*);
 	using EvaluatePackage_t = void(__thiscall*)(Actor*, bool, bool);
@@ -25,17 +25,15 @@ namespace
 
 	constexpr DWORD kCombatRecheckMs = 2000;
 
-	struct TimedAlert
-	{
+	struct TimedAlert {
 		UInt32 refID;
 		DWORD expiresAt; //0 = until cleared
 	};
 
 	std::vector<TimedAlert> g_alerts;
 
-	constexpr UInt8 kAlertBit = 0x08;      //process+0x30 Alert bit
-	constexpr UInt32 kBakeSite = 0x90FB1B; //LowProcess::SaveGame writes process+0x30 here
-	constexpr UInt32 kWriter = 0x8579B0;   //save-buffer byte writer, __thiscall(buf, ptr, len)
+	constexpr UInt8 kAlertBit = 0x08; //process+0x30 Alert bit
+	constexpr UInt32 kBakeSite = 0x90FB1B; //LowProcess::SaveGame writes process+0x30 here (0x8579B0)
 
 	Detours::CallDetour s_bakeMaskDetour;
 	using WriteSaveBytes_t = int(__thiscall*)(void*, void*, int);
@@ -55,8 +53,7 @@ namespace
 
 	TimedAlert* FindAlert(UInt32 refID)
 	{
-		for (auto& alert : g_alerts)
-		{
+		for (auto& alert : g_alerts) {
 			if (alert.refID == refID)
 				return &alert;
 		}
@@ -65,10 +62,8 @@ namespace
 
 	void RemoveAlert(UInt32 refID)
 	{
-		for (std::size_t i = 0; i < g_alerts.size(); ++i)
-		{
-			if (g_alerts[i].refID == refID)
-			{
+		for (size_t i = 0; i < g_alerts.size(); ++i) {
+			if (g_alerts[i].refID == refID) {
 				g_alerts[i] = g_alerts.back();
 				g_alerts.pop_back();
 				return;
@@ -90,8 +85,7 @@ namespace
 
 	bool ProcessIsTracked(void* process)
 	{
-		for (const auto& alert : g_alerts)
-		{
+		for (const auto& alert : g_alerts) {
 			Actor* actor = LookupActor(alert.refID);
 			//actor+0x68 = process pointer (SetAlert 0x8A5E40 uses this[26])
 			if (actor && *reinterpret_cast<void**>(reinterpret_cast<UInt8*>(actor) + 0x68) == process)
@@ -102,12 +96,11 @@ namespace
 
 	//mask the Alert bit out of the serialised process flag byte for plugin-tracked
 	//actors so SetAlertNS never bakes, without touching live state
-	int __fastcall Hook_SerialiseProcessFlags(void* saveBuf, void*, UInt8* flagByte, int len)
+	int __fastcall Hook_SerialiseProcessFlags(void* saveBuf, void* edx, UInt8* flagByte, int len)
 	{
 		auto original = reinterpret_cast<WriteSaveBytes_t>(s_bakeMaskDetour.GetOverwrittenAddr());
 		if (!g_alerts.empty() && flagByte && (*flagByte & kAlertBit)
-			&& ProcessIsTracked(reinterpret_cast<UInt8*>(flagByte) - 0x30))
-		{
+			&& ProcessIsTracked(reinterpret_cast<UInt8*>(flagByte) - 0x30)) {
 			g_maskedFlag = *flagByte & ~kAlertBit;
 			return original(saveBuf, &g_maskedFlag, len);
 		}
@@ -116,9 +109,9 @@ namespace
 }
 
 static ParamInfo kParams_SetAlertNS[2] =
-{
-	{ "toggle", kParamType_Integer, 0 },
-	{ "duration", kParamType_Float, 1 },
+	{
+		{"toggle", kParamType_Integer, 0},
+		{"duration", kParamType_Float, 1},
 };
 
 DEFINE_COMMAND_PLUGIN(SetAlertNS, "Sets the actor's alert posture without persisting it across a save, optionally auto-clearing after duration seconds", 1, 2, kParams_SetAlertNS);
@@ -134,14 +127,12 @@ bool Cmd_SetAlertNS_Execute(COMMAND_ARGS)
 		return true;
 
 	auto* actor = static_cast<Actor*>(thisObj);
-	if (toggle)
-	{
+	if (toggle) {
 		SetAlert(actor, true);
 		EvaluatePackage(actor, false, false);
 
 		DWORD expiresAt = 0;
-		if (duration > 0.0f)
-		{
+		if (duration > 0.0f) {
 			if (duration > 86400.0f) //clamp to a day, ms conversion overflow guard
 				duration = 86400.0f;
 			expiresAt = GetTickCount() + static_cast<DWORD>(duration * 1000.0f);
@@ -152,14 +143,11 @@ bool Cmd_SetAlertNS_Execute(COMMAND_ARGS)
 		if (TimedAlert* existing = FindAlert(actor->refID))
 			existing->expiresAt = expiresAt;
 		else
-			g_alerts.push_back({ actor->refID, expiresAt });
+			g_alerts.push_back({actor->refID, expiresAt});
 		Log("SetAlertNS: %08X on, duration %.2f", actor->refID, duration);
-	}
-	else
-	{
+	} else {
 		RemoveAlert(actor->refID);
-		if (GetAlert(actor))
-		{
+		if (GetAlert(actor)) {
 			SetAlert(actor, false);
 			EvaluatePackage(actor, false, false);
 		}
@@ -177,12 +165,10 @@ bool Cmd_GetAlertNS_Execute(COMMAND_ARGS)
 	if (!IsActorRef(thisObj))
 		return true;
 
-	if (const TimedAlert* alert = FindAlert(thisObj->refID))
-	{
+	if (const TimedAlert* alert = FindAlert(thisObj->refID)) {
 		if (!alert->expiresAt)
 			*result = -1;
-		else
-		{
+		else {
 			const SInt32 remainingMs = static_cast<SInt32>(alert->expiresAt - GetTickCount());
 			if (remainingMs > 0)
 				*result = remainingMs / 1000.0;
@@ -192,8 +178,7 @@ bool Cmd_GetAlertNS_Execute(COMMAND_ARGS)
 	return true;
 }
 
-namespace AlertCommands
-{
+namespace AlertCommands {
 	void RegisterCommands(void* nvsePtr)
 	{
 		auto* nvse = static_cast<NVSEInterface*>(nvsePtr);
@@ -205,8 +190,7 @@ namespace AlertCommands
 	{
 		//mask the Alert bit at the save-bake site instead of stripping the live bit on
 		//kMessage_SaveGame, which xNVSE dispatches after the .fos is already written
-		if (!s_bakeMaskDetour.WriteRelCallIfTarget(kBakeSite, kWriter, Hook_SerialiseProcessFlags))
-			Log("AlertCommands: save-bake site %08X not vanilla; SetAlertNS may persist across saves", kBakeSite);
+		s_bakeMaskDetour.WriteRelCall(kBakeSite, Hook_SerialiseProcessFlags);
 	}
 
 	void Update()
@@ -215,26 +199,22 @@ namespace AlertCommands
 			return;
 
 		const DWORD now = GetTickCount();
-		for (std::size_t i = 0; i < g_alerts.size();)
-		{
+		for (size_t i = 0; i < g_alerts.size();) {
 			TimedAlert& alert = g_alerts[i];
-			if (!alert.expiresAt || !IsExpired(now, alert.expiresAt))
-			{
+			if (!alert.expiresAt || !IsExpired(now, alert.expiresAt)) {
 				++i;
 				continue;
 			}
 
 			Actor* actor = LookupActor(alert.refID);
-			if (actor && HasCombatTargets(actor))
-			{
+			if (actor && HasCombatTargets(actor)) {
 				//still fighting, defer expiry so the posture clears once combat ends
 				alert.expiresAt = now + kCombatRecheckMs;
 				++i;
 				continue;
 			}
 
-			if (actor && GetAlert(actor))
-			{
+			if (actor && GetAlert(actor)) {
 				SetAlert(actor, false);
 				EvaluatePackage(actor, false, false);
 			}

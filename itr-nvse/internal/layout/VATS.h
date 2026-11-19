@@ -1,4 +1,3 @@
-//VATS layout - camera mode/kills, target list, body-part visibility
 #pragma once
 
 #include <cstddef>

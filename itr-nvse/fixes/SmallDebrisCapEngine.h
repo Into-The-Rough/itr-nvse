@@ -1,5 +1,4 @@
 #pragma once
-#include <cstdint>
 
 class TESObjectREFR;
 
@@ -13,6 +12,6 @@ namespace SmallDebrisCap::Engine {
 	TESObjectREFR* CullableRef(void* node);
 	void Fade(void* object, float fraction);
 	void Cull(void* node, bool whole, const bool& cancelled);
-	int32_t MaxCount();
+	SInt32 MaxCount();
 	float FadeTime();
 }

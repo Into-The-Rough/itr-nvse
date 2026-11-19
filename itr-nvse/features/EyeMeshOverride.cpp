@@ -15,13 +15,11 @@
 
 extern const _ExtractArgs ExtractArgs;
 
-namespace
-{
+namespace {
 	//single call site, inside BSFaceGenManager::CreateFaceGenHead
 	constexpr UInt32 kAddr_AttachEyesCall = 0x655032;
 
-	struct EyeEntry
-	{
+	struct EyeEntry {
 		std::string left;
 		std::string right;
 	};
@@ -38,19 +36,18 @@ namespace
 	//fake eye-model whose vtable slot 5 (the model-path getter at +0x14) hands
 	//back our registered path. AttachEyesToHead touches the model object only
 	//through that one call, so a stub vtable is enough.
-	struct FakeEyeModel
-	{
+	struct FakeEyeModel {
 		void** vtbl;
 		const char* path;
 	};
 
-	const char* __fastcall FakeEyeModel_GetPath(FakeEyeModel* self, void*)
+	const char* __fastcall FakeEyeModel_GetPath(FakeEyeModel* self, void* edx)
 	{
 		return self->path;
 	}
 
-	void* s_fakeVtbl[6] = { nullptr, nullptr, nullptr, nullptr, nullptr,
-	                        reinterpret_cast<void*>(&FakeEyeModel_GetPath) };
+	void* s_fakeVtbl[6] = {nullptr, nullptr, nullptr, nullptr, nullptr,
+		reinterpret_cast<void*>(&FakeEyeModel_GetPath)};
 
 	std::string NormalizeMeshPath(const char* raw)
 	{
@@ -68,44 +65,41 @@ namespace
 
 		std::string left, right;
 		bool have = false;
-		if (eyeForm)
-		{
+		if (eyeForm) {
 			ScopedLock lock(&g_lock);
 			auto it = g_registry.find(eyeForm->refID);
-			if (it != g_registry.end())
-			{
+			if (it != g_registry.end()) {
 				left = it->second.left;
 				right = it->second.right;
 				have = true;
 			}
 		}
 
-		if (!have)
-		{
+		if (!have) {
 			g_origAttachEyes(a1, a2, npcData, a4);
 			return;
 		}
 
 		//restore the race's eye-model pointers no matter how the engine call
 		//returns - the fakes live on this stack frame and must not outlive it
-		struct ModelSwap
-		{
+		struct ModelSwap {
 			void** slot;
 			void* saved;
+
 			ModelSwap(void** s, void* fake) : slot(s), saved(*s) { *s = fake; }
+
 			~ModelSwap() { *slot = saved; }
 		};
 
 		void** pLeft = FaceGenNpcDataGetLeftEyeModelSlot(npcData);
 		void** pRight = FaceGenNpcDataGetRightEyeModelSlot(npcData);
-		if (!pLeft || !pRight)
-		{
+		if (!pLeft || !pRight) {
 			g_origAttachEyes(a1, a2, npcData, a4);
 			return;
 		}
 
-		FakeEyeModel fakeLeft{ s_fakeVtbl, left.c_str() };
-		FakeEyeModel fakeRight{ s_fakeVtbl, right.c_str() };
+		FakeEyeModel fakeLeft{s_fakeVtbl, left.c_str()};
+		FakeEyeModel fakeRight{s_fakeVtbl, right.c_str()};
 
 		ModelSwap swapL(pLeft, left.empty() ? *pLeft : &fakeLeft);
 		ModelSwap swapR(pRight, right.empty() ? *pRight : &fakeRight);
@@ -115,8 +109,7 @@ namespace
 	void EnsureHook()
 	{
 		if (g_hookInstalled) return;
-		if (g_detour.WriteRelCall(kAddr_AttachEyesCall, Hook_AttachEyesToHead))
-		{
+		if (g_detour.WriteRelCall(kAddr_AttachEyesCall, Hook_AttachEyesToHead)) {
 			g_origAttachEyes = reinterpret_cast<AttachEyes_t>(g_detour.GetOverwrittenAddr());
 			g_hookInstalled = true;
 		}
@@ -133,14 +126,13 @@ bool Cmd_SetEyeMesh_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 	TESForm* form = nullptr;
-	char leftPath[512] = { 0 };
-	char rightPath[512] = { 0 };
+	char leftPath[512] = {0};
+	char rightPath[512] = {0};
 	if (!ExtractArgs(EXTRACT_ARGS, &form, &leftPath, &rightPath))
 		return true;
 
 	TESForm* eyes = ExtractEyesForm(form);
-	if (!eyes)
-	{
+	if (!eyes) {
 		if (IsConsoleMode())
 			Console_Print("SetEyeMesh >> form is not an eyes record");
 		return true;
@@ -154,7 +146,7 @@ bool Cmd_SetEyeMesh_Execute(COMMAND_ARGS)
 	InitCriticalSectionOnce(&g_lockInit, &g_lock);
 	{
 		ScopedLock lock(&g_lock);
-		g_registry[eyes->refID] = EyeEntry{ left, right };
+		g_registry[eyes->refID] = EyeEntry{left, right};
 	}
 	EnsureHook();
 
@@ -195,8 +187,7 @@ static ParamInfo kParams_ClearEyeMesh[1] = {
 DEFINE_COMMAND_PLUGIN(SetEyeMesh, "Register a per-eyes-form mesh override (path relative to Meshes\\); rightMesh optional, defaults to leftMesh. Run Update3D on an actor to apply it", 0, 3, kParams_SetEyeMesh);
 DEFINE_COMMAND_PLUGIN(ClearEyeMesh, "Remove a per-eyes-form mesh override. Run Update3D on an actor to apply it", 0, 1, kParams_ClearEyeMesh);
 
-namespace EyeMeshOverride
-{
+namespace EyeMeshOverride {
 	void RegisterCommands(void* nvsePtr)
 	{
 		NVSEInterface* nvse = static_cast<NVSEInterface*>(nvsePtr);

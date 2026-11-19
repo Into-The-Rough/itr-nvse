@@ -1,4 +1,3 @@
-//TESReputation layout - reputation form fields read by ELMO
 #pragma once
 
 #include <cstddef>

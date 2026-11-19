@@ -14,6 +14,35 @@
 #include "internal/layout/Player.h"
 #include "internal/layout/ExtraData.h"
 #include "internal/layout/Process.h"
+#include "internal/layout/Audio.h"
+
+struct GridCellArrayView {
+	void* vtbl;
+	UInt8 pad04[0x0C - 0x04];
+	UInt32 gridSize;
+	TESObjectCELL** gridCells;
+};
+
+struct TESView {
+	void* vtbl;
+	UInt32 unk04;
+	GridCellArrayView* gridCellArray;
+	UInt8 pad0C[0x34 - 0x0C];
+	TESObjectCELL* currentInterior;
+	TESObjectCELL** interiorsBuffer;
+	TESObjectCELL** exteriorsBuffer;
+};
+
+struct SkyView {
+	UInt8 pad00[0x10];
+	TESForm* currWeather; //0x10
+	TESForm* transWeather; //0x14 outgoing weather, non-null only during a blend
+};
+
+struct MarkerDataView {
+	void* unk00;
+	const char* name;
+};
 
 struct BGSVoiceTypeEditorIDView {
 	UInt8 pad00[0x1C];
@@ -27,12 +56,14 @@ struct TESTopicInfoListNodeView {
 
 struct SettingView {
 	void* vtbl;
+
 	union {
 		UInt32 uint;
 		SInt32 i;
 		float f;
 		char* str;
 	} data;
+
 	char* name;
 };
 
@@ -196,9 +227,18 @@ static_assert(offsetof(ExtraContainerChanges::EntryData, type) == 0x08);
 static_assert(sizeof(ExtraContainerChanges::EntryData) == 0x0C);
 static_assert(offsetof(TESActorBaseVoiceFallbackView, voiceType) == 0x94);
 
-
 static_assert(offsetof(DecalCreationDataView, origin) == 0x00);
 static_assert(offsetof(DecalCreationDataView, direction) == 0x0C);
+static_assert(offsetof(GridCellArrayView, gridSize) == 0x0C);
+static_assert(offsetof(GridCellArrayView, gridCells) == 0x10);
+static_assert(offsetof(TESView, gridCellArray) == 0x08);
+static_assert(offsetof(TESView, currentInterior) == 0x34);
+static_assert(offsetof(TESView, interiorsBuffer) == 0x38);
+static_assert(offsetof(TESView, exteriorsBuffer) == 0x3C);
+static_assert(offsetof(SkyView, currWeather) == 0x10);
+static_assert(offsetof(SkyView, transWeather) == 0x14);
+static_assert(offsetof(MarkerDataView, name) == 0x04);
+
 inline UInt8 TESFormGetTypeID(TESForm* form)
 {
 	return form ? form->typeID : 0;
@@ -234,6 +274,7 @@ inline Actor* BGSTalkingActivatorGetTalkingActor(TESForm* form)
 {
 	return form ? reinterpret_cast<BGSTalkingActivatorView*>(form)->talkingActor : nullptr;
 }
+
 inline ActorValueOwner* ActorGetActorValueOwner(Actor* actor)
 {
 	return actor ? &actor->avOwner : nullptr;
@@ -243,6 +284,7 @@ inline MagicTarget* ActorGetMagicTarget(Actor* actor)
 {
 	return actor ? &actor->magicTarget : nullptr;
 }
+
 inline const float* DecalCreationDataGetOrigin(void* decalData)
 {
 	return decalData ? reinterpret_cast<DecalCreationDataView*>(decalData)->origin : nullptr;
@@ -267,6 +309,7 @@ inline tList<BGSPerk>* DataHandlerGetPerkList(DataHandler* dataHandler)
 {
 	return dataHandler ? &dataHandler->perkList : nullptr;
 }
+
 inline TESTopic* TESTopicInfoGetParentTopic(TESTopicInfo* topicInfo)
 {
 	return topicInfo ? reinterpret_cast<TESTopicInfoVoiceParentView*>(topicInfo)->parentTopic : nullptr;
@@ -276,6 +319,7 @@ inline BGSVoiceType* TESActorBaseGetLegacyVoiceTypeFallback(TESForm* baseForm)
 {
 	return baseForm ? reinterpret_cast<TESActorBaseVoiceFallbackView*>(baseForm)->voiceType : nullptr;
 }
+
 inline NiNode* TESObjectREFRGetNiNodeRaw(TESObjectREFR* ref)
 {
 	return ref && ref->renderState ? ref->renderState->niNode : nullptr;

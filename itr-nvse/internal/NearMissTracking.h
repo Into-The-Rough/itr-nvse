@@ -1,6 +1,4 @@
 #pragma once
-
-#include <cstdint>
 #include <cstring>
 
 namespace NearMissTracking {
@@ -9,27 +7,27 @@ namespace NearMissTracking {
 	};
 
 	class FlightHistory {
-		static constexpr uint32_t kCapacity = 1024;
-		static constexpr uint32_t kProbes = 4;
+		static constexpr UInt32 kCapacity = 1024;
+		static constexpr UInt32 kProbes = 4;
 
 		struct Flight {
-			uint32_t id;
-			uint32_t stamp;
+			UInt32 id;
+			UInt32 stamp;
 			float lifeTime;
 			Point3 pos;
 		};
 
 		Flight flights[kCapacity] = {};
-		uint32_t stamp = 0;
+		UInt32 stamp = 0;
 
 	public:
-		Point3 Observe(uint32_t id, float lifeBefore, float lifeAfter, const Point3& before, const Point3& after)
+		Point3 Observe(UInt32 id, float lifeBefore, float lifeAfter, const Point3& before, const Point3& after)
 		{
 			Point3 start = before;
-			const uint32_t first = (id ^ (id >> 10)) % kCapacity;
+			const UInt32 first = (id ^ (id >> 10)) % kCapacity;
 			auto* slot = &flights[first];
 			++stamp;
-			for (uint32_t i = 0; i < kProbes; ++i) {
+			for (UInt32 i = 0; i < kProbes; ++i) {
 				auto* candidate = &flights[(first + i) % kCapacity];
 				if (candidate->id == id || !candidate->id) {
 					slot = candidate;

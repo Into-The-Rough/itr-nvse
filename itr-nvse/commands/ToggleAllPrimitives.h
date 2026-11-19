@@ -2,7 +2,7 @@
 
 namespace ToggleAllPrimitives {
 	void RegisterCommands(void* nvse);
-	void InstallHooks();
+	void Init();
 	void Update();
 	void Reset();
 }

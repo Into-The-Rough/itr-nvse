@@ -11,33 +11,33 @@
 
 //sole call site of BGSDecalEmitter::Update 0x4A2D50, ecx holds the emitter for each list entry
 constexpr UInt32 kAddr_EmitterUpdateCallSite = 0x4A0430;
-constexpr UInt32 kAddr_EmitterUpdate = 0x4A2D50;
-constexpr UInt32 kAddr_AddDecalCallSite = 0x4A36FD;
-constexpr UInt32 kAddr_AddDecal = 0x4A3FE0;
+constexpr UInt32 kAddr_AddDecalCallSite = 0x4A36FD; //TESObjectCELL::AddDecal 0x4A3FE0
 
 struct BGSDecalEmitter {
-	UInt32 uiDecalsToEmit;   // +0x00
-	UInt8  bFinished;        // +0x04
-	UInt8  pad05[3];
-	void*  pImpactData;      // +0x08
+	UInt32 uiDecalsToEmit; //0x00
+	UInt8 bFinished; //0x04
+	UInt8 pad05[3];
+	void* pImpactData; //0x08
 };
 
-typedef void (__thiscall* BGSDecalEmitter_Update_t)(BGSDecalEmitter*);
-typedef void (__thiscall* TESObjectCELL_AddDecal_t)(void*, void*, int, UInt8);
+using BGSDecalEmitter_Update_t = void(__thiscall*)(BGSDecalEmitter*);
+using TESObjectCELL_AddDecal_t = void(__thiscall*)(void*, void*, int, UInt8);
 
 static BGSDecalEmitter* g_currentEmitter = nullptr;
 static Detours::CallDetour s_emitterUpdateDetour;
 static Detours::CallDetour s_addDecalDetour;
 
-static void __fastcall HookEmitterUpdate(BGSDecalEmitter* this_, void* edx) {
+static void __fastcall Hook_EmitterUpdate(BGSDecalEmitter* this_, void* edx)
+{
 	BGSDecalEmitter* saved = g_currentEmitter;
 	g_currentEmitter = this_;
 	((BGSDecalEmitter_Update_t)s_emitterUpdateDetour.GetOverwrittenAddr())(this_);
 	g_currentEmitter = saved;
 }
 
-//replaces the call AddDecal at 0x4A36FD; same signature as TESObjectCELL::AddDecal
-static void __fastcall HookSprayAddDecal(void* cell, void* edx, void* decalData, int type, UInt8 forceAdd) {
+//replaces call AddDecal at 0x4A36FD (same signature as TESObjectCELL::AddDecal)
+static void __fastcall Hook_SprayAddDecal(void* cell, void* edx, void* decalData, int type, UInt8 forceAdd)
+{
 	((TESObjectCELL_AddDecal_t)s_addDecalDetour.GetOverwrittenAddr())(cell, decalData, type, forceAdd);
 
 	if (!g_eventManagerInterface) return;
@@ -56,32 +56,18 @@ static void __fastcall HookSprayAddDecal(void* cell, void* edx, void* decalData,
 		PackEventFloatArg(origin[2]),
 		PackEventFloatArg(direction[0]),
 		PackEventFloatArg(direction[1]),
-		PackEventFloatArg(direction[2])
-	);
+		PackEventFloatArg(direction[2]));
 }
 
 namespace OnSprayDecalHandler {
-bool Init(void* nvseInterface) {
-	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
-	if (nvse->isEditor) return false;
+	bool Init(void* nvseInterface)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
+		if (nvse->isEditor) return false;
 
-	if (!s_emitterUpdateDetour.WriteRelCall(kAddr_EmitterUpdateCallSite, HookEmitterUpdate)) {
-		Log("OnSprayDecal: emitter update call site at 0x%X is not an E8 call, disabled", kAddr_EmitterUpdateCallSite);
-		return false;
+		if (!s_emitterUpdateDetour.WriteRelCall(kAddr_EmitterUpdateCallSite, Hook_EmitterUpdate)
+			|| !s_addDecalDetour.WriteRelCall(kAddr_AddDecalCallSite, Hook_SprayAddDecal))
+			return false;
+		return true;
 	}
-	UInt32 emitterOriginal = s_emitterUpdateDetour.GetOverwrittenAddr();
-	Log("OnSprayDecal: %08X hooked, original=%08X vanilla=%08X", kAddr_EmitterUpdateCallSite,
-		emitterOriginal, kAddr_EmitterUpdate);
-
-	if (!s_addDecalDetour.WriteRelCall(kAddr_AddDecalCallSite, HookSprayAddDecal)) {
-		Log("OnSprayDecal: AddDecal call site at 0x%X is not an E8 call, disabled", kAddr_AddDecalCallSite);
-		s_emitterUpdateDetour.Remove();
-		return false;
-	}
-	UInt32 addDecalOriginal = s_addDecalDetour.GetOverwrittenAddr();
-	Log("OnSprayDecal: %08X hooked, original=%08X vanilla=%08X", kAddr_AddDecalCallSite,
-		addDecalOriginal, kAddr_AddDecal);
-
-	return true;
-}
 }

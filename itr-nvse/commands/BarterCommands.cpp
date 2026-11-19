@@ -14,12 +14,11 @@
 #include <cstddef>
 #include <unordered_set>
 
-extern const _ExtractArgs ExtractArgs;
-extern void Log(const char* fmt, ...);
-extern void Console_Print(const char* fmt, ...);
+#include "internal/globals.h"
 
-namespace
-{
+extern const _ExtractArgs ExtractArgs;
+
+namespace {
 	constexpr UInt32 kAddr_ShowBarterMenu = 0x704F80;
 	constexpr UInt32 kAddr_PlayMenuSound = 0x706F30;
 	constexpr UInt32 kAddr_BarterMenu_Close = 0x72D6D0;
@@ -27,7 +26,6 @@ namespace
 	constexpr UInt32 kAddr_BarterMenu_TransferItem = 0x72F6F0;
 	//sole call site of BarterMenu::CompleteTransaction 0x72FD10, in BarterMenu::DoClick
 	constexpr UInt32 kAddr_BarterMenu_CompleteTransactionCall = 0x72D920;
-	constexpr UInt32 kAddr_BarterMenu_CompleteTransaction = 0x72FD10;
 	constexpr UInt32 kAddr_MenuItemsList_TileFromItem = 0x7A22D0;
 	constexpr UInt32 kAddr_TESObjectREFR_GetObjectReference = 0x7AF430;
 	constexpr UInt32 kAddr_MobileObject_IsTalkingThroughActivator = 0x574900;
@@ -37,15 +35,15 @@ namespace
 	constexpr UInt32 kVtable_IsMobileObject = 0xFC;
 	constexpr UInt32 kVtable_IsActor = 0x100;
 
-	using ShowBarterMenu_t = void* (__cdecl*)(TESObjectREFR*, SInt32);
+	using ShowBarterMenu_t = void*(__cdecl*)(TESObjectREFR*, SInt32);
 	using BarterMenuClose_t = void(__cdecl*)();
 	using ShouldHideItem_t = bool(__cdecl*)(ExtraContainerChanges::EntryData*);
 	using TransferItem_t = void(__cdecl*)(SInt32);
 	using ProcessTransaction_t = void(__thiscall*)(void*);
-	using TileFromItem_t = void* (__thiscall*)(void*, ExtraContainerChanges::EntryData**);
-	using TESObjectREFR_GetObjectReference_t = TESForm* (__thiscall*)(TESObjectREFR*);
+	using TileFromItem_t = void*(__thiscall*)(void*, ExtraContainerChanges::EntryData**);
+	using TESObjectREFR_GetObjectReference_t = TESForm*(__thiscall*)(TESObjectREFR*);
 	using IsTalkingThroughActivator_t = bool(__thiscall*)(TESObjectREFR*);
-	using GetActivatorRef_t = TESObjectREFR* (__thiscall*)(TESObjectREFR*);
+	using GetActivatorRef_t = TESObjectREFR*(__thiscall*)(TESObjectREFR*);
 	using TileIsFloatValueNotNull_t = bool(__thiscall*)(void*, UInt32);
 	using RefPredicate_t = bool(__thiscall*)(TESObjectREFR*);
 
@@ -59,17 +57,7 @@ namespace
 	const auto TileIsFloatValueNotNull =
 		reinterpret_cast<TileIsFloatValueNotNull_t>(kAddr_Tile_IsFloatValueNotNull);
 
-	static_assert(offsetof(ExtraContainerChanges::EntryData, extendData) == 0x00,
-		"EntryData extras offset changed");
-	static_assert(offsetof(ExtraContainerChanges::EntryData, countDelta) == 0x04,
-		"EntryData count offset changed");
-	static_assert(offsetof(ExtraContainerChanges::EntryData, type) == 0x08,
-		"EntryData form offset changed");
-	static_assert(sizeof(ExtraContainerChanges::EntryData) == 0x0C,
-		"EntryData must match engine ItemChange layout");
-
-	struct BarterItemNode
-	{
+	struct BarterItemNode {
 		ExtraContainerChanges::EntryData* item;
 		BarterItemNode* next;
 	};
@@ -115,23 +103,16 @@ namespace
 
 		TESObjectREFR* mobileRef = nullptr;
 		TESObjectREFR* merchant = nullptr;
-		if (CallRefPredicate(ref, kVtable_IsMobileObject))
-		{
+		if (CallRefPredicate(ref, kVtable_IsMobileObject)) {
 			mobileRef = ref;
-		}
-		else
-		{
+		} else {
 			merchant = ResolveTalkingActivatorActor(GetObjectReference(ref));
 		}
 
-		if (mobileRef)
-		{
-			if (CallRefPredicate(mobileRef, kVtable_IsActor))
-			{
+		if (mobileRef) {
+			if (CallRefPredicate(mobileRef, kVtable_IsActor)) {
 				merchant = mobileRef;
-			}
-			else if (IsTalkingThroughActivator(mobileRef))
-			{
+			} else if (IsTalkingThroughActivator(mobileRef)) {
 				auto* activatorRef = GetActivatorRef(mobileRef);
 				merchant = activatorRef ? ResolveTalkingActivatorActor(GetObjectReference(activatorRef)) : nullptr;
 			}
@@ -206,13 +187,11 @@ namespace
 		if (!visited.insert(list->refID).second)
 			return false;
 
-		for (auto* node = list->list.Head(); node && node->Item(); node = node->Next())
-		{
+		for (auto* node = list->list.Head(); node && node->Item(); node = node->Next()) {
 			auto* form = node->Item();
 			if (form == item)
 				return true;
-			if (form && form->typeID == kFormType_ListForm &&
-				FormListContains(static_cast<BGSListForm*>(form), item, visited))
+			if (form && form->typeID == kFormType_ListForm && FormListContains(static_cast<BGSListForm*>(form), item, visited))
 				return true;
 		}
 
@@ -256,8 +235,7 @@ namespace
 			return false;
 
 		auto* node = reinterpret_cast<BarterItemNode*>(BarterMenuGetLeftBarter(menu));
-		for (; node && node->item; node = node->next)
-		{
+		for (; node && node->item; node = node->next) {
 			if (ShouldBlockPlayerItem(node->item->type))
 				return true;
 		}
@@ -269,8 +247,8 @@ namespace
 	{
 		CdeclCall<void>(kAddr_PlayMenuSound, 2);
 		Console_Print(s_blacklistMode
-			? "ShowBarterMenuBlacklist >> item is in blacklist"
-			: "ShowBarterMenuWhitelist >> item is not in whitelist");
+				? "ShowBarterMenuBlacklist >> item is in blacklist"
+				: "ShowBarterMenuWhitelist >> item is not in whitelist");
 	}
 
 	void SetActive(TESObjectREFR* merchant, BGSListForm* filterList, bool blacklistMode)
@@ -305,8 +283,7 @@ namespace
 
 	void __cdecl Hook_TransferItem(SInt32 count)
 	{
-		if (ShouldBlockSelectedTransfer())
-		{
+		if (ShouldBlockSelectedTransfer()) {
 			NotifyBlockedSale();
 			return;
 		}
@@ -314,10 +291,9 @@ namespace
 		s_origTransferItem(count);
 	}
 
-	void __fastcall Hook_ProcessTransaction(void* menu, void*)
+	void __fastcall Hook_ProcessTransaction(void* menu, void* edx)
 	{
-		if (HasBlockedQueuedSale(menu))
-		{
+		if (HasBlockedQueuedSale(menu)) {
 			NotifyBlockedSale();
 			return;
 		}
@@ -356,8 +332,7 @@ namespace
 		s_openingFilteredMenu = true;
 		void* menu = ShowBarterMenu(merchant, barterFlag);
 		s_openingFilteredMenu = false;
-		if (!menu)
-		{
+		if (!menu) {
 			BarterCommands::ClearState();
 			return true;
 		}
@@ -390,94 +365,26 @@ bool Cmd_ShowBarterMenuBlacklist_Execute(COMMAND_ARGS)
 		scriptObj, eventList, result, opcodeOffsetPtr, true);
 }
 
-namespace BarterCommands
-{
-	void RemoveHooks()
-	{
-		if (s_processCall.IsInstalled())
-			s_processCall.Remove();
-		if (s_transferDetour.IsInstalled())
-			s_transferDetour.Remove();
-		if (s_hideDetour.IsInstalled())
-			s_hideDetour.Remove();
-		if (s_closeDetour.IsInstalled())
-			s_closeDetour.Remove();
-
-		s_origClose = nullptr;
-		s_origShouldHideItem = nullptr;
-		s_origTransferItem = nullptr;
-		s_origProcessTransaction = nullptr;
-		s_hooksInstalled = false;
-	}
-
-	bool InitHooks()
+namespace BarterCommands {
+	bool Init()
 	{
 		//bail if another plugin already patched the prologue
-		static const UInt8 kPrologue_Close[6]     = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x08 };
-		static const UInt8 kPrologue_ShouldHide[6] = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x30 };
-		static const UInt8 kPrologue_Transfer[6]  = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x24 };
+		static const UInt8 kPrologue_Close[6] = {0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x08};
+		static const UInt8 kPrologue_ShouldHide[6] = {0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x30};
+		static const UInt8 kPrologue_Transfer[6] = {0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x24};
 
-		auto CheckPrologue = [](const char* name, UInt32 addr, const UInt8* expected, UInt32 size) -> bool {
-			if (memcmp((void*)addr, expected, size) != 0)
-			{
-				Log("BarterCommands: %s prologue at 0x%X differs from expected, skipping (another plugin hooked here?)", name, addr);
-				return false;
-			}
-			return true;
-		};
-
-		if (!CheckPrologue("BarterMenu::Close", kAddr_BarterMenu_Close, kPrologue_Close, 6))
-			return false;
-		if (!CheckPrologue("BarterMenu::ShouldHideItem", kAddr_BarterMenu_ShouldHideItem, kPrologue_ShouldHide, 6))
-			return false;
-		if (!CheckPrologue("BarterMenu::TransferItem", kAddr_BarterMenu_TransferItem, kPrologue_Transfer, 6))
+		if (memcmp((void*)kAddr_BarterMenu_Close, kPrologue_Close, 6) != 0
+			|| memcmp((void*)kAddr_BarterMenu_ShouldHideItem, kPrologue_ShouldHide, 6) != 0
+			|| memcmp((void*)kAddr_BarterMenu_TransferItem, kPrologue_Transfer, 6) != 0)
 			return false;
 
-		if (s_closeDetour.WriteRelJump(kAddr_BarterMenu_Close, Hook_Close, 6))
-		{
-			s_origClose = s_closeDetour.GetTrampoline<BarterMenuClose_t>();
-		}
-		else
-		{
-			Log("BarterCommands: failed to hook BarterMenu::Close");
+		if (!s_closeDetour.WriteRelJump(kAddr_BarterMenu_Close, Hook_Close, 6, reinterpret_cast<UInt8**>(&s_origClose))
+			|| !s_hideDetour.WriteRelJump(kAddr_BarterMenu_ShouldHideItem, Hook_ShouldHideItem, 6, reinterpret_cast<UInt8**>(&s_origShouldHideItem))
+			|| !s_transferDetour.WriteRelJump(kAddr_BarterMenu_TransferItem, Hook_TransferItem, 6, reinterpret_cast<UInt8**>(&s_origTransferItem))
+			|| !s_processCall.WriteRelCall(kAddr_BarterMenu_CompleteTransactionCall, Hook_ProcessTransaction))
 			return false;
-		}
 
-		if (s_hideDetour.WriteRelJump(kAddr_BarterMenu_ShouldHideItem, Hook_ShouldHideItem, 6))
-		{
-			s_origShouldHideItem = s_hideDetour.GetTrampoline<ShouldHideItem_t>();
-		}
-		else
-		{
-			RemoveHooks();
-			Log("BarterCommands: failed to hook BarterMenu::ShouldHideItem");
-			return false;
-		}
-
-		if (s_transferDetour.WriteRelJump(kAddr_BarterMenu_TransferItem, Hook_TransferItem, 6))
-		{
-			s_origTransferItem = s_transferDetour.GetTrampoline<TransferItem_t>();
-		}
-		else
-		{
-			RemoveHooks();
-			Log("BarterCommands: failed to hook BarterMenu::TransferItem");
-			return false;
-		}
-
-		if (s_processCall.WriteRelCall(kAddr_BarterMenu_CompleteTransactionCall, Hook_ProcessTransaction))
-		{
-			s_origProcessTransaction = (ProcessTransaction_t)s_processCall.GetOverwrittenAddr();
-			Log("BarterCommands: %08X hooked, original=%08X vanilla=%08X", kAddr_BarterMenu_CompleteTransactionCall,
-				(UInt32)s_origProcessTransaction, kAddr_BarterMenu_CompleteTransaction);
-		}
-		else
-		{
-			RemoveHooks();
-			Log("BarterCommands: CompleteTransaction call site at 0x%X is not an E8 call", kAddr_BarterMenu_CompleteTransactionCall);
-			return false;
-		}
-
+		s_origProcessTransaction = (ProcessTransaction_t)s_processCall.GetOverwrittenAddr();
 		s_hooksInstalled = true;
 		return true;
 	}

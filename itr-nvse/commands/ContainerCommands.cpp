@@ -10,8 +10,7 @@
 
 extern const _ExtractArgs ExtractArgs;
 
-namespace
-{
+namespace {
 	static BSExtraData* BaseExtraListGetByType(BaseExtraList* list, UInt32 type)
 	{
 		if (!list)
@@ -27,8 +26,7 @@ namespace
 		if (form->typeID == kFormType_LeveledItem)
 			return includeUnresolvedLeveled;
 
-		switch (form->typeID)
-		{
+		switch (form->typeID) {
 			case kFormType_Armor:
 			case kFormType_Clothing:
 				return reinterpret_cast<TESObjectARMO*>(form)->bipedModel.IsPlayable();
@@ -55,8 +53,7 @@ namespace
 		if (!entryList || !item)
 			return nullptr;
 
-		for (auto* node = entryList->Head(); node; node = node->Next())
-		{
+		for (auto* node = entryList->Head(); node; node = node->Next()) {
 			auto* entry = node->Item();
 			if (entry && entry->type == item)
 				return entry;
@@ -70,8 +67,7 @@ namespace
 		if (!entry || !entry->extendData)
 			return false;
 
-		for (auto* node = entry->extendData->Head(); node; node = node->Next())
-		{
+		for (auto* node = entry->extendData->Head(); node; node = node->Next()) {
 			auto* extraList = node->Item();
 			if (extraList && BaseExtraListGetByType(extraList, extraType))
 				return true;
@@ -85,8 +81,7 @@ namespace
 		if (!container || !item)
 			return false;
 
-		for (auto* node = container->formCountList.Head(); node; node = node->Next())
-		{
+		for (auto* node = container->formCountList.Head(); node; node = node->Next()) {
 			auto* formCount = node->Item();
 			if (formCount && formCount->form == item && item->typeID != kFormType_LeveledItem)
 				return true;
@@ -100,15 +95,13 @@ namespace
 		int count = 0;
 		const bool includeUnresolvedLeveled = !entryList;
 
-		for (auto* node = container->formCountList.Head(); node; node = node->Next())
-		{
+		for (auto* node = container->formCountList.Head(); node; node = node->Next()) {
 			auto* formCount = node->Item();
 			if (!formCount || !IsVisibleInventoryForm(formCount->form, includeUnresolvedLeveled))
 				continue;
 
 			int itemCount = formCount->count;
-			if (auto* entry = FindEntryForItem(entryList, formCount->form))
-			{
+			if (auto* entry = FindEntryForItem(entryList, formCount->form)) {
 				if (EntryHasExtraType(entry, kExtraData_LeveledItem))
 					itemCount = entry->countDelta;
 				else
@@ -122,8 +115,7 @@ namespace
 		if (!entryList)
 			return count;
 
-		for (auto* node = entryList->Head(); node; node = node->Next())
-		{
+		for (auto* node = entryList->Head(); node; node = node->Next()) {
 			auto* entry = node->Item();
 			if (!entry || entry->countDelta <= 0 || !IsVisibleInventoryForm(entry->type, false))
 				continue;
@@ -159,8 +151,7 @@ namespace
 	}
 }
 
-namespace ContainerCommands
-{
+namespace ContainerCommands {
 	void RegisterCommands(void* nvsePtr)
 	{
 		NVSEInterface* nvse = static_cast<NVSEInterface*>(nvsePtr);

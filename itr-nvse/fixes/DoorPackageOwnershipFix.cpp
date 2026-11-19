@@ -1,17 +1,11 @@
-//fixes NPCs with lock/unlock door packages locking doors they don't own
-//vanilla bug: doors skip cell ownership inheritance in GetOwnerRawForm
-//fix: hook IsAnOwner calls in lock/unlock functions to also check cell ownership for doors
-//NOT hot-reloadable - requires game restart
+//doors skip cell ownership in GetOwnerRawForm, check cell owner in lock/unlock IsAnOwner calls
 
 #include "DoorPackageOwnershipFix.h"
 #include "internal/EngineFunctions.h"
 #include "internal/Detours.h"
 #include "internal/GameSDK.h"
 
-#include <cstdint>
-
-namespace DoorPackageOwnershipFix
-{
+namespace DoorPackageOwnershipFix {
 	static Detours::CallDetour s_lockDoorsIsOwnerCall;
 	static Detours::CallDetour s_unlockDoorsIsOwnerCall;
 
@@ -33,8 +27,7 @@ namespace DoorPackageOwnershipFix
 	bool ActorInFaction(TESActorBase* actorBase, TESForm* faction)
 	{
 		auto* node = actorBase->baseData.factionList.Head();
-		while (node && node->item)
-		{
+		while (node && node->item) {
 			if (node->item->faction == faction)
 				return true;
 			node = node->next;
@@ -58,7 +51,7 @@ namespace DoorPackageOwnershipFix
 	}
 
 	//replacement IsAnOwner that also checks cell ownership for doors
-	bool __fastcall IsAnOwner_Hook(TESObjectREFR* refr, void* edx, Actor* actor, bool checkFaction)
+	bool __fastcall Hook_IsAnOwner(TESObjectREFR* refr, void* edx, Actor* actor, bool checkFaction)
 	{
 		bool originalResult = Engine::TESObjectREFR_IsAnOwner(refr, actor, checkFaction);
 
@@ -80,7 +73,7 @@ namespace DoorPackageOwnershipFix
 
 	void Init()
 	{
-		s_lockDoorsIsOwnerCall.WriteRelCall(0x90D528, IsAnOwner_Hook);  //LockDoorsAtLocation
-		s_unlockDoorsIsOwnerCall.WriteRelCall(0x90D5DE, IsAnOwner_Hook);  //UnlockDoorsAtLocation
+		s_lockDoorsIsOwnerCall.WriteRelCall(0x90D528, Hook_IsAnOwner); //LockDoorsAtLocation
+		s_unlockDoorsIsOwnerCall.WriteRelCall(0x90D5DE, Hook_IsAnOwner); //UnlockDoorsAtLocation
 	}
 }

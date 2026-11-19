@@ -2,17 +2,14 @@
 
 #include <cmath>
 
-namespace FootContactLogic
-{
-	enum Side
-	{
+namespace FootContactLogic {
+	enum Side {
 		kSide_Unknown = -1,
 		kSide_Left = 0,
 		kSide_Right = 1,
 	};
 
-	struct Point3
-	{
+	struct Point3 {
 		float x;
 		float y;
 		float z;

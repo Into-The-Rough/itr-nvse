@@ -3,30 +3,15 @@
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
-#include "internal/FormatLogic.h"
+#include "internal/MenuLayout.h"
 #include <cstdio>
 
-static const UInt32 kTileValue_user1 = 0x1005;
+static constexpr UInt32 kTileValue_user1 = 0x1005;
 
-struct BGSSaveLoadFileEntry
-{
-	char* name;
-	UInt8 isInitialised;
-	UInt8 isCorrupt;
-	UInt8 gap06[2];
-	UInt32 saveNumber;
-	char* pcName;
-	char* pcTitle;
-	char* location;
-	char* time;
-};
-static_assert(offsetof(BGSSaveLoadFileEntry, location) == 0x14);
+using ConstructSavegamePath_t = void(__thiscall*)(void*, char*);
+static const ConstructSavegamePath_t ConstructSavegamePath = (ConstructSavegamePath_t)0x84FF30;
 
-typedef void (__thiscall *_ConstructSavegamePath)(void*, char*);
-static const _ConstructSavegamePath ConstructSavegamePath = (_ConstructSavegamePath)0x84FF30;
-
-namespace SaveFileSizeHandler
-{
+namespace SaveFileSizeHandler {
 	static char g_savePath[MAX_PATH] = {0};
 	static UInt32 g_chainTarget = 0;
 	static Detours::CallDetour s_setupTileCall;
@@ -37,13 +22,10 @@ namespace SaveFileSizeHandler
 			ConstructSavegamePath(*g_saveGameManagerPtr, g_savePath);
 	}
 
-	//0x7D6931 sets the _initialized trait at the end of the one-shot tile setup in
-	//StartMenu::InitializeSaveLoadListItem. the engine's jnz at 0x7D6806 short-circuits
-	//already-initialised tiles, and trait 0x1005 keeps our size-appended string for the
-	//tile's lifetime, so the setup (and this hook) only needs to run once per tile
-	static const UInt32 kAddr_HookSite = 0x7D6931;
+	//0x7D6931 sets _initialized at end of StartMenu::InitializeSaveLoadListItem (runs once per tile)
+	static constexpr UInt32 kAddr_HookSite = 0x7D6931;
 
-	void __cdecl OnSetupTile(void* tile, BGSSaveLoadFileEntry* entry)
+	void __cdecl OnSetupTile(void* tile, BGSSaveLoadFileEntryView* entry)
 	{
 		if (!entry || !entry->name || !entry->location)
 			return;
@@ -61,7 +43,12 @@ namespace SaveFileSizeHandler
 
 		ULONGLONG fileSize = ((ULONGLONG)fad.nFileSizeHigh << 32) | fad.nFileSizeLow;
 		char sizeStr[32];
-		FormatLogic::FormatFileSize(fileSize, sizeStr, sizeof(sizeStr));
+		if (fileSize >= 1048576ULL)
+			sprintf_s(sizeStr, "%.1f MB", fileSize / 1048576.0);
+		else if (fileSize >= 1024ULL)
+			sprintf_s(sizeStr, "%.1f KB", fileSize / 1024.0);
+		else
+			sprintf_s(sizeStr, "%llu B", fileSize);
 
 		static char newLoc[512];
 		_snprintf_s(newLoc, sizeof(newLoc), _TRUNCATE, "%s - %s", entry->location, sizeStr);
@@ -73,24 +60,24 @@ namespace SaveFileSizeHandler
 
 	void CallOnSetupTile()
 	{
-		OnSetupTile(g_savedTile, (BGSSaveLoadFileEntry*)g_savedEntry);
+		OnSetupTile(g_savedTile, (BGSSaveLoadFileEntryView*)g_savedEntry);
 	}
 
 	__declspec(naked) void Hook()
 	{
 		__asm
 		{
-			mov g_savedTile, ecx           //ecx = tile (thiscall this), stash for the cdecl helper
-			mov eax, [ebp+0xC]             //arg2 of caller's frame = BGSSaveLoadFileEntry*
+			mov g_savedTile, ecx //ecx = tile (thiscall this), stash for the cdecl helper
+			mov eax, [ebp+0xC] //arg2 of caller's frame = BGSSaveLoadFileEntry*
 			mov g_savedEntry, eax
 
 			pushad
 			pushfd
-			call CallOnSetupTile           //reads the globals, fills size suffix into the tile
+			call CallOnSetupTile //reads the globals, fills size suffix into the tile
 			popfd
 			popad
 
-			mov eax, g_chainTarget         //jump to the original callee for the overwritten call at kAddr_HookSite
+			mov eax, g_chainTarget //jump to the original callee for the overwritten call at kAddr_HookSite
 			jmp eax
 		}
 	}

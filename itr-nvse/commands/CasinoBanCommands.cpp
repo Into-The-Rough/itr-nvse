@@ -14,21 +14,28 @@ extern const _ExtractArgs ExtractArgs;
 
 constexpr UInt32 kFormType_TESCasino = 0x6D;
 
-typedef void* (__cdecl*  _OperatorNew)(UInt32 size);
-typedef void (__thiscall* _CasinoStatsCtor)(void* self);
-typedef bool (__thiscall* _BSSimpleList_IsEmpty)(void* self);
-typedef void (__thiscall* _BSSimpleList_AddHead)(void* self, void** item);
-typedef void (__thiscall* _BSSimpleList_SetItem0)(void* self, void** item);
+using OperatorNew_t = void*(__cdecl*)(UInt32 size);
+using CasinoStatsCtor_t = void(__thiscall*)(void* self);
+using BSSimpleList_IsEmpty_t = bool(__thiscall*)(void* self);
+using BSSimpleList_AddHead_t = void(__thiscall*)(void* self, void** item);
+using BSSimpleList_SetItem0_t = void(__thiscall*)(void* self, void** item);
 
-static const _OperatorNew           OperatorNew          = (_OperatorNew)0x401000;
-static const _CasinoStatsCtor       CasinoStatsCtor      = (_CasinoStatsCtor)0x733F50;
-static const _BSSimpleList_IsEmpty  BSSimpleList_IsEmpty = (_BSSimpleList_IsEmpty)0x8256D0;
-static const _BSSimpleList_AddHead  BSSimpleList_AddHead = (_BSSimpleList_AddHead)0x5AE3D0;
-static const _BSSimpleList_SetItem0 BSSimpleList_SetItem0 = (_BSSimpleList_SetItem0)0x726C60;
+static const OperatorNew_t OperatorNew = (OperatorNew_t)0x401000;
+static const CasinoStatsCtor_t CasinoStatsCtor = (CasinoStatsCtor_t)0x733F50;
+static const BSSimpleList_IsEmpty_t BSSimpleList_IsEmpty = (BSSimpleList_IsEmpty_t)0x8256D0;
+static const BSSimpleList_AddHead_t BSSimpleList_AddHead = (BSSimpleList_AddHead_t)0x5AE3D0;
+static const BSSimpleList_SetItem0_t BSSimpleList_SetItem0 = (BSSimpleList_SetItem0_t)0x726C60;
 
-struct CasinoStats { UInt32 casinoRefID; UInt32 earnings; UInt32 unk08; };
+struct CasinoStats {
+	UInt32 casinoRefID;
+	UInt32 earnings;
+	UInt32 unk08;
+};
 
-struct SimpleListNode { void* item; SimpleListNode* next; };
+struct SimpleListNode {
+	void* item;
+	SimpleListNode* next;
+};
 
 static SimpleListNode* GetCasinoDataList()
 {
@@ -62,7 +69,8 @@ static CasinoStats* CreateEntry(SimpleListNode* list, UInt32 refID)
 	return entry;
 }
 
-static UInt32 GetCasinoRefID(TESForm* casino) {
+static UInt32 GetCasinoRefID(TESForm* casino)
+{
 	return casino ? casino->refID : 0;
 }
 
@@ -99,7 +107,10 @@ bool Cmd_SetCasinoBan_Execute(COMMAND_ARGS)
 		if (!entry) return true;
 		entry->earnings = maxWinnings;
 	} else {
-		if (!entry) { *result = 1; return true; } //already "not banned"
+		if (!entry) {
+			*result = 1;
+			return true;
+		} //already "not banned"
 		if (entry->earnings >= maxWinnings)
 			entry->earnings = maxWinnings > 0 ? maxWinnings - 1 : 0;
 	}
@@ -127,10 +138,10 @@ bool Cmd_GetCasinoBan_Execute(COMMAND_ARGS)
 }
 
 namespace CasinoBanCommands {
-void RegisterCommands(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_SetCasinoBan);
-	nvse->RegisterCommand(&kCommandInfo_GetCasinoBan);
-}
+	void RegisterCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_SetCasinoBan);
+		nvse->RegisterCommand(&kCommandInfo_GetCasinoBan);
+	}
 }

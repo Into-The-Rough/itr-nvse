@@ -17,7 +17,7 @@ struct NiRefObjectView {
 	UInt32 refCount;
 };
 
-template <typename T>
+template<typename T>
 struct NiTObjectArrayView {
 	void** vtbl;
 	T* data;
@@ -33,9 +33,27 @@ struct NiAVObjectView {
 	UInt8 pad0C[0x18 - 0x0C];
 	void* parent;
 	void* collisionObject;
-	UInt8 pad20[0x34 - 0x20];
+	UInt8 pad20[0x30 - 0x20];
+	UInt32 flags;
 	NiTransformView local;
 	NiTransformView world;
+};
+
+struct NiAlphaPropertyView {
+	UInt8 pad00[0x18];
+	UInt16 flags;
+};
+
+struct NiShaderFadeView {
+	UInt8 pad00[0x1C];
+	SInt32 propertyIndex;
+	UInt8 pad20[0x0C];
+	float fade;
+};
+
+struct NiGeometryFadeView {
+	UInt8 pad00[0xA8];
+	NiShaderFadeView* shader;
 };
 
 struct NiNodeView {
@@ -96,6 +114,7 @@ static_assert(sizeof(NiAVObjectView) == 0x9C);
 static_assert(offsetof(NiAVObjectView, name) == 0x08);
 static_assert(offsetof(NiAVObjectView, parent) == 0x18);
 static_assert(offsetof(NiAVObjectView, collisionObject) == 0x1C);
+static_assert(offsetof(NiAVObjectView, flags) == 0x30);
 static_assert(offsetof(NiAVObjectView, local) == 0x34);
 static_assert(offsetof(NiAVObjectView, local.rotate) == 0x34);
 static_assert(offsetof(NiAVObjectView, local.translate) == 0x58);
@@ -122,6 +141,10 @@ static_assert(offsetof(NiRenderTargetGroupView, depthStencil) == 0x20);
 static_assert(offsetof(NiRenderTargetGroupView, rendererData) == 0x24);
 static_assert(offsetof(NiRenderTargetRendererDataView, msaaPref) == 0x10);
 static_assert(offsetof(NiSkinInstanceView, actorRoot) == 0x10);
+static_assert(offsetof(NiAlphaPropertyView, flags) == 0x18);
+static_assert(offsetof(NiShaderFadeView, propertyIndex) == 0x1C);
+static_assert(offsetof(NiShaderFadeView, fade) == 0x2C);
+static_assert(offsetof(NiGeometryFadeView, shader) == 0xA8);
 
 inline NiAVObjectView* NiAVObjectAsView(void* object)
 {

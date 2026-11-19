@@ -1,6 +1,6 @@
 #pragma once
 
 namespace AutoQuickLoad {
-	void InstallHook();
+	void Init();
 	void Update();
 }

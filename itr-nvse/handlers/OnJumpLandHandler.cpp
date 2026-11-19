@@ -3,7 +3,6 @@
 
 #include <vector>
 #include <algorithm>
-#include <cstdint>
 
 #include "OnJumpLandHandler.h"
 #include "internal/NVSEPluginAPI.h"
@@ -55,22 +54,27 @@ static bool s_reserved = false;
 static bool s_inUpdate = false;
 
 static void JumpProbeHandler(TESObjectREFR*, void*) {}
+
 static void LandProbeHandler(TESObjectREFR*, void*) {}
 
 struct UpdateGuard {
 	UpdateGuard() { s_inUpdate = true; }
+
 	~UpdateGuard() { s_inUpdate = false; }
 };
 
-static UInt32 ReadState(const BhkCharacterControllerView* charCtrl) {
+static UInt32 ReadState(const BhkCharacterControllerView* charCtrl)
+{
 	return charCtrl ? charCtrl->chrContext.hkState : 0xFFFFFFFF;
 }
 
-static float ReadFallTime(const BhkCharacterControllerView* charCtrl) {
+static float ReadFallTime(const BhkCharacterControllerView* charCtrl)
+{
 	return charCtrl ? charCtrl->fallTime : 0.0f;
 }
 
-static BhkCharacterControllerView* GetCharController(Actor* actor) {
+static BhkCharacterControllerView* GetCharController(Actor* actor)
+{
 	if (!actor) return nullptr;
 
 	if (actor->typeID != kFormType_ACHR && actor->typeID != kFormType_ACRE)
@@ -85,32 +89,36 @@ static BhkCharacterControllerView* GetCharController(Actor* actor) {
 		reinterpret_cast<ProcessControllerView*>(process)->characterController);
 }
 
-static void EnsureReserved() {
+static void EnsureReserved()
+{
 	if (s_reserved) return;
 	s_tracked.reserve(128);
 	s_pending.reserve(128);
 	s_reserved = true;
 }
 
-static std::vector<TrackedEntry>::iterator FindTracked(UInt32 refID) {
+static std::vector<TrackedEntry>::iterator FindTracked(UInt32 refID)
+{
 	return std::lower_bound(s_tracked.begin(), s_tracked.end(), refID,
 		[](const TrackedEntry& entry, UInt32 value) {
 			return entry.refID < value;
 		});
 }
 
-static void QueueEdgeEvents(UInt32 refID, UInt32 prevState, float prevFallTime, UInt32 state) {
+static void QueueEdgeEvents(UInt32 refID, UInt32 prevState, float prevFallTime, UInt32 state)
+{
 	if (s_hasJumpListeners && state == kHkState_Jumping && prevState != kHkState_Jumping)
 		s_pending.push_back({1, refID, 0.0f});
 
 	bool wasAirborne = (prevState == kHkState_Jumping || prevState == kHkState_InAir);
-	// mirrors old hook: newState == 0 || (newState & 0x2) == 0
+	//mirrors old hook: newState == 0 || (newState & 0x2) == 0
 	bool nowGrounded = (state == 0 || (state & 0x2) == 0);
 	if (s_hasLandListeners && wasAirborne && nowGrounded && state != kHkState_Jumping)
 		s_pending.push_back({2, refID, prevFallTime});
 }
 
-static void ProcessActor(Actor* actor) {
+static void ProcessActor(Actor* actor)
+{
 	if (!actor) return;
 	BhkCharacterControllerView* ctrl = GetCharController(actor);
 	if (!ctrl) return;
@@ -138,8 +146,9 @@ static void ProcessActor(Actor* actor) {
 	s_tracked.insert(it, {refID, state, fallTime, s_frameTag});
 }
 
-static void ProcessActorsFromProcessManager() {
-	auto* processManager = reinterpret_cast<ProcessManagerLite*>(g_processManager);
+static void ProcessActorsFromProcessManager()
+{
+	auto* processManager = reinterpret_cast<ProcessManagerView*>(g_processManager);
 	if (!processManager || !processManager->objects.data) return;
 
 	UInt32 upperBound = processManager->objects.firstFreeEntry;
@@ -163,11 +172,7 @@ static void ProcessActorsFromProcessManager() {
 static bool InstallProbeHandler(const char* eventName, NVSEEventManagerInterface::NativeEventHandler handler,
 	const char* handlerName)
 {
-	if (!g_eventManagerInterface ||
-		!g_eventManagerInterface->SetNativeEventHandlerWithPriority ||
-		!g_eventManagerInterface->RemoveNativeEventHandlerWithPriority ||
-		s_pluginHandle == kPluginHandle_Invalid)
-	{
+	if (!g_eventManagerInterface || !g_eventManagerInterface->SetNativeEventHandlerWithPriority || !g_eventManagerInterface->RemoveNativeEventHandlerWithPriority || s_pluginHandle == kPluginHandle_Invalid) {
 		return false;
 	}
 
@@ -176,7 +181,8 @@ static bool InstallProbeHandler(const char* eventName, NVSEEventManagerInterface
 		eventName, handler, s_pluginHandle, handlerName, kProbePriority);
 }
 
-static bool HasExternalHandlers(const char* eventName, NVSEEventManagerInterface::NativeEventHandler probeHandler) {
+static bool HasExternalHandlers(const char* eventName, NVSEEventManagerInterface::NativeEventHandler probeHandler)
+{
 	if (!s_probeHandlersInstalled || !g_eventManagerInterface || !g_eventManagerInterface->IsEventHandlerFirst)
 		return true;
 
@@ -185,7 +191,8 @@ static bool HasExternalHandlers(const char* eventName, NVSEEventManagerInterface
 		nullptr, 0, nullptr, 0, nullptr, 0);
 }
 
-static void RefreshListenerState(bool force) {
+static void RefreshListenerState(bool force)
+{
 	if (!s_probeHandlersInstalled)
 		OnJumpLandHandler::InstallListenerProbes();
 
@@ -203,14 +210,16 @@ static void RefreshListenerState(bool force) {
 	s_hasLandListeners = HasExternalHandlers(kActorLandedEvent, LandProbeHandler);
 }
 
-static void AdvanceFrameTag() {
+static void AdvanceFrameTag()
+{
 	if (++s_frameTag == 0) {
 		s_tracked.clear();
 		s_frameTag = 1;
 	}
 }
 
-static void DispatchPendingEvents() {
+static void DispatchPendingEvents()
+{
 	for (const auto& evt : s_pending) {
 		auto* actor = reinterpret_cast<TESObjectREFR*>(Engine::LookupFormByID(evt.refID));
 		if (!actor) continue;
@@ -227,58 +236,59 @@ static void DispatchPendingEvents() {
 }
 
 namespace OnJumpLandHandler {
-void InstallListenerProbes()
-{
-	bool jumpProbe = InstallProbeHandler(kJumpStartEvent, JumpProbeHandler, "ITR_OnJumpStartProbe");
-	bool landProbe = InstallProbeHandler(kActorLandedEvent, LandProbeHandler, "ITR_OnActorLandedProbe");
+	void InstallListenerProbes()
+	{
+		bool jumpProbe = InstallProbeHandler(kJumpStartEvent, JumpProbeHandler, "ITR_OnJumpStartProbe");
+		bool landProbe = InstallProbeHandler(kActorLandedEvent, LandProbeHandler, "ITR_OnActorLandedProbe");
 
-	s_probeHandlersInstalled = jumpProbe && landProbe;
-	s_listenerProbeFrame = kListenerProbeIntervalFrames;
-	s_hasJumpListeners = true;
-	s_hasLandListeners = true;
-}
-
-void ClearState()
-{
-	s_tracked.clear();
-	s_pending.clear();
-	s_probeHandlersInstalled = false;
-	s_listenerProbeFrame = kListenerProbeIntervalFrames;
-	s_hasJumpListeners = true;
-	s_hasLandListeners = true;
-}
-
-void Update()
-{
-	if (!g_eventManagerInterface) return;
-	if (s_inUpdate) return;
-	UpdateGuard guard;
-
-	RefreshListenerState(false);
-	if (!s_hasJumpListeners && !s_hasLandListeners) {
-		if (!s_tracked.empty())
-			s_tracked.clear();
-		return;
+		s_probeHandlersInstalled = jumpProbe && landProbe;
+		s_listenerProbeFrame = kListenerProbeIntervalFrames;
+		s_hasJumpListeners = true;
+		s_hasLandListeners = true;
 	}
 
-	EnsureReserved();
-	s_pending.clear();
-	AdvanceFrameTag();
-	ProcessActorsFromProcessManager();
+	void ClearState()
+	{
+		s_tracked.clear();
+		s_pending.clear();
+		s_probeHandlersInstalled = false;
+		s_listenerProbeFrame = kListenerProbeIntervalFrames;
+		s_hasJumpListeners = true;
+		s_hasLandListeners = true;
+	}
 
-	s_tracked.erase(std::remove_if(s_tracked.begin(), s_tracked.end(),
-		[](const TrackedEntry& entry) {
-			return entry.lastSeenFrame != s_frameTag;
-		}), s_tracked.end());
+	void Update()
+	{
+		if (!g_eventManagerInterface) return;
+		if (s_inUpdate) return;
+		UpdateGuard guard;
 
-	DispatchPendingEvents();
-}
+		RefreshListenerState(false);
+		if (!s_hasJumpListeners && !s_hasLandListeners) {
+			if (!s_tracked.empty())
+				s_tracked.clear();
+			return;
+		}
 
-bool Init(void* nvseInterface)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
-	if (nvse->isEditor) return false;
-	s_pluginHandle = nvse->GetPluginHandle ? nvse->GetPluginHandle() : kPluginHandle_Invalid;
-	return true;
-}
+		EnsureReserved();
+		s_pending.clear();
+		AdvanceFrameTag();
+		ProcessActorsFromProcessManager();
+
+		s_tracked.erase(std::remove_if(s_tracked.begin(), s_tracked.end(),
+							[](const TrackedEntry& entry) {
+								return entry.lastSeenFrame != s_frameTag;
+							}),
+			s_tracked.end());
+
+		DispatchPendingEvents();
+	}
+
+	bool Init(void* nvseInterface)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
+		if (nvse->isEditor) return false;
+		s_pluginHandle = nvse->GetPluginHandle ? nvse->GetPluginHandle() : kPluginHandle_Invalid;
+		return true;
+	}
 }

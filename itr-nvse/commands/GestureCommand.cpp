@@ -15,14 +15,12 @@
 
 extern const _ExtractArgs ExtractArgs;
 
-namespace GestureCommand
-{
+namespace GestureCommand {
 	static constexpr float kDegToRad = GestureMath::kPi / 180.0f;
 	static constexpr UInt32 kMenuType_Dialogue = 1009;
 	static constexpr int MAX_GESTURES = 32;
 
-	struct Gesture
-	{
+	struct Gesture {
 		UInt32 refID = 0;
 		UInt8 type = 0; //1=nod, 2=shake, 3=tilt, 4=eyeroll, 5=browraise, 6=squint
 		DWORD start = 0;
@@ -38,29 +36,29 @@ namespace GestureCommand
 
 	static Gesture g_gestures[MAX_GESTURES] = {};
 
-	typedef void* (__cdecl* GetObjectByName_t)(void* rootNode, const char* name);
+	using GetObjectByName_t = void*(__cdecl*)(void* rootNode, const char* name);
 	static GetObjectByName_t GetObjectByName = (GetObjectByName_t)0x4AAE30;
 
-	typedef void* (__thiscall* GetFaceGenAnimData_t)(void* actor);
+	using GetFaceGenAnimData_t = void*(__thiscall*)(void* actor);
 	static GetFaceGenAnimData_t GetFaceGenAnimData = (GetFaceGenAnimData_t)0x8ADCB0;
 
 	//a direct SetModifierValue never renders, BSFaceGenNiNode only re-morphs when the anim data reports a change,
 	//so morphs go through the keyframe list the blink driver uses
-	typedef void (__thiscall* AddModifiersKeyframe_t)(void* faceData, const float* values, float time);
+	using AddModifiersKeyframe_t = void(__thiscall*)(void* faceData, const float* values, float time);
 	static AddModifiersKeyframe_t AddModifiersKeyframe = (AddModifiersKeyframe_t)0x64AB40;
 
 	//the list is strictly first in first out, so a pending gesture blocks every later one until it drains.
 	//flag order is from the disassembly, not the Xbox PDB signature: arg_8 is the one gating the +0x88 list
-	typedef void (__thiscall* ClearKeyframeLists_t)(void* faceData, bool expressionTarget, bool phonemes, bool modifiers, bool custom);
+	using ClearKeyframeLists_t = void(__thiscall*)(void* faceData, bool expressionTarget, bool phonemes, bool modifiers, bool custom);
 	static ClearKeyframeLists_t ClearKeyframeLists = (ClearKeyframeLists_t)0x64AE60;
 
-	typedef bool (__thiscall* SetKeyframeTime_t)(void* keyframe, float time);
+	using SetKeyframeTime_t = bool(__thiscall*)(void* keyframe, float time);
 	static SetKeyframeTime_t SetKeyframeTime = (SetKeyframeTime_t)0x64EB30;
 
 	constexpr UInt32 kModifierChannel = 0x94;
 
 	//symmetric min/max eye deflection in radians, from fTrackEyeZ
-	typedef void (__cdecl* GetEyeRange_t)(float* outMin, float* outMax);
+	using GetEyeRange_t = void(__cdecl*)(float* outMin, float* outMax);
 	static GetEyeRange_t GetEyeRangeVert = (GetEyeRange_t)0x649F70;
 
 	constexpr UInt32 kModifierCount = 17;
@@ -76,7 +74,9 @@ namespace GestureCommand
 	//BSFaceGenNiNode::UpdateDownwardPass rewrites the Look modifiers every frame from this eye state,
 	//so the gesture drives the state and lets the engine convert it
 	static float* EyeCurrent(void* faceData) { return (float*)((UInt8*)faceData + 0x140); }
+
 	static float* EyeTarget(void* faceData) { return (float*)((UInt8*)faceData + 0x150); }
+
 	static float* GazeTimer(void* faceData) { return (float*)((UInt8*)faceData + 0x17C); }
 
 	static void* GetRootNode(TESObjectREFR* ref)
@@ -104,8 +104,7 @@ namespace GestureCommand
 	{
 		auto* n = NiAVObjectAsView(node);
 		auto* p = NiAVObjectAsView(n->parent);
-		if (p)
-		{
+		if (p) {
 			float* pwr = p->world.rotate;
 			float* lr = n->local.rotate;
 			float* wr = n->world.rotate;
@@ -121,8 +120,7 @@ namespace GestureCommand
 			n->world.scale = ps * n->local.scale;
 		}
 
-		if (IsNiNode(node))
-		{
+		if (IsNiNode(node)) {
 			UInt16 count = NiNodeGetChildLimit(node);
 			void** children = NiNodeGetChildData(node);
 			if (children && count > 0 && count < 512)
@@ -199,13 +197,11 @@ namespace GestureCommand
 
 		float values[kModifierCount];
 		float rest[kModifierCount];
-		for (UInt32 i = 0; i < kModifierCount; i++)
-		{
+		for (UInt32 i = 0; i < kModifierCount; i++) {
 			values[i] = kModifierUnset;
 			rest[i] = kModifierUnset;
 		}
-		for (UInt32 i = 0; i < count; i++)
-		{
+		for (UInt32 i = 0; i < count; i++) {
 			values[modifiers[i]] = weights[i];
 			rest[modifiers[i]] = 0.0f;
 		}
@@ -227,8 +223,7 @@ namespace GestureCommand
 
 		float remaining = hold;
 		bool low = true;
-		while (remaining > 0.0f)
-		{
+		while (remaining > 0.0f) {
 			const float slice = (remaining < step) ? remaining : step;
 			AddModifiersKeyframe(faceData, low ? wobble : values, slice);
 			remaining -= slice;
@@ -249,16 +244,13 @@ namespace GestureCommand
 
 	static void StopGesture(Gesture& g)
 	{
-		if (GestureMath::IsFacialGesture(g.type))
-		{
+		if (GestureMath::IsFacialGesture(g.type)) {
 			auto* form = reinterpret_cast<TESObjectREFR*>(Engine::LookupFormByID(g.refID));
-			if (form && Engine::TESObjectREFR_IsActor(form))
-			{
+			if (form && Engine::TESObjectREFR_IsActor(form)) {
 				if (void* faceData = GetFaceGenAnimData(form))
 					StopFacial(faceData);
 			}
-		}
-		else
+		} else
 			RestoreGesturePose(g);
 
 		ClearGesture(g);
@@ -266,14 +258,24 @@ namespace GestureCommand
 
 	static void UpdateFacial(Gesture& g, TESObjectREFR* form, DWORD now)
 	{
-		if (!Engine::TESObjectREFR_IsActor(form)) { ClearGesture(g); return; }
+		if (!Engine::TESObjectREFR_IsActor(form)) {
+			ClearGesture(g);
+			return;
+		}
 
 		void* faceData = GetFaceGenAnimData(form);
-		if (!faceData) { ClearGesture(g); return; }
+		if (!faceData) {
+			ClearGesture(g);
+			return;
+		}
 
 		if (!g.start) g.start = now;
 		DWORD elapsed = now - g.start;
-		if (elapsed >= g.duration) { StopFacial(faceData); ClearGesture(g); return; }
+		if (elapsed >= g.duration) {
+			StopFacial(faceData);
+			ClearGesture(g);
+			return;
+		}
 
 		//an eye roll is a look up, held, then released, the envelope shapes all three
 		const float weight = GestureMath::ComputeMorphWeight(g.type, elapsed, g.duration, g.amplitude, g.cycleTime);
@@ -309,28 +311,38 @@ namespace GestureCommand
 
 		DWORD now = GetTickCount();
 
-		for (int i = 0; i < MAX_GESTURES; i++)
-		{
+		for (int i = 0; i < MAX_GESTURES; i++) {
 			auto& g = g_gestures[i];
 			if (!g.type) continue;
 
 			auto* form = (TESObjectREFR*)Engine::LookupFormByID(g.refID);
-			if (!form) { ClearGesture(g); continue; }
+			if (!form) {
+				ClearGesture(g);
+				continue;
+			}
 
-			if (GestureMath::IsFacialGesture(g.type)) { UpdateFacial(g, form, now); continue; }
+			if (GestureMath::IsFacialGesture(g.type)) {
+				UpdateFacial(g, form, now);
+				continue;
+			}
 
 			//re-scan for the bone only when the skeleton root changes, the name lookup is the costly part
 			void* root = GetRootNode(form);
-			if (!root) { ClearGesture(g); continue; }
-			if (root != g.root)
-			{
+			if (!root) {
+				ClearGesture(g);
+				continue;
+			}
+			if (root != g.root) {
 				g.root = root;
 				g.headBone = GetObjectByName(root, "Bip01 Head");
 				g.hasLast = false;
 			}
 
 			void* headBone = g.headBone;
-			if (!headBone) { ClearGesture(g); continue; }
+			if (!headBone) {
+				ClearGesture(g);
+				continue;
+			}
 
 			//rebase whenever the animation system rewrote the bone since our last write,
 			//so the gesture rides on top of headtracking instead of a stale snapshot
@@ -340,7 +352,10 @@ namespace GestureCommand
 
 			if (!g.start) g.start = now;
 			DWORD elapsed = now - g.start;
-			if (elapsed >= g.duration) { StopGesture(g); continue; }
+			if (elapsed >= g.duration) {
+				StopGesture(g);
+				continue;
+			}
 
 			float angle = GestureMath::ComputeAngleRadians(g.type, elapsed, g.duration, g.amplitude, g.cycleTime);
 			GestureMath::ComposePoseFromBase(g.animBase, g.type, angle, localRot);
@@ -357,19 +372,17 @@ namespace GestureCommand
 			return false;
 
 		//brow and squint are pure morph animations, the keyframe list plays them without a slot
-		if (type == GestureMath::kGesture_BrowRaise || type == GestureMath::kGesture_Squint)
-		{
+		if (type == GestureMath::kGesture_BrowRaise || type == GestureMath::kGesture_Squint) {
 			const float weight = ClampWeight(amplitude);
-			if (type == GestureMath::kGesture_Squint)
-			{
+			if (type == GestureMath::kGesture_Squint) {
 				//the brows coming down are what read as a squint, the lid narrowing alone barely shows
-				const UInt32 squint[] = { kModifier_SquintLeft, kModifier_SquintRight, kModifier_BrowDownLeft, kModifier_BrowDownRight };
-				const float weights[] = { weight, weight, weight, weight };
+				const UInt32 squint[] = {kModifier_SquintLeft, kModifier_SquintRight, kModifier_BrowDownLeft, kModifier_BrowDownRight};
+				const float weights[] = {weight, weight, weight, weight};
 				return PushModifierKeyframes(actor, squint, weights, 4, duration);
 			}
 
-			const UInt32 brows[] = { kModifier_BrowUpLeft, kModifier_BrowUpRight };
-			const float weights[] = { weight, weight };
+			const UInt32 brows[] = {kModifier_BrowUpLeft, kModifier_BrowUpRight};
+			const float weights[] = {weight, weight};
 			return PushModifierKeyframes(actor, brows, weights, 2, duration);
 		}
 
@@ -377,9 +390,11 @@ namespace GestureCommand
 
 		//find existing or free slot
 		int slot = -1;
-		for (int i = 0; i < MAX_GESTURES; i++)
-		{
-			if (g_gestures[i].refID == refID) { slot = i; break; }
+		for (int i = 0; i < MAX_GESTURES; i++) {
+			if (g_gestures[i].refID == refID) {
+				slot = i;
+				break;
+			}
 			if (!g_gestures[i].type && slot < 0) slot = i;
 		}
 		if (slot < 0) return false;
@@ -404,12 +419,11 @@ namespace GestureCommand
 		g.cycleTime = speed;
 
 		//20 degrees of eye travel is all the engine allows, the raised brows and lowered lids are what make it read
-		if (type == GestureMath::kGesture_EyeRoll)
-		{
-			const UInt32 modifiers[] = { kModifier_BrowUpLeft, kModifier_BrowUpRight, kModifier_BlinkLeft, kModifier_BlinkRight };
+		if (type == GestureMath::kGesture_EyeRoll) {
+			const UInt32 modifiers[] = {kModifier_BrowUpLeft, kModifier_BrowUpRight, kModifier_BlinkLeft, kModifier_BlinkRight};
 			const float brow = g.amplitude;
 			const float lid = g.amplitude * 0.35f;
-			const float weights[] = { brow, brow, lid, lid };
+			const float weights[] = {brow, brow, lid, lid};
 			PushModifierKeyframes(actor, modifiers, weights, 4, duration);
 		}
 		return true;
@@ -457,5 +471,4 @@ bool Cmd_Gesture_Execute(COMMAND_ARGS)
 
 CommandInfo kCommandInfo_Gesture = {
 	"Gesture", "", 0, "play a procedural head or facial gesture on an actor",
-	1, 4, kParams_Gesture, Cmd_Gesture_Execute, nullptr, nullptr, 0
-};
+	1, 4, kParams_Gesture, Cmd_Gesture_Execute, nullptr, nullptr, 0};

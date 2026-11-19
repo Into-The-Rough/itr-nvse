@@ -6,8 +6,7 @@
 #include "internal/Detours.h"
 #include "internal/GameGlobals.h"
 
-namespace CompanionNoInfamy
-{
+namespace CompanionNoInfamy {
 	static bool g_enabled = false;
 	static bool g_initialized = false;
 	static Detours::CallDetour s_murderAlarmReputationCall;
@@ -15,10 +14,10 @@ namespace CompanionNoInfamy
 	static Detours::CallDetour s_attackAlarmMinorReputationCall;
 	static Detours::CallDetour s_actorKillReputationCall;
 
-	static const UInt32 kAddr_MurderAlarmReputationCall = 0x8C0E6E;
-	static const UInt32 kAddr_AttackAlarmReputationCall = 0x8C0930;
-	static const UInt32 kAddr_AttackAlarmMinorReputationCall = 0x8C0941; //arg_4!=0 branch, minor-crime leg
-	static const UInt32 kAddr_ActorKillReputationCall = 0x89F3DF;
+	static constexpr UInt32 kAddr_MurderAlarmReputationCall = 0x8C0E6E;
+	static constexpr UInt32 kAddr_AttackAlarmReputationCall = 0x8C0930;
+	static constexpr UInt32 kAddr_AttackAlarmMinorReputationCall = 0x8C0941; //arg_4!=0 branch, minor-crime leg
+	static constexpr UInt32 kAddr_ActorKillReputationCall = 0x89F3DF;
 
 	static void __fastcall Hook_MurderAlarmReputation(Actor* actor, UInt32 isTeammate, UInt32 a2, UInt32 a3)
 	{
@@ -29,12 +28,12 @@ namespace CompanionNoInfamy
 		ThisCall<void>(s_murderAlarmReputationCall.GetOverwrittenAddr(), actor, a2, static_cast<char>(a3)); //0x8B7D20 HandleMajorCrimeFactionReputations in vanilla
 	}
 
-	__declspec(naked) static void MurderAlarmReputationHook_Wrapper()
+	__declspec(naked) static void Hook_MurderAlarmReputationWrapper()
 	{
 		__asm
 		{
-			movzx edx, byte ptr [ebp-0x15]     //bIsTeammate local -> fastcall arg2; ecx has actor already
-			jmp Hook_MurderAlarmReputation     //tail-jmp; typed Hook owns stack cleanup
+			movzx edx, byte ptr [ebp-0x15] //bIsTeammate local -> fastcall arg2, ecx has actor already
+			jmp Hook_MurderAlarmReputation //tail-jmp, typed Hook owns stack cleanup
 		}
 	}
 
@@ -46,11 +45,11 @@ namespace CompanionNoInfamy
 		ThisCall<void>(s_attackAlarmReputationCall.GetOverwrittenAddr(), actor, a2, static_cast<char>(a3)); //0x8B7D20 HandleMajorCrimeFactionReputations in vanilla
 	}
 
-	__declspec(naked) static void AttackAlarmReputationHook_Wrapper()
+	__declspec(naked) static void Hook_AttackAlarmReputationWrapper()
 	{
 		__asm
 		{
-			mov edx, [ebp+8]                   //attacker = caller arg0 -> fastcall arg2
+			mov edx, [ebp+8] //attacker = caller arg0 -> fastcall arg2
 			jmp Hook_AttackAlarmReputation
 		}
 	}
@@ -63,11 +62,11 @@ namespace CompanionNoInfamy
 		ThisCall<void>(s_attackAlarmMinorReputationCall.GetOverwrittenAddr(), actor, a2, static_cast<bool>(a3)); //0x8B7C00 HandleMinorCrimeFactionReputations in vanilla
 	}
 
-	__declspec(naked) static void AttackAlarmMinorReputationHook_Wrapper()
+	__declspec(naked) static void Hook_AttackAlarmMinorReputationWrapper()
 	{
 		__asm
 		{
-			mov edx, [ebp+8]                   //attacker = caller arg0 -> fastcall arg2, same AttackAlarm frame
+			mov edx, [ebp+8] //attacker = caller arg0 -> fastcall arg2, same AttackAlarm frame
 			jmp Hook_AttackAlarmMinorReputation
 		}
 	}
@@ -80,11 +79,11 @@ namespace CompanionNoInfamy
 		ThisCall<void>(s_actorKillReputationCall.GetOverwrittenAddr(), actor, a2, static_cast<bool>(a3)); //0x8B7C00 HandleMinorCrimeFactionReputations in vanilla
 	}
 
-	__declspec(naked) static void ActorKillReputationHook_Wrapper()
+	__declspec(naked) static void Hook_ActorKillReputationWrapper()
 	{
 		__asm
 		{
-			mov edx, [ebx+8]                   //attacker lives in an ebx-based struct here, not ebp
+			mov edx, [ebx+8] //attacker lives in an ebx-based struct here, not ebp
 			jmp Hook_ActorKillReputation
 		}
 	}
@@ -94,10 +93,7 @@ namespace CompanionNoInfamy
 	bool ApplyPatch()
 	{
 		//a refused remove leaves the detour installed
-		const bool ok = (s_murderAlarmReputationCall.IsInstalled() || s_murderAlarmReputationCall.WriteRelCall(kAddr_MurderAlarmReputationCall, MurderAlarmReputationHook_Wrapper)) &&
-			(s_attackAlarmReputationCall.IsInstalled() || s_attackAlarmReputationCall.WriteRelCall(kAddr_AttackAlarmReputationCall, AttackAlarmReputationHook_Wrapper)) &&
-			(s_attackAlarmMinorReputationCall.IsInstalled() || s_attackAlarmMinorReputationCall.WriteRelCall(kAddr_AttackAlarmMinorReputationCall, AttackAlarmMinorReputationHook_Wrapper)) &&
-			(s_actorKillReputationCall.IsInstalled() || s_actorKillReputationCall.WriteRelCall(kAddr_ActorKillReputationCall, ActorKillReputationHook_Wrapper));
+		const bool ok = (s_murderAlarmReputationCall.IsInstalled() || s_murderAlarmReputationCall.WriteRelCall(kAddr_MurderAlarmReputationCall, Hook_MurderAlarmReputationWrapper)) && (s_attackAlarmReputationCall.IsInstalled() || s_attackAlarmReputationCall.WriteRelCall(kAddr_AttackAlarmReputationCall, Hook_AttackAlarmReputationWrapper)) && (s_attackAlarmMinorReputationCall.IsInstalled() || s_attackAlarmMinorReputationCall.WriteRelCall(kAddr_AttackAlarmMinorReputationCall, Hook_AttackAlarmMinorReputationWrapper)) && (s_actorKillReputationCall.IsInstalled() || s_actorKillReputationCall.WriteRelCall(kAddr_ActorKillReputationCall, Hook_ActorKillReputationWrapper));
 		if (!ok)
 			RemovePatch();
 		return ok;
@@ -130,8 +126,7 @@ namespace CompanionNoInfamy
 	{
 		g_initialized = true;
 
-		if (enabled)
-		{
+		if (enabled) {
 			g_enabled = ApplyPatch();
 		}
 	}

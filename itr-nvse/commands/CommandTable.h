@@ -61,7 +61,6 @@
 // 0x4064  SetDialogueCameraFixedAngle
 // 0x4065  SetDialogueCameraAngle
 // 0x4066  RefillAmmo
-// 0x4067  RunITRCommandBounds (Debug only)
 // 0x4068  ToggleAllPrimitives (TAP)
 // 0x409C  GetRefExteriorDoor
 // 0x409D  GetWorldspaceOffsetX
@@ -111,6 +110,5 @@
 // 0x40DD  GetActorCoverInfo
 // 0x40DE  SpawnTempParticle
 // 0x410E  Gesture
-
 
 void RegisterAllCommands(void* nvse);

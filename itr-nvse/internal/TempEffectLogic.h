@@ -3,17 +3,14 @@
 #include <cstddef>
 #include <cmath>
 
-namespace TempEffectLogic
-{
-	struct Point3
-	{
+namespace TempEffectLogic {
+	struct Point3 {
 		float x;
 		float y;
 		float z;
 	};
 
-	struct Matrix3
-	{
+	struct Matrix3 {
 		float data[3][3];
 	};
 
@@ -66,8 +63,8 @@ namespace TempEffectLogic
 			return false;
 
 		Point3 tangent = std::fabs(normal.z) < 0.70710678f
-			? Cross({ 0.0f, 0.0f, 1.0f }, normal)
-			: Cross({ 0.0f, 1.0f, 0.0f }, normal);
+			? Cross({0.0f, 0.0f, 1.0f}, normal)
+			: Cross({0.0f, 1.0f, 0.0f}, normal);
 		if (!Normalize(tangent))
 			return false;
 

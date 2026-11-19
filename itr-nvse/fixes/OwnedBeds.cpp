@@ -10,24 +10,25 @@
 #include "internal/globals.h"
 #include "internal/CallTemplates.h"
 
-namespace OwnedBeds
-{
+namespace OwnedBeds {
 	static bool g_enabled = false;
 	static Detours::CallDetour s_isOwnerCall;
 
 	static bool g_playerWarnedAboutBed = false;
 
-	inline UInt8 GetFormType(void* form) {
+	inline UInt8 GetFormType(void* form)
+	{
 		return TESFormGetTypeID(static_cast<TESForm*>(form));
 	}
 
-	typedef void* (__cdecl *_GetTopic)(UInt32 type, int index);
-	static _GetTopic GetTopic = (_GetTopic)0x61A2D0;
+	using GetTopic_t = void*(__cdecl*)(UInt32 type, int index);
+	static GetTopic_t GetTopic = (GetTopic_t)0x61A2D0;
 
-	typedef void (__thiscall *_ProcessGreet)(void* process, void* actor, void* topic, bool forceSub, bool stop, bool queue, bool sayCallback);
-	static _ProcessGreet ProcessGreet = (_ProcessGreet)0x8DBE30;
+	using ProcessGreet_t = void(__thiscall*)(void* process, void* actor, void* topic, bool forceSub, bool stop, bool queue, bool sayCallback);
+	static ProcessGreet_t ProcessGreet = (ProcessGreet_t)0x8DBE30;
 
-	static void SendAssaultAlarmToBedOwner(void* bedRef, void* owner) {
+	static void SendAssaultAlarmToBedOwner(void* bedRef, void* owner)
+	{
 		void* player = *(void**)g_thePlayerPtr;
 		void* processList = g_processManager;
 		void* nearbyActor = nullptr;
@@ -65,7 +66,8 @@ namespace OwnedBeds
 		}
 	}
 
-	bool __fastcall IsAnOwnerHook(void* bedRef, void* edx, void* actor, bool checkFaction) {
+	bool __fastcall Hook_IsAnOwner(void* bedRef, void* edx, void* actor, bool checkFaction)
+	{
 		if (!g_enabled)
 			return Engine::TESObjectREFR_IsAnOwner(bedRef, actor, checkFaction);
 
@@ -80,17 +82,19 @@ namespace OwnedBeds
 		return true;
 	}
 
-	void SetEnabled(bool enabled) {
+	void SetEnabled(bool enabled)
+	{
 		g_enabled = enabled;
 	}
 
-	void ClearState() {
+	void ClearState()
+	{
 		g_playerWarnedAboutBed = false;
 	}
 
 	void Init(bool enabled)
 	{
-		s_isOwnerCall.WriteRelCall(0x509679, IsAnOwnerHook);
+		s_isOwnerCall.WriteRelCall(0x509679, Hook_IsAnOwner);
 		g_enabled = enabled;
 	}
 }

@@ -1,7 +1,6 @@
 #pragma once
 
-namespace AimZoomFirstPersonOnly
-{
+namespace AimZoomFirstPersonOnly {
 	void Init(bool enabled);
 	void SetEnabled(bool enabled);
 	bool IsEnabled();

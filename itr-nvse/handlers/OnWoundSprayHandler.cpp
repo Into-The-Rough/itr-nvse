@@ -11,34 +11,20 @@
 #include "internal/GameLayout.h"
 #include "internal/globals.h"
 
-constexpr UInt32 kAddr_Actor_CreateBlood = 0x88E8D0;
-constexpr UInt32 kCreateBloodCallSites[] = { 0x87C105, 0x890CD8, 0x89CE24 };
+constexpr UInt32 kCreateBloodCallSites[] = {0x87C105, 0x890CD8, 0x89CE24}; //Actor::CreateBlood 0x88E8D0
 constexpr UInt32 kCreateBloodCallCount = sizeof(kCreateBloodCallSites) / sizeof(kCreateBloodCallSites[0]);
-constexpr UInt32 kAddr_GetIsParallaxCall = 0x88F838;
-constexpr UInt32 kAddr_GetIsParallax = 0x4A4100;
-constexpr UInt32 kAddr_AddDecalCall = 0x88F9C5;
-constexpr UInt32 kAddr_AddDecal = 0x4A3FE0;
-
-struct HitData {
-	void*  pSource;                  //+0x00
-	UInt8  pad04[0x10 - 0x04];
-	SInt32 eDamageLimb;              //+0x10
-	UInt8  pad14[0x30 - 0x14];
-	void*  pWeapon;                  //+0x30
-};
-
-static_assert(offsetof(HitData, eDamageLimb) == 0x10, "HitData limb offset changed");
-static_assert(offsetof(HitData, pWeapon) == 0x30, "HitData weapon offset changed");
+constexpr UInt32 kAddr_GetIsParallaxCall = 0x88F838; //BGSImpactData::GetIsParallax 0x4A4100
+constexpr UInt32 kAddr_AddDecalCall = 0x88F9C5; //TESObjectCELL::AddDecal 0x4A3FE0
 
 struct WoundCtx {
-	void*    pActor;
-	HitData* pHit;
-	void*    pImpactData;
+	void* pActor;
+	ActorHitDataView* pHit;
+	void* pImpactData;
 };
 
-typedef void (__thiscall* Actor_CreateBlood_t)(void*, float, HitData*);
-typedef bool (__thiscall* BGSImpactData_GetIsParallax_t)(void*);
-typedef void (__thiscall* TESObjectCELL_AddDecal_t)(void*, void*, int, UInt8);
+using Actor_CreateBlood_t = void(__thiscall*)(void*, float, ActorHitDataView*);
+using BGSImpactData_GetIsParallax_t = bool(__thiscall*)(void*);
+using TESObjectCELL_AddDecal_t = void(__thiscall*)(void*, void*, int, UInt8);
 
 static WoundCtx g_currentCtx;
 static UInt32 g_dispatchDepth = 0;
@@ -47,8 +33,9 @@ static Detours::CallDetour s_createBloodCalls[kCreateBloodCallCount];
 static Detours::CallDetour s_getIsParallaxDetour;
 static Detours::CallDetour s_addDecalDetour;
 
-template <UInt32 N>
-static void __fastcall HookCreateBlood(void* this_, void*, float a2, HitData* hit) {
+template<UInt32 N>
+static void __fastcall Hook_CreateBlood(void* this_, void* edx, float a2, ActorHitDataView* hit)
+{
 	WoundCtx saved = g_currentCtx;
 	g_currentCtx.pActor = this_;
 	g_currentCtx.pHit = hit;
@@ -60,12 +47,14 @@ static void __fastcall HookCreateBlood(void* this_, void*, float a2, HitData* hi
 
 //ecx holds the live body-part impact data (v117 reassigned a few
 //lines above the wall-splatter dispatch).
-static bool __fastcall HookCaptureWoundIPCT(void* this_, void* edx) {
+static bool __fastcall Hook_CaptureWoundIPCT(void* this_, void* edx)
+{
 	g_currentCtx.pImpactData = this_;
 	return ((BGSImpactData_GetIsParallax_t)s_getIsParallaxDetour.GetOverwrittenAddr())(this_);
 }
 
-static void __fastcall HookWoundAddDecal(void* cell, void* edx, void* decalData, int type, UInt8 forceAdd) {
+static void __fastcall Hook_WoundAddDecal(void* cell, void* edx, void* decalData, int type, UInt8 forceAdd)
+{
 	((TESObjectCELL_AddDecal_t)s_addDecalDetour.GetOverwrittenAddr())(cell, decalData, type, forceAdd);
 
 	if (!g_eventManagerInterface) return;
@@ -87,56 +76,28 @@ static void __fastcall HookWoundAddDecal(void* cell, void* edx, void* decalData,
 		PackEventFloatArg(direction[0]),
 		PackEventFloatArg(direction[1]),
 		PackEventFloatArg(direction[2]),
-		(int)g_currentCtx.pHit->eDamageLimb,
-		(TESForm*)g_currentCtx.pHit->pSource,
-		(TESForm*)g_currentCtx.pHit->pWeapon
-	);
+		(int)g_currentCtx.pHit->hitLocation,
+		(TESForm*)g_currentCtx.pHit->source,
+		(TESForm*)g_currentCtx.pHit->weapon);
 	g_dispatchDepth--;
 }
 
 namespace OnWoundSprayHandler {
-static void RemoveHooks() {
-	s_addDecalDetour.Remove();
-	s_getIsParallaxDetour.Remove();
-	for (UInt32 i = kCreateBloodCallCount; i > 0; i--)
-		s_createBloodCalls[i - 1].Remove();
-}
+	bool Init(void* nvseInterface)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
+		if (nvse->isEditor) return false;
 
-bool Init(void* nvseInterface) {
-	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
-	if (nvse->isEditor) return false;
+		using CreateBloodHook_t = void(__fastcall*)(void*, void*, float, ActorHitDataView*);
+		static const CreateBloodHook_t hooks[kCreateBloodCallCount] = {
+			Hook_CreateBlood<0>, Hook_CreateBlood<1>, Hook_CreateBlood<2>};
 
-	typedef void (__fastcall* CreateBloodHook_t)(void*, void*, float, HitData*);
-	static const CreateBloodHook_t hooks[kCreateBloodCallCount] = {
-		HookCreateBlood<0>, HookCreateBlood<1>, HookCreateBlood<2>
-	};
-
-	for (UInt32 i = 0; i < kCreateBloodCallCount; i++) {
-		if (!s_createBloodCalls[i].WriteRelCall(kCreateBloodCallSites[i], hooks[i])) {
-			Log("OnWoundSpray: CreateBlood call site %08X unusable, backing out", kCreateBloodCallSites[i]);
-			RemoveHooks();
-			return false;
+		for (UInt32 i = 0; i < kCreateBloodCallCount; i++) {
+			if (!s_createBloodCalls[i].WriteRelCall(kCreateBloodCallSites[i], hooks[i]))
+				return false;
 		}
-		Log("OnWoundSpray: %08X hooked, original=%08X vanilla=%08X", kCreateBloodCallSites[i],
-			s_createBloodCalls[i].GetOverwrittenAddr(), kAddr_Actor_CreateBlood);
-	}
 
-	if (!s_getIsParallaxDetour.WriteRelCall(kAddr_GetIsParallaxCall, HookCaptureWoundIPCT)) {
-		Log("OnWoundSpray: GetIsParallax call site %08X unusable, backing out", kAddr_GetIsParallaxCall);
-		RemoveHooks();
-		return false;
+		return s_getIsParallaxDetour.WriteRelCall(kAddr_GetIsParallaxCall, Hook_CaptureWoundIPCT)
+			&& s_addDecalDetour.WriteRelCall(kAddr_AddDecalCall, Hook_WoundAddDecal);
 	}
-	Log("OnWoundSpray: %08X hooked, original=%08X vanilla=%08X", kAddr_GetIsParallaxCall,
-		s_getIsParallaxDetour.GetOverwrittenAddr(), kAddr_GetIsParallax);
-
-	if (!s_addDecalDetour.WriteRelCall(kAddr_AddDecalCall, HookWoundAddDecal)) {
-		Log("OnWoundSpray: AddDecal call site %08X unusable, backing out", kAddr_AddDecalCall);
-		RemoveHooks();
-		return false;
-	}
-	Log("OnWoundSpray: %08X hooked, original=%08X vanilla=%08X", kAddr_AddDecalCall,
-		s_addDecalDetour.GetOverwrittenAddr(), kAddr_AddDecal);
-
-	return true;
-}
 }

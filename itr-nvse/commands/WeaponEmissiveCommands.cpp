@@ -9,11 +9,10 @@ extern const _ExtractArgs ExtractArgs;
 #include "internal/GameGlobals.h"
 #include "internal/NiLayout.h"
 
-namespace
-{
+namespace {
 	//NiAVObject::GetObjectByName - __cdecl(NiAVObject* root, const char* name) -> NiAVObject*
-	typedef void* (__cdecl *_GetObjectByName)(void* root, const char* name);
-	static const _GetObjectByName GetObjectByName = (_GetObjectByName)0x4AAE30;
+	using GetObjectByName_t = void*(__cdecl*)(void* root, const char* name);
+	static const GetObjectByName_t GetObjectByName = (GetObjectByName_t)0x4AAE30;
 
 	struct EmissiveOriginal {
 		void* node;
@@ -53,12 +52,10 @@ namespace
 	{
 		if (!node) return 0;
 
-		if (IsGeometry(node))
-		{
+		if (IsGeometry(node)) {
 			auto* matProp = NiGeometryGetMaterialProperty(node);
 			if (!matProp) return 0;
-			if (s_count < 64)
-			{
+			if (s_count < 64) {
 				auto& orig = s_originals[s_count++];
 				orig.node = node;
 				orig.r = matProp->emissiveR;
@@ -75,8 +72,7 @@ namespace
 		UInt16 childCount = NiNodeGetChildLimit(node);
 		if (!childData) return 0;
 		UInt32 found = 0;
-		for (UInt16 i = 0; i < childCount; i++)
-		{
+		for (UInt16 i = 0; i < childCount; i++) {
 			if (childData[i])
 				found += TraverseCacheOriginals(childData[i]);
 		}
@@ -88,8 +84,7 @@ namespace
 	{
 		if (!node) return;
 
-		if (IsGeometry(node))
-		{
+		if (IsGeometry(node)) {
 			auto* matProp = NiGeometryGetMaterialProperty(node);
 			if (matProp)
 				NiMaterialPropertySetEmissive(matProp, r, g, b, emitMult);
@@ -101,8 +96,7 @@ namespace
 		void** childData = NiNodeGetChildData(node);
 		UInt16 childCount = NiNodeGetChildLimit(node);
 		if (!childData) return;
-		for (UInt16 i = 0; i < childCount; i++)
-		{
+		for (UInt16 i = 0; i < childCount; i++) {
 			if (childData[i])
 				TraverseSetEmissive(childData[i], r, g, b, emitMult);
 		}
@@ -113,9 +107,8 @@ namespace
 	{
 		if (!node) return true;
 
-		if (IsGeometry(node))
-		{
-			if (!NiGeometryGetMaterialProperty(node)) return true;   //cache skips material-less geometry, keep the index aligned
+		if (IsGeometry(node)) {
+			if (!NiGeometryGetMaterialProperty(node)) return true; //cache skips material-less geometry, keep the index aligned
 			if (idx >= s_count || s_originals[idx].node != node) return false;
 			idx++;
 			return true;
@@ -126,8 +119,7 @@ namespace
 		void** childData = NiNodeGetChildData(node);
 		UInt16 childCount = NiNodeGetChildLimit(node);
 		if (!childData) return true;
-		for (UInt16 i = 0; i < childCount; i++)
-		{
+		for (UInt16 i = 0; i < childCount; i++) {
 			if (childData[i] && !TraverseVerify(childData[i], idx))
 				return false;
 		}
@@ -139,12 +131,10 @@ namespace
 	{
 		if (!node || idx >= s_count) return;
 
-		if (IsGeometry(node))
-		{
+		if (IsGeometry(node)) {
 			auto* matProp = NiGeometryGetMaterialProperty(node);
-			if (!matProp) return;   //cache skips material-less geometry, keep the index aligned
-			if (idx < s_count)
-			{
+			if (!matProp) return; //cache skips material-less geometry, keep the index aligned
+			if (idx < s_count) {
 				auto& orig = s_originals[idx];
 				NiMaterialPropertySetEmissive(matProp, orig.r, orig.g, orig.b, orig.mult);
 			}
@@ -157,17 +147,16 @@ namespace
 		void** childData = NiNodeGetChildData(node);
 		UInt16 childCount = NiNodeGetChildLimit(node);
 		if (!childData) return;
-		for (UInt16 i = 0; i < childCount; i++)
-		{
+		for (UInt16 i = 0; i < childCount; i++) {
 			if (childData[i])
 				TraverseRestore(childData[i], idx);
 		}
 	}
 
 	static ParamInfo kParams_SetWeaponEmissiveColor[4] = {
-		{"fR",        kParamType_Float, 0},
-		{"fG",        kParamType_Float, 0},
-		{"fB",        kParamType_Float, 0},
+		{"fR", kParamType_Float, 0},
+		{"fG", kParamType_Float, 0},
+		{"fB", kParamType_Float, 0},
 		{"fEmitMult", kParamType_Float, 0},
 	};
 
@@ -190,22 +179,18 @@ namespace
 
 		//a weapon switch rebuilds the geometry, a stale cache would tint the new model
 		//with no matching originals to restore, verify and re-cache on mismatch
-		if (s_active)
-		{
+		if (s_active) {
 			UInt32 vidx = 0;
-			if (!TraverseVerify(weaponNode, vidx) || vidx != s_count)
-			{
+			if (!TraverseVerify(weaponNode, vidx) || vidx != s_count) {
 				s_count = 0;
 				s_active = false;
 			}
 		}
 
-		if (!s_active)
-		{
+		if (!s_active) {
 			s_count = 0;
 			UInt32 found = TraverseCacheOriginals(weaponNode);
-			if (found != s_count)
-			{
+			if (found != s_count) {
 				//more geometries than the cache holds, tinting untracked geometry would be unrecoverable
 				s_count = 0;
 				if (IsConsoleMode())
@@ -233,8 +218,7 @@ namespace
 			return true;
 
 		void* root1st = GetPlayer1stPersonNode();
-		if (!root1st)
-		{
+		if (!root1st) {
 			//model gone, nothing to restore
 			s_active = false;
 			s_count = 0;
@@ -242,8 +226,7 @@ namespace
 		}
 
 		void* weaponNode = GetObjectByName(root1st, "Weapon");
-		if (!weaponNode)
-		{
+		if (!weaponNode) {
 			s_active = false;
 			s_count = 0;
 			return true;
@@ -252,8 +235,7 @@ namespace
 		//only restore if the live model is still the one we cached - a weapon switch
 		//rebuilds the geometry, and restoring by index would corrupt the new model
 		UInt32 vidx = 0;
-		if (TraverseVerify(weaponNode, vidx) && vidx == s_count)
-		{
+		if (TraverseVerify(weaponNode, vidx) && vidx == s_count) {
 			UInt32 idx = 0;
 			TraverseRestore(weaponNode, idx);
 		}
@@ -270,35 +252,31 @@ namespace
 }
 
 namespace WeaponEmissiveCommands {
-bool Init(void* nvsePtr) { return true; }
+	bool Init(void* nvsePtr) { return true; }
 
-void RegisterCommands(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_SetWeaponEmissiveColor);
-	nvse->RegisterCommand(&kCommandInfo_ClearWeaponEmissiveColor);
-}
-
-void ClearState()
-{
-	//restore the live model before dropping the cache when it still matches
-	if (s_active)
+	void RegisterCommands(void* nvsePtr)
 	{
-		if (void* root1st = GetPlayer1stPersonNode())
-		{
-			if (void* weaponNode = GetObjectByName(root1st, "Weapon"))
-			{
-				UInt32 vidx = 0;
-				if (TraverseVerify(weaponNode, vidx) && vidx == s_count)
-				{
-					UInt32 idx = 0;
-					TraverseRestore(weaponNode, idx);
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_SetWeaponEmissiveColor);
+		nvse->RegisterCommand(&kCommandInfo_ClearWeaponEmissiveColor);
+	}
+
+	void ClearState()
+	{
+		//restore the live model before dropping the cache when it still matches
+		if (s_active) {
+			if (void* root1st = GetPlayer1stPersonNode()) {
+				if (void* weaponNode = GetObjectByName(root1st, "Weapon")) {
+					UInt32 vidx = 0;
+					if (TraverseVerify(weaponNode, vidx) && vidx == s_count) {
+						UInt32 idx = 0;
+						TraverseRestore(weaponNode, idx);
+					}
 				}
 			}
 		}
-	}
 
-	s_count = 0;
-	s_active = false;
-}
+		s_count = 0;
+		s_active = false;
+	}
 }

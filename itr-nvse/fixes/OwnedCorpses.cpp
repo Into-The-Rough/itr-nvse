@@ -8,10 +8,7 @@
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"
 
-namespace OwnedCorpses
-{
-	constexpr UInt32 kAddr_GetOwnerRawForm = 0x567790;
-
+namespace OwnedCorpses {
 	static bool g_enabled = false;
 	static bool g_installed = false;
 	static Detours::CallDetour g_crimeOwnerCall;
@@ -28,11 +25,9 @@ namespace OwnedCorpses
 		auto* node = actorBase->baseData.factionList.Head();
 		TESFaction* fallback = nullptr;
 
-		while (node && node->item)
-		{
+		while (node && node->item) {
 			TESFaction* faction = node->item->faction;
-			if (faction)
-			{
+			if (faction) {
 				if (!fallback) fallback = faction;
 				if (faction->reputation)
 					return faction;
@@ -47,11 +42,9 @@ namespace OwnedCorpses
 	static void* GetZoneOrCellOwner(void* ref)
 	{
 		void* zone = ThisCall<void*>(0x567D20, ref); //GetEncounterZone
-		if (zone)
-		{
+		if (zone) {
 			void* noZone = CdeclCall<void*>(0x546A90); //GetNoZoneZone
-			if (zone != noZone)
-			{
+			if (zone != noZone) {
 				void* zoneOwner = ThisCall<void*>(0x9611E0, zone); //zone->GetOwner
 				if (zoneOwner) return zoneOwner;
 			}
@@ -82,21 +75,21 @@ namespace OwnedCorpses
 		return GetBestFaction(static_cast<TESObjectREFR*>(ref));
 	}
 
-	typedef void* (__thiscall* GetOwnerRawForm_t)(void*);
+	using GetOwnerRawForm_t = void*(__thiscall*)(void*);
 
-	static void* __fastcall GetCrimeOwnerHook(void* ref, void*)
+	static void* __fastcall Hook_GetCrimeOwner(void* ref, void* edx)
 	{
 		auto original = reinterpret_cast<GetOwnerRawForm_t>(g_crimeOwnerCall.GetOverwrittenAddr());
 		return GetCorpseOwner(ref, original(ref));
 	}
 
-	static void* __fastcall GetAlarmOwnerHook(void* ref, void*)
+	static void* __fastcall Hook_GetAlarmOwner(void* ref, void* edx)
 	{
 		auto original = reinterpret_cast<GetOwnerRawForm_t>(g_alarmOwnerCall.GetOverwrittenAddr());
 		return GetCorpseOwner(ref, original(ref));
 	}
 
-	static bool __fastcall IsDeadForStealAlarm(Actor* actor, void*)
+	static bool __fastcall IsDeadForStealAlarm(Actor* actor, void* edx)
 	{
 		return Engine::Actor_IsDead(actor, false);
 	}
@@ -107,7 +100,7 @@ namespace OwnedCorpses
 	static UInt32 kStealAlarmUseWitness = 0x8BFC52;
 	static UInt32 kStealAlarmFactionSearch = 0x8BFBBE;
 
-	__declspec(naked) void StealAlarmWitnessHook()
+	__declspec(naked) void Hook_StealAlarmWitness()
 	{
 		__asm
 		{
@@ -140,34 +133,10 @@ namespace OwnedCorpses
 
 	void Init(bool enabled)
 	{
-		//the earlier owner calls are base-form-gated and cannot receive actor corpses
-		if (!g_crimeOwnerCall.WriteRelCall(0x579A92, GetCrimeOwnerHook))
-		{
-			Log("OwnedCorpses: activation owner call could not be detoured");
+		if (!g_crimeOwnerCall.WriteRelCall(0x579A92, Hook_GetCrimeOwner)
+			|| !g_alarmOwnerCall.WriteRelCall(0x8BFB2C, Hook_GetAlarmOwner)
+			|| !g_stealAlarmDetour.WriteRelJump(0x8BFBB3, Hook_StealAlarmWitness, 11))
 			return;
-		}
-		UInt32 crimeOriginal = g_crimeOwnerCall.GetOverwrittenAddr();
-		Log("OwnedCorpses: %08X hooked, original=%08X vanilla=%08X", 0x579A92, crimeOriginal, kAddr_GetOwnerRawForm);
-
-		//steal alarm resolves the actor-container owner here before witness selection
-		if (!g_alarmOwnerCall.WriteRelCall(0x8BFB2C, GetAlarmOwnerHook))
-		{
-			Log("OwnedCorpses: alarm owner call could not be detoured");
-			g_crimeOwnerCall.Remove();
-			return;
-		}
-		UInt32 alarmOriginal = g_alarmOwnerCall.GetOverwrittenAddr();
-		Log("OwnedCorpses: %08X hooked, original=%08X vanilla=%08X", 0x8BFB2C, alarmOriginal, kAddr_GetOwnerRawForm);
-
-		//StealAlarm witness selection: 11 bytes at 0x8BFBB3
-		//original: mov edx,[ebp-1C]; mov [ebp-10],edx; jmp 8BFC52
-		if (!g_stealAlarmDetour.WriteRelJump(0x8BFBB3, StealAlarmWitnessHook, 11))
-		{
-			Log("OwnedCorpses: failed to hook StealAlarm");
-			g_alarmOwnerCall.Remove();
-			g_crimeOwnerCall.Remove();
-			return;
-		}
 
 		g_installed = true;
 		g_enabled = enabled;

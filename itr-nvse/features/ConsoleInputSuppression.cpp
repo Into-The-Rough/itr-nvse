@@ -1,9 +1,4 @@
-//blinds modded keybinds while the console is open
-//vanilla controls already stop (InterfaceManager::Idle gates control translation on the
-//console-active check 0x4A4040) but the raw key state arrays and NVSE's DIHookControl
-//keep updating every poll, so mods reading them keep firing their binds. after each
-//device poll we zero what mods read. console typing and scrolling ride the buffered
-//pipeline (GetDeviceData) and are unaffected, mouse is left alone for ref-picking
+//zero raw key states and DIHookControl after poll while console is open (console uses buffered GetDeviceData)
 
 #include "ConsoleInputSuppression.h"
 #include "internal/Detours.h"
@@ -16,8 +11,7 @@
 
 #include <cstring>
 
-namespace ConsoleInputSuppression
-{
+namespace ConsoleInputSuppression {
 	using PollInputDevices_t = void(__thiscall*)(void* inputGlobals);
 
 	//per-frame device poll 0xA23010 called from the main input update 0x86F390
@@ -44,16 +38,15 @@ namespace ConsoleInputSuppression
 	//Clipboard's ctrl+V, alt+tab), the other half of a modded combo is still zeroed
 	static bool IsModifierKey(UInt32 key)
 	{
-		return key == 0x1D || key == 0x9D   //ctrl
-			|| key == 0x2A || key == 0x36   //shift
-			|| key == 0x38 || key == 0xB8;  //alt
+		return key == 0x1D || key == 0x9D //ctrl
+			|| key == 0x2A || key == 0x36 //shift
+			|| key == 0x38 || key == 0xB8; //alt
 	}
 
 	static void SuppressStates(void* inputGlobals)
 	{
 		auto* view = reinterpret_cast<OSInputGlobalsView*>(inputGlobals);
-		for (UInt32 i = 0; i < 256; ++i)
-		{
+		for (UInt32 i = 0; i < 256; ++i) {
 			if (IsPreservedKey(i) || IsModifierKey(i))
 				continue;
 			view->currKeyStates[i] = 0;
@@ -66,14 +59,13 @@ namespace ConsoleInputSuppression
 		memset(kStoredGamepadPrev, 0, kGamepadSize);
 	}
 
-	static void __fastcall Hook_PollInputDevices(void* inputGlobals, void*)
+	static void __fastcall Hook_PollInputDevices(void* inputGlobals, void* edx)
 	{
 		if (s_pollOriginal)
 			s_pollOriginal(inputGlobals);
 
 		const bool active = Settings::bSuppressInputInConsole && inputGlobals && Engine::IsConsoleVisible();
-		if (active != s_suppressing)
-		{
+		if (active != s_suppressing) {
 			s_suppressing = active;
 			Log("ConsoleInputSuppression: %s", active ? "suppressing" : "restored");
 		}

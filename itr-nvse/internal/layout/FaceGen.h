@@ -1,4 +1,3 @@
-//FaceGen NPC data layout - eye form and eye model slots read by EyeMeshOverride
 #pragma once
 
 #include <cstddef>

@@ -10,14 +10,27 @@
 #include "internal/GameGlobals.h"
 #include "internal/EventDispatch.h"
 
-struct SimpleListNode { void* item; SimpleListNode* next; };
-struct CasinoStats { UInt32 casinoRefID; UInt32 earnings; UInt32 unk08; };
+struct SimpleListNode {
+	void* item;
+	SimpleListNode* next;
+};
+
+struct CasinoStats {
+	UInt32 casinoRefID;
+	UInt32 earnings;
+	UInt32 unk08;
+};
 
 constexpr UInt32 kMaxTracked = 64;
-struct Tracked { UInt32 refID; bool banned; };
+
+struct Tracked {
+	UInt32 refID;
+	bool banned;
+};
+
 static Tracked g_tracked[kMaxTracked];
 static UInt32 g_trackedCount = 0;
-static bool g_baselineDone = false;   //the first poll after a load snapshots existing bans silently
+static bool g_baselineDone = false; //the first poll after a load snapshots existing bans silently
 
 static Tracked* GetTracked(UInt32 refID)
 {
@@ -33,69 +46,69 @@ static void SetLastState(UInt32 refID, bool banned)
 		return;
 	}
 	if (g_trackedCount < kMaxTracked) {
-		g_tracked[g_trackedCount++] = { refID, banned };
+		g_tracked[g_trackedCount++] = {refID, banned};
 	}
 }
 
 namespace OnCasinoBanHandler {
-void Update()
-{
-	if (!g_eventManagerInterface) return;
-	PlayerCharacter* player = *g_thePlayerPtr;
-	if (!player) return;
+	void Update()
+	{
+		if (!g_eventManagerInterface) return;
+		PlayerCharacter* player = *g_thePlayerPtr;
+		if (!player) return;
 
-	auto* list = reinterpret_cast<SimpleListNode*>(PlayerCharacterGetCasinoDataList(player));
+		auto* list = reinterpret_cast<SimpleListNode*>(PlayerCharacterGetCasinoDataList(player));
 
-	//an OnCasinoBan handler can run script that mutates the casino list, so record
-	//transitions during the walk and dispatch once the list pointers are no longer live
-	TESForm* newlyBanned[16];
-	UInt32 newlyBannedCount = 0;
+		//an OnCasinoBan handler can run script that mutates the casino list, so record
+		//transitions during the walk and dispatch once the list pointers are no longer live
+		TESForm* newlyBanned[16];
+		UInt32 newlyBannedCount = 0;
 
-	for (SimpleListNode* n = list; n; n = n->next) {
-		auto* entry = (CasinoStats*)n->item;
-		if (!entry) continue;
+		for (SimpleListNode* n = list; n; n = n->next) {
+			auto* entry = (CasinoStats*)n->item;
+			if (!entry) continue;
 
-		auto* casino = static_cast<TESForm*>(Engine::LookupFormByID(entry->casinoRefID));
-		if (!casino) continue;
+			auto* casino = static_cast<TESForm*>(Engine::LookupFormByID(entry->casinoRefID));
+			if (!casino) continue;
 
-		UInt32 max = TESCasinoGetMaxWinnings(casino);
-		bool nowBanned = entry->earnings >= max;
-		auto* tracked = GetTracked(entry->casinoRefID);
+			UInt32 max = TESCasinoGetMaxWinnings(casino);
+			bool nowBanned = entry->earnings >= max;
+			auto* tracked = GetTracked(entry->casinoRefID);
 
-		bool crossedIntoBan;
-		if (tracked)
-			crossedIntoBan = nowBanned && !tracked->banned;
-		else
-			//first sight during the post-load baseline seeds silently, after that a
-			//never-seen entry that is already banned is a genuine new ban, but only
-			//fire when there is room to record it or it would re-fire every frame
-			crossedIntoBan = g_baselineDone && nowBanned && g_trackedCount < kMaxTracked;
+			bool crossedIntoBan;
+			if (tracked)
+				crossedIntoBan = nowBanned && !tracked->banned;
+			else
+				//first sight during the post-load baseline seeds silently, after that a
+				//never-seen entry that is already banned is a genuine new ban, but only
+				//fire when there is room to record it or it would re-fire every frame
+				crossedIntoBan = g_baselineDone && nowBanned && g_trackedCount < kMaxTracked;
 
-		if (crossedIntoBan && newlyBannedCount < 16)
-			newlyBanned[newlyBannedCount++] = casino;
+			if (crossedIntoBan && newlyBannedCount < 16)
+				newlyBanned[newlyBannedCount++] = casino;
 
-		if (tracked)
-			tracked->banned = nowBanned;
-		else
-			SetLastState(entry->casinoRefID, nowBanned);
+			if (tracked)
+				tracked->banned = nowBanned;
+			else
+				SetLastState(entry->casinoRefID, nowBanned);
+		}
+
+		g_baselineDone = true;
+
+		for (UInt32 i = 0; i < newlyBannedCount; ++i)
+			g_eventManagerInterface->DispatchEvent("ITR:OnCasinoBan", nullptr, newlyBanned[i]);
 	}
 
-	g_baselineDone = true;
+	void ClearState()
+	{
+		g_trackedCount = 0;
+		g_baselineDone = false;
+	}
 
-	for (UInt32 i = 0; i < newlyBannedCount; ++i)
-		g_eventManagerInterface->DispatchEvent("ITR:OnCasinoBan", nullptr, newlyBanned[i]);
-}
-
-void ClearState()
-{
-	g_trackedCount = 0;
-	g_baselineDone = false;
-}
-
-bool Init(void* nvseInterface)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
-	if (nvse->isEditor) return false;
-	return true;
-}
+	bool Init(void* nvseInterface)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
+		if (nvse->isEditor) return false;
+		return true;
+	}
 }

@@ -6,6 +6,8 @@
 #include <vector>
 #include <functional>
 #include <cmath>
+#include "common/ITypes.h"
+#undef ASSERT
 
 namespace Test {
 

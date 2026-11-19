@@ -1,8 +1,3 @@
-//radio track query commands for scripters
-//GetPlayingRadioTrack - returns TESSound or TESTopicInfo form
-//GetPlayingRadioTrackFileName - returns file path string
-//GetPlayingRadioText - returns dialogue text string
-
 #include "RadioCommands.h"
 #include "nvse/PluginAPI.h"
 #include "nvse/CommandTable.h"
@@ -11,6 +6,7 @@
 #include "nvse/GameObjects.h"
 #include "nvse/GameExtraData.h"
 #include "internal/GameLayout.h"
+#include "internal/layout/ExtraData.h"
 #include "internal/GameGlobals.h"
 #include "internal/EngineFunctions.h"
 #include "internal/globals.h"
@@ -28,14 +24,12 @@ DEFINE_COMMAND_PLUGIN(ChangeRadioTrack, "Forces active radio station to advance 
 DEFINE_COMMAND_PLUGIN(IsRadioPlaying, "Returns 1 if any pip-boy or ambient radio is currently playing", 0, 0, nullptr);
 
 //internal structs
-struct VoiceResponse
-{
+struct VoiceResponse {
 	String str;
 	char* fileName;
 };
 
-struct VoiceEntry
-{
+struct VoiceEntry {
 	tList<void> list00;
 	VoiceResponse* response;
 	TESTopicInfo* topicInfo;
@@ -44,14 +38,12 @@ struct VoiceEntry
 	Actor* actor;
 };
 
-struct VoiceList
-{
+struct VoiceList {
 	tList<VoiceEntry> entries;
 	VoiceList* next;
 };
 
-struct RadioData
-{
+struct RadioData {
 	VoiceList* voiceList;
 	UInt32 unk04;
 	UInt32 offset;
@@ -63,22 +55,19 @@ struct RadioData
 	tList<void> dynamicRadios;
 };
 
-struct RadioEntry
-{
+struct RadioEntry {
 	TESObjectREFR* radioRef;
 	RadioData data;
 };
 
-struct SoundKey
-{
+struct SoundKey {
 	UInt32 soundKey;
 	UInt8 byte04;
 	UInt8 pad05[3];
 	UInt32 unk08;
 };
 
-struct DynamicRadio
-{
+struct DynamicRadio {
 	TESObjectREFR* ref;
 	SoundKey sound;
 	SoundKey radioStaticSound;
@@ -86,69 +75,7 @@ struct DynamicRadio
 	UInt8 pad[3];
 };
 
-struct BSGameSound
-{
-	void* vtbl;
-	UInt32 mapKey;
-	UInt32 audioFlags;
-	UInt32 flags00C;
-	UInt32 stateFlags;
-	UInt32 duration;
-	UInt16 staticAttenuation;
-	UInt16 unk01A;
-	UInt16 unk01C;
-	UInt16 unk01E;
-	UInt16 unk020;
-	UInt16 unk022;
-	float volume;
-	float flt028;
-	float flt02C;
-	UInt32 unk030;
-	UInt16 baseSamplingFreq;
-	char filePath[254];
-};
-
-struct MapEntry
-{
-	MapEntry* next;
-	UInt32 key;
-	void* data;
-};
-
-struct SoundMap
-{
-	void* vtbl;
-	UInt32 numBuckets;
-	MapEntry** buckets;
-	UInt32 numItems;
-
-	BSGameSound* Lookup(UInt32 key)
-	{
-		if (!buckets || !numBuckets) return nullptr;
-		for (MapEntry* e = buckets[key % numBuckets]; e; e = e->next)
-			if (e->key == key)
-				return (BSGameSound*)e->data;
-		return nullptr;
-	}
-};
-
-struct BSAudioManagerView
-{
-	UInt8 pad00[0x54];
-	SoundMap playingSounds;
-};
-
-static_assert(offsetof(BSAudioManagerView, playingSounds) == 0x54);
-
-struct ExtraRadioDataLite //kExtraData_RadioData (0x68)
-{
-	UInt8 pad00[0x10];
-	UInt32 rangeType;
-	float staticPerc;
-	TESObjectREFR* positionRef;
-};
-
-using GetRadioEntryFromActivator_t = RadioEntry* (__cdecl*)(void*);
+using GetRadioEntryFromActivator_t = RadioEntry*(__cdecl*)(void*);
 using DisableNPCRadio_t = void(__cdecl*)(Actor*);
 using SetNPCRadio_t = void(__cdecl*)(Actor*, TESObjectREFR*);
 
@@ -161,7 +88,7 @@ static tList<DynamicRadio>* GetDynamicRadioList()
 	return static_cast<tList<DynamicRadio>*>(GetDynamicRadios());
 }
 
-static SoundMap* GetPlayingSoundsMap()
+static SoundMapView* GetPlayingSoundsMap()
 {
 	return &reinterpret_cast<BSAudioManagerView*>(g_audioManager)->playingSounds;
 }
@@ -169,7 +96,7 @@ static SoundMap* GetPlayingSoundsMap()
 static const char* GetSoundFilePath(UInt32 soundKey)
 {
 	if (!soundKey || soundKey == 0xFFFFFFFF) return nullptr;
-	BSGameSound* gs = GetPlayingSoundsMap()->Lookup(soundKey);
+	BSGameSoundView* gs = GetPlayingSoundsMap()->Lookup(soundKey);
 	return (gs && gs->filePath[0]) ? gs->filePath : nullptr;
 }
 
@@ -197,11 +124,9 @@ static const char* GetPlayingTrackPath()
 
 	//world/dynamic radios
 	auto* dynamicRadios = GetDynamicRadioList();
-	for (auto iter = dynamicRadios->Begin(); !iter.End(); ++iter)
-	{
+	for (auto iter = dynamicRadios->Begin(); !iter.End(); ++iter) {
 		DynamicRadio* dr = iter.Get();
-		if (dr && dr->isActive)
-		{
+		if (dr && dr->isActive) {
 			const char* path = GetSoundFilePath(dr->sound.soundKey);
 			if (path) return path;
 		}
@@ -229,13 +154,11 @@ static void NormalizePath(const char* src, char* dst, size_t dstSize)
 		p += 11;
 
 	char* dot = strrchr(p, '.');
-	if (dot)
-	{
+	if (dot) {
 		char* check = dot - 5;
 		if (check >= p && _strnicmp(check, "_mono", 5) == 0)
 			memmove(check, dot, strlen(dot) + 1);
-		else
-		{
+		else {
 			check = dot - 7;
 			if (check >= p && _strnicmp(check, "_stereo", 7) == 0)
 				memmove(check, dot, strlen(dot) + 1);
@@ -261,8 +184,7 @@ static TESSound* FindSoundByPath(const char* runtimePath)
 	if (!dataHandler) return nullptr;
 
 	auto* soundList = DataHandlerGetSoundList(dataHandler);
-	for (auto iter = soundList->Begin(); !iter.End(); ++iter)
-	{
+	for (auto iter = soundList->Begin(); !iter.End(); ++iter) {
 		TESSound* sound = iter.Get();
 		if (!sound) continue;
 
@@ -272,8 +194,7 @@ static TESSound* FindSoundByPath(const char* runtimePath)
 		char formNorm[512];
 		size_t flen = strlen(formPath);
 		if (flen >= sizeof(formNorm)) flen = sizeof(formNorm) - 1;
-		for (size_t i = 0; i <= flen; i++)
-		{
+		for (size_t i = 0; i <= flen; i++) {
 			char c = formPath[i];
 			formNorm[i] = (c == '/') ? '\\' : (char)tolower((unsigned char)c);
 		}
@@ -299,12 +220,18 @@ static UInt32 ExtractFormIDFromVoicePath(const char* path)
 
 	const char* lastUs = nullptr;
 	for (const char* p = ext - 1; p >= fname; p--)
-		if (*p == '_') { lastUs = p; break; }
+		if (*p == '_') {
+			lastUs = p;
+			break;
+		}
 	if (!lastUs || lastUs <= fname) return 0;
 
 	const char* prevUs = nullptr;
 	for (const char* p = lastUs - 1; p >= fname; p--)
-		if (*p == '_') { prevUs = p; break; }
+		if (*p == '_') {
+			prevUs = p;
+			break;
+		}
 	if (!prevUs) return 0;
 
 	int len = (int)(lastUs - prevUs - 1);
@@ -316,8 +243,8 @@ static UInt32 ExtractFormIDFromVoicePath(const char* path)
 }
 
 //TESTopicInfo::GetResponses at 0x61E780
-typedef TESTopicInfoResponse** (__thiscall *_GetResponses)(TESTopicInfo*, UInt32);
-static _GetResponses GetResponses = (_GetResponses)0x61E780;
+using GetResponses_t = TESTopicInfoResponse**(__thiscall*)(TESTopicInfo*, UInt32);
+static GetResponses_t GetResponses = (GetResponses_t)0x61E780;
 
 bool Cmd_GetPlayingRadioTrack_Execute(COMMAND_ARGS)
 {
@@ -327,22 +254,19 @@ bool Cmd_GetPlayingRadioTrack_Execute(COMMAND_ARGS)
 	if (!path) return true;
 
 	TESSound* sound = FindSoundByPath(path);
-	if (sound)
-	{
+	if (sound) {
 		*(UInt32*)result = sound->refID;
 		return true;
 	}
 
 	VoiceEntry* voice = GetCurrentVoiceEntry();
-	if (voice && voice->topicInfo)
-	{
+	if (voice && voice->topicInfo) {
 		*(UInt32*)result = voice->topicInfo->refID;
 		return true;
 	}
 
 	UInt32 formID = ExtractFormIDFromVoicePath(path);
-	if (formID)
-	{
+	if (formID) {
 		TESForm* form = (TESForm*)Engine::LookupFormByID(formID);
 		if (form)
 			*(UInt32*)result = form->refID;
@@ -367,33 +291,28 @@ bool Cmd_GetPlayingRadioText_Execute(COMMAND_ARGS)
 	const char* empty = "";
 
 	const char* path = GetPlayingTrackPath();
-	if (!path)
-	{
+	if (!path) {
 		g_strInterface->Assign(PASS_COMMAND_ARGS, empty);
 		return true;
 	}
 
 	UInt32 formID = ExtractFormIDFromVoicePath(path);
-	if (!formID)
-	{
+	if (!formID) {
 		g_strInterface->Assign(PASS_COMMAND_ARGS, empty);
 		return true;
 	}
 
 	TESForm* form = (TESForm*)Engine::LookupFormByID(formID);
-	if (!form || form->typeID != kFormType_INFO)
-	{
+	if (!form || form->typeID != kFormType_INFO) {
 		g_strInterface->Assign(PASS_COMMAND_ARGS, empty);
 		return true;
 	}
 
 	TESTopicInfo* info = (TESTopicInfo*)form;
 	TESTopicInfoResponse** ppResp = GetResponses(info, 0);
-	if (ppResp && *ppResp)
-	{
+	if (ppResp && *ppResp) {
 		const char* text = (*ppResp)->responseText.m_data;
-		if (text && text[0])
-		{
+		if (text && text[0]) {
 			g_strInterface->Assign(PASS_COMMAND_ARGS, text);
 			return true;
 		}
@@ -409,8 +328,7 @@ static void* ResolveRadioActivator(TESForm* baseForm)
 	if (!baseForm) return nullptr;
 	if (baseForm->typeID == kFormType_TalkingActivator)
 		return baseForm;
-	if (baseForm->typeID == kFormType_Activator)
-	{
+	if (baseForm->typeID == kFormType_Activator) {
 		auto* actBase = static_cast<TESObjectACTI*>(baseForm);
 		if (actBase->radioStation)
 			return actBase->radioStation;
@@ -441,12 +359,12 @@ static bool AdvanceDynamicRadios(double* result)
 		Actor* actor;
 		TESObjectREFR* stationRef;
 	};
+
 	constexpr UInt32 kMaxReseats = 64;
 	ReseatAction reseats[kMaxReseats];
 	UInt32 reseatPending = 0;
 
-	for (auto iter = dynamicRadios->Begin(); !iter.End(); ++iter)
-	{
+	for (auto iter = dynamicRadios->Begin(); !iter.End(); ++iter) {
 		DynamicRadio* dr = iter.Get();
 		if (!dr || !dr->isActive)
 			continue;
@@ -455,33 +373,28 @@ static bool AdvanceDynamicRadios(double* result)
 		Actor* sourceActor = nullptr;
 		void* activator = nullptr;
 
-		if (dr->ref)
-		{
+		if (dr->ref) {
 			stationRef = dr->ref;
 			TESForm* baseForm = dr->ref->baseForm;
-			if (baseForm)
-			{
+			if (baseForm) {
 				UInt8 baseType = baseForm->typeID;
 				if (baseType == kFormType_NPC || baseType == kFormType_Creature)
 					sourceActor = static_cast<Actor*>(dr->ref);
 				activator = ResolveRadioActivator(baseForm);
 			}
 
-			auto* xRadio = reinterpret_cast<ExtraRadioDataLite*>(
+			auto* xRadio = reinterpret_cast<ExtraRadioDataView*>(
 				Engine::BaseExtraList_GetByType(&dr->ref->extraDataList, kExtraData_RadioData));
-			if (xRadio && xRadio->positionRef)
-			{
+			if (xRadio && xRadio->positionRef) {
 				stationRef = xRadio->positionRef;
 				activator = ResolveRadioActivator(stationRef->baseForm);
 			}
 		}
 
 		bool advancedThisRadio = false;
-		if (activator)
-		{
+		if (activator) {
 			RadioEntry* entry = s_getRadioEntryFromActivator(activator);
-			if (entry)
-			{
+			if (entry) {
 				entry->data.soundTimeRemaining = 1;
 				advancedCount++;
 				advancedThisRadio = true;
@@ -491,23 +404,19 @@ static bool AdvanceDynamicRadios(double* result)
 		UInt32 soundKey = dr->sound.soundKey;
 		UInt32 staticKey = dr->radioStaticSound.soundKey;
 
-		if (soundKey && soundKey != 0xFFFFFFFF)
-		{
+		if (soundKey && soundKey != 0xFFFFFFFF) {
 			StopRadioSound(&dr->sound);
 			stoppedCount++;
 		}
-		if (staticKey && staticKey != 0xFFFFFFFF)
-		{
+		if (staticKey && staticKey != 0xFFFFFFFF) {
 			StopRadioSound(&dr->radioStaticSound);
 			stoppedCount++;
 		}
 
 		//if station entry couldn't be advanced directly, reseat the radio after the walk
-		if (!advancedThisRadio && stationRef && reseatPending < kMaxReseats)
-		{
+		if (!advancedThisRadio && stationRef && reseatPending < kMaxReseats) {
 			Actor* reseatActor = sourceActor ? sourceActor : PlayerCharacter::GetSingleton();
-			if (reseatActor && s_disableNPCRadio && s_setNPCRadio)
-			{
+			if (reseatActor && s_disableNPCRadio && s_setNPCRadio) {
 				reseats[reseatPending].actor = reseatActor;
 				reseats[reseatPending].stationRef = stationRef;
 				reseatPending++;
@@ -515,15 +424,13 @@ static bool AdvanceDynamicRadios(double* result)
 		}
 	}
 
-	for (UInt32 i = 0; i < reseatPending; i++)
-	{
+	for (UInt32 i = 0; i < reseatPending; i++) {
 		s_disableNPCRadio(reseats[i].actor);
 		s_setNPCRadio(reseats[i].actor, reseats[i].stationRef);
 		reseatCount++;
 	}
 
-	if (stoppedCount || advancedCount || reseatCount)
-	{
+	if (stoppedCount || advancedCount || reseatCount) {
 		if (IsConsoleMode())
 			Console_Print("ChangeRadioTrack >> stopped=%d advanced=%d reseat=%d",
 				stoppedCount, advancedCount, reseatCount);
@@ -544,8 +451,7 @@ static bool AdvanceCurrentRadioTrack(double* result)
 	auto* radio = IsRadioEnabled() ? static_cast<RadioEntry*>(GetCurrentRadio()) : nullptr;
 
 	//pip-boy radio disabled or no entry - try ambient/dynamic radios
-	if (!radio)
-	{
+	if (!radio) {
 		AdvanceDynamicRadios(result);
 		return true;
 	}
@@ -565,17 +471,14 @@ bool Cmd_IsRadioPlaying_Execute(COMMAND_ARGS)
 {
 	*result = 0;
 
-	if (IsPipboyRadioActive())
-	{
-		if (GetCurrentRadioSong()[0])
-		{
+	if (IsPipboyRadioActive()) {
+		if (GetCurrentRadioSong()[0]) {
 			*result = 1;
 			return true;
 		}
 
 		auto* radio = static_cast<RadioEntry*>(GetCurrentRadio());
-		if (radio->data.soundTimeRemaining)
-		{
+		if (radio->data.soundTimeRemaining) {
 			*result = 1;
 			return true;
 		}
@@ -585,8 +488,7 @@ bool Cmd_IsRadioPlaying_Execute(COMMAND_ARGS)
 	if (!dynamicRadios)
 		return true;
 
-	for (auto iter = dynamicRadios->Begin(); !iter.End(); ++iter)
-	{
+	for (auto iter = dynamicRadios->Begin(); !iter.End(); ++iter) {
 		DynamicRadio* dr = iter.Get();
 		if (!dr)
 			continue;
@@ -596,8 +498,7 @@ bool Cmd_IsRadioPlaying_Execute(COMMAND_ARGS)
 
 		UInt32 soundKey = dr->sound.soundKey;
 		UInt32 staticKey = dr->radioStaticSound.soundKey;
-		if ((soundKey && soundKey != 0xFFFFFFFF) || (staticKey && staticKey != 0xFFFFFFFF))
-		{
+		if ((soundKey && soundKey != 0xFFFFFFFF) || (staticKey && staticKey != 0xFFFFFFFF)) {
 			*result = 1;
 			return true;
 		}
@@ -607,34 +508,34 @@ bool Cmd_IsRadioPlaying_Execute(COMMAND_ARGS)
 }
 
 namespace RadioCommands {
-void Init(void* nvse)
-{
-	NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
-	g_strInterface = (NVSEStringVarInterface*)nvseIntf->QueryInterface(kInterface_StringVar);
-}
+	void Init(void* nvse)
+	{
+		NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
+		g_strInterface = (NVSEStringVarInterface*)nvseIntf->QueryInterface(kInterface_StringVar);
+	}
 
-void RegisterCommands(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterTypedCommand(&kCommandInfo_GetPlayingRadioTrack, kRetnType_Form);
-	nvse->RegisterTypedCommand(&kCommandInfo_GetPlayingRadioTrackFileName, kRetnType_String);
-}
+	void RegisterCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterTypedCommand(&kCommandInfo_GetPlayingRadioTrack, kRetnType_Form);
+		nvse->RegisterTypedCommand(&kCommandInfo_GetPlayingRadioTrackFileName, kRetnType_String);
+	}
 
-void RegisterCommands2(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterTypedCommand(&kCommandInfo_GetPlayingRadioText, kRetnType_String);
-}
+	void RegisterRadioTextCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterTypedCommand(&kCommandInfo_GetPlayingRadioText, kRetnType_String);
+	}
 
-void RegisterCommands3(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_IsRadioPlaying);
-}
+	void RegisterIsPlayingCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_IsRadioPlaying);
+	}
 
-void RegisterCommands4(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_ChangeRadioTrack);
-}
+	void RegisterChangeTrackCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_ChangeRadioTrack);
+	}
 }

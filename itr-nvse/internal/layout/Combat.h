@@ -1,4 +1,3 @@
-//Combat layout - combat controller/state/procedure/target + world location
 #pragma once
 
 #include <cstddef>
@@ -79,6 +78,22 @@ struct CombatTargetView {
 	UInt8 pad66[2];
 };
 
+struct ActorHitDataView {
+	void* source; //0x00 attacker
+	void* target; //0x04 victim
+	void* projectile; //0x08
+	UInt32 weaponAV; //0x0C
+	SInt32 hitLocation; //0x10
+	float healthDmg; //0x14
+	float wpnBaseDmg; //0x18
+	float fatigueDmg; //0x1C
+	float limbDmg; //0x20
+	float blockDTMod; //0x24
+	float armorDmg; //0x28
+	float weaponDmg; //0x2C
+	void* weapon; //0x30
+};
+
 static_assert(offsetof(CombatControllerView, combatGroup) == 0x80);
 static_assert(offsetof(CombatControllerView, attackProcedure) == 0x84);
 static_assert(offsetof(CombatControllerView, movementProcedure) == 0x88);
@@ -107,6 +122,11 @@ static_assert(offsetof(CombatTargetView, timestamps) == 0x4C);
 static_assert(offsetof(CombatTargetView, inLOSCount) == 0x64);
 static_assert(offsetof(CombatTargetView, inFullLOSCount) == 0x65);
 static_assert(sizeof(CombatTargetView) == 0x68);
+static_assert(offsetof(ActorHitDataView, hitLocation) == 0x10);
+static_assert(offsetof(ActorHitDataView, healthDmg) == 0x14);
+static_assert(offsetof(ActorHitDataView, fatigueDmg) == 0x1C);
+static_assert(offsetof(ActorHitDataView, limbDmg) == 0x20);
+static_assert(offsetof(ActorHitDataView, weapon) == 0x30);
 
 inline void* CombatControllerGetCombatGroup(void* combatController)
 {

@@ -1,6 +1,5 @@
 #pragma once
 
-namespace ITR
-{
+namespace ITR {
 	bool Init(void* nvse);
 }

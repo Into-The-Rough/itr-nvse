@@ -10,13 +10,12 @@
 
 #include "internal/globals.h"
 
-namespace NPCDoorUnlockBlock
-{
+namespace NPCDoorUnlockBlock {
 	static int g_blockLevel = 0;
 
-	typedef bool (__cdecl* _CanActorIgnoreLock)(void* doorRef, void* actor, bool activate, bool movement);
-	typedef bool (__thiscall* _IsFollowing)(void* actor);
-	static _IsFollowing IsFollowing = (_IsFollowing)0x8842C0;
+	using CanActorIgnoreLock_t = bool(__cdecl*)(void* doorRef, void* actor, bool activate, bool movement);
+	using IsFollowing_t = bool(__thiscall*)(void* actor);
+	static IsFollowing_t IsFollowing = (IsFollowing_t)0x8842C0;
 
 	static Detours::JumpDetour s_detour;
 
@@ -25,18 +24,18 @@ namespace NPCDoorUnlockBlock
 		return *(void**)g_thePlayerPtr;
 	}
 
-	bool __cdecl CanActorIgnoreLock_Hook(void* doorRef, void* actor, bool activate, bool movement)
+	bool __cdecl Hook_CanActorIgnoreLock(void* doorRef, void* actor, bool activate, bool movement)
 	{
 		if (g_blockLevel == 0)
-			return s_detour.GetTrampoline<_CanActorIgnoreLock>()(doorRef, actor, activate, movement);
+			return s_detour.GetTrampoline<CanActorIgnoreLock_t>()(doorRef, actor, activate, movement);
 
 		//always allow player
 		if (actor == GetPlayer())
-			return s_detour.GetTrampoline<_CanActorIgnoreLock>()(doorRef, actor, activate, movement);
+			return s_detour.GetTrampoline<CanActorIgnoreLock_t>()(doorRef, actor, activate, movement);
 
 		//always allow companions (vanilla behaviour)
 		if (IsFollowing(actor))
-			return s_detour.GetTrampoline<_CanActorIgnoreLock>()(doorRef, actor, activate, movement);
+			return s_detour.GetTrampoline<CanActorIgnoreLock_t>()(doorRef, actor, activate, movement);
 
 		//level 2: nobody can bypass locks, must use key/lockpicks
 		if (g_blockLevel >= 2)
@@ -57,7 +56,7 @@ namespace NPCDoorUnlockBlock
 	//verified in IDA: 5 bytes are stolen from the CanActorIgnoreLock prologue
 	void Init(int level)
 	{
-		if (!s_detour.WriteRelJump(0x518F00, CanActorIgnoreLock_Hook, 5)) //CanActorIgnoreLock
+		if (!s_detour.WriteRelJump(0x518F00, Hook_CanActorIgnoreLock, 5)) //CanActorIgnoreLock
 			Log("ERROR: NPCDoorUnlockBlock hook failed");
 		g_blockLevel = level;
 	}

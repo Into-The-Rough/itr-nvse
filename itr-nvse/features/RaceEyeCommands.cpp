@@ -7,8 +7,7 @@
 
 extern const _ExtractArgs ExtractArgs;
 
-namespace
-{
+namespace {
 	//AddEye dedups by formID, both free nodes on the game heap
 	using AddEye_t = void(__thiscall*)(TESRace*, TESEyes*);
 	using ClearEyes_t = void(__thiscall*)(TESRace*);
@@ -20,9 +19,9 @@ namespace
 		return (form && form->typeID == kFormType_Eyes) ? static_cast<TESEyes*>(form) : nullptr;
 	}
 
-	struct EyeMatch
-	{
+	struct EyeMatch {
 		TESEyes* target;
+
 		bool Accept(TESEyes* eye) { return eye == target; }
 	};
 }
@@ -36,8 +35,7 @@ bool Cmd_AddRaceEye_Execute(COMMAND_ARGS)
 		return true;
 
 	TESEyes* eyes = AsEyes(eyeForm);
-	if (!race || !eyes)
-	{
+	if (!race || !eyes) {
 		if (IsConsoleMode())
 			Console_Print("AddRaceEye >> needs a race and an eyes form");
 		return true;
@@ -57,14 +55,13 @@ bool Cmd_RemoveRaceEye_Execute(COMMAND_ARGS)
 		return true;
 
 	TESEyes* eyes = AsEyes(eyeForm);
-	if (!race || !eyes)
-	{
+	if (!race || !eyes) {
 		if (IsConsoleMode())
 			Console_Print("RemoveRaceEye >> needs a race and an eyes form");
 		return true;
 	}
 
-	EyeMatch match{ eyes };
+	EyeMatch match{eyes};
 	if (race->eyes.RemoveIf(match))
 		*result = 1;
 	return true;
@@ -97,8 +94,7 @@ DEFINE_COMMAND_PLUGIN(AddRaceEye, "Make an eyes form selectable for a race in th
 DEFINE_COMMAND_PLUGIN(RemoveRaceEye, "Remove an eyes form from a race's selectable eye list", 0, 2, kParams_AddRaceEye);
 DEFINE_COMMAND_PLUGIN(ClearRaceEyes, "Empty a race's selectable eye list", 0, 1, kParams_ClearRaceEyes);
 
-namespace RaceEyeCommands
-{
+namespace RaceEyeCommands {
 	void RegisterCommands(void* nvsePtr)
 	{
 		NVSEInterface* nvse = static_cast<NVSEInterface*>(nvsePtr);

@@ -1,7 +1,6 @@
 #pragma once
 
-namespace ConsoleInputSuppression
-{
+namespace ConsoleInputSuppression {
 	bool Init(void* nvseInterface);
 	void InstallHook();
 }

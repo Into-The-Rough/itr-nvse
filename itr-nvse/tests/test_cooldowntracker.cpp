@@ -34,8 +34,8 @@ TEST(CooldownTracker_StillPresentNoTrigger)
 TEST(CooldownTracker_LeftAndReturned)
 {
 	CooldownTracker<64> tracker;
-	uint32_t cooldown = 60000;
-	uint32_t leaveThreshold = 3000;
+	UInt32 cooldown = 60000;
+	UInt32 leaveThreshold = 3000;
 
 	//first visit at t=1000
 	tracker.Check(0x12345, 1000, cooldown);
@@ -50,8 +50,8 @@ TEST(CooldownTracker_LeftAndReturned)
 TEST(CooldownTracker_MarkShownCooldown)
 {
 	CooldownTracker<64> tracker;
-	uint32_t cooldown = 60000;
-	uint32_t leaveThreshold = 3000;
+	UInt32 cooldown = 60000;
+	UInt32 leaveThreshold = 3000;
 
 	//first visit at t=1000
 	tracker.Check(0x12345, 1000, cooldown);
@@ -72,8 +72,8 @@ TEST(CooldownTracker_MarkShownCooldown)
 TEST(CooldownTracker_CooldownExpired)
 {
 	CooldownTracker<64> tracker;
-	uint32_t cooldown = 60000;
-	uint32_t leaveThreshold = 3000;
+	UInt32 cooldown = 60000;
+	UInt32 leaveThreshold = 3000;
 
 	tracker.Check(0x12345, 1000, cooldown);
 	tracker.UpdateCooldowns(5000, leaveThreshold);
@@ -90,8 +90,8 @@ TEST(CooldownTracker_CooldownExpired)
 TEST(CooldownTracker_MultipleMarkers)
 {
 	CooldownTracker<64> tracker;
-	uint32_t cooldown = 60000;
-	uint32_t leaveThreshold = 3000;
+	UInt32 cooldown = 60000;
+	UInt32 leaveThreshold = 3000;
 
 	tracker.Check(0x11111, 1000, cooldown);
 	tracker.Check(0x22222, 1000, cooldown);
@@ -123,8 +123,8 @@ TEST(CooldownTracker_MaxCapacity)
 TEST(CooldownTracker_FullTableInsertEvictsStalest)
 {
 	CooldownTracker<4> tracker;
-	uint32_t cooldown = 60000;
-	uint32_t leaveThreshold = 3000;
+	UInt32 cooldown = 60000;
+	UInt32 leaveThreshold = 3000;
 
 	tracker.Check(1, 1000, cooldown);
 	tracker.Check(2, 2000, cooldown);
@@ -165,8 +165,8 @@ TEST(CooldownTracker_Clear)
 TEST(CooldownTracker_NotLeftNoTrigger)
 {
 	CooldownTracker<64> tracker;
-	uint32_t cooldown = 60000;
-	uint32_t leaveThreshold = 3000;
+	UInt32 cooldown = 60000;
+	UInt32 leaveThreshold = 3000;
 
 	tracker.Check(0x12345, 1000, cooldown);
 	//only 2 seconds since last seen - not left yet
@@ -180,8 +180,8 @@ TEST(CooldownTracker_NotLeftNoTrigger)
 TEST(CooldownTracker_LeaveThresholdBoundary)
 {
 	CooldownTracker<64> tracker;
-	uint32_t cooldown = 60000;
-	uint32_t leaveThreshold = 3000;
+	UInt32 cooldown = 60000;
+	UInt32 leaveThreshold = 3000;
 
 	tracker.Check(0x12345, 1000, cooldown);
 	tracker.UpdateCooldowns(4000, leaveThreshold);
@@ -195,7 +195,7 @@ TEST(CooldownTracker_LeaveThresholdBoundary)
 TEST(CooldownTracker_ZeroCooldownTriggersAfterLeaving)
 {
 	CooldownTracker<64> tracker;
-	uint32_t leaveThreshold = 3000;
+	UInt32 leaveThreshold = 3000;
 
 	tracker.Check(0x12345, 1000, 0);
 	tracker.UpdateCooldowns(5000, leaveThreshold);

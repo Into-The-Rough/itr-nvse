@@ -9,11 +9,11 @@ extern NVSEEventManagerInterface* g_eventManagerInterface;
 
 inline void* PackEventFloatArg(float value)
 {
-	union
-	{
+	union {
 		float f;
 		UInt32 u;
 	} bits;
+
 	bits.f = value;
 	return reinterpret_cast<void*>(bits.u);
 }
@@ -31,7 +31,7 @@ namespace EventDispatch {
 	//ShowOff pre-activate gate for inventory refs - true means activation may proceed
 	bool DispatchShowOffPreActivate(TESObjectREFR* player, TESForm* baseForm, TESObjectREFR* invRef);
 
-	typedef void (*ProbeHandlerFn)(TESObjectREFR*, void*);
+	using ProbeHandlerFn = void (*)(TESObjectREFR*, void*);
 
 	//sentinel handler at extreme priority - while it is still first in line for the
 	//event, no external handler is registered and hooks can skip their bookkeeping

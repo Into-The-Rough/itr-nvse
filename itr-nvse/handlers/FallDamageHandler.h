@@ -3,7 +3,7 @@
 class Actor;
 
 namespace FallDamageHandler {
-	void InstallHook();
+	void Init();
 	void RegisterCommands(void* nvse);
 	void ClearState();
 	bool HasOverride(Actor* actor);

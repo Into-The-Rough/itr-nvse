@@ -14,13 +14,12 @@
 #include <cstdio>
 #include <share.h>
 
-namespace VATSProjectileFix
-{
+namespace VATSProjectileFix {
 	constexpr UInt32 kAddr_HookSite = 0x7ED349;
 	constexpr UInt32 kAddr_FindTarget = 0x7F3C90;
 
 	static Detours::CallDetour s_vatsMenuUpdateCall;
-	typedef bool(__thiscall* VATSMenuUpdate_t)(void*);
+	using VATSMenuUpdate_t = bool(__thiscall*)(void*);
 	static bool s_enabled = false;
 	static FILE* s_diagnosticLog = nullptr;
 	constexpr UInt32 kMaxDiagnosticParts = 32;
@@ -74,8 +73,7 @@ namespace VATSProjectileFix
 			auto* part = node->item;
 			snapshot.parts[snapshot.count++] = {
 				part->bodyPartID, part->percentVisible, part->hitChance,
-				part->isOnScreen, part->chanceCalculated, part->firstTimeShown, part->needsRecalc
-			};
+				part->isOnScreen, part->chanceCalculated, part->firstTimeShown, part->needsRecalc};
 		}
 		snapshot.truncated = !VATSBodyPartNodeIsEmpty(node);
 	}
@@ -103,7 +101,7 @@ namespace VATSProjectileFix
 		HMODULE module = nullptr;
 		char path[MAX_PATH] = {};
 		if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-			reinterpret_cast<LPCSTR>(target), &module))
+				reinterpret_cast<LPCSTR>(target), &module))
 			GetModuleFileNameA(module, path, sizeof(path));
 		std::fprintf(s_diagnosticLog, "%s site=%08X target=%08X module=%s\n", label, site, target, path);
 	}
@@ -166,7 +164,7 @@ namespace VATSProjectileFix
 		return result;
 	}
 
-	static bool __fastcall VATSMenuUpdate_Hook(void* pThis, void*)
+	static bool __fastcall Hook_VATSMenuUpdate(void* pThis, void* edx)
 	{
 		++s_hookDepth;
 		auto original = reinterpret_cast<VATSMenuUpdate_t>(s_vatsMenuUpdateCall.GetOverwrittenAddr());
@@ -205,7 +203,7 @@ namespace VATSProjectileFix
 			std::fprintf(s_diagnosticLog, "\nVATS diagnostic 1: enabled=%u; restart required between settings\n", s_enabled);
 			LogCallOwner("original menu update", kAddr_HookSite);
 		}
-		bool installed = s_vatsMenuUpdateCall.WriteRelCall(kAddr_HookSite, VATSMenuUpdate_Hook);
+		bool installed = s_vatsMenuUpdateCall.WriteRelCall(kAddr_HookSite, Hook_VATSMenuUpdate);
 		if (s_diagnosticLog) {
 			std::fprintf(s_diagnosticLog, "installed=%u capturedOriginal=%08X\n", installed, s_vatsMenuUpdateCall.GetOverwrittenAddr());
 			std::fflush(s_diagnosticLog);

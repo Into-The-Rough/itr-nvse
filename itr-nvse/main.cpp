@@ -37,5 +37,4 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface* nvse)
 	if (nvse->isEditor) return true;
 	return ITR::Init((void*)nvse);
 }
-
 }

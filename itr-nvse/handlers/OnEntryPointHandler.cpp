@@ -9,62 +9,61 @@
 #include "internal/GameLayout.h"
 #include "internal/EventDispatch.h"
 #include "internal/Detours.h"
-
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 constexpr UInt32 kVtbl_BGSEntryPointPerkEntry = 0x1046D0C;
 
 namespace OnEntryPointHandler {
-    //double-buffered: build into new map, swap pointer atomically
-    //readers always see a complete map, never a half-built one
-    typedef std::unordered_map<UInt32, BGSPerk*> EntryMap;
-    static EntryMap g_mapA, g_mapB;
-    static EntryMap* volatile g_activeMap = nullptr;
+	//double-buffered: build into new map, swap pointer atomically
+	//readers always see a complete map, never a half-built one
+	using EntryMap = std::unordered_map<UInt32, BGSPerk*>;
+	static EntryMap g_mapA, g_mapB;
+	static EntryMap* volatile g_activeMap = nullptr;
 
-    struct EntryPointContext {
-        UInt8 entryPoint;
-        Actor* actor;
-        TESForm* filterForm1;
-        BGSEntryPointPerkEntry* perkEntry;
-    };
+	struct EntryPointContext {
+		UInt8 entryPoint;
+		Actor* actor;
+		TESForm* filterForm1;
+		BGSEntryPointPerkEntry* perkEntry;
+	};
 
-    //per-thread to avoid races between AI worker threads
-    static thread_local std::vector<EntryPointContext> g_contextStack;
+	//per-thread to avoid races between AI worker threads
+	static thread_local std::vector<EntryPointContext> g_contextStack;
 
-    bool g_hookInstalled = false;
-    static bool g_useMapB = false; //which buffer to build into next
+	bool g_hookInstalled = false;
+	static bool g_useMapB = false; //which buffer to build into next
 }
 
 namespace OnEntryPointHandler {
-void BuildEntryMap()
-{
-    using namespace OnEntryPointHandler;
+	void BuildEntryMap()
+	{
+		using namespace OnEntryPointHandler;
 
-    //build into the inactive buffer while readers use the active one
-    EntryMap* buildMap = g_useMapB ? &g_mapB : &g_mapA;
-    buildMap->clear();
+		//build into the inactive buffer while readers use the active one
+		EntryMap* buildMap = g_useMapB ? &g_mapB : &g_mapA;
+		buildMap->clear();
 
-    auto* dataHandler = static_cast<DataHandler*>(*g_dataHandlerPtr);
-    if (!dataHandler) return;
+		auto* dataHandler = static_cast<DataHandler*>(*g_dataHandlerPtr);
+		if (!dataHandler) return;
 
-    auto* perkList = DataHandlerGetPerkList(dataHandler);
-    if (!perkList) return;
+		auto* perkList = DataHandlerGetPerkList(dataHandler);
+		if (!perkList) return;
 
-    for (auto* perkNode = perkList->Head(); perkNode && perkNode->Item(); perkNode = perkNode->Next()) {
-        BGSPerk* perk = perkNode->Item();
+		for (auto* perkNode = perkList->Head(); perkNode && perkNode->Item(); perkNode = perkNode->Next()) {
+			BGSPerk* perk = perkNode->Item();
 
-        for (auto* entryNode = perk->entries.Head(); entryNode && entryNode->Item(); entryNode = entryNode->Next()) {
-            BGSPerkEntry* entry = entryNode->Item();
+			for (auto* entryNode = perk->entries.Head(); entryNode && entryNode->Item(); entryNode = entryNode->Next()) {
+				BGSPerkEntry* entry = entryNode->Item();
 
-            if (entry->vtbl == kVtbl_BGSEntryPointPerkEntry)
-                (*buildMap)[(UInt32)entry] = perk;
-        }
-    }
+				if (entry->vtbl == kVtbl_BGSEntryPointPerkEntry)
+					(*buildMap)[(UInt32)entry] = perk;
+			}
+		}
 
-    //readers instantly see the new complete map
-    InterlockedExchangePointer((volatile PVOID*)&g_activeMap, buildMap);
-    g_useMapB = !g_useMapB;
-}
+		//readers instantly see the new complete map
+		InterlockedExchangePointer((volatile PVOID*)&g_activeMap, buildMap);
+		g_useMapB = !g_useMapB;
+	}
 }
 
 static UInt32 s_ExecuteFunctionAddr = 0; //chained original, set at install
@@ -72,56 +71,54 @@ static Detours::CallDetour s_executeFunctionDetour;
 
 static void __cdecl PushContext(UInt32 entryPoint, Actor* actor, TESForm* filterForm1, BGSEntryPointPerkEntry* perkEntry)
 {
-    OnEntryPointHandler::EntryPointContext ctx;
-    ctx.entryPoint = (UInt8)entryPoint;
-    ctx.actor = actor;
-    ctx.filterForm1 = filterForm1;
-    ctx.perkEntry = perkEntry;
-    OnEntryPointHandler::g_contextStack.push_back(ctx);
+	OnEntryPointHandler::EntryPointContext ctx;
+	ctx.entryPoint = (UInt8)entryPoint;
+	ctx.actor = actor;
+	ctx.filterForm1 = filterForm1;
+	ctx.perkEntry = perkEntry;
+	OnEntryPointHandler::g_contextStack.push_back(ctx);
 }
 
 static void DispatchEntryPointEvent()
 {
-    if (OnEntryPointHandler::g_contextStack.empty()) return;
+	if (OnEntryPointHandler::g_contextStack.empty()) return;
 
-    auto* map = OnEntryPointHandler::g_activeMap;
-    if (!map) return;
+	auto* map = OnEntryPointHandler::g_activeMap;
+	if (!map) return;
 
-    const auto& ctx = OnEntryPointHandler::g_contextStack.back();
-    if (!ctx.perkEntry) return;
+	const auto& ctx = OnEntryPointHandler::g_contextStack.back();
+	if (!ctx.perkEntry) return;
 
-    auto it = map->find((UInt32)ctx.perkEntry);
-    if (it == map->end()) return;
+	auto it = map->find((UInt32)ctx.perkEntry);
+	if (it == map->end()) return;
 
-    BGSPerk* perk = it->second;
+	BGSPerk* perk = it->second;
 
-    //a handler can trigger a nested entry point synchronously, cap the depth
-    //and drop dispatches past it, breaking the cycle
-    static UInt32 s_depth = 0;
-    if (s_depth >= 16)
-    {
-        static volatile LONG loggedDepth = 0;
-        if (InterlockedCompareExchange(&loggedDepth, 1, 0) == 0)
-            Log("OnEntryPointHandler: recursion cap hit, dropping nested dispatch");
-        return;
-    }
+	//a handler can trigger a nested entry point synchronously, cap the depth
+	//and drop dispatches past it, breaking the cycle
+	static UInt32 s_depth = 0;
+	if (s_depth >= 16) {
+		static volatile LONG loggedDepth = 0;
+		if (InterlockedCompareExchange(&loggedDepth, 1, 0) == 0)
+			Log("OnEntryPointHandler: recursion cap hit, dropping nested dispatch");
+		return;
+	}
 
-    if (g_eventManagerInterface && ctx.actor)
-    {
-        s_depth++;
-        g_eventManagerInterface->DispatchEventThreadSafe("ITR:OnEntryPoint",
-            nullptr, reinterpret_cast<TESObjectREFR*>(ctx.actor),
-            (TESForm*)perk, (int)ctx.entryPoint, (TESForm*)ctx.actor, ctx.filterForm1);
-        s_depth--;
-    }
+	if (g_eventManagerInterface && ctx.actor) {
+		s_depth++;
+		g_eventManagerInterface->DispatchEventThreadSafe("ITR:OnEntryPoint",
+			nullptr, reinterpret_cast<TESObjectREFR*>(ctx.actor),
+			(TESForm*)perk, (int)ctx.entryPoint, (TESForm*)ctx.actor, ctx.filterForm1);
+		s_depth--;
+	}
 }
 
 static void __cdecl DoDispatchAndPop()
 {
-    DispatchEntryPointEvent();
-    if (!OnEntryPointHandler::g_contextStack.empty()) {
-        OnEntryPointHandler::g_contextStack.pop_back();
-    }
+	DispatchEntryPointEvent();
+	if (!OnEntryPointHandler::g_contextStack.empty()) {
+		OnEntryPointHandler::g_contextStack.pop_back();
+	}
 }
 
 static UInt32 s_ExecuteFunctionReturnAddr = 0x5E5ABE;
@@ -129,81 +126,78 @@ static UInt32 s_ExecuteFunctionReturnAddr = 0x5E5ABE;
 static DWORD s_mainThreadId = 0;
 
 static void EntryPointProbe(TESObjectREFR*, void*) {}
-static EventDispatch::ListenerProbe s_probe = { "ITR:OnEntryPoint", "ITR_OnEntryPointProbe", EntryPointProbe };
+
+static EventDispatch::ListenerProbe s_probe = {"ITR:OnEntryPoint", "ITR_OnEntryPointProbe", EntryPointProbe};
 static volatile UInt8 s_hasListeners = 1;
 
 static __declspec(naked) void Hook_ExecuteFunctionCall()
 {
-    __asm {
-        add esp, 4                                //drop the ret addr pushed by the site call
-                                                  //(always 0x5E5ABE), engine args must sit at
-                                                  //esp for the inner call
-        mov eax, fs:[0x24]                        //TEB->ClientId.UniqueThread (current tid)
+	__asm {
+        add esp, 4 //drop the ret addr pushed by the site call
+		//(always 0x5E5ABE), engine args must sit at
+		//esp for the inner call
+        mov eax, fs:[0x24] //TEB->ClientId.UniqueThread (current tid)
         cmp eax, [s_mainThreadId]
         jne ai_thread
         cmp byte ptr [s_hasListeners], 0
         je ai_thread
 
-        //filterForm1 lives in the first vararg slot ([ebp+0x10]) only when the entry
-        //point has more than one filter arg (v17[0]=actor, v17[1]=filterForm1...).
-        //numArgs is at [ebp-0x5E]; if <=1, the slot holds an unrelated param, not a form.
+			//filterForm1 is at [ebp+0x10] only when numArgs ([ebp-0x5E]) > 1
         xor eax, eax
         cmp byte ptr [ebp-0x5E], 1
         jbe push_args
         mov eax, [ebp+0x10]
     push_args:
-        push [ebp-0x74]                           //cdecl arg4: perkEntry local
-        push eax                                  //cdecl arg3: filterForm1 (or null)
-        push [ebp+0x0C]                           //cdecl arg2: actor
-        movzx eax, byte ptr [ebp+0x08]            //cdecl arg1: entryPoint (1-byte id -> UInt32)
+        push [ebp-0x74] //cdecl arg4: perkEntry local
+        push eax //cdecl arg3: filterForm1 (or null)
+        push [ebp+0x0C] //cdecl arg2: actor
+        movzx eax, byte ptr [ebp+0x08] //cdecl arg1: entryPoint (1-byte id -> UInt32)
         push eax
-        call PushContext                          //record ctx before the engine fn runs
-        add esp, 16                               //cdecl cleanup 4 dwords
+        call PushContext //record ctx before the engine fn runs
+        add esp, 16 //cdecl cleanup 4 dwords
 
-        call dword ptr [s_ExecuteFunctionAddr]    //ExecuteFunction(perkEntry,...) runs here
+        call dword ptr [s_ExecuteFunctionAddr] //ExecuteFunction(perkEntry,...) runs here
 
         pushad
         pushfd
-        call DoDispatchAndPop                     //fire event with ctx snapshot, then pop
+        call DoDispatchAndPop //fire event with ctx snapshot, then pop
         popfd
         popad
 
         jmp dword ptr [s_ExecuteFunctionReturnAddr]
 
     ai_thread:
-        call dword ptr [s_ExecuteFunctionAddr]    //just run the engine call, no bookkeeping
+        call dword ptr [s_ExecuteFunctionAddr] //just run the engine call, no bookkeeping
         jmp dword ptr [s_ExecuteFunctionReturnAddr]
-    }
+	}
 }
 
 namespace OnEntryPointHandler {
-bool Init(void* nvseInterface)
-{
-    NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
-    if (nvse->isEditor) return false;
+	bool Init(void* nvseInterface)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvseInterface;
+		if (nvse->isEditor) return false;
 
-    if (!g_hookInstalled) {
-        s_mainThreadId = GetCurrentThreadId();
-        if (s_executeFunctionDetour.WriteRelCall(0x5E5AB9, (UInt32)Hook_ExecuteFunctionCall))
-        {
-            s_ExecuteFunctionAddr = s_executeFunctionDetour.GetOverwrittenAddr();
-            g_hookInstalled = true;
-        }
-        else
-            Log("OnEntryPointHandler: no CALL at 0x5E5AB9, another mod owns the perk dispatch, handler disabled");
-    }
+		if (!g_hookInstalled) {
+			s_mainThreadId = GetCurrentThreadId();
+			if (s_executeFunctionDetour.WriteRelCall(0x5E5AB9, (UInt32)Hook_ExecuteFunctionCall)) {
+				s_ExecuteFunctionAddr = s_executeFunctionDetour.GetOverwrittenAddr();
+				g_hookInstalled = true;
+			} else
+				Log("OnEntryPointHandler: no CALL at 0x5E5AB9, another mod owns the perk dispatch, handler disabled");
+		}
 
-    return true;
-}
+		return true;
+	}
 
-void InstallListenerProbe()
-{
-    s_probe.Install();
-    s_hasListeners = 1;
-}
+	void InstallListenerProbe()
+	{
+		s_probe.Install();
+		s_hasListeners = 1;
+	}
 
-void Update()
-{
-    s_hasListeners = s_probe.Refresh(false) ? 1 : 0;
-}
+	void Update()
+	{
+		s_hasListeners = s_probe.Refresh(false) ? 1 : 0;
+	}
 }

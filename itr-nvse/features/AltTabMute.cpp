@@ -5,12 +5,10 @@
 #include <Windows.h>
 #include "internal/GameGlobals.h"
 
-namespace AltTabMute
-{
+namespace AltTabMute {
 	constexpr UInt32 kNumVolumeChannels = 12;
 
-	struct BSAudioManager
-	{
+	struct BSAudioManager {
 		void* vtable;
 		UInt8 pad004[0x13C];
 		float volumes[kNumVolumeChannels];
@@ -27,8 +25,7 @@ namespace AltTabMute
 	static void OnFocusLost()
 	{
 		BSAudioManager* audioMgr = BSAudioManager::Get();
-		for (UInt32 i = 0; i < kNumVolumeChannels; i++)
-		{
+		for (UInt32 i = 0; i < kNumVolumeChannels; i++) {
 			g_savedVolumes[i] = audioMgr->volumes[i];
 			audioMgr->volumes[i] = 0.0f;
 		}
@@ -41,8 +38,7 @@ namespace AltTabMute
 	{
 		if (!g_volumesSaved) return;
 		BSAudioManager* audioMgr = BSAudioManager::Get();
-		for (UInt32 i = 0; i < kNumVolumeChannels; i++)
-		{
+		for (UInt32 i = 0; i < kNumVolumeChannels; i++) {
 			audioMgr->volumes[i] = g_savedVolumes[i];
 		}
 		SetIniMusicVolume(g_savedIniMusicVolume);
@@ -50,16 +46,14 @@ namespace AltTabMute
 
 	void Update()
 	{
-		if (!g_gameWindow)
-		{
+		if (!g_gameWindow) {
 			//engine-owned hwnd from OSGlobals, set once at startup and never changes
 			g_gameWindow = (HWND)OSGlobalsGetWindow(*g_osGlobalsPtr);
 			if (!g_gameWindow) return;
 		}
 
 		bool currentlyInFocus = (GetForegroundWindow() == g_gameWindow);
-		if (currentlyInFocus != g_wasInFocus)
-		{
+		if (currentlyInFocus != g_wasInFocus) {
 			if (!currentlyInFocus)
 				OnFocusLost();
 			else
@@ -68,4 +62,3 @@ namespace AltTabMute
 		}
 	}
 }
-

@@ -16,8 +16,7 @@
 extern const _ExtractArgs ExtractArgs;
 extern NVSEArrayVarInterface* g_arrInterface;
 
-namespace
-{
+namespace {
 	static constexpr UInt32 kRagdollFlag_Flip = 1; //spin about pitch axis (front/back flip)
 	static constexpr float kRagdollEnterForce = 0.01f;
 	//ragdoll bodies don't exist until the anim->ragdoll blend creates them
@@ -57,18 +56,18 @@ namespace
 		UInt8 angular;
 	};
 
-	typedef void (__cdecl* BHKWorld_DoObjectRec_t)(NiAVObject* object, HavokObjectRecData* data,
-		void (__cdecl* callback)(void* collisionObject, HavokObjectRecData* data));
+	using BHKWorld_DoObjectRec_t = void(__cdecl*)(NiAVObject* object, HavokObjectRecData* data,
+		void(__cdecl* callback)(void* collisionObject, HavokObjectRecData* data));
 
 	static BHKWorld_DoObjectRec_t BHKWorld_DoObjectRec = (BHKWorld_DoObjectRec_t)0xC68900;
 
 	//bhkWorld::SetMotion(node, motionType, recurse, force, allowActivate) - __cdecl
-	typedef int (__cdecl* bhkWorld_SetMotion_t)(void*, int, int, int, int);
+	using bhkWorld_SetMotion_t = int(__cdecl*)(void*, int, int, int, int);
 	static bhkWorld_SetMotion_t bhkWorld_SetMotion = (bhkWorld_SetMotion_t)0xC6A350;
 	static constexpr int kMotionType_Dynamic = 1;
 
 	//bhkUtilFunctions::GetbhkCollisionObject returns null when the node has no collision object
-	typedef void* (__cdecl* GetbhkCollisionObject_t)(void*);
+	using GetbhkCollisionObject_t = void*(__cdecl*)(void*);
 	static GetbhkCollisionObject_t GetbhkCollisionObject = (GetbhkCollisionObject_t)0x43B610;
 
 	static QueuedRagdollMotion s_ragdollMotions[kMaxRagdollMotions] = {};
@@ -164,11 +163,9 @@ namespace
 		data.velocity = velocity;
 		data.angular = angular ? 1 : 0;
 
-		//the generated DismemberedLimb wrapper can retain an invalid collision
-		//pointer; the actual blend collision objects are on its child bones
+		//DismemberedLimb wrapper can retain an invalid collision ptr, walk child bones instead
 		const int count = ThisCall<int>(0x43B480, root);
-		for (int i = 0; i < count; i++)
-		{
+		for (int i = 0; i < count; i++) {
 			NiAVObject* child = ThisCall<NiAVObject*>(0x43B4A0, root, i);
 			if (child)
 				BHKWorld_DoObjectRec(child, &data, SetRigidBodyVelocity);
@@ -193,28 +190,30 @@ namespace
 	//the command limb arg selects the boosted biped part
 	int LimbTargetIndex(UInt8 limb)
 	{
-		switch (limb)
-		{
-			case 1:           return 1; //head
-			case 3: case 5:   return 3; //left arm / hand
-			case 4: case 6:   return 5; //right arm / hand
-			case 7: case 9:   return 7; //left leg / foot
-			case 8: case 10:  return 10; //right leg / foot
-			default:          return -1; //torso / pelvis -> whole-body falloff
+		switch (limb) {
+			case 1: return 1; //head
+			case 3:
+			case 5: return 3; //left arm / hand
+			case 4:
+			case 6: return 5; //right arm / hand
+			case 7:
+			case 9: return 7; //left leg / foot
+			case 8:
+			case 10: return 10; //right leg / foot
+			default: return -1; //torso / pelvis -> whole-body falloff
 		}
 	}
 
 	//walk the scene tree and set angular velocity on each ragdoll body
 	//the caller only reaches this after the ragdoll controller exists
-	typedef NiNode* (__thiscall* GetAsNiNode_t)(void*);
+	using GetAsNiNode_t = NiNode*(__thiscall*)(void*);
 
 	void ApplySpinRecursive(void* node, const float* angVel)
 	{
 		if (!node)
 			return;
 
-		if (void* collObj = GetbhkCollisionObject(node))
-		{
+		if (void* collObj = GetbhkCollisionObject(node)) {
 			if (void* rb = ThisCall<void*>(0x6FA820, collObj)) //base rigid body
 			{
 				if (void* hk = ThisCall<void*>(0x4AE750, rb)) //hk referenced object
@@ -231,23 +230,19 @@ namespace
 			ApplySpinRecursive(ThisCall<void*>(0x43B4A0, asNode, i), angVel); //child node
 	}
 
-	//biped part is bits 8-12 of the collision filter
-	//1=head 2=body 3/4=spine
-	//5/6/7=left arm 8/9/10=left leg
-	//11/12/13=right arm 14/15/16=right leg
+	//biped part is bits 8-12 of collision filter (1=head, 2..4=body/spine, 5..7/11..13=arms, 8..10/14..16=legs)
 	bool LimbMatchesPart(UInt8 limb, int part)
 	{
-		switch (limb)
-		{
-			case 1:  return part == 1;
-			case 2:  return part == 2 || part == 3 || part == 4;
-			case 3:  return part >= 5 && part <= 7;
-			case 4:  return part >= 11 && part <= 13;
-			case 5:  return part == 7;
-			case 6:  return part == 13;
-			case 7:  return part >= 8 && part <= 10;
-			case 8:  return part >= 14 && part <= 16;
-			case 9:  return part == 10;
+		switch (limb) {
+			case 1: return part == 1;
+			case 2: return part == 2 || part == 3 || part == 4;
+			case 3: return part >= 5 && part <= 7;
+			case 4: return part >= 11 && part <= 13;
+			case 5: return part == 7;
+			case 6: return part == 13;
+			case 7: return part >= 8 && part <= 10;
+			case 8: return part >= 14 && part <= 16;
+			case 9: return part == 10;
 			case 10: return part == 16;
 			default: return true; //whole-body
 		}
@@ -260,15 +255,13 @@ namespace
 		if (!node)
 			return;
 
-		if (void* collObj = GetbhkCollisionObject(node))
-		{
+		if (void* collObj = GetbhkCollisionObject(node)) {
 			if (void* base = ThisCall<void*>(0x6FA820, collObj)) //base rigid body
 			{
 				UInt32 cf = 0;
 				ThisCall<void*>(0x43B4F0, base, &cf); //bhkRigidBody::GetCollisionFilter
 				const int part = (cf >> 8) & 0x1F;
-				if (LimbMatchesPart(limb, part))
-				{
+				if (LimbMatchesPart(limb, part)) {
 					if (void* hk = ThisCall<void*>(0x4AE750, base)) //hk referenced object
 					{
 						float* cur = ThisCall<float*>(0x560DC0, hk); //getLinearVelocity
@@ -276,7 +269,7 @@ namespace
 							impulse[0] + (cur ? cur[0] : 0.0f),
 							impulse[1] + (cur ? cur[1] : 0.0f),
 							impulse[2] + (cur ? cur[2] : 0.0f),
-							0.0f };
+							0.0f};
 						ThisCall<void>(0x5616D0, hk, v); //setLinearVelocity
 					}
 				}
@@ -308,38 +301,39 @@ namespace
 		ThisCall<void>(0xA59C60, root, arData); //update root
 
 		//62B660 runs SSE (movaps) on this vector - hkVector4 must be 16-aligned
-		NiPoint3 src = { linear.x, linear.y, linear.z };
+		NiPoint3 src = {linear.x, linear.y, linear.z};
 		alignas(16) float hkDir[4] = {};
 		CdeclCall<void*>(0x4A3E00, hkDir, &src); //nif to havok vector
 
 		const float force = sqrtf(LengthSq(linear));
 		const int idx = LimbTargetIndex(limb);
-		struct { char pad[0x10]; int index; } limbData = { {}, idx };
+
+		struct {
+			char pad[0x10];
+			int index;
+		} limbData = {{}, idx};
+
 		void* limbArg = idx >= 0 ? &limbData : nullptr;
 
 		CdeclCall<void>(0x62B660, root, hkDir, force, limbArg); //apply impulse
 
-		if (spin != 0.0f)
-		{
+		if (spin != 0.0f) {
 			//angular velocity in rad/s
 			//flip uses the actor right vector
 			//otherwise spin uses the knock direction or world up
 			Vec3 axis;
-			if (flags & kRagdollFlag_Flip)
-			{
+			if (flags & kRagdollFlag_Flip) {
 				const float rz = ref->rotZ;
-				axis = { cosf(rz), -sinf(rz), 0.0f };
-			}
-			else
-			{
+				axis = {cosf(rz), -sinf(rz), 0.0f};
+			} else {
 				axis = linear;
 				if (LengthSq(axis) < 0.0001f)
-					axis = { 0.0f, 0.0f, 1.0f };
+					axis = {0.0f, 0.0f, 1.0f};
 			}
 			float len = sqrtf(LengthSq(axis));
 			if (len < 0.0001f) len = 1.0f;
 			const float s = spin / len;
-			alignas(16) float angVel[4] = { axis.x * s, axis.y * s, axis.z * s, 0.0f };
+			alignas(16) float angVel[4] = {axis.x * s, axis.y * s, axis.z * s, 0.0f};
 			ApplySpinRecursive(root, angVel);
 		}
 
@@ -385,23 +379,20 @@ namespace
 		UInt32 affected = 0;
 		const int first = bodyPart < 0 ? 0 : bodyPart;
 		const int last = bodyPart < 0 ? kDismemberedLimbCount : bodyPart + 1;
-		for (int i = first; i < last; i++)
-		{
+		for (int i = first; i < last; i++) {
 			NiNode* limbNode = GetDismemberedLimbNode(root, i);
 			if (!limbNode)
 				continue;
 
 			NiAVObject* target = nullptr;
-			if (nodeName && nodeName[0])
-			{
+			if (nodeName && nodeName[0]) {
 				target = GetObjectByNameInTree(limbNode, nodeName);
 				if (!target || target == limbNode)
 					continue;
 			}
 
 			Vec3 applied = velocity;
-			if (local)
-			{
+			if (local) {
 				//the wrapper keeps a stale transform, the ragdolled child bones drive their own
 				NiAVObject* frame = target ? target : GetFirstChild(limbNode);
 				if (!frame)
@@ -409,8 +400,8 @@ namespace
 				applied = RotateToWorld(frame, applied);
 			}
 
-			NiPoint3 sourceVelocity = { applied.x, applied.y, applied.z };
-			alignas(16) float havokVelocity[4] = { applied.x, applied.y, applied.z, 0.0f };
+			NiPoint3 sourceVelocity = {applied.x, applied.y, applied.z};
+			alignas(16) float havokVelocity[4] = {applied.x, applied.y, applied.z, 0.0f};
 			if (!angular)
 				CdeclCall<void*>(0x4A3E00, havokVelocity, &sourceVelocity);
 
@@ -622,10 +613,8 @@ namespace
 	bool QueueRagdollMotion(UInt32 refID, UInt8 limb, const Vec3& linear, float spin, float duration, UInt32 flags)
 	{
 		int slot = -1;
-		for (int i = 0; i < kMaxRagdollMotions; i++)
-		{
-			if (s_ragdollMotions[i].active && s_ragdollMotions[i].refID == refID && s_ragdollMotions[i].limb == limb)
-			{
+		for (int i = 0; i < kMaxRagdollMotions; i++) {
+			if (s_ragdollMotions[i].active && s_ragdollMotions[i].refID == refID && s_ragdollMotions[i].limb == limb) {
 				slot = i;
 				break;
 			}
@@ -636,8 +625,7 @@ namespace
 			return false;
 
 		DWORD durationMs = 0;
-		if (duration > 0.0f)
-		{
+		if (duration > 0.0f) {
 			double requested = duration * 1000.0;
 			if (requested < 1.0)
 				requested = 1.0;
@@ -774,15 +762,14 @@ bool Cmd_Ragdoll_Execute(COMMAND_ARGS)
 
 	//knockexplosion creates the ragdoll controller and applies the first push
 	//the queued pass adds precise limb motion once the controller exists
-	const Vec3 linear = { x, y, z };
+	const Vec3 linear = {x, y, z};
 	const float mag = sqrtf(LengthSq(linear));
 
 	float sx = actor->posX;
 	float sy = actor->posY;
 	float sz = actor->posZ - 1.0f;
 	float force = kRagdollEnterForce;
-	if (mag > 0.0001f)
-	{
+	if (mag > 0.0001f) {
 		const float inv = 64.0f / mag;
 		sx = actor->posX - linear.x * inv;
 		sy = actor->posY - linear.y * inv;
@@ -819,7 +806,7 @@ bool Cmd_RagdollLimb_Execute(COMMAND_ARGS)
 	if (!root)
 		return true;
 
-	NiPoint3 src = { x, y, z };
+	NiPoint3 src = {x, y, z};
 	alignas(16) float impulse[4] = {};
 	CdeclCall<void*>(0x4A3E00, impulse, &src); //nif to havok vector
 
@@ -897,79 +884,75 @@ bool Cmd_SetRigidBodyCenterOfMass_Execute(COMMAND_ARGS)
 
 namespace HavokCommands {
 
-void RegisterCommands(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_IsRigidBodyAtRest);
-}
-
-void RegisterCommands2(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_Ragdoll);
-}
-
-void RegisterCommands3(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_RagdollLimb);
-}
-
-void RegisterCommands4(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	kCommandInfo_SetDismemberedLimbVelocity.shortName = "SetDismLimbVel";
-	nvse->RegisterCommand(&kCommandInfo_SetDismemberedLimbVelocity);
-}
-
-void RegisterCommands5(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	kCommandInfo_GetRigidBodyCenterOfMass.shortName = "GetRigidBodyCoM";
-	kCommandInfo_SetRigidBodyCenterOfMass.shortName = "SetRigidBodyCoM";
-	nvse->RegisterTypedCommand(&kCommandInfo_GetRigidBodyCenterOfMass, kRetnType_Array);
-	nvse->RegisterCommand(&kCommandInfo_SetRigidBodyCenterOfMass);
-}
-
-void ClearState()
-{
-	memset(s_ragdollMotions, 0, sizeof(s_ragdollMotions));
-}
-
-void Update()
-{
-	const DWORD now = GetTickCount();
-	for (auto& motion : s_ragdollMotions)
+	void RegisterCommands(void* nvsePtr)
 	{
-		if (!motion.active)
-			continue;
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_IsRigidBodyAtRest);
+	}
 
-		auto* ref = (TESObjectREFR*)Engine::LookupFormByID(motion.refID);
-		if (!Engine::TESObjectREFR_IsActor(ref))
-		{
-			memset(&motion, 0, sizeof(motion));
-			continue;
-		}
+	void RegisterRagdollCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_Ragdoll);
+	}
 
-		//ragdoll bodies are unavailable until KnockExplosion creates the
-		//controller
-		//wait before touching Havok state
-		if (!HasRagdollController(ref))
-		{
-			if (motion.retryFrames)
-			{
-				motion.retryFrames--;
+	void RegisterRagdollLimbCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_RagdollLimb);
+	}
+
+	void RegisterLimbVelocityCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		kCommandInfo_SetDismemberedLimbVelocity.shortName = "SetDismLimbVel";
+		nvse->RegisterCommand(&kCommandInfo_SetDismemberedLimbVelocity);
+	}
+
+	void RegisterCenterOfMassCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		kCommandInfo_GetRigidBodyCenterOfMass.shortName = "GetRigidBodyCoM";
+		kCommandInfo_SetRigidBodyCenterOfMass.shortName = "SetRigidBodyCoM";
+		nvse->RegisterTypedCommand(&kCommandInfo_GetRigidBodyCenterOfMass, kRetnType_Array);
+		nvse->RegisterCommand(&kCommandInfo_SetRigidBodyCenterOfMass);
+	}
+
+	void ClearState()
+	{
+		memset(s_ragdollMotions, 0, sizeof(s_ragdollMotions));
+	}
+
+	void Update()
+	{
+		const DWORD now = GetTickCount();
+		for (auto& motion : s_ragdollMotions) {
+			if (!motion.active)
+				continue;
+
+			auto* ref = (TESObjectREFR*)Engine::LookupFormByID(motion.refID);
+			if (!Engine::TESObjectREFR_IsActor(ref)) {
+				memset(&motion, 0, sizeof(motion));
 				continue;
 			}
-			memset(&motion, 0, sizeof(motion));
-			continue;
+
+			//ragdoll bodies are unavailable until KnockExplosion creates the
+			//controller
+			//wait before touching Havok state
+			if (!HasRagdollController(ref)) {
+				if (motion.retryFrames) {
+					motion.retryFrames--;
+					continue;
+				}
+				memset(&motion, 0, sizeof(motion));
+				continue;
+			}
+
+			ApplyRagdollMotion(ref, motion.limb, motion.linear, motion.spin, motion.flags);
+
+			if (!motion.repeat || (SInt32)(now - motion.endTime) >= 0)
+				memset(&motion, 0, sizeof(motion));
 		}
-
-		ApplyRagdollMotion(ref, motion.limb, motion.linear, motion.spin, motion.flags);
-
-		if (!motion.repeat || (SInt32)(now - motion.endTime) >= 0)
-			memset(&motion, 0, sizeof(motion));
 	}
-}
 
 }

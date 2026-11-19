@@ -18,8 +18,7 @@
 
 extern const _ExtractArgs ExtractArgs;
 
-namespace NoWeaponSearch
-{
+namespace NoWeaponSearch {
 	static const int MAX_DISABLED = 64;
 	static UInt32 g_disabled[MAX_DISABLED] = {0};
 	static int g_count = 0;
@@ -32,13 +31,12 @@ namespace NoWeaponSearch
 		InitCriticalSectionOnce(&g_lockInit, &g_lock);
 	}
 
-	typedef bool (__thiscall *CombatItemSearch_t)(void* combatState);
+	using CombatItemSearch_t = bool(__thiscall*)(void* combatState);
 	static Detours::CallDetour s_combatItemSearchCall;
 
 	static bool CallOriginal(void* combatState)
 	{
-		auto original = reinterpret_cast<CombatItemSearch_t>(s_combatItemSearchCall.GetOverwrittenAddr());
-		return original ? original(combatState) : true;
+		return reinterpret_cast<CombatItemSearch_t>(s_combatItemSearchCall.GetOverwrittenAddr())(combatState);
 	}
 
 	static bool IsDisabled_Unlocked(UInt32 refID)
@@ -61,21 +59,18 @@ namespace NoWeaponSearch
 			return CallOriginal(combatState);
 
 		g_inCombatItemSearch = true;
-		if (IsGameLoading())
-		{
+		if (IsGameLoading()) {
 			g_inCombatItemSearch = false;
 			return CallOriginal(combatState);
 		}
 
 		void* controller = CombatStateGetCombatController(combatState);
-		if (!controller)
-		{
+		if (!controller) {
 			g_inCombatItemSearch = false;
 			return CallOriginal(combatState);
 		}
 		Actor* actor = (Actor*)Engine::CombatController_GetPackageOwner(controller);
-		if (!actor || !actor->baseProcess || !actor->renderState)
-		{
+		if (!actor || !actor->baseProcess || !actor->renderState) {
 			g_inCombatItemSearch = false;
 			return CallOriginal(combatState);
 		}
@@ -92,8 +87,7 @@ namespace NoWeaponSearch
 				isDisabled = true;
 		}
 
-		if (isDisabled)
-		{
+		if (isDisabled) {
 			g_inCombatItemSearch = false;
 			return false;
 		}
@@ -109,18 +103,13 @@ namespace NoWeaponSearch
 		UInt32 refID = actor->refID;
 
 		ScopedLock lock(&g_lock);
-		if (disable)
-		{
+		if (disable) {
 			if (IsDisabled_Unlocked(refID)) return;
 			if (g_count < MAX_DISABLED)
 				g_disabled[g_count++] = refID;
-		}
-		else
-		{
-			for (int i = 0; i < g_count; i++)
-			{
-				if (g_disabled[i] == refID)
-				{
+		} else {
+			for (int i = 0; i < g_count; i++) {
+				if (g_disabled[i] == refID) {
 					g_disabled[i] = g_disabled[--g_count];
 					g_disabled[g_count] = 0;
 					break;
@@ -144,8 +133,7 @@ namespace NoWeaponSearch
 }
 
 static ParamInfo kParams_SetNoWeaponSearch[1] = {
-	{"disable", kParamType_Integer, 0}
-};
+	{"disable", kParamType_Integer, 0}};
 
 bool Cmd_SetNoWeaponSearch_Execute(COMMAND_ARGS)
 {
@@ -154,8 +142,7 @@ bool Cmd_SetNoWeaponSearch_Execute(COMMAND_ARGS)
 	if (!ExtractArgs(EXTRACT_ARGS, &disable))
 		return true;
 
-	if (Engine::TESObjectREFR_IsActor(thisObj))
-	{
+	if (Engine::TESObjectREFR_IsActor(thisObj)) {
 		NoWeaponSearch::Set((Actor*)thisObj, disable != 0);
 		*result = 1;
 	}
@@ -172,26 +159,24 @@ bool Cmd_GetNoWeaponSearch_Execute(COMMAND_ARGS)
 
 CommandInfo kCommandInfo_SetNoWeaponSearch = {
 	"SetNoWeaponSearch", "", 0, "Disable weapon searching for actor",
-	1, 1, kParams_SetNoWeaponSearch, Cmd_SetNoWeaponSearch_Execute, nullptr, nullptr, 0
-};
+	1, 1, kParams_SetNoWeaponSearch, Cmd_SetNoWeaponSearch_Execute, nullptr, nullptr, 0};
 
 CommandInfo kCommandInfo_GetNoWeaponSearch = {
 	"GetNoWeaponSearch", "", 0, "Check if weapon searching is disabled",
-	1, 0, nullptr, Cmd_GetNoWeaponSearch_Execute, nullptr, nullptr, 0
-};
+	1, 0, nullptr, Cmd_GetNoWeaponSearch_Execute, nullptr, nullptr, 0};
 
 namespace NoWeaponSearch {
-void RegisterCommands(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_SetNoWeaponSearch);
-	nvse->RegisterCommand(&kCommandInfo_GetNoWeaponSearch);
-}
+	void RegisterCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_SetNoWeaponSearch);
+		nvse->RegisterCommand(&kCommandInfo_GetNoWeaponSearch);
+	}
 
-void ClearState()
-{
-	EnsureLockInit();
-	ScopedLock lock(&g_lock);
-	g_count = 0;
-}
+	void ClearState()
+	{
+		EnsureLockInit();
+		ScopedLock lock(&g_lock);
+		g_count = 0;
+	}
 }

@@ -17,15 +17,15 @@ static TESNPC* GetBaseNPC(TESObjectREFR* thisObj, TESForm* explicitTarget)
 }
 
 static ParamInfo kParams_SetHairColorAlt[4] = {
-	{"red",   kParamType_Integer, 0},
+	{"red", kParamType_Integer, 0},
 	{"green", kParamType_Integer, 0},
-	{"blue",  kParamType_Integer, 0},
-	{"npc",   kParamType_AnyForm, 1},
+	{"blue", kParamType_Integer, 0},
+	{"npc", kParamType_AnyForm, 1},
 };
 
 static ParamInfo kParams_GetHairColorAlt[2] = {
 	{"channel", kParamType_Integer, 1}, //1=R, 2=G, 3=B, else packed
-	{"npc",     kParamType_AnyForm, 1},
+	{"npc", kParamType_AnyForm, 1},
 };
 
 DEFINE_COMMAND_PLUGIN(SetHairColorAlt, "Set NPC hair colour from r,g,b (0-255 each)", 1, 4, kParams_SetHairColorAlt);
@@ -69,10 +69,10 @@ bool Cmd_GetHairColorAlt_Execute(COMMAND_ARGS)
 }
 
 namespace HairColorCommands {
-void RegisterCommands(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_SetHairColorAlt);
-	nvse->RegisterCommand(&kCommandInfo_GetHairColorAlt);
-}
+	void RegisterCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_SetHairColorAlt);
+		nvse->RegisterCommand(&kCommandInfo_GetHairColorAlt);
+	}
 }

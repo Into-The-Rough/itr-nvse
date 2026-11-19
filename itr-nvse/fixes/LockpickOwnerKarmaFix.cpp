@@ -6,17 +6,15 @@
 #include "internal/GameGlobals.h"
 #include "internal/Detours.h"
 
-namespace LockpickOwnerKarmaFix
-{
-	using GetOwner_t = void* (__thiscall*)(void*);
+namespace LockpickOwnerKarmaFix {
+	using GetOwner_t = void*(__thiscall*)(void*);
 
 	static bool g_enabled = false;
 	static Detours::CallDetour s_callDetour;
 
-	static void* __fastcall Hook_GetOwnerForLockpickKarma(void* ref, void*)
+	static void* __fastcall Hook_GetOwnerForLockpickKarma(void* ref, void* edx)
 	{
-		auto getOwner = reinterpret_cast<GetOwner_t>(s_callDetour.GetOverwrittenAddr());
-		void* owner = getOwner ? getOwner(ref) : Engine::TESObjectREFR_GetOwnerRawForm(ref);
+		void* owner = reinterpret_cast<GetOwner_t>(s_callDetour.GetOverwrittenAddr())(ref);
 		if (!g_enabled || !owner)
 			return owner;
 

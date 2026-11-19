@@ -5,7 +5,9 @@ class ScopedLock {
 	CRITICAL_SECTION* cs;
 public:
 	explicit ScopedLock(CRITICAL_SECTION* c) : cs(c) { EnterCriticalSection(cs); }
+
 	~ScopedLock() { LeaveCriticalSection(cs); }
+
 	ScopedLock(const ScopedLock&) = delete;
 	ScopedLock& operator=(const ScopedLock&) = delete;
 };
@@ -15,8 +17,7 @@ inline void InitCriticalSectionOnce(volatile LONG* initFlag, CRITICAL_SECTION* l
 {
 	if (*initFlag == 2) return;
 
-	if (InterlockedCompareExchange(initFlag, 1, 0) == 0)
-	{
+	if (InterlockedCompareExchange(initFlag, 1, 0) == 0) {
 		InitializeCriticalSection(lock);
 		InterlockedExchange(initFlag, 2);
 		return;

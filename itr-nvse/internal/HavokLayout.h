@@ -11,7 +11,7 @@ constexpr UInt8 kHkpFilterFlag_NoCollision = 0x40; //collisionFilterInfo byte at
 
 //havok layouts missing from the sdk, checked against falloutnv.exe
 
-template <typename T>
+template<typename T>
 struct HkArrayView {
 	T* data;
 	SInt32 size;

@@ -1,4 +1,3 @@
-//Actor process layout - process manager iteration + padded actor/process views
 #pragma once
 
 #include <cstddef>
@@ -7,8 +6,8 @@
 
 #include "nvse/GameProcess.h"
 
-template <typename T>
-struct NiTArrayLite {
+template<typename T>
+struct NiTArrayView {
 	void** vtbl;
 	T* data;
 	UInt16 capacity;
@@ -17,9 +16,9 @@ struct NiTArrayLite {
 	UInt16 growSize;
 };
 
-struct ProcessManagerLite {
+struct ProcessManagerView {
 	UInt32 unk000;
-	NiTArrayLite<void*> objects;
+	NiTArrayView<void*> objects;
 	UInt32 beginOffsets[4];
 	UInt32 endOffsets[4];
 };
@@ -54,10 +53,10 @@ static_assert(offsetof(ActorTeammateView, isTeammate) == 0x18D);
 static_assert(offsetof(ProcessDamageDealtView, damageDealt) == 0xAC);
 static_assert(offsetof(HighProcessFadeView, delayTime) == 0x3EC);
 static_assert(offsetof(HighProcessQueuedGreetView, queuedGreetTopic) == 0x3E4);
-static_assert(sizeof(NiTArrayLite<void*>) == 0x10);
-static_assert(offsetof(ProcessManagerLite, objects) == 0x04);
-static_assert(offsetof(ProcessManagerLite, beginOffsets) == 0x14);
-static_assert(offsetof(ProcessManagerLite, endOffsets) == 0x24);
+static_assert(sizeof(NiTArrayView<void*>) == 0x10);
+static_assert(offsetof(ProcessManagerView, objects) == 0x04);
+static_assert(offsetof(ProcessManagerView, beginOffsets) == 0x14);
+static_assert(offsetof(ProcessManagerView, endOffsets) == 0x24);
 
 inline float* LowProcessGetDamageDealtCounter(BaseProcess* process)
 {

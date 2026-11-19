@@ -2,8 +2,7 @@
 #include <Windows.h>
 #include <cstdlib>
 
-namespace Settings
-{
+namespace Settings {
 	inline int bAutoGodMode = 0;
 	inline int bAutoQuickLoad = 0;
 	inline int iAutoQuickLoadDelayMs = 0;
@@ -283,6 +282,5 @@ namespace Settings
 		//a per-actor floor stops the forward corridor re-dispatching every projectile update
 		iNearMissCooldownMs = GetINIInt("OnNearMiss", "iCooldownMs", 250);
 		if (iNearMissCooldownMs < 50) iNearMissCooldownMs = 50;
-
 	}
 }

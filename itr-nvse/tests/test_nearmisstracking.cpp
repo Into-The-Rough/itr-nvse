@@ -68,12 +68,12 @@ TEST(NearMissDiscardsHistoryAcrossMissedUpdates)
 TEST(NearMissHistorySaturationNeverJoinsDifferentProjectiles)
 {
 	FlightHistory history;
-	for (uint32_t id = 1; id < 5000; ++id) {
+	for (UInt32 id = 1; id < 5000; ++id) {
 		const Point3 pos = {static_cast<float>(id), 0.0f, 0.0f};
 		const auto start = history.Observe(id, 1.0f, 2.0f, pos, pos);
 		ASSERT_NEAR(start.x, pos.x, 0.0001f);
 	}
-	for (uint32_t id = 1; id < 5000; ++id) {
+	for (UInt32 id = 1; id < 5000; ++id) {
 		const Point3 pos = {static_cast<float>(id), 0.0f, 0.0f};
 		const auto start = history.Observe(id, 2.0f, 3.0f, pos, pos);
 		ASSERT_NEAR(start.x, pos.x, 0.0001f);

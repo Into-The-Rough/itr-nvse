@@ -1,8 +1,4 @@
-//caution/combat mode never clears - combat groups only drop members while the member is
-//loaded, in combat and high-processed, so actors that die or unload outside that window stay
-//grouped and keep the player flagged in combat. the engine's own prune (0x98EB30) is wired
-//only to savegame load, so run it on combat-state change, stop combat for actors demoted out
-//of the combat-capable levels into middle-low, and reconcile the bIsDetected flag
+//prune dead/unloaded group members (0x98EB30) and stop combat on actors demoted to middle-low
 
 #include "StuckCombatStateFix.h"
 #include "internal/NVSEPluginAPI.h"
@@ -14,8 +10,7 @@
 
 #include "internal/globals.h"
 
-namespace StuckCombatStateFix
-{
+namespace StuckCombatStateFix {
 	static Detours::JumpDetour s_stopCombatDetour;
 	static Detours::CallDetour s_demoteDetour;
 	static UInt8* s_stopCombatOrig = nullptr;
@@ -37,7 +32,7 @@ namespace StuckCombatStateFix
 	//0x8A06C0 Actor::StopCombat, shared impl in Actor/Character/Creature vtables (slot +0x434).
 	//every combat end funnels through here (Actor::Kill at 0x89DD8B, wants-stop, invalid target),
 	//so a stale membership can only appear after one of these calls
-	static void __fastcall Hook_StopCombat(Actor* apThis, void*, Actor* apTarget)
+	static void __fastcall Hook_StopCombat(Actor* apThis, void* edx, Actor* apTarget)
 	{
 		s_dirty = true;
 		ThisCall<void>((UInt32)s_stopCombatOrig, apThis, apTarget);
@@ -56,15 +51,14 @@ namespace StuckCombatStateFix
 		for (UInt32 i = 0; i < s_demotedCount; i++)
 			if (s_demotedRefIDs[i] == refID)
 				return;
-		if (s_demotedCount >= 64)
-		{
+		if (s_demotedCount >= 64) {
 			Log("StuckCombatStateFix: demoted queue full, dropping %08X", refID);
 			return;
 		}
 		s_demotedRefIDs[s_demotedCount++] = refID;
 	}
 
-	static void __fastcall Hook_Demote(void* apProcessLists, void*, Actor* apActor)
+	static void __fastcall Hook_Demote(void* apProcessLists, void* edx, Actor* apActor)
 	{
 		ThisCall<void>(s_demoteDetour.GetOverwrittenAddr(), apProcessLists, apActor);
 		QueueDemoted(apActor);
@@ -76,8 +70,7 @@ namespace StuckCombatStateFix
 		if (!manager)
 			return;
 		UInt32 count = ThisCall<UInt32>(0x658930, manager); //CombatManager::GetGroupCount
-		for (UInt32 i = 0; i < count; i++)
-		{
+		for (UInt32 i = 0; i < count; i++) {
 			void** slot = ThisCall<void**>(0x877A30, manager, i); //CombatManager::GetGroupAt
 			if (!slot || !*slot)
 				continue;
@@ -106,8 +99,7 @@ namespace StuckCombatStateFix
 		//no combat - clear only if no live hostile detector remains, same criterion the
 		//setter at 0x973A1E uses to assert the flag
 		SInt32 highest = ThisCall<SInt32>(0x973710, g_processManager, player, 0); //ProcessLists::GetHighestDetectionLevelForActor
-		if (highest <= 0)
-		{
+		if (highest <= 0) {
 			*isDetected = 0;
 			Log("StuckCombatStateFix: cleared stale bIsDetected");
 		}
@@ -115,8 +107,7 @@ namespace StuckCombatStateFix
 
 	void Update()
 	{
-		for (UInt32 i = 0; i < s_demotedCount; i++)
-		{
+		for (UInt32 i = 0; i < s_demotedCount; i++) {
 			TESForm* form = (TESForm*)Engine::LookupFormByID(s_demotedRefIDs[i]);
 			if (!form || !TESFormIsActorRef(form))
 				continue;
@@ -134,8 +125,7 @@ namespace StuckCombatStateFix
 		}
 		s_demotedCount = 0;
 
-		if (s_dirty)
-		{
+		if (s_dirty) {
 			s_dirty = false;
 			PruneGroups();
 		}
@@ -150,17 +140,15 @@ namespace StuckCombatStateFix
 	}
 
 	//push ebp / mov ebp,esp / sub esp,18h
-	static constexpr UInt8 kStopCombatPrologue[6] = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x18 };
+	static constexpr UInt8 kStopCombatPrologue[6] = {0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x18};
 
 	void Init()
 	{
-		if (memcmp((void*)0x8A06C0, kStopCombatPrologue, sizeof(kStopCombatPrologue)) != 0)
-		{
+		if (memcmp((void*)0x8A06C0, kStopCombatPrologue, sizeof(kStopCombatPrologue)) != 0) {
 			Log("StuckCombatStateFix: StopCombat prologue bytes changed, fix disabled");
 			return;
 		}
-		if (!s_stopCombatDetour.WriteRelJump(0x8A06C0, Hook_StopCombat, 6, &s_stopCombatOrig))
-		{
+		if (!s_stopCombatDetour.WriteRelJump(0x8A06C0, Hook_StopCombat, 6, &s_stopCombatOrig)) {
 			Log("StuckCombatStateFix: StopCombat prologue already patched, fix disabled");
 			return;
 		}

@@ -4,6 +4,80 @@
 
 #include "common/ITypes.h"
 
+constexpr UInt32 kTileTrait_id = 0xFAA;
+
+enum MenuSpecialKeyboardInputCode {
+	kMenuKey_Enter = -2,
+	kMenuKey_UpArrow = 1,
+	kMenuKey_DownArrow,
+	kMenuKey_RightArrow,
+	kMenuKey_LeftArrow,
+	kMenuKey_Space = 9,
+	kMenuKey_Tab,
+	kMenuKey_ShiftEnter,
+	kMenuKey_AltEnter,
+	kMenuKey_ShiftLeft,
+	kMenuKey_ShiftRight,
+	kMenuKey_PageUp,
+	kMenuKey_PageDown
+};
+
+struct TileView;
+
+struct TileValueView {
+	UInt32 id; //0x00
+	TileView* parent; //0x04
+	float num; //0x08
+	char* str; //0x0C
+	void* action; //0x10
+};
+
+template<typename Item>
+struct MenuListBoxView {
+	struct ListItem {
+		TileView* tile;
+		Item item;
+		bool isFiltered;
+		UInt8 pad09[3];
+	};
+
+	struct Node {
+		ListItem* data;
+		Node* next;
+	};
+
+	struct List {
+		Node m_listHead;
+
+		Node* Head() { return &m_listHead; }
+
+		const Node* Head() const { return &m_listHead; }
+	};
+
+	void* vtable;
+	List list;
+	TileView* parentTile;
+	TileView* selected;
+};
+
+struct MessageMenuView {
+	void* vtable;
+	UInt8 pad04[0x3C];
+	MenuListBoxView<int> buttonList;
+};
+
+struct BGSSaveLoadFileEntryView {
+	char* name;
+	UInt8 isInitialised;
+	UInt8 isCorrupt;
+	UInt8 gap06[2];
+	UInt32 saveNumber;
+	char* pcName;
+	char* pcTitle;
+	char* location;
+	char* time;
+};
+
 class BGSNote;
 class TESObjectREFR;
 class TESTopic;
@@ -28,12 +102,44 @@ struct TileNodeView {
 	void* data;
 };
 
+template<typename T>
+struct TileSimpleArrayView {
+	void* vtbl;
+	T* data;
+	UInt32 size;
+	UInt32 capacity;
+};
+
 struct TileView {
 	void* vtbl;
 	TileNodeView* firstChild;
-	UInt8 pad08[0x20 - 0x08];
+	UInt8 pad08[0x08];
+	TileSimpleArrayView<TileValueView*> values;
 	TileStringView name;
 };
+
+inline TileValueView* TileGetValue(const void* tilePtr, UInt32 traitID)
+{
+	auto* tile = reinterpret_cast<const TileView*>(tilePtr);
+	if (!tile || !tile->values.data)
+		return nullptr;
+
+	UInt32 left = 0;
+	UInt32 right = tile->values.size;
+	while (left < right) {
+		UInt32 mid = (left + right) >> 1;
+		TileValueView* val = tile->values.data[mid];
+		if (!val)
+			return nullptr;
+		if (val->id < traitID)
+			left = mid + 1;
+		else if (val->id == traitID)
+			return val;
+		else
+			right = mid;
+	}
+	return nullptr;
+}
 
 struct TileMenuArrayView {
 	void* vtbl;
@@ -95,11 +201,13 @@ struct HUDMainMenuView {
 
 struct BGSNoteView {
 	UInt8 pad00[0x6C];
+
 	union {
 		void* noteText;
 		void* picture;
 		void* voice;
 	};
+
 	void* speaker;
 	UInt8 pad74[0x08];
 	UInt8 noteType;
@@ -140,7 +248,9 @@ struct InterfaceManagerView {
 	UInt8 msgBoxButton;
 	UInt8 pad0E5[0xFC - 0xE5];
 	TESObjectREFR* crosshairRef;
-	UInt8 pad100[0x1DC - 0x100];
+	UInt8 pad100[0x114 - 0x100];
+	UInt32 menuStack[10];
+	UInt8 pad13C[0x1DC - 0x13C];
 	UInt8 vatsHighlightData[0x10];
 };
 
@@ -473,3 +583,15 @@ inline UInt32 FormViewGetRefID(const void* form)
 {
 	return form ? reinterpret_cast<const TESFormIDView*>(form)->refID : 0;
 }
+
+static_assert(sizeof(TileValueView) == 0x14);
+static_assert(offsetof(TileValueView, num) == 0x08);
+static_assert(offsetof(TileValueView, str) == 0x0C);
+static_assert(offsetof(TileView, values) == 0x10);
+static_assert(offsetof(TileView, name) == 0x20);
+static_assert(offsetof(InterfaceManagerView, menuStack) == 0x114);
+static_assert(offsetof(InterfaceManagerView, vatsHighlightData) == 0x1DC);
+static_assert(offsetof(MenuListBoxView<int>, list) == 0x04);
+static_assert(offsetof(MenuListBoxView<int>, selected) == 0x10);
+static_assert(offsetof(MessageMenuView, buttonList) == 0x40);
+static_assert(offsetof(BGSSaveLoadFileEntryView, location) == 0x14);

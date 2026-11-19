@@ -13,11 +13,11 @@
 #include "nvse/CommandTable.h"
 #include "nvse/ParamInfos.h"
 
-extern const _ExtractArgs ExtractArgs;
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
-namespace
-{
+extern const _ExtractArgs ExtractArgs;
+
+namespace {
 	struct NiPoint3 {
 		float x;
 		float y;
@@ -42,7 +42,7 @@ namespace
 	{
 		auto* cell = ref->parentCell;
 		if (!cell) return false;
-		float xy[2] = { ref->posX, ref->posY };
+		float xy[2] = {ref->posX, ref->posY};
 		return ThisCall<bool>(0x5547C0, cell, xy, outZ);
 	}
 
@@ -82,7 +82,7 @@ namespace
 	//mirror the engine's position update path so the ref's 3D and collision stay in sync
 	void SetPosAndUpdate3D(TESObjectREFR* ref, float newZ)
 	{
-		NiPoint3 pos = { ref->posX, ref->posY, newZ };
+		NiPoint3 pos = {ref->posX, ref->posY, newZ};
 		ThisCall<void>(0x575830, ref, &pos); //SetLocationOnReference
 
 		auto* renderState = ref->renderState;
@@ -180,7 +180,7 @@ bool Cmd_GetDistanceToGround_Execute(COMMAND_ARGS)
 }
 
 static ParamInfo kParams_OneOptionalFloat[] = {
-	{ "distance", kParamType_Float, 1 },
+	{"distance", kParamType_Float, 1},
 };
 
 DEFINE_COMMAND_PLUGIN(MoveToTerrain, "move reference toward terrain below, 0=instant, >0=units to descend (capped at terrain)", true, 1, kParams_OneOptionalFloat);
@@ -188,8 +188,7 @@ DEFINE_COMMAND_PLUGIN(GetDistanceToTerrain, "get Z distance from reference to te
 DEFINE_COMMAND_PLUGIN(MoveToGround, "move reference toward ground below (raycast, terrain fallback), 0=instant, >0=units to descend (capped at ground)", true, 1, kParams_OneOptionalFloat);
 DEFINE_COMMAND_PLUGIN(GetDistanceToGround, "get Z distance from reference to ground below (raycast, terrain fallback)", true, 0, nullptr);
 
-namespace GroundCommands
-{
+namespace GroundCommands {
 	void Update() {}
 
 	void RegisterCommands(void* nvsePtr)

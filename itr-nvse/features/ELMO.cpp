@@ -6,7 +6,6 @@
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
-#include "internal/FormatLogic.h"
 #include "internal/GameGlobals.h"
 #include "internal/GameSDK.h"
 #include "internal/layout/Reputation.h"
@@ -15,8 +14,7 @@
 
 #include "internal/globals.h"
 
-namespace ELMO
-{
+namespace ELMO {
 	char g_msgBuffer[512];
 
 	enum eEmotion : UInt32 {
@@ -38,7 +36,11 @@ namespace ELMO
 
 	const char* __cdecl FormatReputationMessage(const char* factionName, const char* repTitle, const char* repDesc)
 	{
-		return FormatLogic::FormatReputationMessage(g_msgBuffer, sizeof(g_msgBuffer), factionName, repTitle, repDesc);
+		sprintf_s(g_msgBuffer, "%s - %s. %s",
+			factionName ? factionName : "",
+			repTitle ? repTitle : "",
+			repDesc ? repDesc : "");
+		return g_msgBuffer;
 	}
 
 	static UInt32 GetObjectiveEmotion(UInt32 isCompleted, UInt32 isReminder)
@@ -92,8 +94,7 @@ namespace ELMO
 		static constexpr UInt32 kObjectiveHookSites[] = {
 			kObjectiveDisplayedCall,
 			kObjectiveCompletedCall,
-			kObjectiveReminderCall
-		};
+			kObjectiveReminderCall};
 
 		for (auto hookSite : kObjectiveHookSites) {
 			if (*reinterpret_cast<UInt8*>(hookSite) != 0xE8) {
@@ -102,9 +103,7 @@ namespace ELMO
 			}
 		}
 
-		if (!s_objectiveDisplayedCall.WriteRelCall(kObjectiveDisplayedCall, ShowAsCornerMessage) ||
-			!s_objectiveCompletedCall.WriteRelCall(kObjectiveCompletedCall, ShowAsCornerMessage) ||
-			!s_objectiveReminderCall.WriteRelCall(kObjectiveReminderCall, ShowAsCornerMessage)) {
+		if (!s_objectiveDisplayedCall.WriteRelCall(kObjectiveDisplayedCall, ShowAsCornerMessage) || !s_objectiveCompletedCall.WriteRelCall(kObjectiveCompletedCall, ShowAsCornerMessage) || !s_objectiveReminderCall.WriteRelCall(kObjectiveReminderCall, ShowAsCornerMessage)) {
 			Log("ELMO: Failed to install objective call-site hooks");
 			return false;
 		}
@@ -113,15 +112,15 @@ namespace ELMO
 		return true;
 	}
 
-	bool __fastcall ReputationPopup_Hook(void* reputation)
+	bool __fastcall Hook_ReputationPopup(void* reputation)
 	{
 		ShowReputationThresholdAsCornerMessage(reputation);
 		return true;
 	}
 
-	__declspec(naked) void ReputationCornerMessage_Hook_AddRep()
+	__declspec(naked) void Hook_ReputationCornerMessage_AddRep()
 	{
-		static const UInt32 returnAddr = 0x615F71;
+		static constexpr UInt32 returnAddr = 0x615F71;
 
 		__asm {
 			pushad
@@ -135,9 +134,9 @@ namespace ELMO
 		}
 	}
 
-	__declspec(naked) void ReputationCornerMessage_Hook_AddRepExact()
+	__declspec(naked) void Hook_ReputationCornerMessage_AddRepExact()
 	{
-		static const UInt32 returnAddr = 0x6159B2;
+		static constexpr UInt32 returnAddr = 0x6159B2;
 
 		__asm {
 			pushad
@@ -151,9 +150,9 @@ namespace ELMO
 		}
 	}
 
-	__declspec(naked) void ReputationCornerMessage_Hook_RemRepExact()
+	__declspec(naked) void Hook_ReputationCornerMessage_RemRepExact()
 	{
-		static const UInt32 returnAddr = 0x615C6A;
+		static constexpr UInt32 returnAddr = 0x615C6A;
 
 		__asm {
 			pushad
@@ -167,9 +166,9 @@ namespace ELMO
 		}
 	}
 
-	__declspec(naked) void ReputationCornerMessage_Hook_RemRep()
+	__declspec(naked) void Hook_ReputationCornerMessage_RemRep()
 	{
-		static const UInt32 returnAddr = 0x616269;
+		static constexpr UInt32 returnAddr = 0x616269;
 
 		__asm {
 			pushad
@@ -189,16 +188,21 @@ namespace ELMO
 			InstallObjectiveHooks();
 
 		if (suppressReputation) {
-			if (!s_reputationPopupDetour.WriteRelJump(0x6155F0, ReputationPopup_Hook, 9))
+			if (!s_reputationPopupDetour.WriteRelJump(0x6155F0, Hook_ReputationPopup, 9))
 				Log("ELMO: failed to install reputation popup detour");
 
 			//each site is mov ecx,[ebp+disp32] (8B 8D xx FE FF FF), stomped with jmp+nop
-			struct RepHook { UInt32 site; void (*fn)(); UInt8 disp; };
+			struct RepHook {
+				UInt32 site;
+				void (*fn)();
+				UInt8 disp;
+			};
+
 			static const RepHook kRepHooks[] = {
-				{ 0x615F4A, ReputationCornerMessage_Hook_AddRep,      0xD8 },
-				{ 0x61598B, ReputationCornerMessage_Hook_AddRepExact, 0xF0 },
-				{ 0x615C43, ReputationCornerMessage_Hook_RemRepExact, 0xF0 },
-				{ 0x616242, ReputationCornerMessage_Hook_RemRep,      0xD8 },
+				{0x615F4A, Hook_ReputationCornerMessage_AddRep, 0xD8},
+				{0x61598B, Hook_ReputationCornerMessage_AddRepExact, 0xF0},
+				{0x615C43, Hook_ReputationCornerMessage_RemRepExact, 0xF0},
+				{0x616242, Hook_ReputationCornerMessage_RemRep, 0xD8},
 			};
 			for (const auto& h : kRepHooks) {
 				const UInt8* p = reinterpret_cast<const UInt8*>(h.site);

@@ -12,12 +12,12 @@
 #include "handlers/DialogueCameraHandler.h"
 extern const _ExtractArgs ExtractArgs;
 
-namespace CameraOverride
-{
+namespace CameraOverride {
 	//identity at definition, SetRotation multiplies into this so it must never start zeroed
 	static Mat3 g_rotation = {{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}};
 
-	void SetRotation(bool enable, int axis, float degrees) {
+	void SetRotation(bool enable, int axis, float degrees)
+	{
 		if (!enable) {
 			g_rotation.Identity();
 			DialogueCameraHandler::ClearExternalRotation();
@@ -27,7 +27,10 @@ namespace CameraOverride
 		float rad = degrees * 0.01745329252f;
 		Mat3 rot;
 		switch (axis) {
-			case 0: g_rotation.Identity(); DialogueCameraHandler::ClearExternalRotation(); return;
+			case 0:
+				g_rotation.Identity();
+				DialogueCameraHandler::ClearExternalRotation();
+				return;
 			case 1: rot.RotateX(rad); break;
 			case 2: rot.RotateY(rad); break;
 			case 3: rot.RotateZ(rad); break;
@@ -37,17 +40,18 @@ namespace CameraOverride
 		DialogueCameraHandler::SetExternalRotation(g_rotation);
 	}
 
-	void ResetRotation() {
+	void ResetRotation()
+	{
 		g_rotation.Identity();
 		DialogueCameraHandler::ClearExternalRotation();
 	}
 }
 
 static ParamInfo kParams_SetCameraAngle[4] = {
-	{ "enable",  kParamType_Integer, 0 },
-	{ "angleX",  kParamType_Float,   0 },
-	{ "angleY",  kParamType_Float,   0 },
-	{ "angleZ",  kParamType_Float,   0 },
+	{"enable", kParamType_Integer, 0},
+	{"angleX", kParamType_Float, 0},
+	{"angleY", kParamType_Float, 0},
+	{"angleZ", kParamType_Float, 0},
 };
 
 DEFINE_COMMAND_PLUGIN(SetCameraAngle, "Sets absolute camera rotation angles", 0, 4, kParams_SetCameraAngle);
@@ -66,22 +70,18 @@ bool Cmd_SetCameraAngle_Execute(COMMAND_ARGS)
 
 	CameraOverride::ResetRotation();
 
-	if (enable)
-	{
+	if (enable) {
 		if (angleX != 0.0f)
 			CameraOverride::SetRotation(true, 1, angleX);
 		if (angleY != 0.0f)
 			CameraOverride::SetRotation(true, 2, angleY);
 		if (angleZ != 0.0f)
 			CameraOverride::SetRotation(true, 3, angleZ);
-	}
-	else
-	{
+	} else {
 		CameraOverride::SetRotation(false, 0, 0);
 	}
 
-	if (IsConsoleMode())
-	{
+	if (IsConsoleMode()) {
 		if (enable)
 			Console_Print("SetCameraAngle >> Set to X:%.1f Y:%.1f Z:%.1f", angleX, angleY, angleZ);
 		else
@@ -92,14 +92,14 @@ bool Cmd_SetCameraAngle_Execute(COMMAND_ARGS)
 }
 
 namespace CameraOverride {
-void Init()
-{
-	g_rotation.Identity();
-}
+	void Init()
+	{
+		g_rotation.Identity();
+	}
 
-void RegisterCommands(void* nvse)
-{
-	NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
-	nvseIntf->RegisterCommand(&kCommandInfo_SetCameraAngle);
-}
+	void RegisterCommands(void* nvse)
+	{
+		NVSEInterface* nvseIntf = (NVSEInterface*)nvse;
+		nvseIntf->RegisterCommand(&kCommandInfo_SetCameraAngle);
+	}
 }

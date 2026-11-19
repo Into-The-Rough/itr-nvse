@@ -16,14 +16,10 @@
 #include "commands/CrouchCommands.h"
 #include "commands/ChallengeCommands.h"
 #include "commands/DialogueCommands.h"
-#include "commands/ForceSayCommand.h"
-#include "commands/IsSayingCommand.h"
-#include "commands/CurrentDialogueCommands.h"
 #include "commands/WeaponEmissiveCommands.h"
 #include "commands/ItemModFlagCommands.h"
 #include "commands/UICommands.h"
 #include "commands/ActorValueCommands.h"
-#include "commands/CommandBoundsCommand.h"
 #include "commands/ToggleAllPrimitives.h"
 #include "commands/PathingCommands.h"
 #include "commands/HairColorCommands.h"
@@ -41,7 +37,7 @@
 #include "features/CameraOverride.h"
 #include "features/NoWeaponSearch.h"
 #include "features/PreventWeaponSwitch.h"
-#include "features/PerkRuntimeFramework.h"
+#include "commands/PerkCommands.h"
 #include "features/EyeMeshOverride.h"
 #include "features/RaceEyeCommands.h"
 #include "features/AimZoomFirstPersonOnly.h"
@@ -50,12 +46,10 @@
 #include "commands/GestureCommand.h"
 #include "commands/NavmeshCommands.h"
 #include "commands/CoverCommands.h"
-#include "commands/DialogueTopicCommands.h"
 #include "commands/ParticleCommands.h"
 #include "features/RadioInjection.h"
 #include "handlers/OnTileValueChangeHandler.h"
-
-extern void Log(const char* fmt, ...);
+#include "internal/globals.h"
 
 void RegisterAllCommands(void* nvsePtr)
 {
@@ -71,7 +65,7 @@ void RegisterAllCommands(void* nvsePtr)
 	FakeHitHandler::RegisterCommands(nvse); //FakeHit, FakeHitEx
 
 	nvse->SetOpcodeBase(0x401C);
-	RadioCommands::RegisterCommands3(nvse); //IsRadioPlaying
+	RadioCommands::RegisterIsPlayingCommands(nvse); //IsRadioPlaying
 
 	nvse->SetOpcodeBase(0x401D);
 	CameraOverride::RegisterCommands(nvse); //SetCameraAngle
@@ -81,8 +75,8 @@ void RegisterAllCommands(void* nvsePtr)
 
 	nvse->SetOpcodeBase(0x4021);
 	ImperativeCommands::RegisterCommands(nvse); //GetRefsSortedByDistance, Duplicate, GetAvailableRecipes
-	RadioCommands::RegisterCommands4(nvse); //ChangeRadioTrack
-	ImperativeCommands::RegisterCommands2(nvse); //GetTargetLastSeenLocation..GetTargetInitialLocation
+	RadioCommands::RegisterChangeTrackCommands(nvse); //ChangeRadioTrack
+	ImperativeCommands::RegisterTargetLocationCommands(nvse); //GetTargetLastSeenLocation..GetTargetInitialLocation
 
 	nvse->SetOpcodeBase(0x402A);
 	NoWeaponSearch::RegisterCommands(nvse); //SetNoWeaponSearch, GetNoWeaponSearch
@@ -94,10 +88,10 @@ void RegisterAllCommands(void* nvsePtr)
 	RadioCommands::RegisterCommands(nvse); //GetPlayingRadioTrack, GetPlayingRadioTrackFileName
 
 	nvse->SetOpcodeBase(0x4030);
-	ImperativeCommands::RegisterCommands3(nvse); //UseAidItem
+	ImperativeCommands::RegisterAidCommands(nvse); //UseAidItem
 
 	nvse->SetOpcodeBase(0x4031);
-	RadioCommands::RegisterCommands2(nvse); //GetPlayingRadioText
+	RadioCommands::RegisterRadioTextCommands(nvse); //GetPlayingRadioText
 
 	nvse->SetOpcodeBase(0x4032);
 	ResurrectCommands::RegisterCommands(nvse); //ResurrectActorEx
@@ -106,18 +100,18 @@ void RegisterAllCommands(void* nvsePtr)
 	ChallengeCommands::RegisterCommands(nvse); //ModChallenge
 
 	nvse->SetOpcodeBase(0x4035);
-	ImperativeCommands::RegisterCommands4(nvse); //SetCreatureCombatSkill
-	ResurrectCommands::RegisterCommands2(nvse); //ResurrectAll
-	ImperativeCommands::RegisterCommands5(nvse); //ForceReload
+	ImperativeCommands::RegisterCombatSkillCommands(nvse); //SetCreatureCombatSkill
+	ResurrectCommands::RegisterResurrectAllCommands(nvse); //ResurrectAll
+	ImperativeCommands::RegisterForceReloadCommands(nvse); //ForceReload
 
 	nvse->SetOpcodeBase(0x4038);
 	DialogueCommands::RegisterCommands(nvse); //GetDialogueInfoFlags, SetDialogueInfoFlags, GetDisplayedDialogueInfos
 
 	nvse->SetOpcodeBase(0x403B);
-	ImperativeCommands::RegisterCommands6(nvse); //SetRaceAlt
+	ImperativeCommands::RegisterSetRaceCommands(nvse); //SetRaceAlt
 
 	nvse->SetOpcodeBase(0x403C);
-	ForceSayCommand::RegisterCommands(nvse); //ForceSay
+	DialogueCommands::RegisterForceSayCommands(nvse); //ForceSay
 
 	nvse->SetOpcodeBase(0x4050);
 	WeaponEmissiveCommands::RegisterCommands(nvse); //SetWeaponEmissiveColor, ClearWeaponEmissiveColor
@@ -129,7 +123,7 @@ void RegisterAllCommands(void* nvsePtr)
 	ActorValueCommands::RegisterCommands(nvse); //DamageActorValueAlt
 
 	nvse->SetOpcodeBase(0x4054);
-	IsSayingCommand::RegisterCommands(nvse); //IsSaying
+	DialogueCommands::RegisterIsSayingCommands(nvse); //IsSaying
 
 	nvse->SetOpcodeBase(0x4055);
 	DialogueCameraHandler::RegisterCommands(nvse); //SetDialogueCameraDolly, SetDialogueCameraShake
@@ -141,16 +135,16 @@ void RegisterAllCommands(void* nvsePtr)
 	CrouchCommands::RegisterCommands(nvse); //ForceCrouch, DisableCrouching
 
 	nvse->SetOpcodeBase(0x405F);
-	ImperativeCommands::RegisterCommands7(nvse); //SetOnContactWatch, GetOnContactWatch
+	ImperativeCommands::RegisterContactWatchCommands(nvse); //SetOnContactWatch, GetOnContactWatch
 
 	nvse->SetOpcodeBase(0x4061);
 	ForceCombatTargetCommands::RegisterCommands(nvse); //ForceCombatTarget
 
 	nvse->SetOpcodeBase(0x4062);
-	DialogueCameraHandler::RegisterCommands2(nvse); //SetDialogueCameraEnabled, SetDialogueCameraMode, SetDialogueCameraFixedAngle, SetDialogueCameraAngle
+	DialogueCameraHandler::RegisterModeCommands(nvse); //SetDialogueCameraEnabled, SetDialogueCameraMode, SetDialogueCameraFixedAngle, SetDialogueCameraAngle
 
 	nvse->SetOpcodeBase(0x4066);
-	ImperativeCommands::RegisterCommands8(nvse); //RefillAmmo
+	ImperativeCommands::RegisterRefillAmmoCommands(nvse); //RefillAmmo
 
 	nvse->SetOpcodeBase(0x4068);
 	ToggleAllPrimitives::RegisterCommands(nvse); //ToggleAllPrimitives
@@ -171,10 +165,10 @@ void RegisterAllCommands(void* nvsePtr)
 	CasinoBanCommands::RegisterCommands(nvse); //SetCasinoBan, GetCasinoBan
 
 	nvse->SetOpcodeBase(0x40A9);
-	UICommands::RegisterCommands2(nvse); //SetUITexOffset
+	UICommands::RegisterTexOffsetCommands(nvse); //SetUITexOffset
 
 	nvse->SetOpcodeBase(0x40AA);
-	ExteriorDoorCommands::RegisterCommands2(nvse); //GetRefNextTeleportDoor
+	ExteriorDoorCommands::RegisterNextTeleportCommands(nvse); //GetRefNextTeleportDoor
 
 	nvse->SetOpcodeBase(0x40AB);
 	ContainerCommands::RegisterCommands(nvse); //GetVisibleContainerInventoryCount
@@ -183,7 +177,7 @@ void RegisterAllCommands(void* nvsePtr)
 	HavokCommands::RegisterCommands(nvse); //IsRigidBodyAtRest
 
 	nvse->SetOpcodeBase(0x40B1);
-	PerkRuntimeFramework::RegisterCommands(nvse); //GetPerkEligibility..GetPerksForForm
+	PerkCommands::RegisterCommands(nvse); //GetPerkEligibility..GetPerksForForm
 
 	nvse->SetOpcodeBase(0x40B6);
 	DetectionSoundCommands::RegisterCommands(nvse); //CreateDetectionSoundAt, CreateAnonymousDetectionSoundAt
@@ -192,10 +186,10 @@ void RegisterAllCommands(void* nvsePtr)
 	BarterCommands::RegisterCommands(nvse); //ShowBarterMenuWhitelist, ShowBarterMenuBlacklist
 
 	nvse->SetOpcodeBase(0x40BA);
-	HavokCommands::RegisterCommands2(nvse); //Ragdoll
+	HavokCommands::RegisterRagdollCommands(nvse); //Ragdoll
 
 	nvse->SetOpcodeBase(0x40BB);
-	HavokCommands::RegisterCommands3(nvse); //RagdollLimb
+	HavokCommands::RegisterRagdollLimbCommands(nvse); //RagdollLimb
 
 	nvse->SetOpcodeBase(0x40BC);
 	EyeMeshOverride::RegisterCommands(nvse); //SetEyeMesh, ClearEyeMesh
@@ -204,15 +198,12 @@ void RegisterAllCommands(void* nvsePtr)
 	AimZoomFirstPersonOnly::RegisterCommands(nvse); //SetAimZoomFirstPersonOnly, GetAimZoomFirstPersonOnly
 
 	nvse->SetOpcodeBase(0x40C1);
-	FakeHitHandler::RegisterCommands2(nvse); //FakeImpact
+	FakeHitHandler::RegisterImpactCommands(nvse); //FakeImpact
 
 	nvse->SetOpcodeBase(0x40C2);
 	CenterOnCellAltCommand::RegisterCommands(nvse); //CenterOnCellAlt
 
 #ifdef _DEBUG
-	nvse->SetOpcodeBase(0x4067);
-	CommandBoundsCommand::RegisterCommands(nvse); //RunITRCommandBounds
-
 	nvse->SetOpcodeBase(0x4029);
 	ImperativeCommands::RegisterDebugCommands(nvse); //DumpCombatTarget
 #endif
@@ -224,7 +215,7 @@ void RegisterAllCommands(void* nvsePtr)
 	GestureCommand::RegisterCommands(nvse); //Gesture
 
 	nvse->SetOpcodeBase(0x40C3);
-	DialogueCameraHandler::RegisterCommands3(nvse); //SetDialogueCameraAngleEnabled
+	DialogueCameraHandler::RegisterAngleEnableCommands(nvse); //SetDialogueCameraAngleEnabled
 
 	nvse->SetOpcodeBase(0x40C4);
 	RaceEyeCommands::RegisterCommands(nvse); //AddRaceEye, RemoveRaceEye, ClearRaceEyes
@@ -240,7 +231,7 @@ void RegisterAllCommands(void* nvsePtr)
 	NavmeshCommands::RegisterCommands(nvse); //GetPathLength, IsPointOnNavmesh, GetCoverPointsInRadius, GetBestCoverFromThreat
 
 	nvse->SetOpcodeBase(0x40D0);
-	DialogueTopicCommands::RegisterCommands(nvse); //AddDialogueTopicEntry, SetDialogueTopicEntryAlpha, SetDialogueTopicHidden, SetDialogueTopicOrder, ClearDialogueTopicOverrides
+	DialogueCommands::RegisterTopicCommands(nvse); //AddDialogueTopicEntry, SetDialogueTopicEntryAlpha, SetDialogueTopicHidden, SetDialogueTopicOrder, ClearDialogueTopicOverrides
 
 	nvse->SetOpcodeBase(0x40D5);
 	OnTileValueChangeHandler::RegisterCommands(nvse); //WatchTileValue, UnwatchTileValue
@@ -249,7 +240,7 @@ void RegisterAllCommands(void* nvsePtr)
 	AlertCommands::RegisterCommands(nvse); //SetAlertNS, GetAlertNS
 
 	nvse->SetOpcodeBase(0x40DB);
-	HavokCommands::RegisterCommands4(nvse); //SetDismemberedLimbVelocity
+	HavokCommands::RegisterLimbVelocityCommands(nvse); //SetDismemberedLimbVelocity
 
 	nvse->SetOpcodeBase(0x40DC);
 	CoverCommands::RegisterCommands(nvse); //GetActorCoverState, GetActorCoverInfo
@@ -258,14 +249,14 @@ void RegisterAllCommands(void* nvsePtr)
 	ParticleCommands::RegisterCommands(nvse); //SpawnTempParticle
 
 	nvse->SetOpcodeBase(0x40E0);
-	PerkRuntimeFramework::RegisterCommands2(nvse);
+	PerkCommands::RegisterEligibleExCommands(nvse);
 
 	nvse->SetOpcodeBase(0x40E2);
-	CurrentDialogueCommands::RegisterCommands(nvse); //GetCurrentDialogue
+	DialogueCommands::RegisterCurrentDialogueCommands(nvse); //GetCurrentDialogue
 
 	nvse->SetOpcodeBase(0x40E6);
 	LimbCommands::RegisterCommands(nvse); //GetLimbGoneType
 
 	nvse->SetOpcodeBase(0x40E7);
-	HavokCommands::RegisterCommands5(nvse); //GetRigidBodyCenterOfMass, SetRigidBodyCenterOfMass
+	HavokCommands::RegisterCenterOfMassCommands(nvse); //GetRigidBodyCenterOfMass, SetRigidBodyCenterOfMass
 }

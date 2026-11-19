@@ -4,7 +4,7 @@
 
 inline char* CopyCString(const char* src)
 {
-	using FormHeapAllocate_t = void* (__cdecl*)(UInt32);
+	using FormHeapAllocate_t = void*(__cdecl*)(UInt32);
 	const auto FormHeapAllocate = reinterpret_cast<FormHeapAllocate_t>(0x401000);
 
 	const size_t size = src ? strlen(src) : 0;

@@ -1,4 +1,3 @@
-//TESChallenge layout - challenge form fields and threshold/completion data
 #pragma once
 
 #include <cstddef>

@@ -77,11 +77,23 @@
       <TargetMachine>MachineX86</TargetMachine>
     </Link>
     <PostBuildEvent>
-      <Message>Copying DLL and PDB to mod folder...</Message>
-      <Command>if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" copy /Y "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
-if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" if exist "$(TargetDir)$(TargetName).pdb" copy /Y "$(TargetDir)$(TargetName).pdb" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"
-if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" copy /Y "$(TargetPath)" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
-if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(TargetDir)$(TargetName).pdb" copy /Y "$(TargetDir)$(TargetName).pdb" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"</Command>
+      <Message>Copying DLL, PDB and MCM scripts to mod folders...</Message>
+      <Command>if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" (
+  copy /Y "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
+  if exist "$(TargetDir)$(TargetName).pdb" copy /Y "$(TargetDir)$(TargetName).pdb" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"
+  if not exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\scripts\" mkdir "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\scripts\"
+  copy /Y "$(ProjectDir)..\mod\NVSE\Plugins\scripts\ln_itr-nvse-mcm.txt" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\scripts\ln_itr-nvse-mcm.txt"
+  if not exist "D:\Modding\VNV\mods\itr-nvse\NVSE\user_defined_functions\itr-nvse\" mkdir "D:\Modding\VNV\mods\itr-nvse\NVSE\user_defined_functions\itr-nvse\"
+  copy /Y "$(ProjectDir)..\mod\NVSE\user_defined_functions\itr-nvse\OnMCMUpdate.gek" "D:\Modding\VNV\mods\itr-nvse\NVSE\user_defined_functions\itr-nvse\OnMCMUpdate.gek"
+)
+if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" (
+  copy /Y "$(TargetPath)" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
+  if exist "$(TargetDir)$(TargetName).pdb" copy /Y "$(TargetDir)$(TargetName).pdb" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"
+  if not exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\scripts\" mkdir "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\scripts\"
+  copy /Y "$(ProjectDir)..\mod\NVSE\Plugins\scripts\ln_itr-nvse-mcm.txt" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\scripts\ln_itr-nvse-mcm.txt"
+  if not exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\user_defined_functions\itr-nvse\" mkdir "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\user_defined_functions\itr-nvse\"
+  copy /Y "$(ProjectDir)..\mod\NVSE\user_defined_functions\itr-nvse\OnMCMUpdate.gek" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\user_defined_functions\itr-nvse\OnMCMUpdate.gek"
+)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -109,11 +121,23 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
       <TargetMachine>MachineX86</TargetMachine>
     </Link>
     <PostBuildEvent>
-      <Message>Copying DLL and PDB to mod folder...</Message>
-      <Command>if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" copy /Y "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
-if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" if exist "$(TargetDir)$(TargetName).pdb" copy /Y "$(TargetDir)$(TargetName).pdb" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"
-if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" copy /Y "$(TargetPath)" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
-if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(TargetDir)$(TargetName).pdb" copy /Y "$(TargetDir)$(TargetName).pdb" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"</Command>
+      <Message>Copying DLL, PDB and MCM scripts to mod folders...</Message>
+      <Command>if exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\" (
+  copy /Y "$(TargetPath)" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
+  if exist "$(TargetDir)$(TargetName).pdb" copy /Y "$(TargetDir)$(TargetName).pdb" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"
+  if not exist "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\scripts\" mkdir "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\scripts\"
+  copy /Y "$(ProjectDir)..\mod\NVSE\Plugins\scripts\ln_itr-nvse-mcm.txt" "D:\Modding\VNV\mods\itr-nvse\NVSE\Plugins\scripts\ln_itr-nvse-mcm.txt"
+  if not exist "D:\Modding\VNV\mods\itr-nvse\NVSE\user_defined_functions\itr-nvse\" mkdir "D:\Modding\VNV\mods\itr-nvse\NVSE\user_defined_functions\itr-nvse\"
+  copy /Y "$(ProjectDir)..\mod\NVSE\user_defined_functions\itr-nvse\OnMCMUpdate.gek" "D:\Modding\VNV\mods\itr-nvse\NVSE\user_defined_functions\itr-nvse\OnMCMUpdate.gek"
+)
+if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" (
+  copy /Y "$(TargetPath)" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.dll"
+  if exist "$(TargetDir)$(TargetName).pdb" copy /Y "$(TargetDir)$(TargetName).pdb" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\itr-nvse.pdb"
+  if not exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\scripts\" mkdir "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\scripts\"
+  copy /Y "$(ProjectDir)..\mod\NVSE\Plugins\scripts\ln_itr-nvse-mcm.txt" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\scripts\ln_itr-nvse-mcm.txt"
+  if not exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\user_defined_functions\itr-nvse\" mkdir "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\user_defined_functions\itr-nvse\"
+  copy /Y "$(ProjectDir)..\mod\NVSE\user_defined_functions\itr-nvse\OnMCMUpdate.gek" "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\user_defined_functions\itr-nvse\OnMCMUpdate.gek"
+)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -180,17 +204,11 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="fixes\GetLineOfSightCrashFix.cpp" />
     <ClCompile Include="fixes\LockpickOwnerKarmaFix.cpp" />
     <ClCompile Include="fixes\InlineGlyphFix.cpp" />
-    <ClCompile Include="features\MessageBoxQuickClose.cpp">
-      <LanguageStandard Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">stdcpp23</LanguageStandard>
-      <LanguageStandard Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">stdcpp23</LanguageStandard>
-    </ClCompile>
+    <ClCompile Include="features\MessageBoxQuickClose.cpp" />
     <ClCompile Include="features\PreventWeaponSwitch.cpp" />
     <ClCompile Include="features\ELMO.cpp" />
     <ClCompile Include="features\LocationVisitPopup.cpp" />
-    <ClCompile Include="features\QuickReadNote.cpp">
-      <LanguageStandard Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">stdcpp23</LanguageStandard>
-      <LanguageStandard Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">stdcpp23</LanguageStandard>
-    </ClCompile>
+    <ClCompile Include="features\QuickReadNote.cpp" />
     <ClCompile Include="features\VATSExtender.cpp" />
     <ClCompile Include="features\VATSHighlightDepthFix.cpp" />
     <ClCompile Include="features\AltTabMute.cpp" />
@@ -202,7 +220,9 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="features\CompanionNoBlock.cpp" />
     <ClCompile Include="features\DoorPinchFix.cpp" />
     <ClCompile Include="features\NoWeaponSearch.cpp" />
-    <ClCompile Include="features\PerkRuntimeFramework.cpp" />
+    <ClCompile Include="internal\PerkIndex.cpp" />
+    <ClCompile Include="internal\PerkEvaluator.cpp" />
+    <ClCompile Include="commands\PerkCommands.cpp" />
     <ClCompile Include="features\EyeMeshOverride.cpp" />
     <ClCompile Include="features\RaceEyeCommands.cpp" />
     <ClCompile Include="features\WeatherChangeEvent.cpp" />
@@ -217,12 +237,8 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="commands\CrouchCommands.cpp" />
     <ClCompile Include="commands\CommandTable.cpp" />
     <ClCompile Include="commands\ChallengeCommands.cpp" />
-    <ClCompile Include="commands\CommandBoundsCommand.cpp" />
     <ClCompile Include="commands\ToggleAllPrimitives.cpp" />
     <ClCompile Include="commands\DialogueCommands.cpp" />
-    <ClCompile Include="commands\ForceSayCommand.cpp" />
-    <ClCompile Include="commands\CurrentDialogueCommands.cpp" />
-    <ClCompile Include="commands\IsSayingCommand.cpp" />
     <ClCompile Include="commands\WeaponEmissiveCommands.cpp" />
     <ClCompile Include="commands\ItemModFlagCommands.cpp" />
     <ClCompile Include="commands\UICommands.cpp" />
@@ -258,7 +274,6 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClCompile Include="handlers\OnDialogueMenuBuildHandler.cpp" />
     <ClCompile Include="handlers\OnPreDeathHandler.cpp" />
     <ClCompile Include="handlers\OnPreDamageHandler.cpp" />
-    <ClCompile Include="commands\DialogueTopicCommands.cpp" />
     <ClCompile Include="commands\NavmeshCommands.cpp" />
     <ClCompile Include="commands\CoverCommands.cpp" />
     <ClCompile Include="commands\ParticleCommands.cpp" />
@@ -272,17 +287,9 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="ITR.h" />
     <ClInclude Include="internal\settings.h" />
     <ClInclude Include="internal\FormUtils.h" />
-    <ClInclude Include="internal\RefIdSet.h" />
-    <ClInclude Include="internal\StringMatch.h" />
-    <ClInclude Include="internal\UIMinimal.h" />
     <ClInclude Include="internal\CooldownTracker.h" />
-    <ClInclude Include="internal\FallDamageLogic.h" />
-    <ClInclude Include="internal\FormatLogic.h" />
-    <ClInclude Include="internal\OnWitnessedLogic.h" />
-    <ClInclude Include="internal\PickpocketHookLogic.h" />
     <ClInclude Include="internal\RadioInjectionLogic.h" />
     <ClInclude Include="internal\StringAlloc.h" />
-    <ClInclude Include="commands\CommandBoundsCommand.h" />
     <ClInclude Include="commands\ToggleAllPrimitives.h" />
     <ClInclude Include="internal\BSSpinLock.h" />
     <ClInclude Include="internal\EventDispatch.h" />
@@ -361,7 +368,9 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="features\CameraOverride.h" />
     <ClInclude Include="features\CompanionNoBlock.h" />
     <ClInclude Include="features\DoorPinchFix.h" />
-    <ClInclude Include="features\PerkRuntimeFramework.h" />
+    <ClInclude Include="internal\PerkIndex.h" />
+    <ClInclude Include="internal\PerkEvaluator.h" />
+    <ClInclude Include="commands\PerkCommands.h" />
     <ClInclude Include="features\EyeMeshOverride.h" />
     <ClInclude Include="features\RaceEyeCommands.h" />
     <ClInclude Include="features\WeatherChangeEvent.h" />
@@ -379,9 +388,6 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="commands\CrouchCommands.h" />
     <ClInclude Include="commands\ChallengeCommands.h" />
     <ClInclude Include="commands\DialogueCommands.h" />
-    <ClInclude Include="commands\ForceSayCommand.h" />
-    <ClInclude Include="commands\CurrentDialogueCommands.h" />
-    <ClInclude Include="commands\IsSayingCommand.h" />
     <ClInclude Include="commands\WeaponEmissiveCommands.h" />
     <ClInclude Include="commands\ItemModFlagCommands.h" />
     <ClInclude Include="commands\UICommands.h" />
@@ -417,11 +423,11 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" if exist "$(
     <ClInclude Include="handlers\OnDialogueMenuBuildHandler.h" />
     <ClInclude Include="handlers\OnPreDeathHandler.h" />
     <ClInclude Include="handlers\OnPreDamageHandler.h" />
-    <ClInclude Include="commands\DialogueTopicCommands.h" />
     <ClInclude Include="commands\NavmeshCommands.h" />
     <ClInclude Include="commands\CoverCommands.h" />
     <ClInclude Include="commands\ParticleCommands.h" />
-    <ClInclude Include="commands\PathingShared.h" />
+    <ClInclude Include="internal\layout\Audio.h" />
+    <ClInclude Include="internal\layout\Pathing.h" />
     <ClInclude Include="internal\RayCast.h" />
     <ClInclude Include="features\RadioInjection.h" />
     <ClInclude Include="features\WakeyWakey.h" />

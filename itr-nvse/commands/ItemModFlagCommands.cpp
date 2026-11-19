@@ -1,12 +1,4 @@
-//setitemmodflags and getitemmodflags
-//sets ExtraWeaponModFlags 0x8D on an inventory item instance
-//vanilla persists the extra data with the item
-//itemmodflagsafety guards weapon-only display paths
-//inventory refs resolve through xnvse InventoryReferenceGetForRefID
-//placed refs use their own extra data list
-
 #include "ItemModFlagCommands.h"
-#define FORMUTILS_USE_NVSE_TYPES
 #include "internal/FormUtils.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameSDK.h"
@@ -21,21 +13,20 @@ extern const _ExtractArgs ExtractArgs;
 
 using namespace FormUtils;
 
-namespace
-{
-	constexpr UInt8  kXData_WeaponModFlags = 0x8D;
+namespace {
+	constexpr UInt8 kXData_WeaponModFlags = 0x8D;
 	constexpr UInt32 kNVSEData_InventoryReferenceGetForRefID = 2;
 
 	//xnvse inventory reference layout
-	struct InvRef
-	{
-		TESForm*                          type;         // 00
-		ExtraContainerChanges::EntryData* entry;        // 04
-		ExtraDataList*                    xData;        // 08 - the live instance extra-data list
-		TESObjectREFR*                    containerRef; // 0C
-		TESObjectREFR*                    tempRef;      // 10
+	struct InvRef {
+		TESForm* type; //0x00
+		ExtraContainerChanges::EntryData* entry; //0x04
+		ExtraDataList* xData; //0x08
+		TESObjectREFR* containerRef; //0x0C
+		TESObjectREFR* tempRef; //0x10
 	};
-	typedef InvRef* (*InvRefGetForID_t)(UInt32 refID);
+
+	using InvRefGetForID_t = InvRef* (*)(UInt32 refID);
 	static InvRefGetForID_t g_invRefGetForID = nullptr;
 
 	static BSExtraData* GetExtraData(BaseExtraList* list, UInt32 type)
@@ -73,7 +64,11 @@ namespace
 		if (!list || !xData) return;
 		using Node = ExtraContainerChanges::ExtendDataList::_Node;
 		Node* head = list->Head();
-		if (!head->item) { head->item = xData; head->next = nullptr; return; }
+		if (!head->item) {
+			head->item = xData;
+			head->next = nullptr;
+			return;
+		}
 		Node* node = head;
 		while (node->next) node = node->next;
 		Node* newNode = static_cast<Node*>(Engine::FormHeap_Allocate(sizeof(Node)));
@@ -103,7 +98,7 @@ namespace
 	}
 
 	static ParamInfo kParams_SetItemModFlags[1] = {
-		{ "flags", kParamType_Integer, 1 },
+		{"flags", kParamType_Integer, 1},
 	};
 
 	DEFINE_COMMAND_PLUGIN(SetItemModFlags, "Sets the weapon-mod flag (the inventory '+') on this inventory reference's item. flags 0 removes it; default 1.", 1, 1, kParams_SetItemModFlags);
@@ -122,9 +117,11 @@ namespace
 		BaseExtraList* xData;
 		if (InvRef* invRef = g_invRefGetForID ? g_invRefGetForID(thisObj->refID) : nullptr) {
 			xData = ResolveInstanceData(invRef, flags != 0);
-			if (!xData) { *result = (flags == 0) ? 1 : 0; return true; }
-		}
-		else {
+			if (!xData) {
+				*result = (flags == 0) ? 1 : 0;
+				return true;
+			}
+		} else {
 			xData = &thisObj->extraDataList;
 		}
 
@@ -133,8 +130,7 @@ namespace
 			if (x) reinterpret_cast<ExtraWeaponModFlagsView*>(x)->flags = static_cast<UInt8>(flags);
 			else if (auto* created = CreateWeaponModFlags(flags))
 				Engine::BaseExtraList_AddExtra(xData, created);
-		}
-		else {
+		} else {
 			Engine::BaseExtraList_RemoveByType(xData, kXData_WeaponModFlags);
 		}
 
@@ -164,14 +160,14 @@ namespace
 }
 
 namespace ItemModFlagCommands {
-void RegisterCommands(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_SetItemModFlags);
-	nvse->RegisterCommand(&kCommandInfo_GetItemModFlags);
+	void RegisterCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_SetItemModFlags);
+		nvse->RegisterCommand(&kCommandInfo_GetItemModFlags);
 
-	if (auto* dataInterface = reinterpret_cast<NVSEDataInterface*>(nvse->QueryInterface(kInterface_Data)))
-		g_invRefGetForID = reinterpret_cast<InvRefGetForID_t>(
-			dataInterface->GetFunc(kNVSEData_InventoryReferenceGetForRefID));
-}
+		if (auto* dataInterface = reinterpret_cast<NVSEDataInterface*>(nvse->QueryInterface(kInterface_Data)))
+			g_invRefGetForID = reinterpret_cast<InvRefGetForID_t>(
+				dataInterface->GetFunc(kNVSEData_InventoryReferenceGetForRefID));
+	}
 }

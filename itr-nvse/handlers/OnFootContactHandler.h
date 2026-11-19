@@ -1,7 +1,6 @@
 #pragma once
 
-namespace OnFootContactHandler
-{
+namespace OnFootContactHandler {
 	bool Init(void* nvse);
 	void InstallListenerProbes();
 	void Update();

@@ -4,7 +4,6 @@
 #include "nvse/GameObjects.h"
 #include "nvse/ParamInfos.h"
 #include "FallDamageHandler.h"
-#include "internal/FallDamageLogic.h"
 #include "internal/Detours.h"
 #include "internal/ScopedLock.h"
 #include <unordered_map>
@@ -21,15 +20,19 @@ static float __cdecl GetFallDamageMultForActor(UInt32 refID)
 {
 	InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
 	ScopedLock lock(&g_fdhLock);
-	return FallDamageLogic::ResolveMultiplier(refID, g_globalFallDamageMult, g_actorFallDamageMults);
+	if (refID && !g_actorFallDamageMults.empty()) {
+		auto it = g_actorFallDamageMults.find(refID);
+		if (it != g_actorFallDamageMults.end())
+			return it->second;
+	}
+	return g_globalFallDamageMult;
 }
 
-namespace FallDamageHook
-{
-	static const UInt32 kHookAddr = 0x8A63EC;
+namespace FallDamageHook {
+	static constexpr UInt32 kHookAddr = 0x8A63EC;
 	//fld [ebp-0x28] / fcomp qword ds:[0x1012060], the compare that gates applying the damage.
 	//stewie's bPowerArmorScalesFallDamage takes the same bytes, so chain rather than assume vanilla
-	static const UInt8 kVanillaBytes[9] = { 0xD9, 0x45, 0xD8, 0xDC, 0x1D, 0x60, 0x20, 0x01, 0x01 };
+	static const UInt8 kVanillaBytes[9] = {0xD9, 0x45, 0xD8, 0xDC, 0x1D, 0x60, 0x20, 0x01, 0x01};
 
 	static Detours::JumpDetour s_detour;
 	static UInt8* s_trampoline = nullptr;
@@ -38,27 +41,27 @@ namespace FallDamageHook
 	{
 		__asm
 		{
-			push ecx                            //caller-saved, cdecl call below clobbers them
+			push ecx //caller-saved, cdecl call below clobbers them
 			push edx
 
-			mov eax, [ebp-0x54]                 //fall-damage target actor local
+			mov eax, [ebp-0x54] //fall-damage target actor local
 			test eax, eax
 			jz use_global
-			mov eax, [eax+0x0C]                 //TESObjectREFR::refID at +0x0C
+			mov eax, [eax+0x0C] //TESObjectREFR::refID at +0x0C
 			jmp do_call
 
 		use_global:
-			xor eax, eax                        //no actor -> fall back to global multiplier
+			xor eax, eax //no actor -> fall back to global multiplier
 
 		do_call:
-			push eax                            //cdecl arg: refID (or 0)
+			push eax //cdecl arg: refID (or 0)
 			call GetFallDamageMultForActor
 			add esp, 4
 
 			pop edx
 			pop ecx
 
-			fmul dword ptr [ebp-0x28]           //st(0) holds the multiplier, scale the damage float
+			fmul dword ptr [ebp-0x28] //st(0) holds the multiplier, scale the damage float
 			fstp dword ptr [ebp-0x28]
 
 			//trampoline replays the compare and returns to 0x8A63F5, or enters the previous owner
@@ -80,8 +83,7 @@ namespace FallDamageHook
 
 static Actor* RefToActor(TESObjectREFR* ref)
 {
-	if (ref)
-	{
+	if (ref) {
 		UInt8 typeID = ref->typeID;
 		if (typeID == kFormType_ACHR || typeID == kFormType_ACRE)
 			return (Actor*)ref;
@@ -90,8 +92,8 @@ static Actor* RefToActor(TESObjectREFR* ref)
 }
 
 static ParamInfo kParams_SetFallDamageMult[2] = {
-	{ "multiplier", kParamType_Float, 0 },
-	{ "actorRef", kParamType_Actor, 1 },
+	{"multiplier", kParamType_Float, 0},
+	{"actorRef", kParamType_Actor, 1},
 };
 
 DEFINE_COMMAND_PLUGIN(SetFallDamageMult, "Sets fall damage multiplier (global or per-actor)", 0, 2, kParams_SetFallDamageMult);
@@ -110,17 +112,14 @@ bool Cmd_SetFallDamageMult_Execute(COMMAND_ARGS)
 
 	FallDamageHandler::SetMultiplier(mult, actor);
 
-	if (IsConsoleMode())
-	{
+	if (IsConsoleMode()) {
 		float effectiveMult = FallDamageHandler::GetMultiplier(actor);
-		if (actor)
-		{
+		if (actor) {
 			if (!FallDamageHandler::HasOverride(actor))
 				Console_Print("SetFallDamageMult >> Cleared override for %08X (using global %.2f)", actor->refID, g_globalFallDamageMult);
 			else
 				Console_Print("SetFallDamageMult >> Set %08X to %.2f", actor->refID, effectiveMult);
-		}
-		else
+		} else
 			Console_Print("SetFallDamageMult >> Set global to %.2f", effectiveMult);
 	}
 
@@ -129,7 +128,7 @@ bool Cmd_SetFallDamageMult_Execute(COMMAND_ARGS)
 }
 
 static ParamInfo kParams_GetFallDamageMult[1] = {
-	{ "actorRef", kParamType_Actor, 1 },
+	{"actorRef", kParamType_Actor, 1},
 };
 
 DEFINE_COMMAND_PLUGIN(GetFallDamageMult, "Gets fall damage multiplier (global or per-actor)", 0, 1, kParams_GetFallDamageMult);
@@ -143,8 +142,7 @@ bool Cmd_GetFallDamageMult_Execute(COMMAND_ARGS)
 
 	*result = FallDamageHandler::GetMultiplier(actor);
 
-	if (IsConsoleMode())
-	{
+	if (IsConsoleMode()) {
 		if (actor)
 			Console_Print("GetFallDamageMult >> %08X = %.2f", actor->refID, *result);
 		else
@@ -155,7 +153,7 @@ bool Cmd_GetFallDamageMult_Execute(COMMAND_ARGS)
 }
 
 static ParamInfo kParams_ClearFallDamageMult[1] = {
-	{ "actorRef", kParamType_Actor, 1 },
+	{"actorRef", kParamType_Actor, 1},
 };
 
 DEFINE_COMMAND_PLUGIN(ClearFallDamageMult, "Clears fall damage multiplier override", 0, 1, kParams_ClearFallDamageMult);
@@ -171,16 +169,14 @@ bool Cmd_ClearFallDamageMult_Execute(COMMAND_ARGS)
 		actor = RefToActor(thisObj);
 
 	size_t count = 0;
-	if (!actor)
-	{
+	if (!actor) {
 		InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
 		ScopedLock lock(&g_fdhLock);
 		count = g_actorFallDamageMults.size();
 	}
 	FallDamageHandler::ClearMultiplier(actor);
 
-	if (IsConsoleMode())
-	{
+	if (IsConsoleMode()) {
 		if (actor)
 			Console_Print("ClearFallDamageMult >> Cleared %08X", actor->refID);
 		else
@@ -192,75 +188,70 @@ bool Cmd_ClearFallDamageMult_Execute(COMMAND_ARGS)
 }
 
 namespace FallDamageHandler {
-//called at PostPostLoad so a plugin that took 0x8A63EC during its own load is already visible
-//and can be chained
-void InstallHook()
-{
-	FallDamageHook::Install();
-}
-
-bool HasOverride(Actor* actor)
-{
-	if (!actor)
-		return false;
-
-	InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
-	ScopedLock lock(&g_fdhLock);
-	return g_actorFallDamageMults.find(actor->refID) != g_actorFallDamageMults.end();
-}
-
-void SetMultiplier(float mult, Actor* actor)
-{
-	mult = FallDamageLogic::ClampMultiplier(mult);
-
-	InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
-	ScopedLock lock(&g_fdhLock);
-	if (actor)
+	//called at PostPostLoad so a plugin that took 0x8A63EC during its own load is already visible
+	//and can be chained
+	void Init()
 	{
-		if (FallDamageLogic::StoresActorOverride(mult))
-			g_actorFallDamageMults[actor->refID] = mult;
-		else
+		FallDamageHook::Install();
+	}
+
+	bool HasOverride(Actor* actor)
+	{
+		if (!actor)
+			return false;
+
+		InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
+		ScopedLock lock(&g_fdhLock);
+		return g_actorFallDamageMults.find(actor->refID) != g_actorFallDamageMults.end();
+	}
+
+	void SetMultiplier(float mult, Actor* actor)
+	{
+		if (mult < 0.0f)
+			mult = 0.0f;
+
+		InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
+		ScopedLock lock(&g_fdhLock);
+		if (actor) {
+			if (mult != 1.0f)
+				g_actorFallDamageMults[actor->refID] = mult;
+			else
+				g_actorFallDamageMults.erase(actor->refID);
+		} else {
+			g_globalFallDamageMult = mult;
+		}
+	}
+
+	float GetMultiplier(Actor* actor)
+	{
+		return GetFallDamageMultForActor(actor ? actor->refID : 0);
+	}
+
+	void ClearMultiplier(Actor* actor)
+	{
+		InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
+		ScopedLock lock(&g_fdhLock);
+		if (actor) {
 			g_actorFallDamageMults.erase(actor->refID);
+		} else {
+			g_actorFallDamageMults.clear();
+			g_globalFallDamageMult = 1.0f;
+		}
 	}
-	else
-	{
-		g_globalFallDamageMult = mult;
-	}
-}
 
-float GetMultiplier(Actor* actor)
-{
-	return GetFallDamageMultForActor(actor ? actor->refID : 0);
-}
-
-void ClearMultiplier(Actor* actor)
-{
-	InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
-	ScopedLock lock(&g_fdhLock);
-	if (actor)
+	//load teardown, refIDs from the previous session go stale across loads
+	void ClearState()
 	{
-		g_actorFallDamageMults.erase(actor->refID);
-	}
-	else
-	{
+		InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
+		ScopedLock lock(&g_fdhLock);
 		g_actorFallDamageMults.clear();
-		g_globalFallDamageMult = 1.0f;
 	}
-}
 
-//load teardown, refIDs from the previous session go stale across loads
-void ClearState()
-{
-	InitCriticalSectionOnce(&g_fdhLockInit, &g_fdhLock);
-	ScopedLock lock(&g_fdhLock);
-	g_actorFallDamageMults.clear();
-}
-
-void RegisterCommands(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterCommand(&kCommandInfo_SetFallDamageMult);
-	nvse->RegisterCommand(&kCommandInfo_GetFallDamageMult);
-	nvse->RegisterCommand(&kCommandInfo_ClearFallDamageMult);
-}
+	void RegisterCommands(void* nvsePtr)
+	{
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterCommand(&kCommandInfo_SetFallDamageMult);
+		nvse->RegisterCommand(&kCommandInfo_GetFallDamageMult);
+		nvse->RegisterCommand(&kCommandInfo_ClearFallDamageMult);
+	}
 }

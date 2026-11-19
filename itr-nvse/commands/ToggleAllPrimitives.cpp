@@ -10,6 +10,8 @@
 #include "internal/SafeWrite.h"
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
+#include "internal/GameLayout.h"
+#include "internal/NiLayout.h"
 #include "internal/globals.h"
 #include "internal/GameGlobals.h"
 
@@ -18,35 +20,7 @@
 #include <unordered_map>
 #include <vector>
 
-extern void Log(const char* fmt, ...);
-
-namespace
-{
-	struct GridCellArrayView
-	{
-		void* vtbl;
-		UInt8 pad04[0x0C - 0x04];
-		UInt32 gridSize;
-		TESObjectCELL** gridCells;
-	};
-	static_assert(offsetof(GridCellArrayView, gridSize) == 0x0C);
-	static_assert(offsetof(GridCellArrayView, gridCells) == 0x10);
-
-	struct TESView
-	{
-		void* vtbl;
-		UInt32 unk04;
-		GridCellArrayView* gridCellArray;
-		UInt8 pad0C[0x34 - 0x0C];
-		TESObjectCELL* currentInterior;
-		TESObjectCELL** interiorsBuffer;
-		TESObjectCELL** exteriorsBuffer;
-	};
-	static_assert(offsetof(TESView, gridCellArray) == 0x08);
-	static_assert(offsetof(TESView, currentInterior) == 0x34);
-	static_assert(offsetof(TESView, interiorsBuffer) == 0x38);
-	static_assert(offsetof(TESView, exteriorsBuffer) == 0x3C);
-
+namespace {
 	//TES ctor 0x44FB20 sizes the +0x38/+0x3C buffers from these settings and zeroes every slot,
 	//TES+0x40/+0x44 are not live counts, iterators like 0x456D00 walk the full capacity with null checks
 	constexpr UInt32 kAddr_uInteriorCellBufferValue = 0x11C3E3C; //setting object 0x11C3E38, value union at +0x04
@@ -55,7 +29,6 @@ namespace
 	constexpr UInt32 kAddr_TES_ShowCellNode = 0x456D00;
 	constexpr UInt32 kAddr_TES_TogglePrimitive = 0x456AA0;
 	constexpr UInt32 kAddr_ToggleCellNodesFlags_GetFlag = 0x5468F0;
-	constexpr UInt32 kAddr_INISettingCollection_GetValueAddr = 0x408D60;
 	constexpr UInt32 kAddr_ExtraDataList_GetPrimitive = 0x41FBE0;
 	constexpr UInt32 kAddr_TESObjectREFR_TogglePrimitive = 0x577390;
 	constexpr UInt32 kAddr_TESObjectREFR_IsMarker = 0x444ED0;
@@ -90,8 +63,8 @@ namespace
 	constexpr UInt32 kRefreshIntervalMs = 1000;
 	constexpr float kOverlayLifetimeSeconds = 3.0f;
 	constexpr float kMaxOverlayDistance = 4096.0f;
-	enum CellNode : UInt32
-	{
+
+	enum CellNode : UInt32 {
 		kCellNode_Actors = 0,
 		kCellNode_Markers = 1,
 		kCellNode_Land = 2,
@@ -112,8 +85,7 @@ namespace
 		kCellNode_Collision,
 	};
 
-	struct RefreshCounts
-	{
+	struct RefreshCounts {
 		UInt32 cells = 0;
 		UInt32 primitiveRefs = 0;
 		UInt32 primitiveRefs3D = 0;
@@ -129,8 +101,7 @@ namespace
 		float nearestRefDistance = -1.0f;
 	};
 
-	enum class OverlaySpawnResult
-	{
+	enum class OverlaySpawnResult {
 		kSpawned = 0,
 		kNo3D,
 		kStateMiss,
@@ -138,40 +109,20 @@ namespace
 		kCreateFailed,
 	};
 
-	struct NiPoint3
-	{
+	struct NiPoint3 {
 		float x;
 		float y;
 		float z;
 	};
 
-	struct NiColorAlpha
-	{
+	struct NiColorAlpha {
 		float r;
 		float g;
 		float b;
 		float a;
 	};
 
-	struct NiAlphaPropertyView
-	{
-		UInt8 pad00[0x18];
-		UInt16 flags;
-	};
-	static_assert(offsetof(NiAlphaPropertyView, flags) == 0x18);
-
-	struct NiAVObjectView
-	{
-		UInt8 pad00[0x30];
-		UInt32 flags;
-		UInt8 pad34[0x64 - 0x34];
-		float localScale;
-	};
-	static_assert(offsetof(NiAVObjectView, flags) == 0x30);
-	static_assert(offsetof(NiAVObjectView, localScale) == 0x64);
-
-	struct NiUpdateData
-	{
+	struct NiUpdateData {
 		float timePassed;
 		bool updateControllers;
 		bool isMultiThreaded;
@@ -180,10 +131,10 @@ namespace
 		bool updateShadowScene;
 		UInt8 pad09[3];
 	};
+
 	static_assert(sizeof(NiUpdateData) == 0x0C);
 
-	struct DebugNodeState
-	{
+	struct DebugNodeState {
 		void* node = nullptr;
 		UInt32 flags = 0;
 		float localScale = 1.0f;
@@ -224,8 +175,7 @@ namespace
 
 	bool AreVisibleNodesEnabled()
 	{
-		for (UInt32 nodeIndex : kVisibleNodes)
-		{
+		for (UInt32 nodeIndex : kVisibleNodes) {
 			if (!IsCellNodeVisible(nodeIndex))
 				return false;
 		}
@@ -237,8 +187,7 @@ namespace
 		if (!tes)
 			return;
 
-		for (UInt32 nodeIndex : kVisibleNodes)
-		{
+		for (UInt32 nodeIndex : kVisibleNodes) {
 			if (IsCellNodeVisible(nodeIndex) != show)
 				ThisCall<void>(kAddr_TES_ShowCellNode, tes, nodeIndex, show ? 1u : 0u, 0u);
 		}
@@ -317,10 +266,10 @@ namespace
 	NiColorAlpha GetOverlayColor(bool hasPrimitive, bool isMarker)
 	{
 		if (hasPrimitive && isMarker)
-			return { 1.0f, 0.95f, 0.15f, 1.0f };
+			return {1.0f, 0.95f, 0.15f, 1.0f};
 		if (hasPrimitive)
-			return { 1.0f, 0.35f, 0.05f, 1.0f };
-		return { 0.10f, 0.95f, 1.0f, 1.0f };
+			return {1.0f, 0.35f, 0.05f, 1.0f};
+		return {0.10f, 0.95f, 1.0f, 1.0f};
 	}
 
 	float GetOverlayDiameter(bool, bool)
@@ -433,20 +382,11 @@ namespace
 		return object && (*reinterpret_cast<UInt32**>(object))[0x18 >> 2] == kAddr_ReturnThis2;
 	}
 
-	struct NiNodeChildrenView
-	{
-		UInt8 pad00[0x9C];
-		NiTArray<void*> children;
-	};
-	static_assert(offsetof(NiNodeChildrenView, children) == 0x9C);
-
 	void* GetAlphaProperty()
 	{
-		if (!s_alphaProperty)
-		{
+		if (!s_alphaProperty) {
 			s_alphaProperty = CdeclCall<void*>(kAddr_NiAlphaProperty_Create);
-			if (s_alphaProperty)
-			{
+			if (s_alphaProperty) {
 				reinterpret_cast<NiAlphaPropertyView*>(s_alphaProperty)->flags = 0x10ED;
 				//NiRefObject ctor 0xA5D3A0 leaves the refcount (+0x04) at 0, expiring overlays
 				//would decref it to deletion, hold one reference so the cache owns the object
@@ -469,9 +409,8 @@ namespace
 		if (!object)
 			return;
 
-		if (IsNodeObject(object))
-		{
-			auto* node = reinterpret_cast<NiNodeChildrenView*>(object);
+		if (IsNodeObject(object)) {
+			auto* node = NiNodeAsView(object);
 			for (UInt16 i = 0; i < node->children.firstFreeEntry; i++)
 				ApplyRenderPropertiesRecursive(node->children.data ? node->children.data[i] : nullptr, alphaProperty);
 			return;
@@ -508,19 +447,17 @@ namespace
 		if (void* axes = CdeclCall<void*>(kAddr_TES_DrawAxesLines, baseAxesSize))
 			ThisCall<void>(kAddr_NiNode_AttachChild, overlay, axes, 1u);
 
-		const NiPoint3 arrowVector = { 0.0f, 0.0f, beaconHeight };
+		const NiPoint3 arrowVector = {0.0f, 0.0f, beaconHeight};
 		if (void* arrow = CdeclCall<void*>(kAddr_TES_DrawArrow, &arrowVector, &color))
 			ThisCall<void>(kAddr_NiNode_AttachChild, overlay, arrow, 1u);
 
-		const NiPoint3 topPos = { 0.0f, 0.0f, beaconHeight };
-		if (void* head = CdeclCall<void*>(kAddr_TES_DrawSphere, headDiameter, 10u, 10u, &color))
-		{
+		const NiPoint3 topPos = {0.0f, 0.0f, beaconHeight};
+		if (void* head = CdeclCall<void*>(kAddr_TES_DrawSphere, headDiameter, 10u, 10u, &color)) {
 			ThisCall<void>(kAddr_NiAVObject_SetLocalTranslate, head, &topPos);
 			ThisCall<void>(kAddr_NiNode_AttachChild, overlay, head, 1u);
 		}
 
-		if (void* topAxes = CdeclCall<void*>(kAddr_TES_DrawAxesLines, headDiameter * 1.4f))
-		{
+		if (void* topAxes = CdeclCall<void*>(kAddr_TES_DrawAxesLines, headDiameter * 1.4f)) {
 			ThisCall<void>(kAddr_NiAVObject_SetLocalTranslate, topAxes, &topPos);
 			ThisCall<void>(kAddr_NiNode_AttachChild, overlay, topAxes, 1u);
 		}
@@ -540,11 +477,10 @@ namespace
 		NiAVObjectView* view = reinterpret_cast<NiAVObjectView*>(node);
 		DebugNodeState& state = s_debugNodeStates[refr->refID];
 		const bool newNode = state.node != node;
-		if (newNode)
-		{
+		if (newNode) {
 			state.node = node;
 			state.flags = view->flags;
-			state.localScale = view->localScale;
+			state.localScale = view->local.scale;
 			state.lastOverlayTick = 0;
 		}
 
@@ -581,7 +517,7 @@ namespace
 		if (!overlay)
 			return OverlaySpawnResult::kCreateFailed;
 
-		const NiPoint3 worldPos = { refr->posX, refr->posY, refr->posZ + GetOverlayOffsetZ(hasPrimitive, isMarker) };
+		const NiPoint3 worldPos = {refr->posX, refr->posY, refr->posZ + GetOverlayOffsetZ(hasPrimitive, isMarker)};
 		ThisCall<void>(kAddr_NiAVObject_SetLocalTranslate, overlay, &worldPos);
 		UpdateNode(overlay);
 		ThisCall<void>(kAddr_TES_AddTempNode, tes, overlay, kOverlayLifetimeSeconds);
@@ -591,8 +527,7 @@ namespace
 
 	void AccumulateOverlayResult(RefreshCounts& counts, OverlaySpawnResult result)
 	{
-		switch (result)
-		{
+		switch (result) {
 			case OverlaySpawnResult::kSpawned:
 				counts.overlayRefs++;
 				break;
@@ -620,8 +555,7 @@ namespace
 		if (iter == s_debugNodeStates.end())
 			return;
 
-		if (refr->renderState && refr->renderState->niNode && refr->renderState->niNode == iter->second.node)
-		{
+		if (refr->renderState && refr->renderState->niNode && refr->renderState->niNode == iter->second.node) {
 			void* node = refr->renderState->niNode;
 			NiAVObjectView* view = reinterpret_cast<NiAVObjectView*>(node);
 			view->flags = iter->second.flags;
@@ -639,8 +573,7 @@ namespace
 
 		counts.cells++;
 
-		for (auto iter = cell->objectList.Begin(); !iter.End(); ++iter)
-		{
+		for (auto iter = cell->objectList.Begin(); !iter.End(); ++iter) {
 			TESObjectREFR* refr = iter.Get();
 			if (!refr)
 				continue;
@@ -651,32 +584,26 @@ namespace
 			if (!show)
 				RestoreVisuals(refr);
 
-			if (hasPrimitive)
-			{
+			if (hasPrimitive) {
 				counts.primitiveRefs++;
 				if (refr->renderState && refr->renderState->niNode)
 					counts.primitiveRefs3D++;
 				ThisCall<void>(kAddr_TESObjectREFR_TogglePrimitive, refr, show ? 1u : 0u);
 			}
 
-			if (isMarker)
-			{
+			if (isMarker) {
 				counts.markerRefs++;
 				if (refr->renderState && refr->renderState->niNode)
 					counts.markerRefs3D++;
 				SetRefCulled(refr, !show);
 			}
 
-			if (show && (hasPrimitive || isMarker))
-			{
+			if (show && (hasPrimitive || isMarker)) {
 				ApplyLoudVisuals(refr, hasPrimitive, isMarker);
-				if (IsWithinOverlayRange(refr, counts))
-				{
+				if (IsWithinOverlayRange(refr, counts)) {
 					counts.overlayCandidates++;
 					AccumulateOverlayResult(counts, SpawnDebugOverlay(tes, refr, hasPrimitive, isMarker));
-				}
-				else
-				{
+				} else {
 					counts.overlayOutOfRange++;
 				}
 			}
@@ -688,8 +615,7 @@ namespace
 		if (!cell)
 			return;
 
-		for (TESObjectCELL* existing : cells)
-		{
+		for (TESObjectCELL* existing : cells) {
 			if (existing == cell)
 				return;
 		}
@@ -704,22 +630,19 @@ namespace
 
 		AddUniqueCell(cells, tes->currentInterior);
 
-		if (tes->gridCellArray && tes->gridCellArray->gridCells)
-		{
+		if (tes->gridCellArray && tes->gridCellArray->gridCells) {
 			const UInt32 cellCount = tes->gridCellArray->gridSize * tes->gridCellArray->gridSize;
 			for (UInt32 i = 0; i < cellCount; i++)
 				AddUniqueCell(cells, tes->gridCellArray->gridCells[i]);
 		}
 
-		if (tes->interiorsBuffer)
-		{
+		if (tes->interiorsBuffer) {
 			const UInt32 capacity = *reinterpret_cast<UInt32*>(kAddr_uInteriorCellBufferValue);
 			for (UInt32 i = 0; i < capacity; i++)
 				AddUniqueCell(cells, tes->interiorsBuffer[i]);
 		}
 
-		if (tes->exteriorsBuffer)
-		{
+		if (tes->exteriorsBuffer) {
 			const UInt32 capacity = *reinterpret_cast<UInt32*>(kAddr_uExteriorCellBufferValue);
 			for (UInt32 i = 0; i < capacity; i++)
 				AddUniqueCell(cells, tes->exteriorsBuffer[i]);
@@ -746,7 +669,7 @@ namespace
 		return RefreshLoadedRefs(tes, true);
 	}
 
-	void __fastcall Load3D_PrimitiveCullHook(void* node, void*, UInt32 shouldCull)
+	void __fastcall Hook_Load3D_PrimitiveCull(void* node, void* edx, UInt32 shouldCull)
 	{
 		if (node && ArePrimitivesVisible())
 			shouldCull = 0;
@@ -755,7 +678,7 @@ namespace
 			ThisCall<void>(kAddr_NiAVObject_SetAppCulled, node, shouldCull);
 	}
 
-	void __fastcall Load3D_DoorTravelCullHook(void* node, void*, UInt32 shouldCull)
+	void __fastcall Hook_Load3D_DoorTravelCull(void* node, void* edx, UInt32 shouldCull)
 	{
 		if (node && AreVisibleNodesEnabled())
 			shouldCull = 0;
@@ -766,8 +689,7 @@ namespace
 
 	bool InstallLoad3DCall(Detours::CallDetour& detour, UInt32 addr, void* hook)
 	{
-		if (*reinterpret_cast<UInt8*>(addr) != 0xE8)
-		{
+		if (*reinterpret_cast<UInt8*>(addr) != 0xE8) {
 			Log("ToggleAllPrimitives: site 0x%08X expected CALL, found 0x%02X",
 				addr, *reinterpret_cast<UInt8*>(addr));
 			return false;
@@ -782,8 +704,8 @@ namespace
 			return;
 		s_attempted = true;
 
-		InstallLoad3DCall(s_load3DPrimitiveCullCall, kAddr_Load3D_PrimitiveCullCall, Load3D_PrimitiveCullHook);
-		InstallLoad3DCall(s_load3DDoorTravelCullCall, kAddr_Load3D_DoorTravelCullCall, Load3D_DoorTravelCullHook);
+		InstallLoad3DCall(s_load3DPrimitiveCullCall, kAddr_Load3D_PrimitiveCullCall, Hook_Load3D_PrimitiveCull);
+		InstallLoad3DCall(s_load3DDoorTravelCullCall, kAddr_Load3D_DoorTravelCullCall, Hook_Load3D_DoorTravelCull);
 	}
 }
 
@@ -800,14 +722,11 @@ bool Cmd_ToggleAllPrimitives_Execute(COMMAND_ARGS)
 	const bool enable = !s_enabled;
 	RefreshCounts counts;
 
-	if (enable)
-	{
+	if (enable) {
 		s_enabled = true;
 		s_lastRefreshMs = 0;
 		counts = RefreshEnabledState(tes);
-	}
-	else
-	{
+	} else {
 		s_enabled = false;
 		SetVisibleNodesEnabled(tes, false);
 		SetPrimitivesVisible(tes, false);
@@ -817,8 +736,7 @@ bool Cmd_ToggleAllPrimitives_Execute(COMMAND_ARGS)
 
 	*result = enable ? 1.0 : 0.0;
 
-	if (IsConsoleMode())
-	{
+	if (IsConsoleMode()) {
 		Console_Print("ToggleAllPrimitives >> %s primitives=%u markers=%u overlays=%u",
 			enable ? "enabled" : "disabled",
 			counts.primitiveRefs, counts.markerRefs, counts.overlayRefs);
@@ -827,8 +745,7 @@ bool Cmd_ToggleAllPrimitives_Execute(COMMAND_ARGS)
 	return true;
 }
 
-namespace ToggleAllPrimitives
-{
+namespace ToggleAllPrimitives {
 	void Update()
 	{
 		if (!s_enabled || g_isLoadingSave)
@@ -840,10 +757,8 @@ namespace ToggleAllPrimitives
 
 		s_lastRefreshMs = now;
 
-		if (TESView* tes = GetTESView())
-		{
-			for (auto it = s_debugNodeStates.begin(); it != s_debugNodeStates.end();)
-			{
+		if (TESView* tes = GetTESView()) {
+			for (auto it = s_debugNodeStates.begin(); it != s_debugNodeStates.end();) {
 				if (!Engine::LookupFormByID(it->first)) it = s_debugNodeStates.erase(it);
 				else ++it;
 			}
@@ -853,13 +768,11 @@ namespace ToggleAllPrimitives
 
 	void Reset()
 	{
-		if (s_enabled)
-		{
+		if (s_enabled) {
 			//the primitives ini flag and cell node flags are global engine state that survives
 			//a load, flip them back so the new session starts hidden, skip the per-ref walk,
 			//the outgoing cells are being torn down and new cells inherit state from the flags
-			if (TESView* tes = GetTESView())
-			{
+			if (TESView* tes = GetTESView()) {
 				SetVisibleNodesEnabled(tes, false);
 				SetPrimitivesVisible(tes, false);
 			}
@@ -877,7 +790,7 @@ namespace ToggleAllPrimitives
 	}
 
 	//code patches, runtime only - registration runs in the GECK too where these addresses differ
-	void InstallHooks()
+	void Init()
 	{
 		InstallLoad3DFixes();
 	}

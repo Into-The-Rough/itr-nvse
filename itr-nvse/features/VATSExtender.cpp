@@ -12,8 +12,7 @@
 #include "internal/CallTemplates.h"
 #include "internal/MenuLayout.h"
 
-namespace VATSExtender
-{
+namespace VATSExtender {
 	static constexpr UInt32 kMaxOverflow = 256;
 	UInt32 g_overflowRefIDs[kMaxOverflow];
 	UInt32 g_overflowCount = 0;
@@ -38,8 +37,7 @@ namespace VATSExtender
 	void CheckForReset(void* vatsData)
 	{
 		UInt32 vanillaCount = VATSHighlightDataGetRefCount(vatsData);
-		if (vanillaCount == 0 && g_lastVanillaCount > 0)
-		{
+		if (vanillaCount == 0 && g_lastVanillaCount > 0) {
 			ClearOverflow();
 		}
 		g_lastVanillaCount = vanillaCount;
@@ -47,8 +45,7 @@ namespace VATSExtender
 
 	bool IsTracked(UInt32 refID)
 	{
-		for (UInt32 i = 0; i < g_overflowCount; i++)
-		{
+		for (UInt32 i = 0; i < g_overflowCount; i++) {
 			if (g_overflowRefIDs[i] == refID) return true;
 		}
 		return false;
@@ -57,11 +54,9 @@ namespace VATSExtender
 	void AddOverflowRef(TESObjectREFR* refr)
 	{
 		if (!refr) return;
-		if (g_overflowCount >= kMaxOverflow)
-		{
+		if (g_overflowCount >= kMaxOverflow) {
 			static bool loggedFull = false;
-			if (!loggedFull)
-			{
+			if (!loggedFull) {
 				loggedFull = true;
 				Log("VATSExtender: overflow list full at %u, dropping further refs", kMaxOverflow);
 			}
@@ -78,14 +73,11 @@ namespace VATSExtender
 		if (!refr) return;
 
 		TESObjectCELL* currentCell = refr->parentCell;
-		if (currentCell)
-		{
+		if (currentCell) {
 			bool isInterior = currentCell->IsInterior();
-			UInt32 locationID = isInterior ? currentCell->refID :
-				(currentCell->worldSpace ? currentCell->worldSpace->refID : 0);
+			UInt32 locationID = isInterior ? currentCell->refID : (currentCell->worldSpace ? currentCell->worldSpace->refID : 0);
 
-			if ((isInterior != g_lastWasInterior || locationID != g_lastLocationID) && g_overflowCount > 0)
-			{
+			if ((isInterior != g_lastWasInterior || locationID != g_lastLocationID) && g_overflowCount > 0) {
 				ClearOverflow();
 			}
 
@@ -118,17 +110,13 @@ namespace VATSExtender
 		void* vatsData = GetVATSHighlightData();
 		if (vatsData) CheckForReset(vatsData);
 
-		if (g_overflowCount > 0)
-		{
+		if (g_overflowCount > 0) {
 			void* worldRoot = CdeclCall<void*>(0x45C670);
-			if (worldRoot)
-			{
+			if (worldRoot) {
 				void* cullingProcess = ThisCall<void*>(0x8D80E0, worldRoot);
-				if (cullingProcess)
-				{
+				if (cullingProcess) {
 					int rendered = 0;
-					for (UInt32 i = 0; i < g_overflowCount; i++)
-					{
+					for (UInt32 i = 0; i < g_overflowCount; i++) {
 						TESForm* form = (TESForm*)Engine::LookupFormByID(g_overflowRefIDs[i]);
 						if (!form || form->typeID != kFormType_Reference) continue;
 
@@ -163,7 +151,7 @@ namespace VATSExtender
 		if (*(UInt8*)0x800DA4 == 0x68)
 			SafeWrite::WriteRelJump(0x800DA4, (UInt32)Hook_OnLimitReached);
 		else
-			Log("VATSExtender: limit-reject site at 800DA4 is 0x%02X, not a push; skipping", *(UInt8*)0x800DA4);
+			Log("VATSExtender: 0x800DA4 unexpected byte 0x%02X, skipping", *(UInt8*)0x800DA4);
 
 		if (!s_renderSceneCall.WriteRelCall(0x801993, Hook_RenderScene))
 			Log("VATSExtender: render site at 801993 could not be detoured");

@@ -21,8 +21,7 @@ DEFINE_COMMAND_PLUGIN(Sv_TrimStr, "trims whitespace from string", 0, 1, kParams_
 
 static ParamInfo kParams_OneArray_OneOptionalString[2] = {
 	{"array", kParamType_Integer, 0},
-	{"delimiter", kParamType_String, 1}
-};
+	{"delimiter", kParamType_String, 1}};
 DEFINE_COMMAND_PLUGIN(Sv_Join, "joins array elements into string", 0, 2, kParams_OneArray_OneOptionalString)
 DEFINE_COMMAND_PLUGIN(Sv_Reverse, "reverses a string", 0, 1, kParams_OneString)
 
@@ -55,15 +54,13 @@ bool Cmd_Sv_Join_Execute(COMMAND_ARGS)
 		return true;
 
 	NVSEArrayVarInterface::Array* arr = g_arrInterface->LookupArrayByID(arrID);
-	if (!arr)
-	{
+	if (!arr) {
 		g_strInterface->Assign(PASS_COMMAND_ARGS, "");
 		return true;
 	}
 
 	UInt32 size = g_arrInterface->GetArraySize(arr);
-	if (size == 0)
-	{
+	if (size == 0) {
 		g_strInterface->Assign(PASS_COMMAND_ARGS, "");
 		return true;
 	}
@@ -72,8 +69,7 @@ bool Cmd_Sv_Join_Execute(COMMAND_ARGS)
 	g_arrInterface->GetElements(arr, elements.data(), nullptr);
 
 	std::string joined;
-	for (UInt32 i = 0; i < size; i++)
-	{
+	for (UInt32 i = 0; i < size; i++) {
 		if (i > 0 && delimiter[0])
 			joined += delimiter;
 
@@ -114,32 +110,30 @@ bool Cmd_Sv_TrimStr_Execute(COMMAND_ARGS)
 }
 
 namespace StringCommands {
-bool Init(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-
-	g_strInterface = (NVSEStringVarInterface*)nvse->QueryInterface(kInterface_StringVar);
-	if (!g_strInterface)
+	bool Init(void* nvsePtr)
 	{
-		return false;
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+
+		g_strInterface = (NVSEStringVarInterface*)nvse->QueryInterface(kInterface_StringVar);
+		if (!g_strInterface) {
+			return false;
+		}
+
+		NVSEScriptInterface* scriptInterface = (NVSEScriptInterface*)nvse->QueryInterface(kInterface_Script);
+		if (!scriptInterface) {
+			return false;
+		}
+
+		ExtractArgsEx = scriptInterface->ExtractArgsEx;
+
+		return true;
 	}
 
-	NVSEScriptInterface* scriptInterface = (NVSEScriptInterface*)nvse->QueryInterface(kInterface_Script);
-	if (!scriptInterface)
+	void RegisterCommands(void* nvsePtr)
 	{
-		return false;
+		NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
+		nvse->RegisterTypedCommand(&kCommandInfo_Sv_TrimStr, kRetnType_String);
+		nvse->RegisterTypedCommand(&kCommandInfo_Sv_Join, kRetnType_String);
+		nvse->RegisterTypedCommand(&kCommandInfo_Sv_Reverse, kRetnType_String);
 	}
-
-	ExtractArgsEx = scriptInterface->ExtractArgsEx;
-
-	return true;
-}
-
-void RegisterCommands(void* nvsePtr)
-{
-	NVSEInterface* nvse = (NVSEInterface*)nvsePtr;
-	nvse->RegisterTypedCommand(&kCommandInfo_Sv_TrimStr, kRetnType_String);
-	nvse->RegisterTypedCommand(&kCommandInfo_Sv_Join, kRetnType_String);
-	nvse->RegisterTypedCommand(&kCommandInfo_Sv_Reverse, kRetnType_String);
-}
 }

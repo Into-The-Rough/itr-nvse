@@ -2,16 +2,14 @@
 
 #include "common/ITypes.h"
 
-namespace
-{
-	using AddParticle_t = void* (__cdecl*)(TESObjectCELL*, float, const char*,
+namespace {
+	using AddParticle_t = void*(__cdecl*)(TESObjectCELL*, float, const char*,
 		TempEffectLogic::Point3, TempEffectLogic::Point3, float, int, void*);
-	using SpawnParticle_t = void* (__cdecl*)(TESObjectCELL*, float, const char*,
+	using SpawnParticle_t = void*(__cdecl*)(TESObjectCELL*, float, const char*,
 		TempEffectLogic::Matrix3, TempEffectLogic::Point3, float, UInt32, void*);
 }
 
-namespace TempEffects
-{
+namespace TempEffects {
 	void* AddParticle(TESObjectCELL* cell, float duration, const char* modelPath,
 		const TempEffectLogic::Point3& rotation, const TempEffectLogic::Point3& position,
 		float scale, int flags, void* attachNode)
@@ -24,9 +22,7 @@ namespace TempEffects
 		const TempEffectLogic::Point3& position, const TempEffectLogic::Point3& normal,
 		float scale, float yawDegrees)
 	{
-		if (!cell || !modelPath || !modelPath[0] ||
-			!TempEffectLogic::IsValid(duration, position, normal, scale, yawDegrees))
-		{
+		if (!cell || !modelPath || !modelPath[0] || !TempEffectLogic::IsValid(duration, position, normal, scale, yawDegrees)) {
 			return nullptr;
 		}
 

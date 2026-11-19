@@ -11,15 +11,15 @@ class Actor;
 namespace WitnessScan {
 	struct Hit {
 		Actor* actor;
-		int    detectionValue;
+		int detectionValue;
 		UInt32 refID;
 	};
 
 	//if crimeLoc is null, uses perpetrator position
 	//radius and detectionThreshold 0 = use configured defaults
 	void FindWitnesses(Actor* perpetrator, const float* crimeLocXYZ,
-	                   float radius, int detectionThreshold,
-	                   std::vector<Hit>& out);
+		float radius, int detectionThreshold,
+		std::vector<Hit>& out);
 
 	//single-actor query - returns DetectionData.detectionValue, or -100 if none
 	int GetDetectionValue(Actor* observer, Actor* target);

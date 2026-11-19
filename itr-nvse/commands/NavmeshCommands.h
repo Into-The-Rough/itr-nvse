@@ -1,6 +1,5 @@
 #pragma once
 
-namespace NavmeshCommands
-{
+namespace NavmeshCommands {
 	void RegisterCommands(void* nvse);
 }

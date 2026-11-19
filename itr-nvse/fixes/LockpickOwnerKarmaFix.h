@@ -1,7 +1,6 @@
 #pragma once
 
-namespace LockpickOwnerKarmaFix
-{
+namespace LockpickOwnerKarmaFix {
 	void Init(bool enabled);
 	void SetEnabled(bool enabled);
 }

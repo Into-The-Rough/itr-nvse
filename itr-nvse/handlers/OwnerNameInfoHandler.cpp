@@ -1,6 +1,4 @@
-//Rewrites the crosshair prompt with owner information after the HUD updates it.
-
-#include <cstdint>
+//rewrites the crosshair prompt with owner information after the HUD updates it
 #include <cstring>
 #include <cstdio>
 #include <cctype>
@@ -14,8 +12,8 @@
 #include "internal/MenuLayout.h"
 
 //TESObjectREFR::IsCrime at 0x579690 (checks if activating/taking would be a crime)
-typedef bool (__thiscall* _IsCrime)(void* refr);
-static const _IsCrime IsCrime = (_IsCrime)0x579690;
+using IsCrime_t = bool(__thiscall*)(void* refr);
+static const IsCrime_t IsCrime = (IsCrime_t)0x579690;
 
 static bool g_bOwnerNameInfo = false;
 static bool g_bCompatMode = true;
@@ -30,8 +28,7 @@ static TESForm* GetRefOwner(TESObjectREFR* ref, bool* outIsFaction)
 	//keep prompt ownership aligned with the engine's crime/ownership logic
 	auto* owner = reinterpret_cast<TESForm*>(Engine::TESObjectREFR_GetOwnerRawForm(ref));
 
-	if (owner)
-	{
+	if (owner) {
 		UInt8 ownerType = owner->typeID;
 		*outIsFaction = (ownerType == kFormType_Faction);
 	}
@@ -55,8 +52,7 @@ static const char* GetOwnerName(TESForm* owner)
 
 	if (typeID == kFormType_Faction)
 		return GetFactionName(static_cast<TESFaction*>(owner));
-	else if (typeID == kFormType_NPC)
-	{
+	else if (typeID == kFormType_NPC) {
 		auto* actorBase = static_cast<TESActorBase*>(owner);
 		const char* name = actorBase->fullName.name.m_data;
 		if (name && *name)
@@ -77,8 +73,7 @@ static bool EndsWithS(const char* str)
 
 static bool StartsWithCaseInsensitive(const char* str, const char* prefix)
 {
-	while (*prefix)
-	{
+	while (*prefix) {
 		if (tolower(*str++) != tolower(*prefix++))
 			return false;
 	}
@@ -87,8 +82,7 @@ static bool StartsWithCaseInsensitive(const char* str, const char* prefix)
 
 static void CleanFactionName(const char* input, char* output, size_t outputSize)
 {
-	if (!input || !output || outputSize == 0)
-	{
+	if (!input || !output || outputSize == 0) {
 		if (output && outputSize > 0) output[0] = '\0';
 		return;
 	}
@@ -100,8 +94,7 @@ static void CleanFactionName(const char* input, char* output, size_t outputSize)
 	if (StartsWithCaseInsensitive(src, "NV"))
 		src += 2;
 
-	while (StartsWithCaseInsensitive(src, "DLC"))
-	{
+	while (StartsWithCaseInsensitive(src, "DLC")) {
 		src += 3;
 		while (*src && isdigit(*src)) src++;
 		while (*src && isspace(*src)) src++;
@@ -113,8 +106,7 @@ static void CleanFactionName(const char* input, char* output, size_t outputSize)
 		src += 12;
 
 	size_t len = strlen(src);
-	while (len > 2 && src[len - 1] == '*' && src[len - 2] == ' ')
-	{
+	while (len > 2 && src[len - 1] == '*' && src[len - 2] == ' ') {
 		src[len - 2] = '\0';
 		len -= 2;
 	}
@@ -123,21 +115,16 @@ static void CleanFactionName(const char* input, char* output, size_t outputSize)
 	size_t ri = 0;
 	bool afterSpace = true;
 
-	for (size_t i = 0; src[i] && ri < sizeof(result) - 2; i++)
-	{
+	for (size_t i = 0; src[i] && ri < sizeof(result) - 2; i++) {
 		char c = src[i];
-		if (i > 0 && isupper(c) && islower(src[i - 1]) && ri < sizeof(result) - 3)
-		{
+		if (i > 0 && isupper(c) && islower(src[i - 1]) && ri < sizeof(result) - 3) {
 			result[ri++] = ' ';
 			afterSpace = true;
 		}
-		if (afterSpace && isalpha(c))
-		{
+		if (afterSpace && isalpha(c)) {
 			result[ri++] = toupper(c);
 			afterSpace = false;
-		}
-		else
-		{
+		} else {
 			result[ri++] = c;
 			afterSpace = isspace(c);
 		}
@@ -147,8 +134,7 @@ static void CleanFactionName(const char* input, char* output, size_t outputSize)
 	char* start = result;
 	while (*start && isspace(*start)) start++;
 	size_t slen = strlen(start);
-	if (slen > 0)
-	{
+	if (slen > 0) {
 		char* end = start + slen - 1;
 		while (end > start && isspace(*end)) *end-- = '\0';
 	}
@@ -163,127 +149,120 @@ static char g_lastWritten[512] = {0};
 static UInt32 g_lastCrosshairID = 0;
 
 namespace OwnerNameInfoHandler {
-void Update()
-{
-	if (!g_bOwnerNameInfo)
-		return;
-
-	void* hud = GetHUDMainMenu();
-	if (!hud)
-		return;
-
-	auto* ref = HUDMainMenuGetCrosshairRef(hud);
-	if (!ref)
+	void Update()
 	{
-		g_lastCrosshairID = 0;
-		g_lastWritten[0] = '\0';
-		return;
-	}
-
-	UInt32 refID = ref->refID;
-	if (refID != g_lastCrosshairID)
-	{
-		g_lastCrosshairID = refID;
-		g_lastWritten[0] = '\0';
-	}
-
-	UInt8 refType = ref->typeID;
-
-	if (refType == kFormType_ACHR)
-		return;
-
-	bool isFaction = false;
-	TESForm* owner = GetRefOwner(ref, &isFaction);
-	if (!owner)
-		return;
-
-	const char* ownerName = GetOwnerName(owner);
-	if (!ownerName || !*ownerName)
-		return;
-
-	UInt32 ownerRefID = owner->refID;
-	if (ownerRefID == 0x7)
-		return;
-
-	if (g_bShowNameOnlyCrime && !IsCrime(ref))
-		return;
-
-	//get original item name from global buffer
-	const char* itemName = GetCrosshairRefName();
-	if (!itemName || !*itemName)
-		return;
-
-	void* tile = HUDMainMenuGetInfoNameTile(hud);
-	if (!tile)
-		return;
-
-	//format modified name
-	char modifiedName[512];
-	if (isFaction)
-	{
-		if (!g_bShowFactionName)
+		if (!g_bOwnerNameInfo)
 			return;
 
-		char cleanedFaction[256];
-		CleanFactionName(ownerName, cleanedFaction, sizeof(cleanedFaction));
+		void* hud = GetHUDMainMenu();
+		if (!hud)
+			return;
 
-		if (g_bCompatMode)
-			snprintf(modifiedName, sizeof(modifiedName), "%s (%s)", itemName, cleanedFaction);
-		else
-		{
-			if (EndsWithS(cleanedFaction))
-				snprintf(modifiedName, sizeof(modifiedName), "%s' %s", cleanedFaction, itemName);
-			else
-				snprintf(modifiedName, sizeof(modifiedName), "%s's %s", cleanedFaction, itemName);
+		auto* ref = HUDMainMenuGetCrosshairRef(hud);
+		if (!ref) {
+			g_lastCrosshairID = 0;
+			g_lastWritten[0] = '\0';
+			return;
 		}
+
+		UInt32 refID = ref->refID;
+		if (refID != g_lastCrosshairID) {
+			g_lastCrosshairID = refID;
+			g_lastWritten[0] = '\0';
+		}
+
+		UInt8 refType = ref->typeID;
+
+		if (refType == kFormType_ACHR)
+			return;
+
+		bool isFaction = false;
+		TESForm* owner = GetRefOwner(ref, &isFaction);
+		if (!owner)
+			return;
+
+		const char* ownerName = GetOwnerName(owner);
+		if (!ownerName || !*ownerName)
+			return;
+
+		UInt32 ownerRefID = owner->refID;
+		if (ownerRefID == 0x7)
+			return;
+
+		if (g_bShowNameOnlyCrime && !IsCrime(ref))
+			return;
+
+		//get original item name from global buffer
+		const char* itemName = GetCrosshairRefName();
+		if (!itemName || !*itemName)
+			return;
+
+		void* tile = HUDMainMenuGetInfoNameTile(hud);
+		if (!tile)
+			return;
+
+		//format modified name
+		char modifiedName[512];
+		if (isFaction) {
+			if (!g_bShowFactionName)
+				return;
+
+			char cleanedFaction[256];
+			CleanFactionName(ownerName, cleanedFaction, sizeof(cleanedFaction));
+
+			if (g_bCompatMode)
+				snprintf(modifiedName, sizeof(modifiedName), "%s (%s)", itemName, cleanedFaction);
+			else {
+				if (EndsWithS(cleanedFaction))
+					snprintf(modifiedName, sizeof(modifiedName), "%s' %s", cleanedFaction, itemName);
+				else
+					snprintf(modifiedName, sizeof(modifiedName), "%s's %s", cleanedFaction, itemName);
+			}
+		} else {
+			if (g_bCompatMode)
+				snprintf(modifiedName, sizeof(modifiedName), "%s (%s)", itemName, ownerName);
+			else {
+				if (EndsWithS(ownerName))
+					snprintf(modifiedName, sizeof(modifiedName), "%s' %s", ownerName, itemName);
+				else
+					snprintf(modifiedName, sizeof(modifiedName), "%s's %s", ownerName, itemName);
+			}
+		}
+
+		if (strcmp(modifiedName, g_lastWritten) == 0)
+			return;
+		strcpy_s(g_lastWritten, modifiedName);
+
+		Engine::Tile_SetString(tile, 0xFC4, modifiedName, true); //kTileValue_string
 	}
-	else
+
+	static char g_iniPath[MAX_PATH] = {0};
+
+	static void LoadINIPath()
 	{
-		if (g_bCompatMode)
-			snprintf(modifiedName, sizeof(modifiedName), "%s (%s)", itemName, ownerName);
-		else
-		{
-			if (EndsWithS(ownerName))
-				snprintf(modifiedName, sizeof(modifiedName), "%s' %s", ownerName, itemName);
-			else
-				snprintf(modifiedName, sizeof(modifiedName), "%s's %s", ownerName, itemName);
-		}
+		if (g_iniPath[0]) return;
+		GetModuleFileNameA(nullptr, g_iniPath, MAX_PATH);
+		char* lastSlash = strrchr(g_iniPath, '\\');
+		if (lastSlash) *lastSlash = '\0';
+		strcat_s(g_iniPath, "\\Data\\config\\itr-nvse.ini");
 	}
 
-	if (strcmp(modifiedName, g_lastWritten) == 0)
-		return;
-	strcpy_s(g_lastWritten, modifiedName);
+	bool Init()
+	{
+		LoadINIPath();
+		g_bOwnerNameInfo = GetPrivateProfileIntA("Tweaks", "bOwnerNameInfo", 0, g_iniPath) != 0;
+		g_bCompatMode = GetPrivateProfileIntA("OwnerNameInfo", "bCompatibilityMode", 1, g_iniPath) != 0;
+		g_bShowFactionName = GetPrivateProfileIntA("OwnerNameInfo", "bShowFactionName", 1, g_iniPath) != 0;
+		g_bShowNameOnlyCrime = GetPrivateProfileIntA("OwnerNameInfo", "bShowNameOnlyCrime", 1, g_iniPath) != 0;
+		return true;
+	}
 
-	Engine::Tile_SetString(tile, 0xFC4, modifiedName, true); //kTileValue_string
-}
-
-static char g_iniPath[MAX_PATH] = {0};
-
-static void LoadINIPath()
-{
-	if (g_iniPath[0]) return;
-	GetModuleFileNameA(nullptr, g_iniPath, MAX_PATH);
-	char* lastSlash = strrchr(g_iniPath, '\\');
-	if (lastSlash) *lastSlash = '\0';
-	strcat_s(g_iniPath, "\\Data\\config\\itr-nvse.ini");
-}
-
-bool Init()
-{
-	LoadINIPath();
-	g_bOwnerNameInfo = GetPrivateProfileIntA("Tweaks", "bOwnerNameInfo", 0, g_iniPath) != 0;
-	g_bCompatMode = GetPrivateProfileIntA("OwnerNameInfo", "bCompatibilityMode", 1, g_iniPath) != 0;
-	g_bShowFactionName = GetPrivateProfileIntA("OwnerNameInfo", "bShowFactionName", 1, g_iniPath) != 0;
-	g_bShowNameOnlyCrime = GetPrivateProfileIntA("OwnerNameInfo", "bShowNameOnlyCrime", 1, g_iniPath) != 0;
-	return true;
-}
-
-void UpdateSettings()
-{
-	LoadINIPath();
-	g_bOwnerNameInfo = GetPrivateProfileIntA("Tweaks", "bOwnerNameInfo", 0, g_iniPath) != 0;
-	g_bCompatMode = GetPrivateProfileIntA("OwnerNameInfo", "bCompatibilityMode", 1, g_iniPath) != 0;
-	g_bShowFactionName = GetPrivateProfileIntA("OwnerNameInfo", "bShowFactionName", 1, g_iniPath) != 0;
-	g_bShowNameOnlyCrime = GetPrivateProfileIntA("OwnerNameInfo", "bShowNameOnlyCrime", 1, g_iniPath) != 0;
-}
+	void UpdateSettings()
+	{
+		LoadINIPath();
+		g_bOwnerNameInfo = GetPrivateProfileIntA("Tweaks", "bOwnerNameInfo", 0, g_iniPath) != 0;
+		g_bCompatMode = GetPrivateProfileIntA("OwnerNameInfo", "bCompatibilityMode", 1, g_iniPath) != 0;
+		g_bShowFactionName = GetPrivateProfileIntA("OwnerNameInfo", "bShowFactionName", 1, g_iniPath) != 0;
+		g_bShowNameOnlyCrime = GetPrivateProfileIntA("OwnerNameInfo", "bShowNameOnlyCrime", 1, g_iniPath) != 0;
+	}
 }

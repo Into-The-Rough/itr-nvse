@@ -3,11 +3,6 @@
 #include "test.h"
 #include <cstring>
 
-typedef unsigned int UInt32;
-typedef unsigned short UInt16;
-typedef unsigned char UInt8;
-typedef signed int SInt32;
-
 #include "../internal/SafeWrite.h"
 
 //test buffer for write operations

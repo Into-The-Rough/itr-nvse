@@ -31,6 +31,6 @@ namespace DialogueCameraHandler {
 	void SetExternalRotation(const Mat3& rot);
 	void ClearExternalRotation();
 	void RegisterCommands(void* nvse);
-	void RegisterCommands2(void* nvse);
-	void RegisterCommands3(void* nvse);
+	void RegisterModeCommands(void* nvse);
+	void RegisterAngleEnableCommands(void* nvse);
 }

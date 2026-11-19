@@ -1,64 +1,58 @@
-//lets NPCs absorb a configurable number of player hits before turning hostile
-//intercepts the faction-relation getter inside Actor::AttackedBy and reports
-//player-neutral actors as ally/friend, then feeds the configured tolerance into
-//the four iAllyHit*/iFriendHit* setting reads that follow on that same path
+//overrides GetFactionRelation and iAllyHit*/iFriendHit* reads inside Actor::AttackedBy
 
 #include "AggroThreshold.h"
 #include <Windows.h>
-#include <cstdint>
 
 #include "internal/globals.h"
 #include "internal/GameGlobals.h"
 #include "internal/Detours.h"
 #include "internal/settings.h"
 
-namespace AggroThreshold
-{
+namespace AggroThreshold {
 	static bool g_enabled = false;
 	static bool g_installed = false;
 
-	static Detours::CallDetour s_attackedByDetour;      //0x898A54 GetFactionRelation, picks the friend/ally branch
-	static Detours::CallDetour s_friendCombatDetour;    //0x898A98 iFriendHitCombatAllowed
+	static Detours::CallDetour s_attackedByDetour; //0x898A54 GetFactionRelation, picks the friend/ally branch
+	static Detours::CallDetour s_friendCombatDetour; //0x898A98 iFriendHitCombatAllowed
 	static Detours::CallDetour s_friendNonCombatDetour; //0x898AA9 iFriendHitNonCombatAllowed
-	static Detours::CallDetour s_allyCombatDetour;      //0x898AC6 iAllyHitCombatAllowed
-	static Detours::CallDetour s_allyNonCombatDetour;   //0x898AD7 iAllyHitNonCombatAllowed
+	static Detours::CallDetour s_allyCombatDetour; //0x898AC6 iAllyHitCombatAllowed
+	static Detours::CallDetour s_allyNonCombatDetour; //0x898AD7 iAllyHitNonCombatAllowed
 
 	//set by the relation hook, read by the four setting hooks later in the same AttackedBy call
 	//main thread only
 	static bool s_thresholdPending = false;
 
-	typedef uint32_t (__thiscall *_GetFactionRelation)(void* thisActor, void* targetActor, bool* isEnemy);
-	typedef int* (__thiscall *_GetSettingValue)(void* setting);
+	using GetFactionRelation_t = UInt32(__thiscall*)(void* thisActor, void* targetActor, bool* isEnemy);
+	using GetSettingValue_t = int*(__thiscall*)(void* setting);
 
 	static bool IsPlayerInCombat()
 	{
 		void* player = *g_thePlayerPtr;
 		if (!player) return false;
-		return *(bool*)((uint8_t*)player + 0xDF0); //actor bIsInCombat
+		return *(bool*)((UInt8*)player + 0xDF0); //actor bIsInCombat
 	}
 
 	static bool IsCreature(void* actor)
 	{
 		if (!actor) return false;
-		uintptr_t* vtbl = *(uintptr_t**)actor;
-		typedef bool (__thiscall *_IsCreature)(void*);
-		return ((_IsCreature)vtbl[0x21C / 4])(actor); //vtable slot 135 IsCreature
+		UInt32* vtbl = *(UInt32**)actor;
+		using IsCreature_t = bool(__thiscall*)(void*);
+		return ((IsCreature_t)vtbl[0x21C / 4])(actor); //vtable slot 135 IsCreature
 	}
 
 	//assigned on every invocation, never merely set, because the 0x100000 form-flag check
 	//right after this call can leave AttackedBy before any setting is read
-	static uint32_t SuppressRelation(void* thisActor, void* targetActor, bool* isEnemy, _GetFactionRelation orig)
+	static UInt32 SuppressRelation(void* thisActor, void* targetActor, bool* isEnemy, GetFactionRelation_t orig)
 	{
-		uint32_t result = orig(thisActor, targetActor, isEnemy);
+		UInt32 result = orig(thisActor, targetActor, isEnemy);
 		s_thresholdPending = false;
 		if (!g_enabled || result != 0) return result;
 
 		if (Settings::bOnlyCombat && !IsPlayerInCombat()) return result;
 		if (Settings::bIgnoreCreatures && IsCreature(thisActor)) return result;
 
-		if (Settings::bIgnoreFriendlyFire)
-		{
-			uint32_t* formFlags = (uint32_t*)((uint8_t*)thisActor + 0x8);
+		if (Settings::bIgnoreFriendlyFire) {
+			UInt32* formFlags = (UInt32*)((UInt8*)thisActor + 0x8);
 			*formFlags |= 0x100000; //permanently ignore player hits
 		}
 
@@ -66,10 +60,10 @@ namespace AggroThreshold
 		return (Settings::iSuppressionMode == 0) ? 3 : 2; //0=friend, 1=ally
 	}
 
-	static uint32_t __fastcall Hook_AttackedBy(void* thisActor, void*, void* targetActor, bool* isEnemy)
+	static UInt32 __fastcall Hook_AttackedBy(void* thisActor, void* edx, void* targetActor, bool* isEnemy)
 	{
 		return SuppressRelation(thisActor, targetActor, isEnemy,
-			(_GetFactionRelation)s_attackedByDetour.GetOverwrittenAddr());
+			(GetFactionRelation_t)s_attackedByDetour.GetOverwrittenAddr());
 	}
 
 	//engine dereferences the returned pointer immediately, so a pointer to the ini-backed
@@ -77,28 +71,28 @@ namespace AggroThreshold
 	static int* ThresholdOverride(void* setting, const Detours::CallDetour& detour, int& value)
 	{
 		if (!s_thresholdPending)
-			return ((_GetSettingValue)detour.GetOverwrittenAddr())(setting);
+			return ((GetSettingValue_t)detour.GetOverwrittenAddr())(setting);
 
 		s_thresholdPending = false;
 		return &value;
 	}
 
-	static int* __fastcall Hook_FriendHitCombat(void* setting, void*)
+	static int* __fastcall Hook_FriendHitCombat(void* setting, void* edx)
 	{
 		return ThresholdOverride(setting, s_friendCombatDetour, Settings::iFriendHitCombatAllowed);
 	}
 
-	static int* __fastcall Hook_FriendHitNonCombat(void* setting, void*)
+	static int* __fastcall Hook_FriendHitNonCombat(void* setting, void* edx)
 	{
 		return ThresholdOverride(setting, s_friendNonCombatDetour, Settings::iFriendHitNonCombatAllowed);
 	}
 
-	static int* __fastcall Hook_AllyHitCombat(void* setting, void*)
+	static int* __fastcall Hook_AllyHitCombat(void* setting, void* edx)
 	{
 		return ThresholdOverride(setting, s_allyCombatDetour, Settings::iAllyHitCombatAllowed);
 	}
 
-	static int* __fastcall Hook_AllyHitNonCombat(void* setting, void*)
+	static int* __fastcall Hook_AllyHitNonCombat(void* setting, void* edx)
 	{
 		return ThresholdOverride(setting, s_allyNonCombatDetour, Settings::iAllyHitNonCombatAllowed);
 	}

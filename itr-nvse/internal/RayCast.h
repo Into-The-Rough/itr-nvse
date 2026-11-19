@@ -22,6 +22,7 @@ struct alignas(16) RayCastData {
 	UInt8 budgetSpent;
 	UInt8 padAD[3];
 };
+
 static_assert(sizeof(RayCastData) == 0xB0, "RayCastData size mismatch");
 static_assert(offsetof(RayCastData, normal) == 0x30, "RayCastData normal offset mismatch");
 static_assert(offsetof(RayCastData, hitFraction) == 0x40, "RayCastData hit fraction offset mismatch");

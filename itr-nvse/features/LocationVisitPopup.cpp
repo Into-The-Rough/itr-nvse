@@ -5,6 +5,7 @@
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
 #include "internal/GameGlobals.h"
+#include "internal/GameLayout.h"
 #include "internal/MenuLayout.h"
 #include <Windows.h>
 #include <cstddef>
@@ -14,26 +15,16 @@
 #include "internal/globals.h"
 #include "internal/ScopedLock.h"
 
-namespace LocationVisitPopup
-{
+namespace LocationVisitPopup {
 	static DWORD g_cooldownMs = 5 * 60 * 1000;
 	static DWORD g_leaveThresholdMs = 3000;
 	static bool g_disableSound = false;
 	static int g_muxDetected = -1;
 	static DWORD g_mainThreadId = 0;
 
-	struct PendingPopup
-	{
+	struct PendingPopup {
 		char name[260];
 	};
-
-	struct MarkerDataView
-	{
-		void* unk00;
-		const char* name;
-	};
-
-	static_assert(offsetof(MarkerDataView, name) == 0x04);
 
 	static CooldownTracker<256> s_tracker;
 	static CRITICAL_SECTION s_stateLock;
@@ -42,46 +33,53 @@ namespace LocationVisitPopup
 	static Detours::JumpDetour s_markerRadiusDetour;
 	static UInt8* s_markerRadiusTrampoline = nullptr;
 
-	static void UpdateCooldowns() {
+	static void UpdateCooldowns()
+	{
 		s_tracker.UpdateCooldowns(GetTickCount(), g_leaveThresholdMs);
 	}
 
-	static int CheckMarker(UInt32 refID) {
+	static int CheckMarker(UInt32 refID)
+	{
 		return s_tracker.Check(refID, GetTickCount(), g_cooldownMs);
 	}
 
-	static void MarkShown(UInt32 refID) {
+	static void MarkShown(UInt32 refID)
+	{
 		s_tracker.MarkShown(refID, GetTickCount());
 	}
 
-	typedef void(__cdecl* SetCustomQuestText_t)(const char*, const char*, int, int, int, int, const char*);
+	using SetCustomQuestText_t = void(__cdecl*)(const char*, const char*, int, int, int, int, const char*);
 	static SetCustomQuestText_t SetCustomQuestText = (SetCustomQuestText_t)0x76B960;
 
-	static void* GetHUDMainMenuTile() {
+	static void* GetHUDMainMenuTile()
+	{
 		void* hud = GetHUDMainMenu();
 		if (!hud) return nullptr;
 		return HUDMainMenuGetRootTile(hud);
 	}
 
-	static bool CheckMUXInstalled() {
+	static bool CheckMUXInstalled()
+	{
 		void* tile = GetHUDMainMenuTile();
 		if (!tile) return false;
 		int traitID = Engine::Tile_TextToTrait("_UXQV+Location");
-		return Engine::Tile_GetValue(tile, traitID) != nullptr;
+		return traitID > 0 && TileGetValue(tile, static_cast<UInt32>(traitID)) != nullptr;
 	}
 
-	static void ShowPopupMUX(const char* name) {
+	static void ShowPopupMUX(const char* name)
+	{
 		void* tile = GetHUDMainMenuTile();
 		if (!tile) return;
 		int locTrait = Engine::Tile_TextToTrait("_UXQV+Location");
 		int alphaTrait = Engine::Tile_TextToTrait("_UXQV+Alpha");
-		if (Engine::Tile_GetValue(tile, locTrait))
+		if (locTrait > 0 && TileGetValue(tile, static_cast<UInt32>(locTrait)))
 			Engine::Tile_SetString(tile, locTrait, name, true);
-		if (Engine::Tile_GetValue(tile, alphaTrait))
+		if (alphaTrait > 0 && TileGetValue(tile, static_cast<UInt32>(alphaTrait)))
 			Engine::Tile_SetFloat(tile, alphaTrait, 255.0f, true);
 	}
 
-	static void ShowPopupVanilla(const char* name) {
+	static void ShowPopupVanilla(const char* name)
+	{
 		SetCustomQuestText("", name, 1, 0, -1, -1, g_disableSound ? "" : "UIPopUpQuestNew");
 	}
 
@@ -114,7 +112,8 @@ namespace LocationVisitPopup
 		s_pendingPopups.push_back(popup);
 	}
 
-	void __cdecl OnInDiscoveredMarkerRadius(UInt32 markerRefID, void* markerDataPtr) {
+	void __cdecl OnInDiscoveredMarkerRadius(UInt32 markerRefID, void* markerDataPtr)
+	{
 		if (!markerDataPtr)
 			return;
 
@@ -142,7 +141,8 @@ namespace LocationVisitPopup
 			QueuePopup(nameCopy);
 	}
 
-	__declspec(naked) void CheckDiscoveredMarkerHook() {
+	__declspec(naked) void Hook_CheckDiscoveredMarker()
+	{
 		__asm {
 			cmp byte ptr[ebp - 0x90], 0
 			jz skipCheck
@@ -169,7 +169,8 @@ namespace LocationVisitPopup
 		}
 	}
 
-	void Init(int cooldownSeconds, bool disableSound) {
+	void Init(int cooldownSeconds, bool disableSound)
+	{
 		g_mainThreadId = GetCurrentThreadId();
 		if (!s_lockInitialized) {
 			InitializeCriticalSection(&s_stateLock);
@@ -177,7 +178,7 @@ namespace LocationVisitPopup
 		}
 		g_cooldownMs = cooldownSeconds * 1000;
 		g_disableSound = disableSound;
-		if (!s_markerRadiusDetour.WriteRelJump(0x7795DD, CheckDiscoveredMarkerHook, 7, &s_markerRadiusTrampoline))
+		if (!s_markerRadiusDetour.WriteRelJump(0x7795DD, Hook_CheckDiscoveredMarker, 7, &s_markerRadiusTrampoline))
 			Log("LocationVisitPopup: marker radius detour failed to install");
 	}
 

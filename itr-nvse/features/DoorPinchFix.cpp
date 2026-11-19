@@ -12,10 +12,8 @@
 #include <algorithm>
 #include <vector>
 
-namespace
-{
-	enum OpenState : UInt32
-	{
+namespace {
+	enum OpenState : UInt32 {
 		kOpenState_None = 0,
 		kOpenState_Open = 1,
 		kOpenState_Opening = 2,
@@ -23,15 +21,14 @@ namespace
 		kOpenState_Closing = 4,
 	};
 
-	struct DisabledDoor
-	{
+	struct DisabledDoor {
 		UInt32 refID;
 		DWORD restoreAt;
 	};
 
 	using HandleActivate_t = void(__cdecl*)(TESObjectREFR* itemActivated, TESObjectREFR* actionRef, void* openCloseForm);
 	using GetOpenState_t = UInt32(__cdecl*)(TESObjectREFR* ref);
-	using GetTeleport_t = void*(__thiscall*)(TESObjectREFR* ref);
+	using GetTeleport_t = void*(__thiscall*)(TESObjectREFR * ref);
 	using GetSlidingDoor_t = bool(__thiscall*)(TESForm* doorBase);
 
 	Detours::CallDetour g_handleActivateDetour;
@@ -74,16 +71,12 @@ namespace
 		if (!node)
 			return;
 
-		if (void* colObj = NiAVObjectGetCollisionObject(node))
-		{
-			if (void* worldObject = BhkCollisionObjectAsView(colObj)->worldObject)
-			{
-				if (void* hkObject = BhkWorldObjectGetHavokObject(worldObject))
-				{
+		if (void* colObj = NiAVObjectGetCollisionObject(node)) {
+			if (void* worldObject = BhkCollisionObjectAsView(colObj)->worldObject) {
+				if (void* hkObject = BhkWorldObjectGetHavokObject(worldObject)) {
 					UInt8* flags = HkpWorldObjectGetCollisionFilterFlags(hkObject);
 					const bool noCollision = !enabled;
-					if (((*flags & kHkpFilterFlag_NoCollision) != 0) != noCollision)
-					{
+					if (((*flags & kHkpFilterFlag_NoCollision) != 0) != noCollision) {
 						if (noCollision)
 							*flags |= kHkpFilterFlag_NoCollision;
 						else
@@ -94,8 +87,7 @@ namespace
 			}
 		}
 
-		if (NiAVObjectGetAsNiNode(node))
-		{
+		if (NiAVObjectGetAsNiNode(node)) {
 			void** children = NiNodeGetChildData(node);
 			const UInt16 count = NiNodeGetChildLimit(node);
 			for (UInt16 i = 0; i < count; ++i)
@@ -175,14 +167,11 @@ namespace
 	}
 }
 
-namespace DoorPinchFix
-{
+namespace DoorPinchFix {
 	void Init(bool enabled, int distance, int timeoutMs)
 	{
-		if (!g_hookInstalled)
-		{
-			if (g_handleActivateDetour.WriteRelCall(0x518B40, Hook_HandleActivate))
-			{
+		if (!g_hookInstalled) {
+			if (g_handleActivateDetour.WriteRelCall(0x518B40, Hook_HandleActivate)) {
 				g_originalHandleActivate = reinterpret_cast<HandleActivate_t>(g_handleActivateDetour.GetOverwrittenAddr());
 				g_hookInstalled = true;
 			}
@@ -208,16 +197,11 @@ namespace DoorPinchFix
 			return;
 
 		const DWORD now = GetTickCount();
-		for (auto it = g_disabledDoors.begin(); it != g_disabledDoors.end();)
-		{
+		for (auto it = g_disabledDoors.begin(); it != g_disabledDoors.end();) {
 			auto* ref = reinterpret_cast<TESObjectREFR*>(Engine::LookupFormByID(it->refID));
-			const bool shouldRestore = !g_enabled ||
-				!IsDoorRef(ref) ||
-				!IsDoorMoving(GetOpenState(ref)) ||
-				static_cast<SInt32>(now - it->restoreAt) >= 0;
+			const bool shouldRestore = !g_enabled || !IsDoorRef(ref) || !IsDoorMoving(GetOpenState(ref)) || static_cast<SInt32>(now - it->restoreAt) >= 0;
 
-			if (!shouldRestore)
-			{
+			if (!shouldRestore) {
 				SetCollisionEnabled(ref, false);
 				++it;
 				continue;

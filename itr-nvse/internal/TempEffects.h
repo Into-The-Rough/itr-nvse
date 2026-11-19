@@ -4,8 +4,7 @@
 
 class TESObjectCELL;
 
-namespace TempEffects
-{
+namespace TempEffects {
 	void* AddParticle(TESObjectCELL* cell, float duration, const char* modelPath,
 		const TempEffectLogic::Point3& rotation, const TempEffectLogic::Point3& position,
 		float scale, int flags, void* attachNode);

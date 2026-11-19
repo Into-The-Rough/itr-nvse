@@ -1,6 +1,5 @@
 #pragma once
 
-namespace ContainerCommands
-{
+namespace ContainerCommands {
 	void RegisterCommands(void* nvse);
 }
