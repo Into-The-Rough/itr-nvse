@@ -110,6 +110,7 @@
 #include "features/QuickReadNote.h"
 #include "features/VATSExtender.h"
 #include "features/VATSHighlightDepthFix.h"
+#include "features/ThrowArcPreview.h"
 #include "features/WeatherChangeEvent.h"
 #include "features/CameraOverride.h"
 #include "features/CompanionNoBlock.h"
@@ -468,6 +469,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				VATSExtender::Init();
 			if (Settings::bVATSHighlightDepthFix)
 				VATSHighlightDepthFix::Init();
+			ThrowArcPreview::Init();
 			if (Settings::bSuppressObjectives || Settings::bSuppressReputation)
 				ELMO::Init(Settings::bSuppressObjectives != 0, Settings::bSuppressReputation != 0);
 			break;
@@ -475,6 +477,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 		case NVSEMessagingInterface::kMessage_ExitToMainMenu:
 			SmallDebrisCap::ClearState(true);
 			PlayerGrabCommands::ClearState();
+			ThrowArcPreview::ClearState();
 			break;
 
 		case NVSEMessagingInterface::kMessage_PreLoadGame:
@@ -483,6 +486,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			StartNewGameCommand::Abort();
 			HavokCommands::ClearState();
 			PlayerGrabCommands::ClearState();
+			ThrowArcPreview::ClearState();
 			DetectionSoundCommands::ClearState();
 			AlertCommands::ClearState();
 			StuckCombatStateFix::ClearState();
@@ -543,6 +547,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			ImperativeCommands::ClearState();
 			HavokCommands::ClearState();
 			PlayerGrabCommands::ClearState();
+			ThrowArcPreview::ClearState();
 			GestureCommand::Reset();
 			StuckCombatStateFix::ClearState();
 			CrouchCommands::ClearState();
@@ -706,6 +711,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			GroundCommands::Update();
 			HavokCommands::Update();
 			PlayerGrabCommands::Update();
+			ThrowArcPreview::Update();
 			DoorPinchFix::Update();
 			GestureCommand::Update();
 			ToggleAllPrimitives::Update();

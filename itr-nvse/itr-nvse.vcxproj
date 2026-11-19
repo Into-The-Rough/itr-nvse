@@ -211,6 +211,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" (
     <ClCompile Include="features\QuickReadNote.cpp" />
     <ClCompile Include="features\VATSExtender.cpp" />
     <ClCompile Include="features\VATSHighlightDepthFix.cpp" />
+    <ClCompile Include="features\ThrowArcPreview.cpp" />
     <ClCompile Include="features\AltTabMute.cpp" />
     <ClCompile Include="features\AutoQuickLoad.cpp" />
     <ClCompile Include="features\AimZoomFirstPersonOnly.cpp" />
@@ -366,6 +367,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" (
     <ClInclude Include="features\QuickReadNote.h" />
     <ClInclude Include="features\VATSExtender.h" />
     <ClInclude Include="features\VATSHighlightDepthFix.h" />
+    <ClInclude Include="features\ThrowArcPreview.h" />
     <ClInclude Include="features\CameraOverride.h" />
     <ClInclude Include="features\CompanionNoBlock.h" />
     <ClInclude Include="features\DoorPinchFix.h" />
@@ -399,6 +401,8 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" (
     <ClInclude Include="commands\PlayerGrabCommands.h" />
     <ClInclude Include="internal\PlayerGrabLogic.h" />
     <ClInclude Include="internal\DetectionSoundLogic.h" />
+    <ClInclude Include="internal\ThrowArcLogic.h" />
+    <ClInclude Include="internal\layout\Renderer.h" />
     <ClInclude Include="commands\PathingCommands.h" />
     <ClInclude Include="commands\HairColorCommands.h" />
     <ClInclude Include="commands\CasinoBanCommands.h" />

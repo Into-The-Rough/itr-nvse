@@ -9,8 +9,14 @@ constexpr UInt32 kHkpWorldObject_Collidable = 0x10;
 constexpr UInt8 kHkpWorldObject_CollisionTypeRigidBody = 1;
 constexpr UInt8 kHkpFilterFlag_NoCollision = 0x40; //collisionFilterInfo byte at hkObject+0x2D
 constexpr SInt32 kHkpConstraintType_Contact = 11; //hkpConstraintData::getType() (vtbl[8])
+constexpr float kInvHavokScale = 6.9991255f; //havok units to game units
 
 //havok layouts missing from the sdk, checked against falloutnv.exe
+
+struct HkpWorldView {
+	UInt8 pad00[0x10];
+	float gravity[4];
+};
 
 template<typename T>
 struct HkArrayView {
@@ -73,7 +79,9 @@ struct HkpRigidBodyView {
 	void* motionVtbl; //embedded hkpMotion
 	UInt8 pad0E4[0xE8 - 0xE4];
 	UInt8 motionType;
-	UInt8 pad0E9[0x1AC - 0xE9];
+	UInt8 pad0E9[0x194 - 0xE9];
+	float linearDamping; //motion.motionState.linearDamping (+0xF0 + 0xA4)
+	UInt8 pad198[0x1AC - 0x198];
 	float massInv;
 };
 
@@ -142,6 +150,7 @@ struct HkpContactPointAddedEventView {
 	void* bodyB;
 };
 
+static_assert(offsetof(HkpWorldView, gravity) == 0x10);
 static_assert(sizeof(HkArrayView<void*>) == 0x0C);
 static_assert(offsetof(HkpConstraintInstanceView, constraintData) == 0x0C);
 static_assert(offsetof(HkpConstraintInstanceView, entityA) == 0x14);
@@ -162,6 +171,7 @@ static_assert(offsetof(HkpRigidBodyView, constraintsSlave) == 0xB4);
 static_assert(offsetof(HkpRigidBodyView, simulationIsland) == 0xCC);
 static_assert(offsetof(HkpRigidBodyView, motionType) == 0xE8);
 static_assert(offsetof(HkpRigidBodyView, motionVtbl) == 0xE0);
+static_assert(offsetof(HkpRigidBodyView, linearDamping) == 0x194);
 static_assert(offsetof(HkpRigidBodyView, massInv) == 0x1AC);
 static_assert(offsetof(ProcessControllerView, characterController) == 0x138);
 static_assert(offsetof(BhkCharacterPhantomView, havokPhantom) == 0x08);

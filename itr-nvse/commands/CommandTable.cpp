@@ -49,6 +49,7 @@
 #include "commands/CoverCommands.h"
 #include "commands/ParticleCommands.h"
 #include "features/RadioInjection.h"
+#include "features/ThrowArcPreview.h"
 #include "handlers/OnTileValueChangeHandler.h"
 #include "internal/globals.h"
 
@@ -263,4 +264,7 @@ void RegisterAllCommands(void* nvsePtr)
 
 	nvse->SetOpcodeBase(0x40F0);
 	PlayerGrabCommands::RegisterCommands(nvse); //ForcePlayerGrab, ReleasePlayerGrab
+
+	nvse->SetOpcodeBase(0x40F2);
+	ThrowArcPreview::RegisterCommands(nvse); //StartThrowArcPreview, StopThrowArcPreview
 }
