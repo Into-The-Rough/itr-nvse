@@ -868,8 +868,6 @@ namespace OnContactHandler {
 			if (!watched) continue;
 
 			auto* other = evt.otherRefID ? (TESObjectREFR*)Engine::LookupFormByID(evt.otherRefID) : nullptr;
-			if (evt.isBegin && !IsActorTypeID(watched->typeID))
-				Log("OnContactHandler: contact begin watched=%08X other=%08X ch=%u", evt.watchedRefID, evt.otherRefID, evt.channel);
 
 			if (g_eventManagerInterface) {
 				const char* eventName = evt.isBegin ? "ITR:OnContactBegin" : "ITR:OnContactEnd";

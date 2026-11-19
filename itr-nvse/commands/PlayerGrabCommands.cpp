@@ -260,7 +260,6 @@ bool Cmd_ForcePlayerGrab_Execute(COMMAND_ARGS)
 	const AttachResult res = AttachGrabNow(refID, distance, distance > 0.0f);
 	if (res == kAttach_Attached) {
 		*result = 1;
-		Log("ForcePlayerGrab: attached ref=%08X dist=%.1f", refID, distance);
 		if (IsConsoleMode())
 			Console_Print("ForcePlayerGrab >> 1 (attached)");
 		return true;
@@ -292,13 +291,11 @@ bool Cmd_ForcePlayerGrab_Execute(COMMAND_ARGS)
 		s_pendingGrab.skipSameFrame = 1;
 		s_pendingGrab.active = 1;
 		*result = 1;
-		Log("ForcePlayerGrab: queued ref=%08X reason=%u dist=%.1f", refID, res, distance);
 		if (IsConsoleMode())
 			Console_Print("ForcePlayerGrab >> 1 (queued)");
 		return true;
 	}
 
-	Log("ForcePlayerGrab: failed ref=%08X", refID);
 	if (IsConsoleMode())
 		Console_Print("ForcePlayerGrab >> 0");
 	return true;
@@ -311,7 +308,6 @@ bool Cmd_ReleasePlayerGrab_Execute(COMMAND_ARGS)
 
 	const bool hadActive = DestroyActiveGrab(*g_thePlayerPtr);
 	*result = (hadPending || hadActive) ? 1 : 0;
-	Log("ReleasePlayerGrab: hadPending=%d hadActive=%d", hadPending ? 1 : 0, hadActive ? 1 : 0);
 	if (IsConsoleMode())
 		Console_Print("ReleasePlayerGrab >> %d", (*result != 0) ? 1 : 0);
 	return true;
@@ -338,10 +334,8 @@ namespace PlayerGrabCommands {
 		s_pendingGrab = {};
 
 		const AttachResult res = AttachGrabNow(pending.refID, pending.distance, pending.reposition != 0);
-		if (res == kAttach_Attached) {
-			Log("ForcePlayerGrab: deferred attach succeeded ref=%08X framesLeft=%u", pending.refID, pending.retryFrames);
+		if (res == kAttach_Attached)
 			return;
-		}
 		if ((res == kAttach_Pending3D || res == kAttach_DeferNextFrame) && !s_pendingGrab.active && pending.retryFrames > 1) {
 			s_pendingGrab.refID = pending.refID;
 			s_pendingGrab.distance = pending.distance;
@@ -350,7 +344,6 @@ namespace PlayerGrabCommands {
 			s_pendingGrab.active = 1;
 			return;
 		}
-		Log("ForcePlayerGrab: deferred attach ended ref=%08X res=%u framesLeft=%u", pending.refID, res, pending.retryFrames);
 	}
 
 	void ClearState()

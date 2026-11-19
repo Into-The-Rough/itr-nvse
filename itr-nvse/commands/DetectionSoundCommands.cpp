@@ -644,7 +644,6 @@ namespace {
 				g_lastBarkTick = GetTickCount();
 				g_hasLastBark = true;
 			}
-			Log("DetectionSound: bark speaker=%08X topic=%08X item=%p", speakerRefID, usedTopic ? usedTopic->refID : 0, item);
 			return;
 		}
 
@@ -814,7 +813,6 @@ namespace {
 			nowMs);
 
 		UInt32 heardCount = 0;
-		UInt32 scoutOutRefID = 0;
 
 		for (UInt32 combatRefID : plan.pushCombatSearchRefIDs) {
 			if (Actor* actor = LookupActor(combatRefID)) {
@@ -828,7 +826,6 @@ namespace {
 			if (TryRedirectCautionScout(plan.redirectScoutRefID, sourceRefID, searchLocation, strength, seenGroups)) {
 				DetectionSoundLogic::StampActorCooldown(
 					g_investigatorCooldowns, plan.redirectScoutRefID, nowMs, DetectionSoundLogic::kInvestigatorRedirectCooldownMs);
-				scoutOutRefID = plan.redirectScoutRefID;
 				++heardCount;
 			}
 		} else if (plan.newScoutRefID) {
@@ -837,7 +834,6 @@ namespace {
 					g_investigatorCooldowns, plan.newScoutRefID, nowMs, DetectionSoundLogic::kInvestigatorRedirectCooldownMs);
 				DetectionSoundLogic::StampActorCooldown(
 					g_reactionCooldowns, plan.newScoutRefID, nowMs, DetectionSoundLogic::kNpcReactionCooldownMs);
-				scoutOutRefID = plan.newScoutRefID;
 				++heardCount;
 			}
 		}
@@ -856,11 +852,6 @@ namespace {
 			if (Actor* speaker = LookupActor(plan.speakerRefID))
 				QueueResponseBark(speaker, responseTopic, useDirectGreet);
 		}
-
-		Log("DetectionSound: pos=(%.0f,%.0f,%.0f->%.0f) space=%08X rad=%.0f flags=%02X src=%08X cands=%u heard=%u scout=%08X turns=%u speaker=%08X",
-			x, y, z, searchZ, searchLocation.form ? searchLocation.form->refID : 0, radius, flags, sourceRefID,
-			static_cast<UInt32>(candidates.size()), heardCount, scoutOutRefID,
-			static_cast<UInt32>(plan.turnRefIDs.size()), plan.speakerRefID);
 
 		return heardCount;
 	}
@@ -1044,8 +1035,6 @@ namespace DetectionSoundCommands {
 					if (void* combatGroup = GetCombatGroup(actor)) {
 						BGSWorldLocationView loc = {landedX, landedY, landedZ, landedSpace};
 						ApplyScoutSearchLocation(actor, combatGroup, player, loc, settled.strength, true);
-						Log("DetectionSound: settled scout=%08X src=%08X pos=(%.0f,%.0f,%.0f) space=%08X",
-							settled.actorRefID, settled.sourceRefID, landedX, landedY, landedZ, landedSpace->refID);
 					}
 				}
 			}

@@ -92,8 +92,6 @@ namespace {
 	PreviewConfig s_preview = {};
 	ArcSnapshot s_snapshot = {};
 	ScreenVertex s_vertices[kMaxScreenVertices];
-	bool s_loggedStart = false;
-	bool s_loggedDraw = false;
 
 	void ResetPreview()
 	{
@@ -315,16 +313,9 @@ namespace {
 		device->SetRenderState(D3DRS_SHADEMODE, D3DSHADE_GOURAUD);
 		device->SetRenderState(D3DRS_COLORVERTEX, TRUE);
 
-		const HRESULT hr = device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, vertCount / 3, s_vertices, sizeof(ScreenVertex));
+		device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, vertCount / 3, s_vertices, sizeof(ScreenVertex));
 		stateBlock->Apply();
 		stateBlock->Release();
-
-		if (SUCCEEDED(hr) && !s_loggedDraw) {
-			s_loggedDraw = true;
-			Log("ThrowArcPreview: first draw %ux%u reversed=%d verts=%u rgb=(%u,%u,%u) hit=%d",
-				cam.viewport.Width, cam.viewport.Height, reversed ? 1 : 0, vertCount,
-				snap.colorR, snap.colorG, snap.colorB, snap.hasHit ? 1 : 0);
-		}
 	}
 
 	int __cdecl Hook_RenderScene(void* camera, void* accumulator, UInt32 flags)
@@ -493,13 +484,6 @@ namespace ThrowArcPreview {
 		UInt8 colorG = 182;
 		UInt8 colorB = 66;
 		ThrowArcLogic::UnpackHUDColor(GetSystemHUDColorRGBA(), colorR, colorG, colorB);
-
-		if (!s_loggedStart) {
-			s_loggedStart = true;
-			Log("ThrowArcPreview: start ref=%08X min=%.0f max=%.0f grav=(%.1f,%.1f,%.1f) damp=%.3f hud=(%u,%u,%u)",
-				s_preview.refID, s_preview.minForce, s_preview.maxForce,
-				gravity.x, gravity.y, gravity.z, damping, colorR, colorG, colorB);
-		}
 
 		const UInt16 playerGroup = ActorGetCollisionGroup(player);
 		ArcSnapshot next = {};
