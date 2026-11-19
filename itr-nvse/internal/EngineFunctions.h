@@ -216,4 +216,9 @@ namespace Engine {
 
 	//form lookup
 	inline auto LookupFormByID = (void*(__cdecl*)(unsigned int))0x4839C0;
+	inline auto TESForm_GetDeleted = (bool(__thiscall*)(TESForm*))0x440D80;
+	inline auto TESForm_GetDisabled = (bool(__thiscall*)(TESForm*))0x440DA0;
+
+	//heaviest bhkRigidBody under a node
+	inline auto GetHeaviestRigidBody = (void*(__cdecl*)(void*))0x4B52F0;
 }

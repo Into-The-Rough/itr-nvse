@@ -4,6 +4,7 @@
 
 #include "internal/CallTemplates.h"
 #include "internal/EngineFunctions.h"
+#include "internal/EngineHelpers.h"
 #include "internal/GameGlobals.h"
 #include "internal/HavokLayout.h"
 #include "internal/PlayerGrabLogic.h"
@@ -52,7 +53,6 @@ namespace {
 	constexpr UInt32 kControl_Grab = 27;
 	constexpr UInt8 kKeyQuery_IsPressed = 1;
 	constexpr UInt32 kExtraData_Action = 0x7C;
-	constexpr UInt8 kLineOfSightLayer = 6;
 	constexpr UInt8 kMaxPendingGrabFrames = 60;
 	constexpr float kGrabMaxRayDist = 1000.0f;
 
@@ -63,11 +63,9 @@ namespace {
 	using SetLocalTranslate_t = void(__thiscall*)(NiNode*, const PlayerGrabLogic::Point3*);
 	using NiAVObjectUpdate_t = void(__thiscall*)(NiNode*, NiUpdateData*);
 	using ResetSim_t = void(__cdecl*)(NiNode*, bool);
-	using GetHeaviestRigidBody_t = void*(__cdecl*)(NiNode*);
 	using SetRigidBodyVelocity_t = void(__thiscall*)(void*, const float*);
 	using ActivateEntity_t = void(__thiscall*)(void*);
 	using FireExtraAction_t = void*(__thiscall*)(BaseExtraList*, TESObjectREFR*, Actor*);
-	using FormFlagQuery_t = bool(__thiscall*)(TESForm*);
 
 	const auto PlayerCharacter_CreateMouseSpring = reinterpret_cast<CreateMouseSpring_t>(0x95F930);
 	const auto PlayerCharacter_DestroyMouseSpring = reinterpret_cast<DestroyMouseSpring_t>(0x961280);
@@ -76,23 +74,12 @@ namespace {
 	const auto NiNode_SetLocalTranslate = reinterpret_cast<SetLocalTranslate_t>(0x440460);
 	const auto NiAVObject_Update = reinterpret_cast<NiAVObjectUpdate_t>(0xA59C60);
 	const auto BhkNiCollisionObject_ResetSim = reinterpret_cast<ResetSim_t>(0xC6BD00);
-	const auto GetHeaviestRigidBody = reinterpret_cast<GetHeaviestRigidBody_t>(0x4B52F0);
 	const auto HkpRigidBody_SetLinearVelocity = reinterpret_cast<SetRigidBodyVelocity_t>(0x5616D0);
 	const auto HkpRigidBody_SetAngularVelocity = reinterpret_cast<SetRigidBodyVelocity_t>(0x561800);
 	const auto HkpEntity_Activate = reinterpret_cast<ActivateEntity_t>(0xC9C1D0);
 	const auto ExtraDataList_FireGrabAction = reinterpret_cast<FireExtraAction_t>(0x4213C0);
-	const auto TESForm_GetDeleted = reinterpret_cast<FormFlagQuery_t>(0x440D80);
-	const auto TESForm_GetDisabled = reinterpret_cast<FormFlagQuery_t>(0x440DA0);
 
 	PendingGrab s_pendingGrab = {};
-
-	TESObjectREFR* LookupRef(UInt32 refID)
-	{
-		if (!refID)
-			return nullptr;
-		auto* form = static_cast<TESForm*>(Engine::LookupFormByID(refID));
-		return (form && form->IsReference()) ? static_cast<TESObjectREFR*>(form) : nullptr;
-	}
 
 	bool AllowGrabbingLiveActors()
 	{
@@ -106,7 +93,7 @@ namespace {
 			return false;
 		if (!ref->IsReference())
 			return false;
-		if (TESForm_GetDeleted(ref) || TESForm_GetDisabled(ref))
+		if (Engine::TESForm_GetDeleted(ref) || Engine::TESForm_GetDisabled(ref))
 			return false;
 		if (!ref->parentCell || !player->parentCell)
 			return false;
@@ -114,21 +101,6 @@ namespace {
 			!Engine::Actor_IsDead(static_cast<Actor*>(ref), false))
 			return false;
 		return true;
-	}
-
-	UInt16 GetActorCollisionGroup(Actor* actor)
-	{
-		void* rawProcess = actor ? Engine::Actor_GetProcess(actor) : nullptr;
-		auto* process = reinterpret_cast<ProcessControllerView*>(rawProcess);
-		if (!process || !process->characterController)
-			return 0;
-
-		auto* controller = reinterpret_cast<BhkCharacterControllerView*>(process->characterController);
-		if (!controller || !controller->characterPhantom || !controller->characterPhantom->havokPhantom)
-			return 0;
-
-		const UInt32 filterInfo = HkpWorldObjectGetCollisionFilterInfo(controller->characterPhantom->havokPhantom);
-		return static_cast<UInt16>(filterInfo >> 16);
 	}
 
 	PlayerGrabLogic::Point3 ComputeWorldHoldPoint(PlayerCharacter* player, const PlayerGrabLogic::Point3& eyePos,
@@ -148,8 +120,8 @@ namespace {
 		ray.hitFraction = 1.0f;
 		ray.unk44[0] = 0xFFFFFFFF;
 		ray.unk44[6] = 0xFFFFFFFF;
-		ray.layerType = kLineOfSightLayer;
-		ray.group = GetActorCollisionGroup(player);
+		ray.layerType = kRayLayer_Projectile;
+		ray.group = ActorGetCollisionGroup(player);
 
 		float holdDist = desiredDist;
 		if (Engine::TESPickObject(&ray, true) && !ray.budgetSpent && ray.cdBody && ray.hitFraction < 1.0f) {
@@ -195,7 +167,7 @@ namespace {
 	AttachResult AttachGrabNow(UInt32 refID, float requestedDistance, bool forceReposition)
 	{
 		PlayerCharacter* player = *g_thePlayerPtr;
-		TESObjectREFR* ref = LookupRef(refID);
+		TESObjectREFR* ref = LookupRefByID(refID);
 		if (!IsValidGrabTarget(player, ref))
 			return kAttach_Failed;
 
@@ -203,7 +175,7 @@ namespace {
 		if (grab->grabSpring || grab->grabbedRef) {
 			DestroyActiveGrab(player);
 			player = *g_thePlayerPtr;
-			ref = LookupRef(refID);
+			ref = LookupRefByID(refID);
 			if (!IsValidGrabTarget(player, ref))
 				return kAttach_Failed;
 			grab = PlayerCharacterGetGrabView(player);
@@ -212,7 +184,7 @@ namespace {
 		}
 
 		NiNode* root = ref->GetNiNode();
-		void* bhkBody = root ? GetHeaviestRigidBody(root) : nullptr;
+		void* bhkBody = root ? Engine::GetHeaviestRigidBody(root) : nullptr;
 		void* hkpBody = BhkWorldObjectGetHavokObject(bhkBody);
 		if (!root || !bhkBody || !hkpBody || !HkpWorldObjectAsView(hkpBody)->world)
 			return kAttach_Pending3D;
@@ -250,14 +222,14 @@ namespace {
 		if (!grab->grabSpring || !grab->grabbedRef)
 			return kAttach_Failed;
 
-		TESObjectREFR* postRef = LookupRef(refID);
+		TESObjectREFR* postRef = LookupRefByID(refID);
 		if (!postRef || grab->grabbedRef != postRef)
-			return kAttach_Attached;
+			return kAttach_Failed;
 
 		*g_playerGrabActivePtr = 1;
 		postRef->MarkAsModified(4);
 		ExtraDataList_FireGrabAction(&postRef->extraDataList, postRef, player);
-		postRef = LookupRef(refID);
+		postRef = LookupRefByID(refID);
 		if (postRef)
 			Engine::BaseExtraList_RemoveByType(&postRef->extraDataList, kExtraData_Action);
 		return kAttach_Attached;
@@ -300,7 +272,7 @@ bool Cmd_ForcePlayerGrab_Execute(COMMAND_ARGS)
 			return true;
 		}
 		player = *g_thePlayerPtr;
-		TESObjectREFR* ref = LookupRef(refID);
+		TESObjectREFR* ref = LookupRefByID(refID);
 		if (!IsValidGrabTarget(player, ref))
 			return true;
 

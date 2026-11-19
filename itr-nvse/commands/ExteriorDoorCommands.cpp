@@ -110,12 +110,12 @@ namespace {
 
 	static bool GetDisabled(TESForm* form)
 	{
-		return form && ThisCall<bool>(0x440DA0, form);
+		return form && Engine::TESForm_GetDisabled(form);
 	}
 
 	static bool GetDeleted(TESForm* form)
 	{
-		return form && ThisCall<bool>(0x440D80, form);
+		return form && Engine::TESForm_GetDeleted(form);
 	}
 
 	static DoorTeleportData* GetTeleport(TESObjectREFR* ref)

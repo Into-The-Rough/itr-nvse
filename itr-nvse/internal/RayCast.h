@@ -30,3 +30,4 @@ static_assert(offsetof(RayCastData, cdBody) == 0x80, "RayCastData collidable off
 static_assert(offsetof(RayCastData, budgetSpent) == 0xAC, "RayCastData budget offset mismatch");
 
 constexpr float kHavokScale = 0.1428571f;
+constexpr UInt8 kRayLayer_Projectile = 6; //LAYER_PROJECTILE

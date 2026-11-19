@@ -241,8 +241,6 @@ static void __cdecl CollectBodyContactsCallback(void* collisionObject, RigidBody
 
 	data->sawLiveBody = true;
 	auto* rb = HkpRigidBodyAsView(hkpObject);
-	if (rb->processContactCallbackDelay == 0xFFFF && HkpRigidBodyIsMobile(hkpObject))
-		rb->processContactCallbackDelay = 0;
 
 	//manifold streams on small debris skip 0x623CB0 or zero bodyA/bodyB, so read live contact constraints too
 	for (UInt16 i = 0; i < rb->constraintsMasterSize && rb->constraintsMasterData; ++i)

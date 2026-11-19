@@ -8,6 +8,7 @@
 #include "internal/CallTemplates.h"
 #include "internal/Detours.h"
 #include "internal/EngineFunctions.h"
+#include "internal/EngineHelpers.h"
 #include "internal/GameGlobals.h"
 #include "internal/HavokLayout.h"
 #include "internal/NiLayout.h"
@@ -79,19 +80,12 @@ namespace {
 
 	constexpr DWORD kScreenVertexFVF = D3DFVF_XYZRHW | D3DFVF_DIFFUSE;
 	constexpr UInt32 kMaxScreenVertices = (ThrowArcLogic::kMaxDashSegments + ThrowArcLogic::kRingSegments + 8) * 6;
-	constexpr UInt8 kLineOfSightLayer = 6;
 	constexpr float kStepDt = 0.04f;
 	constexpr float kDashLength = 13.0f;
 	constexpr float kGapLength = 10.0f;
 	constexpr float kTwoPi = 6.2831853f;
 
 	using RenderSceneFn = int(__cdecl*)(void*, void*, UInt32);
-	using GetHeaviestRigidBody_t = void*(__cdecl*)(NiNode*);
-	using FormFlagQuery_t = bool(__thiscall*)(TESForm*);
-
-	const auto GetHeaviestRigidBody = reinterpret_cast<GetHeaviestRigidBody_t>(0x4B52F0);
-	const auto TESForm_GetDeleted = reinterpret_cast<FormFlagQuery_t>(0x440D80);
-	const auto TESForm_GetDisabled = reinterpret_cast<FormFlagQuery_t>(0x440DA0);
 
 	Detours::CallDetour s_renderSceneCall;
 	std::atomic_flag s_rendering = ATOMIC_FLAG_INIT;
@@ -100,29 +94,6 @@ namespace {
 	ScreenVertex s_vertices[kMaxScreenVertices];
 	bool s_loggedStart = false;
 	bool s_loggedDraw = false;
-
-	TESObjectREFR* LookupRef(UInt32 refID)
-	{
-		if (!refID)
-			return nullptr;
-		auto* form = static_cast<TESForm*>(Engine::LookupFormByID(refID));
-		return (form && form->IsReference()) ? static_cast<TESObjectREFR*>(form) : nullptr;
-	}
-
-	UInt16 GetActorCollisionGroup(Actor* actor)
-	{
-		void* rawProcess = actor ? Engine::Actor_GetProcess(actor) : nullptr;
-		auto* process = reinterpret_cast<ProcessControllerView*>(rawProcess);
-		if (!process || !process->characterController)
-			return 0;
-
-		auto* controller = reinterpret_cast<BhkCharacterControllerView*>(process->characterController);
-		if (!controller || !controller->characterPhantom || !controller->characterPhantom->havokPhantom)
-			return 0;
-
-		const UInt32 filterInfo = HkpWorldObjectGetCollisionFilterInfo(controller->characterPhantom->havokPhantom);
-		return static_cast<UInt16>(filterInfo >> 16);
-	}
 
 	void ResetPreview()
 	{
@@ -478,15 +449,15 @@ namespace ThrowArcPreview {
 			return;
 		}
 
-		TESObjectREFR* ref = LookupRef(s_preview.refID);
+		TESObjectREFR* ref = LookupRefByID(s_preview.refID);
 		PlayerGrabView* grab = PlayerCharacterGetGrabView(player);
-		if (!ref || TESForm_GetDeleted(ref) || TESForm_GetDisabled(ref) || !grab || grab->grabbedRef != ref) {
+		if (!ref || Engine::TESForm_GetDeleted(ref) || Engine::TESForm_GetDisabled(ref) || !grab || grab->grabbedRef != ref) {
 			ResetPreview();
 			return;
 		}
 
 		NiNode* root = ref->GetNiNode();
-		void* bhkBody = root ? GetHeaviestRigidBody(root) : nullptr;
+		void* bhkBody = root ? Engine::GetHeaviestRigidBody(root) : nullptr;
 		void* hkpBody = BhkWorldObjectGetHavokObject(bhkBody);
 
 		Vec3 startPos = {ref->posX, ref->posY, ref->posZ};
@@ -530,7 +501,7 @@ namespace ThrowArcPreview {
 				gravity.x, gravity.y, gravity.z, damping, colorR, colorG, colorB);
 		}
 
-		const UInt16 playerGroup = GetActorCollisionGroup(player);
+		const UInt16 playerGroup = ActorGetCollisionGroup(player);
 		ArcSnapshot next = {};
 		next.points[0] = startPos;
 		next.pointCount = 1;
@@ -556,7 +527,7 @@ namespace ThrowArcPreview {
 			ray.hitFraction = 1.0f;
 			ray.unk44[0] = 0xFFFFFFFF;
 			ray.unk44[6] = 0xFFFFFFFF;
-			ray.layerType = kLineOfSightLayer;
+			ray.layerType = kRayLayer_Projectile;
 			ray.group = playerGroup;
 
 			bool hitSolid = false;

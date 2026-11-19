@@ -8,6 +8,8 @@
 #include "nvse/GameProcess.h"
 #include "nvse/GameEffects.h"
 #include "internal/CallTemplates.h"
+#include "internal/EngineFunctions.h"
+#include "internal/HavokLayout.h"
 
 class ScopedCellRefLock {
 public:
@@ -94,4 +96,23 @@ inline TESQuest* TESTopicGetQuestForInfo(TESTopic* topic, TESTopicInfo* topicInf
 				return info->quest;
 	}
 	return nullptr;
+}
+
+inline TESObjectREFR* LookupRefByID(UInt32 refID)
+{
+	auto* form = refID ? static_cast<TESForm*>(Engine::LookupFormByID(refID)) : nullptr;
+	return (form && form->IsReference()) ? static_cast<TESObjectREFR*>(form) : nullptr;
+}
+
+//process+0x138 only holds a controller on high and middle-high processes
+inline UInt16 ActorGetCollisionGroup(Actor* actor)
+{
+	BaseProcess* process = actor ? actor->baseProcess : nullptr;
+	if (!process || process->processLevel > 1)
+		return 0;
+
+	auto* controller = static_cast<BhkCharacterControllerView*>(reinterpret_cast<ProcessControllerView*>(process)->characterController);
+	if (!controller || !controller->characterPhantom)
+		return 0;
+	return static_cast<UInt16>(HkpWorldObjectGetCollisionFilterInfo(controller->characterPhantom->havokPhantom) >> 16);
 }

@@ -4,6 +4,7 @@
 #include "internal/EngineFunctions.h"
 #include "internal/EventDispatch.h"
 #include "internal/FootContactLogic.h"
+#include "internal/EngineHelpers.h"
 #include "internal/GameSDK.h"
 #include "internal/HavokLayout.h"
 #include "internal/NiLayout.h"
@@ -21,7 +22,6 @@ namespace {
 	constexpr UInt32 kPendingCapacity = 64;
 	constexpr float kRayStartHeight = 24.0f;
 	constexpr float kRayDepth = 96.0f;
-	constexpr UInt8 kProjectileLayer = 6;
 
 	struct PendingFootstep {
 		UInt32 refID;
@@ -81,25 +81,6 @@ namespace {
 		return FootContactLogic::IsFinite(position);
 	}
 
-	bool GetActorCollisionGroup(Actor* actor, UInt16& group)
-	{
-		if (!actor || !actor->baseProcess || actor->baseProcess->processLevel > 1)
-			return false;
-
-		auto* process = reinterpret_cast<ProcessControllerView*>(actor->baseProcess);
-		auto* controller = reinterpret_cast<BhkCharacterControllerView*>(process->characterController);
-		if (!controller || !controller->characterPhantom)
-			return false;
-
-		void* phantom = controller->characterPhantom->havokPhantom;
-		if (!phantom)
-			return false;
-
-		const UInt32 filterInfo = HkpWorldObjectGetCollisionFilterInfo(phantom);
-		group = static_cast<UInt16>(filterInfo >> 16);
-		return group != 0;
-	}
-
 	bool CastGround(const FootContactLogic::Point3& footPosition, UInt16 group, Contact& contact)
 	{
 		const FootContactLogic::Point3 from = {
@@ -123,7 +104,7 @@ namespace {
 		ray.hitFraction = 1.0f;
 		ray.unk44[0] = 0xFFFFFFFF;
 		ray.unk44[6] = 0xFFFFFFFF;
-		ray.layerType = kProjectileLayer;
+		ray.layerType = kRayLayer_Projectile;
 		ray.group = group;
 
 		if (!Engine::TESPickObject(&ray, true) || ray.budgetSpent || !ray.cdBody || !std::isfinite(ray.hitFraction) || ray.hitFraction >= 1.0f) {
@@ -198,8 +179,8 @@ namespace {
 		Contact contact = {};
 		bool hasContact = false;
 		if (wantsContact && hasFootPosition && actor->typeID == kFormType_ACHR) {
-			UInt16 group = 0;
-			if (GetActorCollisionGroup(actor, group))
+			const UInt16 group = ActorGetCollisionGroup(actor);
+			if (group)
 				hasContact = CastGround(footPosition, group, contact);
 		}
 

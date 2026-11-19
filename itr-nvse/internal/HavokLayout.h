@@ -65,10 +65,7 @@ struct HkpSimulationIslandView {
 };
 
 struct HkpRigidBodyView {
-	UInt8 pad000[0x8C];
-	UInt8 responseType;
-	UInt8 pad08D[0xAA - 0x8D];
-	UInt16 processContactCallbackDelay;
+	UInt8 pad000[0xAC];
 	HkpConstraintMasterEntryView* constraintsMasterData;
 	UInt16 constraintsMasterSize;
 	UInt16 constraintsMasterCapAndFlags;
@@ -163,8 +160,6 @@ static_assert(offsetof(HkpWorldObjectView, collisionType) == 0x28);
 static_assert(offsetof(HkpWorldObjectView, collisionFilterInfo) == 0x2C);
 static_assert(offsetof(HkpCollidableView, collisionFilterInfo) == 0x1C);
 static_assert(offsetof(HkpSimulationIslandView, stateFlags) == 0x26);
-static_assert(offsetof(HkpRigidBodyView, responseType) == 0x8C);
-static_assert(offsetof(HkpRigidBodyView, processContactCallbackDelay) == 0xAA);
 static_assert(offsetof(HkpRigidBodyView, constraintsMasterData) == 0xAC);
 static_assert(offsetof(HkpRigidBodyView, constraintsMasterSize) == 0xB0);
 static_assert(offsetof(HkpRigidBodyView, constraintsSlave) == 0xB4);

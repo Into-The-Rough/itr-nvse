@@ -61,6 +61,8 @@
 - SetRigidBodyCenterOfMass (SetRigidBodyCoM) - set one rigid body's local centre of mass in Havok units, same as the bhkRigidBody Center field in NifSkope
 - ForcePlayerGrab - pull the calling reference into the player's Z-key physics grab hold, deferring until its 3D/Havok rigid body finishes attaching if freshly spawned
 - ReleasePlayerGrab - release any active or pending player physics grab
+- StartThrowArcPreview - draw a live 3D throw arc in the HUD colour for the calling grabbed reference; takes min force, max force and charge time, with optional tap grace, up boost min/max and linear damping
+- StopThrowArcPreview - stop drawing the throw arc
 - GetLimbGoneType - 0 if a body part is intact, 1 if it was dismembered, 2 if it was exploded; uses DismemberLimb body part IDs
 - SetOnContactWatch - enable physics contact tracking for a ref, or for all refs using a base form
 - GetOnContactWatch - get ref or base form contact watch state

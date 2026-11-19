@@ -1,6 +1,7 @@
 #include "DetectionSoundCommands.h"
 #include "internal/DetectionSoundLogic.h"
 #include "internal/EngineFunctions.h"
+#include "internal/EngineHelpers.h"
 #include "internal/GameGlobals.h"
 #include "internal/GameSDK.h"
 #include "internal/RayCast.h"
@@ -20,13 +21,11 @@ extern const _ExtractArgs ExtractArgs;
 namespace {
 	constexpr UInt32 kCreateDetectionEventVtableOffset = 0x0FC;
 	constexpr UInt32 kGetSitSleepStateVtableOffset = 0x214;
-	constexpr UInt32 kIsSpeakingVtableOffset = 0x30C;
 	constexpr UInt32 kProcessLevelHigh = 0;
 	constexpr UInt32 kProcessLevelMiddleHigh = 1;
 	constexpr SInt32 kHeadTrackType_Script = 2;
 	constexpr UInt32 kProcedureType_Search = 10;
 	constexpr UInt32 kProcedureGetTypeVtableOffset = 0x34;
-	constexpr UInt8 kLineOfSightLayer = 6;
 	constexpr DWORD kThrownSettleDelayMs = 700;
 	constexpr float kGroundSnapDrop = 512.0f;
 
@@ -55,7 +54,7 @@ namespace {
 	using HighProcessClearDefaultHeadTrack_t = void(__thiscall*)(void*);
 	using HighProcessClearScriptHeadTrack_t = void(__thiscall*)(void*, bool);
 	using HighProcessGetHeadTrackTarget_t = TESObjectREFR*(__thiscall*)(void*, SInt32);
-	using FormFlagQuery_t = bool(__thiscall*)(TESForm*);
+	using HighProcessIsTalking_t = bool(__thiscall*)(void*, Actor*);
 
 	const auto SetActionSoundValue = reinterpret_cast<SetActionSoundValue_t>(0x8BC240);
 	const auto SetAlert = reinterpret_cast<SetAlert_t>(0x8A5E40);
@@ -82,8 +81,7 @@ namespace {
 	const auto HighProcess_ClearDefaultHeadTrackTarget = reinterpret_cast<HighProcessClearDefaultHeadTrack_t>(0x9010F0);
 	const auto HighProcess_ClearScriptHeadTrackTarget = reinterpret_cast<HighProcessClearScriptHeadTrack_t>(0x901190);
 	const auto HighProcess_GetCurrentHeadTrackTarget = reinterpret_cast<HighProcessGetHeadTrackTarget_t>(0x901640);
-	const auto TESForm_GetDeleted = reinterpret_cast<FormFlagQuery_t>(0x440D80);
-	const auto TESForm_GetDisabled = reinterpret_cast<FormFlagQuery_t>(0x440DA0);
+	const auto HighProcess_IsTalking = reinterpret_cast<HighProcessIsTalking_t>(0x8F6FC0);
 
 	constexpr UInt32 kFlag_SameCellOnly = 0x1;
 	constexpr UInt32 kFlag_SkipPlayer = 0x2;
@@ -144,14 +142,6 @@ namespace {
 		return typeID == kFormType_ACHR || typeID == kFormType_ACRE;
 	}
 
-	TESObjectREFR* LookupRef(UInt32 refID)
-	{
-		if (!refID)
-			return nullptr;
-		auto* form = static_cast<TESForm*>(Engine::LookupFormByID(refID));
-		return (form && form->IsReference()) ? static_cast<TESObjectREFR*>(form) : nullptr;
-	}
-
 	Actor* LookupActor(UInt32 refID)
 	{
 		auto* ref = reinterpret_cast<TESObjectREFR*>(Engine::LookupFormByID(refID));
@@ -190,7 +180,7 @@ namespace {
 		ray.hitFraction = 1.0f;
 		ray.unk44[0] = 0xFFFFFFFF;
 		ray.unk44[6] = 0xFFFFFFFF;
-		ray.layerType = kLineOfSightLayer;
+		ray.layerType = kRayLayer_Projectile;
 		if (Engine::TESPickObject(&ray, true) && !ray.budgetSpent && ray.cdBody && ray.hitFraction > 0.0f && ray.hitFraction < 1.0f)
 			return startZ - (startZ - endZ) * ray.hitFraction + 6.0f;
 		return z;
@@ -210,12 +200,10 @@ namespace {
 		return sitSleepState >= 6;
 	}
 
+	//0x8F6FC0 with no listener is voice handle playing or greeting flag, high process only
 	bool IsProcessSpeaking(BaseProcess* process)
 	{
-		if (!process)
-			return false;
-		void** vtbl = *reinterpret_cast<void***>(process);
-		return reinterpret_cast<bool(__thiscall*)(BaseProcess*)>(vtbl[kIsSpeakingVtableOffset / sizeof(void*)])(process);
+		return process && process->processLevel == kProcessLevelHigh && HighProcess_IsTalking(process, nullptr);
 	}
 
 	bool IsHearingProcess(BaseProcess* process)
@@ -308,7 +296,7 @@ namespace {
 		auto* process = static_cast<BaseProcess*>(Engine::Actor_GetProcess(actor));
 		if (!process || process->processLevel != kProcessLevelHigh)
 			return;
-		TESObjectREFR* tracked = LookupRef(headTrackRefID);
+		TESObjectREFR* tracked = LookupRefByID(headTrackRefID);
 		if (!tracked || HighProcess_GetCurrentHeadTrackTarget(process, kHeadTrackType_Script) == tracked)
 			HighProcess_ClearScriptHeadTrackTarget(process, false);
 	}
@@ -377,8 +365,8 @@ namespace {
 
 		auto* process = static_cast<BaseProcess*>(Engine::Actor_GetProcess(actor));
 		if (process && process->processLevel == kProcessLevelHigh) {
-			TESObjectREFR* sourceRef = LookupRef(sourceRefID);
-			if (sourceRef && sourceRef != player && !TESForm_GetDeleted(sourceRef) && !TESForm_GetDisabled(sourceRef)) {
+			TESObjectREFR* sourceRef = LookupRefByID(sourceRefID);
+			if (sourceRef && sourceRef != player && !Engine::TESForm_GetDeleted(sourceRef) && !Engine::TESForm_GetDisabled(sourceRef)) {
 				HighProcess_SetScriptHeadTrackTarget(process, sourceRef);
 				if (outHeadTrackRefID)
 					*outHeadTrackRefID = sourceRef->refID;
@@ -685,7 +673,7 @@ namespace {
 			return;
 		}
 
-		if (TESForm_GetDisabled(actor) || TESForm_GetDeleted(actor) || Engine::Actor_IsDead(actor, false))
+		if (Engine::TESForm_GetDisabled(actor) || Engine::TESForm_GetDeleted(actor) || Engine::Actor_IsDead(actor, false))
 			return;
 
 		if (!actor->parentCell || !IsHearingProcess(static_cast<BaseProcess*>(Engine::Actor_GetProcess(actor))))
@@ -708,7 +696,7 @@ namespace {
 
 		Actor* actor = LookupActor(cand.refID);
 		Actor* player = *g_thePlayerPtr;
-		if (!actor || actor == player || TESForm_GetDisabled(actor) || TESForm_GetDeleted(actor) || Engine::Actor_IsDead(actor, false))
+		if (!actor || actor == player || Engine::TESForm_GetDisabled(actor) || Engine::TESForm_GetDeleted(actor) || Engine::Actor_IsDead(actor, false))
 			return out;
 
 		auto* process = static_cast<BaseProcess*>(Engine::Actor_GetProcess(actor));
@@ -790,7 +778,7 @@ namespace {
 			UInt32 heardCount = 0;
 			for (const auto& cand : candidates) {
 				Actor* actor = LookupActor(cand.refID);
-				if (!actor || TESForm_GetDisabled(actor) || TESForm_GetDeleted(actor) || Engine::Actor_IsDead(actor, false))
+				if (!actor || Engine::TESForm_GetDisabled(actor) || Engine::TESForm_GetDeleted(actor) || Engine::Actor_IsDead(actor, false))
 					continue;
 				if (searchLocation.form)
 					TryPushSearchLocation(actor, searchLocation, strength, seenGroups);
@@ -856,7 +844,7 @@ namespace {
 
 		for (UInt32 turnRefID : plan.turnRefIDs) {
 			Actor* actor = LookupActor(turnRefID);
-			if (!actor || TESForm_GetDisabled(actor) || TESForm_GetDeleted(actor) || Engine::Actor_IsDead(actor, false))
+			if (!actor || Engine::TESForm_GetDisabled(actor) || Engine::TESForm_GetDeleted(actor) || Engine::Actor_IsDead(actor, false))
 				continue;
 			DetectionSoundLogic::StampActorCooldown(
 				g_reactionCooldowns, turnRefID, nowMs, DetectionSoundLogic::kNpcReactionCooldownMs);
@@ -1033,8 +1021,8 @@ namespace DetectionSoundCommands {
 				g_pendingSearchPushes[i] = g_pendingSearchPushes.back();
 				g_pendingSearchPushes.pop_back();
 
-				TESObjectREFR* sourceRef = LookupRef(settled.sourceRefID);
-				if (!sourceRef || TESForm_GetDeleted(sourceRef) || TESForm_GetDisabled(sourceRef) || !sourceRef->parentCell)
+				TESObjectREFR* sourceRef = LookupRefByID(settled.sourceRefID);
+				if (!sourceRef || Engine::TESForm_GetDeleted(sourceRef) || Engine::TESForm_GetDisabled(sourceRef) || !sourceRef->parentCell)
 					continue;
 
 				const float landedX = sourceRef->posX;

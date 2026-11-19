@@ -37,13 +37,11 @@ namespace VATSHighlightDepthFix {
 		float a;
 	};
 
-	static auto TESMain_HandleVATSOcclusionQueries = reinterpret_cast<TESMain_HandleVATSOcclusionQueries_t>(0x874AC0);
 	static auto InterfaceManager_GetVATSHighlightData = reinterpret_cast<InterfaceManager_GetVATSHighlightData_t>(0x705910);
 	static auto VATSHighlightData_SetTarget = reinterpret_cast<VATSHighlightData_SetTarget_t>(0x800AC0);
 	static auto VATSHighlightData_ResetRefs = reinterpret_cast<VATSHighlightData_ResetRefs_t>(0x800ED0);
 	static auto VATSHighlightData_SetMode = reinterpret_cast<VATSHighlightData_SetMode_t>(0x44AC20);
 	static auto DrawTargetToTexture = reinterpret_cast<DrawTargetToTexture_t>(0x800F30);
-	static auto SetupImageSpace = reinterpret_cast<SetupImageSpace_t>(0x801A60);
 	static Detours::CallDetour s_handleVATSOcclusionQueriesCall;
 	static Detours::CallDetour s_renderScenePostResolveDepthCall;
 	static Detours::CallDetour s_setupImageSpaceCall;
@@ -163,7 +161,7 @@ namespace VATSHighlightDepthFix {
 		if (g_forceSceneDepthTest && zEnable == 0)
 			zEnable = 1;
 
-		CdeclCall(0xB97DE0, zEnable, stateDelta);
+		CdeclCall(s_setZEnableCall.GetOverwrittenAddr(), zEnable, stateDelta);
 	}
 
 	void BeginTextureWithTransparentClear(void* renderer, void* renderTargetGroup)
@@ -303,7 +301,7 @@ namespace VATSHighlightDepthFix {
 		}
 
 		g_deferredHighlight = false;
-		TESMain_HandleVATSOcclusionQueries(tesMain, queryPassRan);
+		reinterpret_cast<TESMain_HandleVATSOcclusionQueries_t>(s_handleVATSOcclusionQueriesCall.GetOverwrittenAddr())(tesMain, queryPassRan);
 	}
 
 	void __cdecl Hook_RenderScenePostResolveDepth(void* camera, void* accumulator, UInt32 unknown)
@@ -314,7 +312,7 @@ namespace VATSHighlightDepthFix {
 				g_deferredHighlight = false;
 		}
 
-		CdeclCall(0xB6B930, camera, accumulator, unknown);
+		CdeclCall(s_renderScenePostResolveDepthCall.GetOverwrittenAddr(), camera, accumulator, unknown);
 	}
 
 	//during VATS the engine owns the list outright, script refs would take the slots the menu
@@ -348,7 +346,7 @@ namespace VATSHighlightDepthFix {
 			g_scriptHighlightsOwned = false;
 		}
 		g_deferredHighlight = false;
-		VATSHighlightData_SetMode(vatsData, mode);
+		reinterpret_cast<VATSHighlightData_SetMode_t>(s_setAdditionalRefModeCall.GetOverwrittenAddr())(vatsData, mode);
 	}
 
 	void __fastcall Hook_SetupImageSpace(void* vatsData, void* edx, void* sceneTexture, void* vatsTexture, UInt32 scanTexture, bool abIsRenderedMenu)
@@ -360,7 +358,7 @@ namespace VATSHighlightDepthFix {
 				RenderHighlightVanilla(vatsData, vatsTexture);
 		}
 
-		SetupImageSpace(vatsData, sceneTexture, vatsTexture, scanTexture, abIsRenderedMenu);
+		reinterpret_cast<SetupImageSpace_t>(s_setupImageSpaceCall.GetOverwrittenAddr())(vatsData, sceneTexture, vatsTexture, scanTexture, abIsRenderedMenu);
 	}
 
 	void ClearState()
