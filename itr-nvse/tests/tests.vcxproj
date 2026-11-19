@@ -48,6 +48,8 @@
     <ClCompile Include="test_footcontactlogic.cpp" />
     <ClCompile Include="test_smalldebris.cpp" />
     <ClCompile Include="test_nearmisstracking.cpp" />
+    <ClCompile Include="test_playergrablogic.cpp" />
+    <ClCompile Include="test_detectionsoundlogic.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="test.h" />
@@ -60,6 +62,8 @@
     <ClInclude Include="..\internal\FootContactLogic.h" />
     <ClInclude Include="..\internal\TempEffectLogic.h" />
     <ClInclude Include="..\internal\NearMissTracking.h" />
+    <ClInclude Include="..\internal\PlayerGrabLogic.h" />
+    <ClInclude Include="..\internal\DetectionSoundLogic.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

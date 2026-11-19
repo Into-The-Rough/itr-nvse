@@ -138,6 +138,7 @@
 #include "commands/ActorValueCommands.h"
 #include "commands/ExteriorDoorCommands.h"
 #include "commands/HavokCommands.h"
+#include "commands/PlayerGrabCommands.h"
 
 #include <cstdio>
 #include <cstdarg>
@@ -473,6 +474,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 
 		case NVSEMessagingInterface::kMessage_ExitToMainMenu:
 			SmallDebrisCap::ClearState(true);
+			PlayerGrabCommands::ClearState();
 			break;
 
 		case NVSEMessagingInterface::kMessage_PreLoadGame:
@@ -480,6 +482,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			SmallDebrisCap::ClearState(true);
 			StartNewGameCommand::Abort();
 			HavokCommands::ClearState();
+			PlayerGrabCommands::ClearState();
 			DetectionSoundCommands::ClearState();
 			AlertCommands::ClearState();
 			StuckCombatStateFix::ClearState();
@@ -539,6 +542,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 			GroundCommands::ClearState();
 			ImperativeCommands::ClearState();
 			HavokCommands::ClearState();
+			PlayerGrabCommands::ClearState();
 			GestureCommand::Reset();
 			StuckCombatStateFix::ClearState();
 			CrouchCommands::ClearState();
@@ -701,6 +705,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* msg)
 				AltTabMute::Update();
 			GroundCommands::Update();
 			HavokCommands::Update();
+			PlayerGrabCommands::Update();
 			DoorPinchFix::Update();
 			GestureCommand::Update();
 			ToggleAllPrimitives::Update();

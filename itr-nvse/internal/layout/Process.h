@@ -43,6 +43,13 @@ struct HighProcessFadeView {
 	float delayTime;
 };
 
+struct HighProcessDialogueView {
+	UInt8 pad00[0x368];
+	void* currentDialogueItem;
+	UInt32 unk36C;
+	Actor* dialogueTarget;
+};
+
 struct HighProcessQueuedGreetView {
 	UInt8 pad00[0x3E4];
 	void* queuedGreetTopic;
@@ -51,6 +58,8 @@ struct HighProcessQueuedGreetView {
 static_assert(offsetof(ActorForceSneakView, forceSneak) == 0x125);
 static_assert(offsetof(ActorTeammateView, isTeammate) == 0x18D);
 static_assert(offsetof(ProcessDamageDealtView, damageDealt) == 0xAC);
+static_assert(offsetof(HighProcessDialogueView, currentDialogueItem) == 0x368);
+static_assert(offsetof(HighProcessDialogueView, dialogueTarget) == 0x370);
 static_assert(offsetof(HighProcessFadeView, delayTime) == 0x3EC);
 static_assert(offsetof(HighProcessQueuedGreetView, queuedGreetTopic) == 0x3E4);
 static_assert(sizeof(NiTArrayView<void*>) == 0x10);
@@ -76,6 +85,16 @@ inline bool ActorIsTeammate(Actor* actor)
 inline void HighProcessSetDelayTime(void* process, float delayTime)
 {
 	if (process) reinterpret_cast<HighProcessFadeView*>(process)->delayTime = delayTime;
+}
+
+inline void* HighProcessGetCurrentDialogueItem(BaseProcess* process)
+{
+	return process ? reinterpret_cast<HighProcessDialogueView*>(process)->currentDialogueItem : nullptr;
+}
+
+inline void HighProcessSetDialogueTarget(BaseProcess* process, Actor* target)
+{
+	if (process) reinterpret_cast<HighProcessDialogueView*>(process)->dialogueTarget = target;
 }
 
 inline void* HighProcessGetQueuedGreetTopic(BaseProcess* process)

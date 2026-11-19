@@ -62,6 +62,30 @@ struct BGSWorldLocationView {
 	TESForm* form; //serialised as a refID via 0x865DF0
 };
 
+template<typename T>
+struct BSSimpleArrayView {
+	void* vtbl;
+	T* data;
+	UInt32 size;
+	UInt32 capacity;
+};
+
+//0x98BFB0 writes 28-byte entries into CombatGroup+0x110, 0x98C0D0 purges entries with investigated != 0
+struct CombatSearchLocationView {
+	BGSWorldLocationView location;
+	float timestamp;
+	UInt32 investigated;
+	float priority;
+};
+
+struct CombatGroupSearchView {
+	UInt8 pad00[0xD8];
+	float searchUpdateTimer[2]; //0x98ACF0 polls +0xD8 via 0x8D7F80
+	float searchAreaTimer[2]; //0x98ACF0 expires +0xE0 via 0x97F220 and polls via 0x8D7F80
+	UInt8 padE8[0x110 - 0xE8];
+	BSSimpleArrayView<CombatSearchLocationView> searchLocations;
+};
+
 //verified: sub_9856E0 serialises six game-time floats at 0x4C..0x60 and the two byte counters at 0x64/0x65
 struct CombatTargetView {
 	Actor* target;
@@ -110,6 +134,14 @@ static_assert(offsetof(CombatProcedureBeInCoverView, coverPos) == 0x18);
 static_assert(offsetof(CombatProcedureBeInCoverView, firePos) == 0x24);
 static_assert(offsetof(CombatProcedureBeInCoverView, fireEyePos) == 0x30);
 static_assert(sizeof(BGSWorldLocationView) == 0x10);
+static_assert(sizeof(BSSimpleArrayView<void*>) == 0x10);
+static_assert(offsetof(CombatSearchLocationView, timestamp) == 0x10);
+static_assert(offsetof(CombatSearchLocationView, investigated) == 0x14);
+static_assert(offsetof(CombatSearchLocationView, priority) == 0x18);
+static_assert(sizeof(CombatSearchLocationView) == 0x1C);
+static_assert(offsetof(CombatGroupSearchView, searchUpdateTimer) == 0xD8);
+static_assert(offsetof(CombatGroupSearchView, searchAreaTimer) == 0xE0);
+static_assert(offsetof(CombatGroupSearchView, searchLocations) == 0x110);
 static_assert(offsetof(CombatTargetView, target) == 0x00);
 static_assert(offsetof(CombatTargetView, detectionLevel) == 0x04);
 static_assert(offsetof(CombatTargetView, lastSeenLocation) == 0x08);
@@ -181,4 +213,25 @@ inline const BGSWorldLocationView* CombatTargetGetLastFullyVisibleLocation(void*
 inline const BGSWorldLocationView* CombatTargetGetInitialLocation(void* combatTarget)
 {
 	return combatTarget ? &CombatTargetAsView(combatTarget)->initialTargetLocation : nullptr;
+}
+
+inline void CombatGroupMarkSearchLocationsInvestigated(void* combatGroup)
+{
+	if (!combatGroup)
+		return;
+	auto& locs = reinterpret_cast<CombatGroupSearchView*>(combatGroup)->searchLocations;
+	if (!locs.data)
+		return;
+	for (UInt32 i = 0; i < locs.size; ++i)
+		locs.data[i].investigated = 1;
+}
+
+inline float* CombatGroupGetSearchUpdateTimer(void* combatGroup)
+{
+	return combatGroup ? reinterpret_cast<CombatGroupSearchView*>(combatGroup)->searchUpdateTimer : nullptr;
+}
+
+inline float* CombatGroupGetSearchAreaTimer(void* combatGroup)
+{
+	return combatGroup ? reinterpret_cast<CombatGroupSearchView*>(combatGroup)->searchAreaTimer : nullptr;
 }

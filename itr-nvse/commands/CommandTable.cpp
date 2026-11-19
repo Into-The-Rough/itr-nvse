@@ -28,6 +28,7 @@
 #include "commands/ContainerCommands.h"
 #include "commands/HavokCommands.h"
 #include "commands/LimbCommands.h"
+#include "commands/PlayerGrabCommands.h"
 #include "commands/WorldspaceOffsetCommands.h"
 #include "commands/DetectionSoundCommands.h"
 #include "commands/AlertCommands.h"
@@ -259,4 +260,7 @@ void RegisterAllCommands(void* nvsePtr)
 
 	nvse->SetOpcodeBase(0x40E7);
 	HavokCommands::RegisterCenterOfMassCommands(nvse); //GetRigidBodyCenterOfMass, SetRigidBodyCenterOfMass
+
+	nvse->SetOpcodeBase(0x40F0);
+	PlayerGrabCommands::RegisterCommands(nvse); //ForcePlayerGrab, ReleasePlayerGrab
 }

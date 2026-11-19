@@ -199,6 +199,82 @@ static bool IsActorTypeID(UInt8 typeID)
 	return typeID == kFormType_ACHR || typeID == kFormType_ACRE;
 }
 
+struct RigidBodyContactWalkData {
+	void* world;
+	UInt8 recurse;
+	UInt8 pad05[3];
+	UInt32 action;
+	UInt32 watchedRefID;
+	std::unordered_set<ContactPair, ContactPairHash>* activePairs;
+	bool sawLiveBody;
+};
+
+using BHKWorld_DoObjectRec_t = void(__cdecl*)(void* object, RigidBodyContactWalkData* data,
+	void(__cdecl* callback)(void* collisionObject, RigidBodyContactWalkData* data));
+static const BHKWorld_DoObjectRec_t BHKWorld_DoObjectRec = (BHKWorld_DoObjectRec_t)0xC68900;
+
+static void RecordConstraintContact(void* hkpObject, HkpConstraintInstanceView* inst, RigidBodyContactWalkData* data)
+{
+	if (!inst || !inst->constraintData) return;
+	if (HkpConstraintDataGetType(inst->constraintData) != kHkpConstraintType_Contact) return;
+
+	void* otherEntity = nullptr;
+	if (inst->entityA == hkpObject)
+		otherEntity = inst->entityB;
+	else if (inst->entityB == hkpObject)
+		otherEntity = inst->entityA;
+	if (!otherEntity) return;
+
+	UInt32 otherRefID = ResolveWorldObjToRefID(otherEntity);
+	if (otherRefID == data->watchedRefID) return;
+	data->activePairs->emplace(ContactPair{data->watchedRefID, otherRefID, kChannel_RigidBody});
+}
+
+static void __cdecl CollectBodyContactsCallback(void* collisionObject, RigidBodyContactWalkData* data)
+{
+	if (!collisionObject || !data || !data->activePairs) return;
+	void* worldObject = BhkCollisionObjectAsView(collisionObject)->worldObject;
+	void* hkpObject = BhkWorldObjectGetHavokObject(worldObject);
+	if (!hkpObject) return;
+	if (HkpWorldObjectAsView(hkpObject)->collisionType != kHkpWorldObject_CollisionTypeRigidBody) return;
+	if (!HkpWorldObjectAsView(hkpObject)->world) return;
+
+	data->sawLiveBody = true;
+	auto* rb = HkpRigidBodyAsView(hkpObject);
+	if (rb->processContactCallbackDelay == 0xFFFF && HkpRigidBodyIsMobile(hkpObject))
+		rb->processContactCallbackDelay = 0;
+
+	//manifold streams on small debris skip 0x623CB0 or zero bodyA/bodyB, so read live contact constraints too
+	for (UInt16 i = 0; i < rb->constraintsMasterSize && rb->constraintsMasterData; ++i)
+		RecordConstraintContact(hkpObject, rb->constraintsMasterData[i].instance, data);
+
+	for (SInt32 i = 0; i < rb->constraintsSlave.size && rb->constraintsSlave.data; ++i)
+		RecordConstraintContact(hkpObject, rb->constraintsSlave.data[i], data);
+}
+
+static void CollectWatchedRigidBodyContacts(std::unordered_set<ContactPair, ContactPairHash>& outPairs,
+	std::unordered_set<UInt32>& outPolledRefs)
+{
+	outPairs.clear();
+	outPolledRefs.clear();
+
+	for (UInt32 refID : g_watchedRefIDs) {
+		auto* ref = static_cast<TESObjectREFR*>(Engine::LookupFormByID(refID));
+		if (!ref || IsActorTypeID(ref->typeID)) continue;
+		void* root = ref->renderState ? ref->renderState->niNode : nullptr;
+		if (!root) continue;
+
+		RigidBodyContactWalkData data = {};
+		data.recurse = 1;
+		data.action = 8;
+		data.watchedRefID = refID;
+		data.activePairs = &outPairs;
+		BHKWorld_DoObjectRec(root, &data, CollectBodyContactsCallback);
+		if (data.sawLiveBody)
+			outPolledRefs.insert(refID);
+	}
+}
+
 static bool IsDeadActor(Actor* actor)
 {
 	return actor && actor->lifeState == 2;
@@ -427,7 +503,8 @@ static void PollDeadActorProximityContacts()
 }
 
 //removed callbacks do not reliably close rigid-body and proxy contacts, so poll for stale pairs
-static void PollContactEnd()
+static void PollContactEnd(const std::unordered_set<ContactPair, ContactPairHash>& currentRigidPairs,
+	const std::unordered_set<UInt32>& polledRigidRefs)
 {
 	std::vector<ContactPair> stale;
 
@@ -442,7 +519,8 @@ static void PollContactEnd()
 		}
 
 		if (!IsActorTypeID(form->typeID)) {
-			stale.push_back(it->first);
+			if (!polledRigidRefs.count(it->first.refA) || !currentRigidPairs.count(it->first))
+				stale.push_back(it->first);
 			continue;
 		}
 
@@ -755,10 +833,19 @@ namespace OnContactHandler {
 			s_proxyMapTimer = 0;
 		}
 
+		static std::unordered_set<ContactPair, ContactPairHash> currentRigidPairs;
+		static std::unordered_set<UInt32> polledRigidRefs;
+		CollectWatchedRigidBodyContacts(currentRigidPairs, polledRigidRefs);
+
 		std::vector<QueuedContactEvent> events;
 		{
 			ScopedLock lock(&g_contactLock);
 			events.swap(g_pendingEvents);
+		}
+
+		for (const auto& pair : currentRigidPairs) {
+			if (g_activeContacts.find(pair) == g_activeContacts.end() && events.size() < kMaxQueuedEvents)
+				events.push_back({pair.refA, pair.refB, kChannel_RigidBody, true});
 		}
 
 		for (const auto& evt : events) {
@@ -783,6 +870,8 @@ namespace OnContactHandler {
 			if (!watched) continue;
 
 			auto* other = evt.otherRefID ? (TESObjectREFR*)Engine::LookupFormByID(evt.otherRefID) : nullptr;
+			if (evt.isBegin && !IsActorTypeID(watched->typeID))
+				Log("OnContactHandler: contact begin watched=%08X other=%08X ch=%u", evt.watchedRefID, evt.otherRefID, evt.channel);
 
 			if (g_eventManagerInterface) {
 				const char* eventName = evt.isBegin ? "ITR:OnContactBegin" : "ITR:OnContactEnd";
@@ -791,7 +880,7 @@ namespace OnContactHandler {
 			}
 		}
 
-		PollContactEnd();
+		PollContactEnd(currentRigidPairs, polledRigidRefs);
 		PollDeadActorProximityContacts();
 	}
 
@@ -815,6 +904,11 @@ namespace OnContactHandler {
 	{
 		g_watchedRefIDs.insert(refID);
 		g_snapshotDirty = true;
+		if (g_lockInit == 2) {
+			ScopedLock lock(&g_contactLock);
+			g_watchedSnapshot.insert(refID);
+			g_watchActive = 1;
+		}
 	}
 
 	void RemoveWatch(UInt32 refID)
@@ -851,6 +945,11 @@ namespace OnContactHandler {
 		if (!baseFormID) return;
 		g_watchedBaseFormIDs.insert(baseFormID);
 		g_snapshotDirty = true;
+		if (g_lockInit == 2) {
+			ScopedLock lock(&g_contactLock);
+			g_watchedBaseSnapshot.insert(baseFormID);
+			g_watchActive = 1;
+		}
 	}
 
 	void RemoveBaseWatch(UInt32 baseFormID)

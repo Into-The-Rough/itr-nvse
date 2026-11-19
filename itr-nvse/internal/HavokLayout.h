@@ -8,6 +8,7 @@
 constexpr UInt32 kHkpWorldObject_Collidable = 0x10;
 constexpr UInt8 kHkpWorldObject_CollisionTypeRigidBody = 1;
 constexpr UInt8 kHkpFilterFlag_NoCollision = 0x40; //collisionFilterInfo byte at hkObject+0x2D
+constexpr SInt32 kHkpConstraintType_Contact = 11; //hkpConstraintData::getType() (vtbl[8])
 
 //havok layouts missing from the sdk, checked against falloutnv.exe
 
@@ -16,6 +17,19 @@ struct HkArrayView {
 	T* data;
 	SInt32 size;
 	UInt32 capacityAndFlags;
+};
+
+struct HkpConstraintInstanceView {
+	UInt8 pad00[0x0C];
+	void* constraintData;
+	UInt32 unk10;
+	void* entityA;
+	void* entityB;
+};
+
+struct HkpConstraintMasterEntryView {
+	HkpConstraintInstanceView* instance;
+	UInt8 pad04[0x30 - 0x04];
 };
 
 struct BhkCollisionObjectView {
@@ -45,7 +59,15 @@ struct HkpSimulationIslandView {
 };
 
 struct HkpRigidBodyView {
-	UInt8 pad000[0xCC];
+	UInt8 pad000[0x8C];
+	UInt8 responseType;
+	UInt8 pad08D[0xAA - 0x8D];
+	UInt16 processContactCallbackDelay;
+	HkpConstraintMasterEntryView* constraintsMasterData;
+	UInt16 constraintsMasterSize;
+	UInt16 constraintsMasterCapAndFlags;
+	HkArrayView<HkpConstraintInstanceView*> constraintsSlave;
+	UInt8 pad0C0[0xCC - 0xC0];
 	HkpSimulationIslandView* simulationIsland;
 	UInt8 pad0D0[0xE0 - 0xD0];
 	void* motionVtbl; //embedded hkpMotion
@@ -121,6 +143,10 @@ struct HkpContactPointAddedEventView {
 };
 
 static_assert(sizeof(HkArrayView<void*>) == 0x0C);
+static_assert(offsetof(HkpConstraintInstanceView, constraintData) == 0x0C);
+static_assert(offsetof(HkpConstraintInstanceView, entityA) == 0x14);
+static_assert(offsetof(HkpConstraintInstanceView, entityB) == 0x18);
+static_assert(sizeof(HkpConstraintMasterEntryView) == 0x30);
 static_assert(offsetof(BhkCollisionObjectView, niNode) == 0x08);
 static_assert(offsetof(BhkCollisionObjectView, worldObject) == 0x10);
 static_assert(offsetof(HkpWorldObjectView, world) == 0x08);
@@ -128,6 +154,11 @@ static_assert(offsetof(HkpWorldObjectView, collisionType) == 0x28);
 static_assert(offsetof(HkpWorldObjectView, collisionFilterInfo) == 0x2C);
 static_assert(offsetof(HkpCollidableView, collisionFilterInfo) == 0x1C);
 static_assert(offsetof(HkpSimulationIslandView, stateFlags) == 0x26);
+static_assert(offsetof(HkpRigidBodyView, responseType) == 0x8C);
+static_assert(offsetof(HkpRigidBodyView, processContactCallbackDelay) == 0xAA);
+static_assert(offsetof(HkpRigidBodyView, constraintsMasterData) == 0xAC);
+static_assert(offsetof(HkpRigidBodyView, constraintsMasterSize) == 0xB0);
+static_assert(offsetof(HkpRigidBodyView, constraintsSlave) == 0xB4);
 static_assert(offsetof(HkpRigidBodyView, simulationIsland) == 0xCC);
 static_assert(offsetof(HkpRigidBodyView, motionType) == 0xE8);
 static_assert(offsetof(HkpRigidBodyView, motionVtbl) == 0xE0);
@@ -232,4 +263,11 @@ inline bool HkpRigidBodyIsActive(void* rigidBody)
 
 	UInt8 activeState = (view->simulationIsland->stateFlags >> 2) & 3;
 	return activeState != 0;
+}
+
+inline SInt32 HkpConstraintDataGetType(void* constraintData)
+{
+	if (!constraintData)
+		return -1;
+	return ThisCall<SInt32>((*reinterpret_cast<UInt32**>(constraintData))[8], constraintData);
 }

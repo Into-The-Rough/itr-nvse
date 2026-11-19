@@ -246,6 +246,7 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" (
     <ClCompile Include="commands\GroundCommands.cpp" />
     <ClCompile Include="commands\HavokCommands.cpp" />
     <ClCompile Include="commands\LimbCommands.cpp" />
+    <ClCompile Include="commands\PlayerGrabCommands.cpp" />
     <ClCompile Include="commands\PathingCommands.cpp" />
     <ClCompile Include="commands\HairColorCommands.cpp" />
     <ClCompile Include="commands\CasinoBanCommands.cpp" />
@@ -395,6 +396,9 @@ if exist "D:\Modding\The Best of Times\mods\itr-nvse\NVSE\Plugins\" (
     <ClInclude Include="commands\GroundCommands.h" />
     <ClInclude Include="commands\HavokCommands.h" />
     <ClInclude Include="commands\LimbCommands.h" />
+    <ClInclude Include="commands\PlayerGrabCommands.h" />
+    <ClInclude Include="internal\PlayerGrabLogic.h" />
+    <ClInclude Include="internal\DetectionSoundLogic.h" />
     <ClInclude Include="commands\PathingCommands.h" />
     <ClInclude Include="commands\HairColorCommands.h" />
     <ClInclude Include="commands\CasinoBanCommands.h" />

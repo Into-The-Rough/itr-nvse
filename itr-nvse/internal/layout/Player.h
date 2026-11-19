@@ -9,6 +9,15 @@ struct PlayerCasinoDataView {
 	void* casinoDataList;
 };
 
+struct PlayerGrabView {
+	UInt8 pad00[0x634];
+	void* grabSpring;
+	TESObjectREFR* grabbedRef;
+	UInt32 grabType;
+	float grabbedWeight;
+	float grabDistance;
+};
+
 struct PlayerAimFOVView {
 	UInt8 pad00[0x64B];
 	UInt8 is3rdPerson;
@@ -34,6 +43,11 @@ static_assert(offsetof(PlayerCharacter, actorMover) == 0x190);
 static_assert(offsetof(PlayerCharacter, bThirdPerson) == 0x64C);
 static_assert(offsetof(PlayerCharacter, playerNode) == 0x694);
 static_assert(offsetof(PlayerCasinoDataView, casinoDataList) == 0x610);
+static_assert(offsetof(PlayerGrabView, grabSpring) == 0x634);
+static_assert(offsetof(PlayerGrabView, grabbedRef) == 0x638);
+static_assert(offsetof(PlayerGrabView, grabType) == 0x63C);
+static_assert(offsetof(PlayerGrabView, grabbedWeight) == 0x640);
+static_assert(offsetof(PlayerGrabView, grabDistance) == 0x644);
 static_assert(offsetof(PlayerAimFOVView, is3rdPerson) == 0x64B);
 static_assert(offsetof(PlayerAimFOVView, bThirdPerson) == 0x64C);
 static_assert(offsetof(PlayerAimFOVView, forceThirdPerson) == 0x64D);
@@ -46,6 +60,11 @@ static_assert(offsetof(TESCasinoView, maxWinnings) == 0x210);
 inline void* PlayerCharacterGetCasinoDataList(PlayerCharacter* player)
 {
 	return player ? reinterpret_cast<PlayerCasinoDataView*>(player)->casinoDataList : nullptr;
+}
+
+inline PlayerGrabView* PlayerCharacterGetGrabView(PlayerCharacter* player)
+{
+	return reinterpret_cast<PlayerGrabView*>(player);
 }
 
 inline bool PlayerCharacterIsAimZoomThirdPerson(PlayerCharacter* player)
